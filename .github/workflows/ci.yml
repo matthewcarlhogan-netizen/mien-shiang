@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    # Windows is not optional here. Both of the defects that shipped green
+    # (the quoted test glob and the .pathname ROOT) were invisible on Linux.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: ['20', '22', '24']
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Install
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      # Guards against the failure mode where npm test exits 0 having run
+      # nothing. scripts/run-tests.js already exits 1 on zero discovery; this
+      # asserts the discovery line actually appeared, in case the test script
+      # is ever changed back to a bare glob.
+      - name: Assert tests were discovered
+        shell: bash
+        run: |
+          out="$(npm test 2>&1)"
+          echo "$out"
+          echo "$out" | grep -qE 'Running [1-9][0-9]* test file' \
+            || { echo "::error::test run reported no discovered test files"; exit 1; }
+
+      # PORT is set explicitly because serve.js defaults to 5173, not 8123.
+      # The supplied workflow curled ${PORT:-8123} while npm start bound 5173,
+      # so the smoke test could only ever fail. serve.js does honour PORT
+      # (verified), so pinning it here makes both halves agree.
+      - name: Smoke-test the server
+        shell: bash
+        env:
+          PORT: '8123'
+        run: |
+          npm start &
+          pid=$!
+          for i in $(seq 1 40); do
+            curl -fsS "http://127.0.0.1:${PORT}/" >/dev/null 2>&1 && break
+            sleep 0.25
+          done
+          # Positive control: a server that refuses everything must not pass.
+          curl -fsS "http://127.0.0.1:${PORT}/" >/dev/null \
+            || { echo "::error::server did not serve its own root"; kill $pid; exit 1; }
+          # And it must actually serve the app, not just any 200.
+          curl -fsS "http://127.0.0.1:${PORT}/" | grep -q '<title>Mien Shiang</title>' \
+            || { echo "::error::server responded but did not serve index.html"; kill $pid; exit 1; }
+          kill $pid

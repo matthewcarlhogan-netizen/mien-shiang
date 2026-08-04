@@ -1,0 +1,11 @@
+node_modules/
+
+# Bubblewrap / Android build output. The keystore especially must never be
+# committed — losing it means you cannot ship updates under the same identity,
+# and leaking it means someone else can.
+*.keystore
+*.jks
+*.apk
+*.aab
+twa-manifest.json.bak
+.bubblewrap/

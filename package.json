@@ -1,0 +1,11 @@
+{
+  "name": "mien-shiang",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "On-device TCM facial zone analysis. General wellness tool, not a diagnostic device.",
+  "scripts": {
+    "start": "node scripts/serve.js",
+    "test": "node scripts/run-tests.js"
+  }
+}
