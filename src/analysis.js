@@ -13,6 +13,9 @@ import {
 
 import { analyse, shadesOfGray, regionStats, UNAVAILABLE } from "./engine.js";
 import { ROIS, runRules } from "./rules.js";
+import { createLandmarkerWithFallback } from "./landmarker.js";
+import { geometryReport } from "./geometry.js";
+import { expressionState } from "./expression.js";
 
 const WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm";
 const MODEL =
@@ -22,7 +25,7 @@ const MAX_DIM = 1024;              // downscale big phone photos before analysis
 const EXPECTED_LANDMARKS = 478;    // 468 mesh + 10 iris
 
 let landmarker = null;
-const $ = (id) => document.getElementById(id);
+let activeDelegate = null;   // "GPU" | "CPU" — surfaced in the debug view
 
 // ------------------------------------------------------------------ model ---
 
@@ -30,13 +33,23 @@ async function getLandmarker(onProgress) {
   if (landmarker) return landmarker;
   onProgress?.("Loading face model (first run only, ~5 MB)…");
   const fileset = await FilesetResolver.forVisionTasks(WASM);
-  landmarker = await FaceLandmarker.createFromOptions(fileset, {
-    baseOptions: { modelAssetPath: MODEL, delegate: "GPU" },
-    runningMode: "IMAGE",
-    numFaces: 1,
-  });
+
+  // GPU first, CPU if that fails. The fallback logic lives in landmarker.js
+  // with the factory injected, so it can be exercised by the test suite —
+  // a fallback nobody has ever run is not a fallback.
+  const built = await createLandmarkerWithFallback(
+    FaceLandmarker.createFromOptions.bind(FaceLandmarker),
+    fileset,
+    { modelAssetPath: MODEL },
+    onProgress,
+  );
+  landmarker = built.landmarker;
+  activeDelegate = built.delegate;
   return landmarker;
 }
+
+/** Which delegate the current session actually got. Null before first load. */
+export const getActiveDelegate = () => activeDelegate;
 
 // ------------------------------------------------------------------ pixels --
 
@@ -163,6 +176,15 @@ export async function runAnalysis(file, unmirror, onProgress) {
   }
   const pts = raw.map((p) => ({ x: p.x * w, y: p.y * h }));
 
+  // Geometry and expression are computed from the landmark set only — no
+  // pixels — so they are independent of the colorimetry path and of its
+  // skin-tone confidence regime.
+  onProgress?.("Measuring proportions…");
+  const geometry = geometryReport(pts);
+  const expression = res.faceBlendshapes?.length
+    ? expressionState(res.faceBlendshapes[0])
+    : null;
+
   onProgress?.("Measuring…");
   const img = ctx.getImageData(0, 0, w, h);
   const balanced = shadesOfGray(img.data);      // ONCE, whole frame
@@ -175,6 +197,7 @@ export async function runAnalysis(file, unmirror, onProgress) {
 
   return {
     canvas, regions, observations, baseline, result,
+    geometry, expression, delegate: activeDelegate,
     notMeasured: Object.keys(UNAVAILABLE),
   };
 }
