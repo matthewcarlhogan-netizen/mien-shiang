@@ -13,10 +13,13 @@ mitigate, cure or prevent any disease.**
 
 ```bash
 npm start     # http://localhost:5173
-npm test      # 56 tests
+npm test      # 96 tests
 ```
 
 No dependencies, no build step.
+
+One test fails deliberately (`copy-guard`) on copy that is awaiting a rewrite.
+It is a real defect, not a flaky test — see CLAUDE.md item 9.
 
 ## On your phone
 
@@ -56,7 +59,14 @@ targets but are load-bearing — each was a real bug with a test pinning it.
 src/index.html    UI + styles
 src/ui.js         screen wiring, overlay
 src/analysis.js   MediaPipe landmarking, zone masking
+src/landmarker.js GPU→CPU delegate fallback
+src/geometry.js   facial proportions + face-shape classifier (pure)
+src/expression.js blendshapes → expression state (pure)
+src/debugview.js  renders the geometry trace (pure)
 src/engine.js     colorimetry + texture measurement
 src/rules.js      zones + forward-chaining rule engine
 src/sw.js         offline cache
 ```
+
+The four `pure` modules have no DOM and no MediaPipe import, so they are tested
+under `node --test` with no browser and no face photo.

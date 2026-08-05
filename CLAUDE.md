@@ -18,14 +18,18 @@ change the product's regulatory status, not just its tone.
 
 ```bash
 npm start     # dev server on http://localhost:5173 (honours PORT)
-npm test      # 56 tests, node:test, no dependencies
+npm test      # 96 tests, node:test, no dependencies
 ```
 
 There is no build step and no npm dependencies. `src/` ships as-is. The
 `package-lock.json` exists only so `npm ci` works in CI; it locks nothing.
 
-56 = 44 science/rules tests + 12 server traversal tests. If you see 44, the
-traversal suite is not being discovered.
+96 = 44 science/rules + 12 server traversal + 1 copy guard + 25 geometry
++ 14 debug view. If you see 44, the traversal suite is not being discovered.
+
+**One test fails on purpose right now** (`copy-guard`, on
+`TCM-202-DAMP-HEAT.recommend[1]`). It is a real defect awaiting the Module A/B
+copy split, not a flaky test. Do not silence it. See item 9.
 
 ## Architecture
 
@@ -34,6 +38,10 @@ src/
   index.html    UI + all styles (single file, no framework)
   ui.js         screen wiring, overlay rendering, consent gate
   analysis.js   MediaPipe landmarking, ROI hull masking, orchestration
+  landmarker.js GPU→CPU delegate fallback (factory INJECTED, so it is testable)
+  geometry.js   facial proportions + face-shape classifier  ← pure, no DOM
+  expression.js blendshapes → expression/asymmetry STATE (never traits)
+  debugview.js  renders the geometry trace  ← pure, no DOM
   engine.js     colorimetry + texture measurement  ← the science
   rules.js      facial zone definitions + forward-chaining rule engine
   sw.js         offline cache (app shell + WASM + model)
@@ -184,6 +192,93 @@ it today.** The copy is unfixed pending a wording decision.
 The term list deliberately excludes "ulcer" (a lesion, not a disease) and the
 organ correspondences like "Heart — cardiovascular" (framed as tradition, not
 asserted as a finding). Widen it on purpose, not by accident.
+
+### 10. fWHR has exactly ONE definition here, and a test pins it
+
+`geometry.js` measures it as **bizygomatic width ÷ (upper eyelid → upper lip)** —
+the eyelid-based convention. The competing nasion-based convention measures the
+denominator from the bridge of the nose and yields systematically different
+numbers.
+
+**Symptom:** stored or displayed fWHR values silently stop being comparable
+with every earlier one, and with the literature you think you are matching.
+**Cause:** someone swapped the denominator because both are "obviously" fWHR.
+**Pinned by:** `fWHR uses the eyelid-based definition and pins it in the
+payload`, which asserts on the `definition` string as well as the number. If
+you change the definition, change it in `geometry.js`, in that test, and here,
+in the same commit.
+
+It is also never to be surfaced as a dominance, aggression or trustworthiness
+signal, and never mapped to a trait. The published correlations are small
+(r ≈ 0.10–0.16) and contested. `fwhr().presentAs` carries that constraint next
+to the number so it cannot be picked up without it.
+
+### 11. Roll is normalised before ANY measurement is taken
+
+`geometryReport()` calls `normaliseRoll()` first, rotating the set so the
+inter-ocular axis is horizontal.
+
+**Symptom:** results drift with head tilt; the facial fifths shear worst,
+because they are taken from x ordering.
+**Cause:** measuring on raw landmarks. On a head tilted 20° the fifths are
+visibly wrong while every width still looks plausible, so it reads as noise
+rather than as a bug.
+**Pinned by:** `roll normalisation makes the measurements invariant to head
+tilt`, which measures the same synthetic face upright and rotated 20° and
+requires the fifths to agree to 1e-6.
+
+### 12. The facial fifths SORT the eye corners by x — never assign them by index
+
+Which of 33/133 is the medial corner is not hardcoded anywhere. `fifths()`
+sorts the four corner landmarks by x and takes them in order.
+
+**Symptom:** the fifths come out mirrored or interleaved on some frames.
+**Cause:** hardcoding medial/lateral. It is then wrong on any mirrored frame,
+and the front-camera path mirrors by default (see item 5).
+**Pinned by:** `fifths are correct on a MIRRORED frame — corners are sorted,
+not assumed`.
+
+### 13. "oval" is the RESIDUAL class, not a positive finding
+
+`classifyFaceShape()` returns `oval` with `residual: true` and an empty
+`because` array when no rule matched. It does not mean the face was measured as
+oval; it means nothing else fired.
+
+**Symptom:** the commonest output silently becomes the least examined one, and
+the UI presents "oval" with the same confidence as a rule-backed label.
+**Cause:** treating the fallthrough as a sixth rule.
+**Pinned by:** `oval is the RESIDUAL class and says so` and, on the view side,
+`the residual class is labelled as residual, not as a finding`.
+
+### 14. The delegate fallback takes its factory as an ARGUMENT
+
+`createLandmarkerWithFallback()` receives `FaceLandmarker.createFromOptions`
+rather than importing it. That is the only reason the GPU→CPU fallback can be
+tested: `analysis.js` imports the MediaPipe bundle from a CDN at module scope,
+so it cannot be loaded under `node --test` at all.
+
+**Symptom:** the fallback is never executed by anything, then breaks silently,
+and the first person to discover it is a user with no WebGL.
+**Cause:** "simplifying" by importing the factory directly, which drags the CDN
+import into the module graph and makes the file untestable.
+**Pinned by:** `tests/landmarker.test.js`, which drives GPU to throw and
+asserts CPU is genuinely reached, and that a double failure reports BOTH errors.
+
+Same reasoning puts `geometry.js`, `expression.js` and `debugview.js` outside
+`ui.js`: all three are pure, so they are testable with no browser and — this is
+the point — **no face photo**.
+
+### 15. Bump `CACHE` in sw.js whenever `SHELL` changes
+
+The activate handler deletes every cache whose name is not the current `CACHE`.
+Adding a file to `SHELL` without bumping the version leaves users on the old
+cache, which does not contain the new module.
+
+**Symptom:** returning users get a white screen or a module-not-found after a
+release that works perfectly on a fresh install.
+**Cause:** new entry in `SHELL`, unchanged `CACHE` name.
+
+Currently `mienshiang-v2` (bumped when the geometry modules were added).
 
 ## The measurement layer
 
@@ -361,7 +456,11 @@ Install on Android: open the URL in Chrome → ⋮ → *Add to Home screen*.
   does not explain the measurement itself. Don't describe it to users as showing
   "what the AI looked at".
 - **No Five Element morphology classifier.** The engine supports `constitution`
-  facts but nothing emits them.
+  facts but nothing emits them. The geometry it would need now exists
+  (`geometry.js`: thirds, fifths, the three widths, face shape with a traceable
+  reason) — what is missing is the interpretation layer on top, which is
+  deliberately not in `geometry.js`. Keep it that way: the measurement must stay
+  checkable independently of the reading laid over it.
 - **Frank's sign is unimplementable here** — MediaPipe's face mesh has no
   earlobe landmarks; the oval terminates near the tragus. Extrapolating from
   234/454 lands in hair. Needs a separate ear detector.
