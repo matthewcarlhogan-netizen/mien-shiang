@@ -306,7 +306,7 @@ export function regionStats(rgba, mask, w, h) {
  * spans both cheeks and the nose bridge, so a whole-face average would fold
  * the rash into its own control and hide it.
  */
-export function analyse(regions) {
+export function rawScalars(regions) {
   const baseEi = [], baseMi = [], baseC = [], baseR = [], baseL = [], baseB = [];
   let basePx = 0;
 
@@ -325,8 +325,11 @@ export function analyse(regions) {
 
   if (!baseEi.length) {
     return {
-      observations: [],
-      baseline: { regime: "low", reason: "Not enough clear skin visible to set a baseline.", n: 0 },
+      zones: {},
+      baseline: {
+        regime: "low", n: 0,
+        reason: "Not enough clear skin visible to set a baseline.",
+      },
     };
   }
 
@@ -338,46 +341,91 @@ export function analyse(regions) {
     ita, band: itaBand(ita), regime, reason, n: basePx,
   };
 
-  const obs = [];
+  const zones = {};
   for (const [key, r] of Object.entries(regions)) {
     if (!r.stats) continue;
-    const tone = baseline.band;
-
-    if (regime !== "low") {
-      const dEi = r.stats.ei - baseline.ei;
-      const conf = regime === "full" ? 0.8 : 0.55;
-      const s = sev(dEi, DELTA_EI_FULL_SCALE);
-      if (s >= EMIT_THRESHOLD)
-        obs.push({ zone: key, condition: "erythema", severity: s, confidence: conf, tone,
-                   measured: { delta_ei: dEi } });
-      const sp = sev(-dEi, DELTA_EI_FULL_SCALE);
-      if (sp >= EMIT_THRESHOLD)
-        obs.push({ zone: key, condition: "pallor", severity: sp, confidence: conf, tone,
-                   measured: { delta_ei: dEi } });
-    }
-
-    const dMi = r.stats.mi - baseline.mi;
-    const sm = sev(dMi, DELTA_MI_FULL_SCALE);
-    if (sm >= EMIT_THRESHOLD)
-      obs.push({ zone: key, condition: "hyperpigmentation", severity: sm, confidence: 0.75, tone,
-                 measured: { delta_mi: dMi } });
-
     const vertical = key === "glabella";
     const ridge = ridgeResponse(r.stats.gray, r.mask, r.w, r.h, vertical);
-    const sr = isFinite(baseline.ridge)
-      ? sev(ridge - baseline.ridge, RHYTIDE_FULL_SCALE) : 0;
+
+    zones[key] = {
+      // NULL, NOT ZERO, in the low-confidence regime. This is the whole
+      // dark-skin posture from CLAUDE.md carried down to the contract: a
+      // fitted-to-zero value would make the system represent "we measured
+      // colour and found none", which is a claim with nothing behind it.
+      // Absence of measurement and a measurement of absence are different
+      // objects, and only the first is honest here. Every consumer must
+      // branch on null rather than arithmetic on a stand-in.
+      deltaEi: regime === "low" ? null : r.stats.ei - baseline.ei,
+      deltaMi: r.stats.mi - baseline.mi,
+      deltaContrast: isFinite(baseline.contrast)
+        ? r.stats.contrast - baseline.contrast : null,
+      ridge,
+      ridgeDelta: isFinite(baseline.ridge) ? ridge - baseline.ridge : null,
+      ridgeAxis: vertical ? "vertical" : "horizontal",
+      L: r.stats.L,
+      b: r.stats.b,
+      pixels: r.stats.n,
+    };
+  }
+
+  return { baseline, zones };
+}
+
+/**
+ * Labelled observations for the forward-chaining rule engine.
+ *
+ * Built ON TOP of rawScalars() rather than beside it, so there is exactly one
+ * place where a delta is computed. Two independent paths over the same pixels
+ * would drift, and the ridge response is the most expensive operation in the
+ * app to run twice.
+ *
+ * @param {object} regions
+ * @param {object} [precomputed] rawScalars() output, if the caller already has
+ *        it. Passing it avoids recomputing the ridge response per zone.
+ */
+export function analyse(regions, precomputed) {
+  const raw = precomputed ?? rawScalars(regions);
+  const { baseline } = raw;
+
+  if (!Object.keys(raw.zones).length && baseline.n === 0) {
+    return { observations: [], baseline };
+  }
+
+  const obs = [];
+  const tone = baseline.band;
+
+  for (const [key, z] of Object.entries(raw.zones)) {
+    if (z.deltaEi !== null) {
+      const conf = baseline.regime === "full" ? 0.8 : 0.55;
+      const s = sev(z.deltaEi, DELTA_EI_FULL_SCALE);
+      if (s >= EMIT_THRESHOLD)
+        obs.push({ zone: key, condition: "erythema", severity: s, confidence: conf, tone,
+                   measured: { delta_ei: z.deltaEi } });
+      const sp = sev(-z.deltaEi, DELTA_EI_FULL_SCALE);
+      if (sp >= EMIT_THRESHOLD)
+        obs.push({ zone: key, condition: "pallor", severity: sp, confidence: conf, tone,
+                   measured: { delta_ei: z.deltaEi } });
+    }
+
+    const sm = sev(z.deltaMi, DELTA_MI_FULL_SCALE);
+    if (sm >= EMIT_THRESHOLD)
+      obs.push({ zone: key, condition: "hyperpigmentation", severity: sm, confidence: 0.75, tone,
+                 measured: { delta_mi: z.deltaMi } });
+
+    const sr = z.ridgeDelta !== null ? sev(z.ridgeDelta, RHYTIDE_FULL_SCALE) : 0;
     if (sr >= EMIT_THRESHOLD)
       obs.push({
         zone: key,
-        condition: vertical ? "deep_rhytide_vertical" : "deep_rhytide_horizontal",
-        severity: sr, confidence: 0.5, tone, measured: { ridge },
+        condition: z.ridgeAxis === "vertical"
+          ? "deep_rhytide_vertical" : "deep_rhytide_horizontal",
+        severity: sr, confidence: 0.5, tone, measured: { ridge: z.ridge },
       });
 
-    if (isFinite(baseline.contrast)) {
-      const sx = sev(r.stats.contrast - baseline.contrast, TEXTURE_CONTRAST_FULL_SCALE);
+    if (z.deltaContrast !== null) {
+      const sx = sev(z.deltaContrast, TEXTURE_CONTRAST_FULL_SCALE);
       if (sx >= EMIT_THRESHOLD)
         obs.push({ zone: key, condition: "xerosis", severity: sx, confidence: 0.4, tone,
-                   measured: { delta_contrast: r.stats.contrast - baseline.contrast } });
+                   measured: { delta_contrast: z.deltaContrast } });
     }
   }
 

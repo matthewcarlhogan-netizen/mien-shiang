@@ -18,14 +18,15 @@ change the product's regulatory status, not just its tone.
 
 ```bash
 npm start     # dev server on http://localhost:5173 (honours PORT)
-npm test      # 96 tests, node:test, no dependencies
+npm test      # 116 tests, node:test, no dependencies
 ```
 
 There is no build step and no npm dependencies. `src/` ships as-is. The
 `package-lock.json` exists only so `npm ci` works in CI; it locks nothing.
 
-96 = 44 science/rules + 12 server traversal + 1 copy guard + 25 geometry
-+ 14 debug view. If you see 44, the traversal suite is not being discovered.
+116 = 44 science/rules + 12 server traversal + 1 copy guard + 25 geometry
++ 14 debug view + 20 module boundary. If you see 44, the traversal suite is
+not being discovered.
 
 **One test fails on purpose right now** (`copy-guard`, on
 `TCM-202-DAMP-HEAT.recommend[1]`). It is a real defect awaiting the Module A/B
@@ -38,6 +39,10 @@ src/
   index.html    UI + all styles (single file, no framework)
   ui.js         screen wiring, overlay rendering, consent gate
   analysis.js   MediaPipe landmarking, ROI hull masking, orchestration
+  flags.js      build flavour: does Module B ship? (ASCII-only, see item 17)
+  adapters/
+    entertainment.js  MODULE A boundary — raw scalars -> glow/vitality values
+    safety.js         MODULE B boundary — raw scalars -> referral thresholds
   landmarker.js GPU→CPU delegate fallback (factory INJECTED, so it is testable)
   geometry.js   facial proportions + face-shape classifier  ← pure, no DOM
   expression.js blendshapes → expression/asymmetry STATE (never traits)
@@ -278,7 +283,85 @@ cache, which does not contain the new module.
 release that works perfectly on a fresh install.
 **Cause:** new entry in `SHELL`, unchanged `CACHE` name.
 
-Currently `mienshiang-v2` (bumped when the geometry modules were added).
+Currently `mienshiang-v3` (bumped when the adapters were added).
+
+### 16. The module boundary sits BELOW labelling, not at it
+
+`engine.js` exposes two layers, and which one you consume decides whether the
+Module A/B boundary is real:
+
+- `rawScalars()` — neutral physical quantities (`deltaEi`, `deltaMi`,
+  `deltaContrast`, `ridgeDelta`, `L`, `b`). No condition names.
+- `analyse()` — the same numbers LABELLED: `condition: "erythema" | "pallor" |
+  "hyperpigmentation" | "xerosis" | "deep_rhytide_*"`.
+
+Those labels are clinical vocabulary. **Module A must consume `rawScalars()`
+and must never consume `analyse()`.**
+
+**Symptom:** clinical terms appear inside the entertainment module, and the
+Play Health declaration and the TGA posture both stop being answerable, while
+the file layout still looks correctly separated.
+**Cause:** wiring `adapters/entertainment.js` to `analyse()` because it is the
+existing entry point and returns "the same data".
+**Pinned by:** `Module A output carries no clinical vocabulary, in keys OR
+values` (walks the whole returned object) and `Module A does not import the
+labelled path`.
+
+`analyse()` is built on top of `rawScalars()` so there is exactly one place a
+delta is computed — two passes over the same pixels would drift, and the ridge
+response is the most expensive operation in the app to run twice. Neither
+module owns either function; both live in `engine.js`.
+
+### 17. The feature flag must gate EVERY door into Module B
+
+Module B is reachable two ways: `adapters/safety.js`, and the `safety_gate`
+rules inside `rules.js`. Both consult `MODULE_B_SAFETY_REFERRALS`.
+
+**Symptom:** the About screen says "entertainment-only" and the flavour string
+agrees, while the app still renders referrals.
+**Cause:** gating the adapter only. `runRules()` kept emitting `safety_gate`
+referrals through the legacy path, so the flag was a label with nothing behind
+it. This was real, not hypothetical — it was the state of the code between the
+adapter landing and the gate being added.
+**Pinned by:** `the flag gates the LEGACY rule path too, not only the adapter`.
+
+Verified by flipping the real constant, not a stub:
+
+```
+flag true  -> flavour wellness            adapterReferrals 1  legacyReferrals 1  halted true
+flag false -> flavour entertainment-only  adapterReferrals 0  legacyReferrals 0  halted false
+```
+
+Note what the flag does NOT do: it removes Module B's behaviour, not its bytes.
+There is no build step, so `safety.js` still ships. See the limitation section
+in `flags.js` before answering anything on a store declaration.
+
+`flags.js` is **ASCII-only on purpose** — a build script that flips the flag
+through PowerShell 5.1 `Get-Content`/`Set-Content` reads non-ASCII as ANSI and
+writes it back double-encoded. That corrupted the file once already. Pinned by
+`flags.js stays pure ASCII`.
+
+### 18. `glowIndex` is only comparable within its `basis`
+
+Module A's composite rescales over the components it could actually measure. In
+the low-confidence regime the warmth component is **dropped, not zeroed** —
+zeroing would systematically score deeper skin tones lower, which is the exact
+bias the self-referencing measurement design exists to prevent.
+
+The consequence is easy to miss: dropping a below-average component makes the
+index go **up**. A face measuring 97 with warmth included reads 100 with it
+dropped, and nothing about the complexion changed.
+
+**Symptom:** a glow-over-time chart shows a step change whenever lighting moves
+the subject between confidence regimes, and it reads as a real change in the
+person.
+**Cause:** comparing two indices computed over different component sets.
+**The guard:** every result carries `basis` (the sorted component key, e.g.
+`clarity+evenness+luminosity+smoothness`). Any history or trend feature must
+group by it and refuse to plot across a change. Relevant the moment Phase 5
+adds history.
+**Pinned by:** `glowIndex is tagged with its basis, because rescaling makes
+regimes incomparable`.
 
 ## The measurement layer
 

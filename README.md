@@ -13,7 +13,7 @@ mitigate, cure or prevent any disease.**
 
 ```bash
 npm start     # http://localhost:5173
-npm test      # 96 tests
+npm test      # 116 tests
 ```
 
 No dependencies, no build step.

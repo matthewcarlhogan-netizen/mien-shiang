@@ -5,11 +5,16 @@
  * second launch works with no connection at all. */
 // Bumped when the shell list changes: the activate handler deletes every cache
 // whose name is not CACHE, so a stale v1 holding an old SHELL cannot survive.
-const CACHE = "mienshiang-v2";
+const CACHE = "mienshiang-v3";
 const SHELL = [
   "./", "./index.html", "./ui.js", "./analysis.js", "./engine.js",
   "./rules.js", "./geometry.js", "./landmarker.js", "./expression.js",
-  "./debugview.js",
+  "./debugview.js", "./flags.js",
+  // Both module adapters ship in both flavours. The flag governs BEHAVIOUR,
+  // not bytes — see the honest limitation in flags.js. Omitting safety.js here
+  // while rules.js still imports it would break the app offline rather than
+  // produce an entertainment-only build.
+  "./adapters/entertainment.js", "./adapters/safety.js",
   "./manifest.webmanifest", "./icon-192.png", "./icon-512.png",
   "./icon-512-maskable.png",
 ];

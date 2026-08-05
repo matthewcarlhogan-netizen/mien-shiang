@@ -126,12 +126,70 @@ wrong, and they are cheapest to fix before Phase 2 layers a reading on top.
 
 ---
 
+## Module boundary — established (Phase 2 prerequisite)
+
+Done before any reading copy, as instructed.
+
+```
+engine.js  rawScalars()   neutral physical quantities   <- owned by NEITHER module
+              |                    |
+              v                    v
+  adapters/entertainment.js   adapters/safety.js
+     MODULE A  glow only        MODULE B  referrals, flag-gated
+```
+
+- **The boundary sits BELOW labelling.** `analyse()` emits `condition:
+  "erythema" | "pallor" | …` — clinical vocabulary. Module A consumes
+  `rawScalars()` instead, so it never sees a condition name. A test walks
+  Module A's entire returned object, keys and values, against a 31-term
+  blocklist.
+- **Measurement stays in `engine.js`.** Neither adapter owns or re-implements
+  a measurement function; a test asserts that against all eight of them.
+  `analyse()` is now built on top of `rawScalars()`, so a delta is computed in
+  exactly one place — verified behaviour-preserving (the 44 pre-existing
+  science/rules tests still pass unchanged).
+- **The flag gates both doors.** Verified by flipping the real constant:
+
+  ```
+  flag true  -> wellness            adapterReferrals 1  legacyReferrals 1  halted true
+  flag false -> entertainment-only  adapterReferrals 0  legacyReferrals 0  halted false
+  ```
+
+  Gating only the adapter would have left `runRules()` still emitting
+  referrals while the flavour read "entertainment-only". That hole was real
+  and is now closed and pinned.
+- **Referral thresholds have one home.** `rules.js` imports
+  `SAFETY_THRESHOLDS` from the safety adapter rather than repeating literals.
+- **No reading copy written.** Both adapters return values and machine-readable
+  tokens (`note: "colourNotMeasurableFromThisPhoto"`), never sentences, so the
+  copy lint will have exactly one surface to scan.
+
+### Two things worth knowing before Phase 2 and Phase 5
+
+**Unmeasurable colour is dropped, never zeroed** — in both modules. Module A
+drops the warmth component and rescales; Module B returns `assessable: false`
+rather than "found nothing". Zeroing would have scored deeper skin tones lower
+and turned a non-measurement into a silent all-clear, from one mistake.
+
+**`glowIndex` is only comparable within its `basis`.** Rescaling means dropping
+a below-average component makes the index go *up* — 97 becomes 100 with nothing
+about the complexion changed. Every result carries a `basis` key; any history
+feature must group by it. This is a Phase 5 trap, defused early.
+
+### Still open on the boundary
+
+`rules.js` still mixes both modules' content in one `RULES` array — the flag
+filters it correctly, but Module A and Module B rules remain in one file with
+one copy deck. Splitting that is the copy work, and is the natural first step
+of Phase 2.
+
+No About screen yet, so the flavour is not surfaced to the user.
+
+---
+
 ## Gaps, largest first
 
-1. **No Module A / Module B boundary.** Unchanged from Phase 0 and now the
-   critical path — Phase 2 writes the copy that this boundary decides the shape
-   of. `RULES` is still one flat array; no feature flag; no About screen.
-2. **Offline analysis still fails.** The WASM and `.task` model are still not
+1. **Offline analysis still fails.** The WASM and `.task` model are still not
    precached (`sw.js` caches them only on first successful fetch). Phase 4's
    exit criterion remains unmet. Deliberately not fixed here — it is a Phase 4
    item and bundling it into Phase 1 would muddy the commit.
@@ -175,8 +233,14 @@ wrong, and they are cheapest to fix before Phase 2 layers a reading on top.
 
 ## Exact next action
 
-**Get the real-photo validation done** (see "Blocked"), then Phase 2.
+The module boundary now exists and both adapters are imported by their
+respective paths, so **reading copy is unblocked**.
 
-If proceeding to Phase 2 first, do the Module A/B split **before** writing any
-reading copy — otherwise every string gets written twice, and the copy deck is
-what the boundary exists to separate.
+1. Split `rules.js` into Module A and Module B content with separate copy
+   decks. `TCM-202-DAMP-HEAT.recommend[1]` — the one deliberately failing test
+   — resolves here: the "get bloods done" line is Module B content sitting in
+   Module A, so it moves or goes rather than being reworded in place.
+2. Then the Phase 2 content layer on top of the adapters.
+
+Still outstanding from Phase 1, unchanged: **real-photo validation** (see
+"Blocked" above). It gates Phase 1's exit, not Phase 2's start.

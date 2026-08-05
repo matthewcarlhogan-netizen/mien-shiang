@@ -11,8 +11,11 @@ import {
   FaceLandmarker, FilesetResolver,
 } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs";
 
-import { analyse, shadesOfGray, regionStats, UNAVAILABLE } from "./engine.js";
+import { analyse, rawScalars, shadesOfGray, regionStats, UNAVAILABLE } from "./engine.js";
 import { ROIS, runRules } from "./rules.js";
+import { readComplexion } from "./adapters/entertainment.js";
+import { evaluateSafety } from "./adapters/safety.js";
+import { BUILD_FLAVOUR } from "./flags.js";
 import { createLandmarkerWithFallback } from "./landmarker.js";
 import { geometryReport } from "./geometry.js";
 import { expressionState } from "./expression.js";
@@ -190,14 +193,31 @@ export async function runAnalysis(file, unmirror, onProgress) {
   const balanced = shadesOfGray(img.data);      // ONCE, whole frame
 
   const regions = extractRegions(balanced, w, h, pts);
-  const { observations, baseline } = analyse(regions);
 
+  // ── the module boundary ─────────────────────────────────────────────────
+  // One measurement pass produces neutral physical scalars. Both modules
+  // consume THE SAME object and neither owns it. `rawScalars()` sits below
+  // labelling on purpose: `analyse()` emits condition names, which are
+  // clinical vocabulary, so Module A must never be built on it.
+  const raw = rawScalars(regions);
+
+  // Module A — entertainment. Glow/vitality values only.
+  const complexion = readComplexion(raw);
+
+  // Module B — safety referral. Health-adjacent, flag-gated, never billed.
+  // Returns an empty, disabled result when the flag is off.
+  const safety = evaluateSafety(raw);
+
+  // Shared labelled view for the existing forward-chaining engine. Passed the
+  // precomputed scalars so the ridge response is not recomputed per zone.
+  const { observations, baseline } = analyse(regions, raw);
   const facts = observations.map((o) => ({ fact: "observation", ...o }));
   const result = runRules(facts);
 
   return {
     canvas, regions, observations, baseline, result,
     geometry, expression, delegate: activeDelegate,
+    complexion, safety, buildFlavour: BUILD_FLAVOUR,
     notMeasured: Object.keys(UNAVAILABLE),
   };
 }

@@ -12,6 +12,9 @@
  * capture path un-mirrors before landmarking.
  */
 
+import { SAFETY_THRESHOLDS } from "./adapters/safety.js";
+import { MODULE_B_SAFETY_REFERRALS } from "./flags.js";
+
 export const ROIS = {
   glabella: {
     label: "Glabella", hanzi: "肝", side: "midline",
@@ -89,12 +92,14 @@ export const RULES = [
   {
     id: "SG-001-MALAR", category: "safety_gate", salience: 1000,
     describe: "Redness across both cheeks and the nose bridge, with the smile lines spared.",
+    // Thresholds come from adapters/safety.js — Module B owns these numbers,
+    // and importing them stops the rule and the adapter drifting apart.
     all: [
-      { fact: "observation", zone: "cheek_left", condition: "erythema", severity: { ">=": 0.45 } },
-      { fact: "observation", zone: "cheek_right", condition: "erythema", severity: { ">=": 0.45 } },
-      { fact: "observation", zone: "nose_bridge", condition: "erythema", severity: { ">=": 0.45 } },
-      { fact: "observation", zone: "nasolabial_left", condition: "erythema", severity: { ">=": 0.30 }, absent: true },
-      { fact: "observation", zone: "nasolabial_right", condition: "erythema", severity: { ">=": 0.30 }, absent: true },
+      { fact: "observation", zone: "cheek_left", condition: "erythema", severity: { ">=": SAFETY_THRESHOLDS.MALAR_CHEEK_SEVERITY } },
+      { fact: "observation", zone: "cheek_right", condition: "erythema", severity: { ">=": SAFETY_THRESHOLDS.MALAR_CHEEK_SEVERITY } },
+      { fact: "observation", zone: "nose_bridge", condition: "erythema", severity: { ">=": SAFETY_THRESHOLDS.MALAR_BRIDGE_SEVERITY } },
+      { fact: "observation", zone: "nasolabial_left", condition: "erythema", severity: { ">=": SAFETY_THRESHOLDS.NASOLABIAL_SPARING_SEVERITY }, absent: true },
+      { fact: "observation", zone: "nasolabial_right", condition: "erythema", severity: { ">=": SAFETY_THRESHOLDS.NASOLABIAL_SPARING_SEVERITY }, absent: true },
     ],
     then: {
       haltTcm: true, urgency: "prompt", referralTo: "doctor",
@@ -104,7 +109,7 @@ export const RULES = [
   {
     id: "SG-003-PIGMENT", category: "safety_gate", salience: 980,
     describe: "Focal pigmented lesion — outside the scope of a wellness tool.",
-    all: [{ fact: "observation", condition: "focal_pigmented_lesion", severity: { ">=": 0.5 } }],
+    all: [{ fact: "observation", condition: "focal_pigmented_lesion", severity: { ">=": SAFETY_THRESHOLDS.PIGMENT_LESION_SEVERITY } }],
     then: {
       haltTcm: true, urgency: "prompt", referralTo: "dermatologist",
       message: "This tool doesn't assess moles, spots or pigmented marks, and has stopped its analysis. Please have it looked at by a doctor or dermatologist.",
@@ -220,7 +225,18 @@ export function runRules(facts) {
   for (const f of facts) wm.set(keyOf(f), f);
 
   const fired = new Set();
-  const rules = [...RULES].sort((a, b) => b.salience - a.salience);
+
+  // Module B is gated HERE as well as in adapters/safety.js. Gating only the
+  // adapter would leave this legacy path still emitting referrals, so the flag
+  // would read as "Module B is off" while the app kept producing exactly the
+  // health-adjacent output the entertainment-only flavour must not contain.
+  // Both doors, or neither.
+  //
+  // With safety gates absent nothing sets `halted`, so the reading simply runs
+  // — which is correct for a build that has no referral to defer to.
+  const rules = [...RULES]
+    .filter((r) => MODULE_B_SAFETY_REFERRALS || r.category !== "safety_gate")
+    .sort((a, b) => b.salience - a.salience);
   const out = { referrals: [], recommendations: [], trace: [], halted: false, haltedBy: null };
 
   for (let cycle = 1; cycle <= 16; cycle++) {
