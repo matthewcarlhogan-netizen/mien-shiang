@@ -3,10 +3,14 @@
  * App shell is cached on install. The MediaPipe WASM runtime and the 4 MB face
  * model are cached on first successful fetch (stale-while-revalidate), so the
  * second launch works with no connection at all. */
-const CACHE = "mienshiang-v1";
+// Bumped when the shell list changes: the activate handler deletes every cache
+// whose name is not CACHE, so a stale v1 holding an old SHELL cannot survive.
+const CACHE = "mienshiang-v2";
 const SHELL = [
   "./", "./index.html", "./ui.js", "./analysis.js", "./engine.js",
-  "./rules.js", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png",
+  "./rules.js", "./geometry.js", "./landmarker.js", "./expression.js",
+  "./debugview.js",
+  "./manifest.webmanifest", "./icon-192.png", "./icon-512.png",
   "./icon-512-maskable.png",
 ];
 
