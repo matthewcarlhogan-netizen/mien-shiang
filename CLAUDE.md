@@ -164,6 +164,27 @@ escape vectors and the sibling case over raw sockets — `fetch`, PowerShell and
 plain `curl` all normalise `/../` before it reaches the wire, so a traversal
 test built on those proves nothing.
 
+### 9. The disease-name guard scans EVERY rule, not one fired path
+
+`tests/copy-guard.test.js` walks all of `RULES` and fails if any payload string
+names a disease. Do not narrow it back to a single scenario.
+
+**Symptom:** a disease name reaches the screen while the older
+`referral never names a disease` test still passes.
+**Cause:** that test fires only the malar gate and screens only the lupus
+family, so it inspects the *referral* path. It never looks at the *advice*
+path — and `ui.js:119` renders `rec.recommend[]` verbatim into `innerHTML`, so
+wellness advice is exactly as user-facing as a referral.
+
+Not hypothetical. `TCM-202-DAMP-HEAT` recommendation `[1]` currently reads
+*"…anaemia and thyroid problems present this way…"* — two disease names plus an
+assertion that they present as the measured facial pattern. **The guard fails on
+it today.** The copy is unfixed pending a wording decision.
+
+The term list deliberately excludes "ulcer" (a lesion, not a disease) and the
+organ correspondences like "Heart — cardiovascular" (framed as tradition, not
+asserted as a finding). Widen it on purpose, not by accident.
+
 ## The measurement layer
 
 | Condition | Method | Source |
@@ -353,4 +374,110 @@ Install on Android: open the URL in Chrome → ⋮ → *Add to Home screen*.
 
 Australian English in user-facing copy. Plain language over clinical register —
 the app talks to a person, not a chart. Comments explain *why*, especially where
-a line looks redundant but is load-bearing (see the six items above).
+a line looks redundant but is load-bearing (see the eight items above).
+
+---
+
+## Verification Protocol
+
+This repo has twice shipped something that looked correct and was not: a test
+runner reporting 0 tests with exit code 0, and a server returning 403 to every
+request while its traversal test "passed". Both were green. Follow this.
+
+### 0. Declare the environment first, before any other work
+
+State host OS, shell, and whether commands run on the user's machine or in a
+separate sandbox. **If they differ, every verification is invalid until re-run
+on the target.** Say so and stop treating sandbox results as evidence.
+Cross-platform defects are invisible to a single-platform check, and a
+single-platform check that looks green is worse than no check.
+
+### 1. No unverified success claims
+
+A claim of success must quote the output that proves it. Not "tests pass" —
+`tests 44 / pass 44 / fail 0`. Not "traversal is blocked" — the status code next
+to the byte count of what came back.
+
+"Verified", "confirmed", "working", "all green", "should work", "N passing" are
+banned unless immediately followed by pasted evidence. If output was not
+observed **this session**, the correct phrasing is *"not verified — here is what
+would need to be run."*
+
+### 2. Exit code 0 is not a pass
+
+Assert on counts and content, never on exit status alone.
+
+- A test run reporting 0 tests is a hard failure. Check the count every time.
+- A build producing 0 artifacts is a failure.
+- An empty grep/glob means *the pattern is wrong*, not *the code is clean*.
+
+If a runner can succeed while doing nothing, add a floor check that fails on
+zero. `scripts/run-tests.js` is that floor check — see item 7.
+
+### 3. Negative controls require a paired positive control
+
+Never report that a guard blocks bad input without proving good input gets
+through **in the same run**. "Traversal returns 404" is meaningless if every
+route returns 404 — that is precisely the bug that shipped. Report both halves
+or neither.
+
+Test guards with a client that cannot pre-normalise the input: raw sockets, or
+`curl --path-as-is`. PowerShell and most HTTP libraries silently rewrite URLs
+and will hide the bug you are looking for.
+
+### 4. Test the artifact you ship, not the tree you built in
+
+Before calling any package complete: extract it to a fresh directory outside the
+working tree, run the documented commands verbatim from the README, hit the
+running app and confirm real content comes back, then diff the extracted file
+list against what the docs claim. Directory structure, path separators and file
+inclusion do not survive packaging by default — this repo already lost its
+entire `src/ tests/ scripts/` layout once in a zip.
+
+### 5. Every referenced file must be proven to exist
+
+Check both directions: for every path referenced in code (precache lists,
+imports, `<link>`, config, dataset paths in docs) confirm the file is there; and
+for every file present, confirm something references it. Report missing ones
+explicitly rather than assuming they were lost in transit. `sw.js` precaching
+three nonexistent icons is what silently killed offline support.
+
+### 6. No swallowed errors
+
+`.catch(() => {})`, bare `except: pass` and `|| true` are forbidden in new code
+and must be flagged when found. At minimum, log. An empty catch on the service
+worker registration is what hid a total install failure.
+
+Atomic batch operations (`cache.addAll`, `Promise.all`, bulk inserts) fail
+entirely on one bad element. Where partial success is acceptable use the
+per-item form (`allSettled`) and report what failed.
+
+### 7. Report blockers immediately; do not explore around them
+
+Credits are finite. When something is ambiguous, missing, or needs a judgement
+call that is properly the user's — branding, copy, data, product scope — stop
+and ask in one short message. Do not generate placeholders, try three
+approaches, or investigate adjacent code speculatively. Prefer one targeted
+command to three exploratory ones; if a command's output will not change what
+you do next, do not run it.
+
+### 8. Definition of done — state each line before claiming completion
+
+```
+[ ] Host OS/shell stated; sandbox-vs-target divergence resolved
+[ ] Test count > 0 and quoted verbatim
+[ ] Positive + negative controls both run, both quoted
+[ ] Shipped artifact extracted to a clean dir and run from README commands
+[ ] Every referenced file confirmed present (both directions)
+[ ] No new swallowed errors; existing ones flagged
+[ ] Anything unverified listed under "NOT VERIFIED" with the exact command
+```
+
+Any unchecked box must appear in the final message. A completion report with no
+"NOT VERIFIED" section is only credible if every box is genuinely ticked.
+
+### 9. Close the loop on the docs
+
+When a cross-cutting defect is found, add it above in the "will silently break
+if you clean it up" format: symptom, cause, and the test that pins it.
+**A constraint without a failing test to protect it will be tidied away.**
