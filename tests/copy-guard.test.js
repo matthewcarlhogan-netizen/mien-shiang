@@ -30,12 +30,19 @@ import { BANDS, SOURCES_DIFFER as QISE_DIFFER } from "../src/reading/qi-se.js";
 import { SCIENCE_POINTS, SCIENCE_INTRO } from "../src/reading/science.js";
 
 /** Every Module A copy surface, so none can be added without being scanned. */
+import { NOT_READ_LABEL, NOTHING_READ, EMPHASIS_LEAD } from "../src/reading/summary.js";
+import { PALACE_SCOPE_NOTE } from "../src/readingview.js";
+
 const MODULE_A_COPY = {
   RULES_A, ZONE_READINGS,
   ELEMENTS, SHAPE_TO_ELEMENT,
   COURTS, BALANCED_READING, COURTS_DIFFER,
   PALACES, TONE_GLOSS, PALACE_DIFFER,
   BANDS, QISE_DIFFER,
+  // The reading receipt and the palace scope note are user-facing Module A
+  // copy too. Registered here so they are scanned rather than trusted —
+  // an unregistered surface ships unread, which is the original defect.
+  SUMMARY: { NOT_READ_LABEL, NOTHING_READ, EMPHASIS_LEAD, PALACE_SCOPE_NOTE },
 };
 
 /* Disease names. Banned in BOTH modules. Deliberately excludes "ulcer" (a

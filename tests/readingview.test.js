@@ -67,8 +67,10 @@ test("a disagreement note renders for every reading that has one", () => {
     assert.ok(html.includes(note.slice(0, 50)),
       `a sources-differ note was computed but not rendered: ${note.slice(0, 60)}…`);
   }
-  // One consistent pattern, used four times.
-  assert.equal((html.match(/class="differ"/g) ?? []).length, 4);
+  // One consistent pattern, used four times. Now a collapsible disclosure —
+  // collapsed is not deleted, and tests/summary.test.js pins that exactly one
+  // starts open so the honesty is visible without interaction.
+  assert.equal((html.match(/class="differ-disclosure"/g) ?? []).length, 4);
 });
 
 test("the Five Elements alternates are shown, not just the primary", () => {
@@ -80,7 +82,7 @@ test("the Five Elements alternates are shown, not just the primary", () => {
 test("sourcesNote returns nothing when there is no disagreement to report", () => {
   assert.equal(sourcesNote(null), "");
   assert.equal(sourcesNote(""), "");
-  assert.match(sourcesNote("Sources differ on this — x versus y."), /class="differ"/);
+  assert.match(sourcesNote("Sources differ on this — x versus y."), /class="differ-disclosure"/);
 });
 
 // ───────────────────────────────────────── Module B stays outside Module A ──
