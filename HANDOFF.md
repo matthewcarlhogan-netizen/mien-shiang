@@ -164,6 +164,9 @@ engine.js  rawScalars()   neutral physical quantities   <- owned by NEITHER modu
   tokens (`note: "colourNotMeasurableFromThisPhoto"`), never sentences, so the
   copy lint will have exactly one surface to scan.
 
+> **Phase 5 history feature must handle basis changes between sessions — see
+> basis key on glow output.**
+
 ### Two things worth knowing before Phase 2 and Phase 5
 
 **Unmeasurable colour is dropped, never zeroed** — in both modules. Module A
