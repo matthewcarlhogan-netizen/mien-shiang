@@ -50,6 +50,25 @@ export const EGRESS_ALLOWLIST = [
 export const SENTRY_DSN_PATTERN = /^https:\/\/[\w.]+@[\w.-]+\.ingest(\.[a-z]+)?\.sentry\.io\/\d+$/;
 export const REVENUECAT_HOST = "api.revenuecat.com";
 
+/**
+ * DOCUMENTATION LINKS — destinations the user may choose to open, which the
+ * app never calls itself.
+ *
+ * These are not egress. The guard exists to stop the app SENDING anywhere it
+ * shouldn't; a hyperlink the user taps is a navigation they initiated. Both
+ * entries are here because something else requires them: the MediaPipe URL is
+ * part of the Apache-2.0 attribution, and RevenueCat's policy must be linked
+ * from ours if their processing is described.
+ *
+ * They are still constrained: a documentation link may carry NO query string
+ * and NO fragment, because either could smuggle a value out in a URL the user
+ * is invited to click. Asserted below.
+ */
+export const DOC_LINK_ALLOWLIST = [
+  /^https:\/\/github\.com\/google-ai-edge\/mediapipe$/,
+  /^https:\/\/www\.revenuecat\.com\/privacy$/,
+];
+
 import {
   BLOCKLIST, DISEASE_TERMS, extractJsProse, extractHtmlCopy, findTerms,
   findAssertive, stripComments as sharedStrip, assertCanary, CANARY_FAILURE,
@@ -107,22 +126,26 @@ function guardCopyBlocklist(file, text, flavour) {
   const rel = relative(DIST, file).replace(/\\/g, "/");
   const isModuleB = rel === "rules-b.js" || rel === "adapters/safety.js";
 
-  let copy = [], disclaimer = [];
+  let copy = [], disclaimer = [], legal = [];
   if (file.endsWith(".html")) {
-    ({ copy, disclaimer } = extractHtmlCopy(text));
+    ({ copy, disclaimer, legal } = extractHtmlCopy(text));
   } else if (file.endsWith(".js")) {
     copy = extractJsProse(text);
   } else {
     return;
   }
-  allCopy.push(...copy, ...disclaimer);
+  allCopy.push(...copy, ...disclaimer, ...legal);
 
-  // Disease names are rejected everywhere — Module B and disclaimers included.
-  for (const h of findTerms([...copy, ...disclaimer], DISEASE_TERMS)) {
+  // Disease names are rejected EVERYWHERE — Module B, disclaimers and legal
+  // pages included. TGA exclusion 14B does not survive a disease claim in any
+  // surface of the product.
+  for (const h of findTerms([...copy, ...disclaimer, ...legal], DISEASE_TERMS)) {
     record("disease-name", file, `"${h.term}" in: ${h.text.slice(0, 80)}`);
   }
 
-  // Assertive phrasing outside a tradition-attributed context, everywhere.
+  // Assertive phrasing. Legal pages are exempt (a statute reference such as
+  // "rights you have under consumer law" is not a claim about the reader);
+  // disclaimers are not.
   for (const h of findAssertive([...copy, ...disclaimer])) {
     record("assertive", file, `"${h.phrase}" in: ${h.text.slice(0, 80)}`);
   }
@@ -163,6 +186,17 @@ function guardEgress(file, text) {
     if (EGRESS_ALLOWLIST.some((a) => a.pattern.test(url))) continue;
     if (SENTRY_DSN_PATTERN.test(url)) continue;
     if (url.includes(REVENUECAT_HOST)) continue;
+
+    // A documentation link is a navigation the user initiates, not egress by
+    // the app — but only if it carries nothing. A query string or fragment on
+    // one of these would be a way to hand a value to a third party in a URL
+    // the user is invited to click.
+    if (DOC_LINK_ALLOWLIST.some((p) => p.test(url))) {
+      if (/[?#]/.test(url)) {
+        record("egress", file, `documentation link carries a query or fragment: ${url}`);
+      }
+      continue;
+    }
     record("egress", file, `destination not on the allowlist: ${url}`);
   }
 }

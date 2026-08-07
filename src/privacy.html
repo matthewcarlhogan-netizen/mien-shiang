@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#14181D" />
+<title>Privacy Policy — Mien Shiang</title>
+<link rel="manifest" href="./manifest.webmanifest" />
+<style>
+:root{
+  --ink:#14181D; --ink-60:#5A626B; --ink-30:#9BA3AB;
+  --rule:#C9CDD1; --paper:#EDEFF0; --paper-hi:#F7F8F8;
+  --cinnabar:#C8442B; --jade:#3F6B5E;
+  --display:system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--display);
+  font-size:16px;line-height:1.6;padding-bottom:env(safe-area-inset-bottom)}
+main{max-width:44rem;margin:0 auto;padding:1.5rem 1.15rem 4rem}
+h1{font-size:1.8rem;line-height:1.15;margin:.5rem 0 .25rem;letter-spacing:-.02em}
+h2{font-size:1.15rem;margin:2rem 0 .5rem;letter-spacing:-.01em}
+h3{font-size:1rem;margin:1.35rem 0 .35rem}
+p,li{color:var(--ink-60)}
+li{margin:.35rem 0}
+a{color:var(--cinnabar)}
+.eyebrow{font-family:var(--mono);font-size:.7rem;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ink-60);margin:0}
+.updated{font-family:var(--mono);font-size:.72rem;color:var(--ink-30)}
+.key{border:1px solid var(--rule);border-left:3px solid var(--jade);
+  background:var(--paper-hi);padding:1rem 1.1rem;margin:1.25rem 0}
+.key p{margin:0;color:var(--ink)}
+.notyet{border:1px solid var(--rule);border-left:3px solid var(--cinnabar);
+  background:var(--paper-hi);padding:.85rem 1rem;margin:1rem 0;font-size:.9rem}
+.notyet p{margin:0}
+table{width:100%;border-collapse:collapse;font-size:.88rem;margin:.75rem 0}
+th,td{text-align:left;padding:.4rem .5rem .4rem 0;border-bottom:1px solid var(--rule);
+  vertical-align:top}
+th{color:var(--ink-30);font-weight:500;font-size:.78rem;text-transform:uppercase;
+  letter-spacing:.06em}
+footer{border-top:1px solid var(--rule);margin-top:2.5rem;padding-top:1rem;
+  font-size:.82rem}
+</style>
+</head>
+<body>
+<!-- data-copy="legal" : this whole document is legal prose. It is exempt
+     from the Module A vocabulary blocklist and the assertive-phrasing guard,
+     because a policy has to be able to say "does not diagnose" and "rights
+     you have under consumer law". Disease names are still rejected here. -->
+<main data-copy="legal">
+  <p class="eyebrow">Mien Shiang</p>
+  <h1>Privacy Policy</h1>
+  <p class="updated">Last updated: this policy describes the app as currently built.</p>
+
+  <div class="key">
+    <p><strong>The short version.</strong> Your photo is analysed on your device
+    and then discarded. It is never uploaded, never stored, and never linked to
+    you or to anything else. There is no account, no analytics, and no
+    advertising. We cannot see your face, because it never reaches us.</p>
+  </div>
+
+  <h2>What the app collects</h2>
+
+  <h3>Camera and photos</h3>
+  <p>When you take or choose a photo, it is drawn onto a canvas inside the app,
+  measured, and discarded. The image and the facial measurements taken from it
+  (a set of coordinates describing the position of features, plus colour and
+  texture values) exist only in the device's memory, for the length of one
+  reading.</p>
+  <p><strong>None of it is transmitted anywhere. None of it is written to
+  storage. None of it is retained after the reading closes.</strong> There is
+  deliberately no upload endpoint in the app, and an automated check runs on
+  every build asserting that no network request can carry any value derived
+  from your photo.</p>
+  <p>Camera access is requested only when you first use it, after a consent
+  screen that explains all of this. You can decline, and you can revoke the
+  permission at any time in your device settings.</p>
+
+  <h3>Crash reports</h3>
+  <div class="notyet">
+    <p><strong>Not currently active.</strong> This build contains no crash
+    reporting and sends no crash data. The section below describes what would be
+    collected if crash reporting is enabled in a future release, so you can see
+    the intended limits in advance. This policy will be updated, and the change
+    noted, before any such collection begins.</p>
+  </div>
+  <p>If crash reporting is enabled, it would collect: device model, operating
+  system version, app version, and an anonymised stack trace describing where
+  the app failed. It would <strong>not</strong> collect images, facial
+  measurements, or any other data derived from your photo, and it would not
+  collect anything identifying you.</p>
+
+  <h3>Purchases</h3>
+  <div class="notyet">
+    <p><strong>Not currently active.</strong> This build has no purchases, no
+    subscriptions and no payment processing of any kind.</p>
+  </div>
+  <p>If purchasing is added, subscription status and purchase history would be
+  handled by RevenueCat, and their handling would be governed by the
+  <a href="https://www.revenuecat.com/privacy">RevenueCat privacy policy</a>.
+  Purchase data would never be combined with anything from your photo, because
+  nothing from your photo leaves your device to be combined with.</p>
+
+  <h3>What the app does not do</h3>
+  <ul>
+    <li>No analytics SDK of any kind.</li>
+    <li>No advertising SDK, no ad identifiers, no tracking pixels.</li>
+    <li>No accounts, no sign-in, no email collection.</li>
+    <li>No third-party data sharing whatsoever in this build.</li>
+    <li>No sale of personal information, ever.</li>
+  </ul>
+  <p>The app does download two files from the internet on first use: the
+  MediaPipe face-measurement library and its model file, from Google's and
+  jsDelivr's public content networks. These are ordinary downloads of static
+  files. They send nothing about you, and after the first load the app works
+  entirely offline.</p>
+
+  <h2>Your rights</h2>
+
+  <h3>If you are in the EU or UK (GDPR)</h3>
+  <p>You have the right to access, rectify, erase, restrict and object to
+  processing of your personal data, and the right to data portability.</p>
+  <p>The lawful basis for processing your facial image is your
+  <strong>explicit consent</strong>, obtained on the consent screen before the
+  camera is first used. You may withdraw consent at any time by revoking camera
+  permission or deleting the app; withdrawal does not affect a reading already
+  shown to you, because that reading exists only on your screen.</p>
+  <p>In practice there is very little for us to act on: we hold no personal
+  data about you, so an access request will be answered truthfully with
+  "we hold nothing about you". You may still make one, and we will respond.</p>
+
+  <h3>If you are in California (CCPA/CPRA)</h3>
+  <p>You have the right to know what personal information is collected, to
+  delete it, to correct it, and to opt out of its sale or sharing.</p>
+  <p><strong>We do not sell or share personal information, and never have.</strong>
+  Because no sale or sharing occurs, there is no "Do Not Sell or Share My
+  Personal Information" link to provide — that is the reason for its absence,
+  not an oversight. Facial geometry is treated as sensitive personal
+  information; it is processed solely to provide the reading you asked for, on
+  your own device, and is not retained.</p>
+
+  <h3>If you are in Australia (Privacy Act 1988)</h3>
+  <p>Facial measurements are biometric information, which is
+  <strong>sensitive information</strong> under the Australian Privacy
+  Principles and attracts a higher standard of protection. Consent is obtained
+  before collection, on the consent screen, and collection is limited to what
+  the reading requires.</p>
+  <p>There is <strong>no cross-border disclosure of biometric information</strong>,
+  because that information never leaves your device in the first place. You may
+  request access to, or correction of, personal information we hold; as above,
+  we hold none.</p>
+
+  <h3>Illinois residents (BIPA)</h3>
+  <p>This section is provided as disclosure, not as a claim of exemption.</p>
+  <p>All facial analysis in this app happens on your own device. No biometric
+  identifier or biometric information is transmitted to us or to any third
+  party. Nothing is retained after a reading is displayed: there is no
+  database, no storage layer, and no file written. Nothing is linked to your
+  identity, because the app has no accounts and collects no identifiers. We
+  do not sell, lease, trade or otherwise profit from biometric information.</p>
+
+  <h2>Children</h2>
+  <p>This app is not directed at children and should not be used by anyone
+  under 13. It is entertainment content about a traditional practice, and is
+  not suitable as a source of guidance for anyone.</p>
+
+  <h2>Changes to this policy</h2>
+  <p>If the app begins collecting anything it does not collect today —
+  including enabling the crash reporting or purchasing described above — this
+  policy will be updated before that collection starts, and the change will be
+  noted in the app.</p>
+
+  <h2>Contact</h2>
+  <p>For access, correction, deletion or any other privacy request:</p>
+  <p><strong>privacy@[yourdomain].com</strong></p>
+  <p>We respond to privacy requests within <strong>30 days</strong>.</p>
+
+  <footer>
+    <p><a href="./index.html">← Back to Mien Shiang</a> ·
+       <a href="./terms.html">Terms of Service</a></p>
+  </footer>
+</main>
+</body>
+</html>

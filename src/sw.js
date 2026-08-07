@@ -5,11 +5,13 @@
  * second launch works with no connection at all. */
 // Bumped when the shell list changes: the activate handler deletes every cache
 // whose name is not CACHE, so a stale v1 holding an old SHELL cannot survive.
-const CACHE = "mienshiang-v4";
+const CACHE = "mienshiang-v5";
 const SHELL = [
   "./", "./index.html", "./ui.js", "./analysis.js", "./engine.js",
   "./geometry.js", "./landmarker.js", "./expression.js",
   "./debugview.js", "./flags.js", "./zones.js",
+  "./modulebview.js", "./report.js", "./about.js",
+  "./privacy.html", "./terms.html",
   // Rule layer, split by module.
   "./rules.js", "./rules-a.js", "./rules-b.js", "./rule-engine.js",
   // Module A reading + its views.

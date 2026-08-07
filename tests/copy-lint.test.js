@@ -38,11 +38,12 @@ function collect() {
   for (const file of walk(SRC).filter((f) => /\.(js|html)$/.test(f))) {
     const text = readFileSync(file, "utf8");
     if (file.endsWith(".html")) {
-      const { copy, disclaimer } = extractHtmlCopy(text);
-      out.push(...copy.map((s) => ({ s, file: rel(file), disclaimer: false })));
-      out.push(...disclaimer.map((s) => ({ s, file: rel(file), disclaimer: true })));
+      const { copy, disclaimer, legal } = extractHtmlCopy(text);
+      out.push(...copy.map((s) => ({ s, file: rel(file), bucket: "copy" })));
+      out.push(...disclaimer.map((s) => ({ s, file: rel(file), bucket: "disclaimer" })));
+      out.push(...legal.map((s) => ({ s, file: rel(file), bucket: "legal" })));
     } else {
-      out.push(...extractJsProse(text).map((s) => ({ s, file: rel(file), disclaimer: false })));
+      out.push(...extractJsProse(text).map((s) => ({ s, file: rel(file), bucket: "copy" })));
     }
   }
   return out;
@@ -75,13 +76,14 @@ test("the three previously-unscanned files are actually being scanned", () => {
 
 test("no Module A source file contains health vocabulary in user-facing copy", () => {
   const offenders = [];
-  for (const { s, file, disclaimer } of ALL) {
+  for (const { s, file, bucket } of ALL) {
     if (MODULE_B_FILES.has(file)) continue;
-    // Disclaimers are exempt from the blocklist ONLY. Their job is to say what
-    // the app is not and does not do, which cannot be written without the words
-    // "diagnose", "treat", "cure" and "disease". Weakening that sentence to
-    // satisfy a vocabulary lint would trade a real disclosure for a green test.
-    if (disclaimer) continue;
+    // Disclaimers and legal pages are exempt from the blocklist ONLY. Their job
+    // is to say what the app is not and does not do, which cannot be written
+    // without the words "diagnose", "treat", "cure" and "disease". Weakening
+    // those sentences to satisfy a vocabulary lint would trade a real legal
+    // disclosure for a green test.
+    if (bucket !== "copy") continue;
     for (const h of findTerms([s], BLOCKLIST)) {
       offenders.push(`${file}: "${h.term}" in ${JSON.stringify(s.slice(0, 90))}`);
     }
@@ -116,7 +118,11 @@ test("the blocklist actually contains the Module B terms it is documented to", (
 
 test("no assertive second-person claim outside a tradition-attributed string", () => {
   const offenders = [];
-  for (const { s, file } of ALL) {
+  for (const { s, file, bucket } of ALL) {
+    // Legal pages are exempt: "rights you have under consumer law" and "it does
+    // not tell you facts about your character" are a statute reference and a
+    // denial, not claims about the reader. Disclaimers are NOT exempt.
+    if (bucket === "legal") continue;
     for (const h of findAssertive([s])) {
       offenders.push(`${file}: "${h.phrase}" in ${JSON.stringify(s.slice(0, 90))}`);
     }
@@ -134,6 +140,17 @@ test("the assertive guard fires on an unattributed claim and not on an attribute
 });
 
 // ────────────────────────────────────────────────── the disclaimer exemption ─
+
+test("only the two legal pages use the legal exemption", () => {
+  // The broadest exemption in the system, so it is pinned to exactly the two
+  // documents that need it. Anything else marking itself legal is a bug.
+  const marked = walk(SRC)
+    .filter((f) => /\.html$/.test(f))
+    .filter((f) => /data-copy=["']legal["']/.test(readFileSync(f, "utf8")))
+    .map(rel)
+    .sort();
+  assert.deepEqual(marked, ["privacy.html", "terms.html"]);
+});
 
 test("the disclaimer exemption is narrow and cannot be applied to a reading", () => {
   const html = readFileSync(join(SRC, "index.html"), "utf8");

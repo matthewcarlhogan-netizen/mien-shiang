@@ -170,8 +170,19 @@ export function extractJsProse(src) {
 }
 
 /**
- * Extract visible text from HTML, split into exempt and non-exempt.
- * @returns {{copy: string[], disclaimer: string[]}}
+ * Extract visible text from HTML, bucketed by its `data-copy` marker.
+ *
+ *   (unmarked)  — Module A copy. Full blocklist, assertive guard, disease guard.
+ *   "disclaimer" — exempt from the BLOCKLIST only. The wellness disclaimer
+ *      cannot be written without "diagnose", "treat", "cure", "disease".
+ *      Assertive phrasing and disease names are still rejected.
+ *   "legal" — whole legal documents (privacy policy, terms). Exempt from the
+ *      blocklist AND the assertive guard: a terms page has to be able to say
+ *      "it does not diagnose" and "rights you have under consumer law", and
+ *      neither is a claim about the reader's character. Disease names are
+ *      still rejected, and a test asserts only the two legal pages use it.
+ *
+ * @returns {{copy: string[], disclaimer: string[], legal: string[]}}
  */
 export function extractHtmlCopy(html) {
   // Drop style and script blocks — neither is visible text.
@@ -179,16 +190,17 @@ export function extractHtmlCopy(html) {
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<script[\s\S]*?<\/script>/gi, " ");
 
-  const disclaimer = [];
+  const buckets = { disclaimer: [], legal: [] };
   let rest = body;
 
-  // Pull out every element carrying data-copy="disclaimer", including nesting,
-  // by scanning for the attribute and taking the balanced element after it.
-  const re = /<(\w+)[^>]*data-copy=["']disclaimer["'][^>]*>/gi;
+  // Pull out every element carrying a data-copy marker, including nesting, by
+  // scanning for the attribute and taking the balanced element after it.
+  const re = /<(\w+)[^>]*data-copy=["'](disclaimer|legal)["'][^>]*>/gi;
   let m;
   const spans = [];
   while ((m = re.exec(body)) !== null) {
     const tag = m[1];
+    const kind = m[2].toLowerCase();
     const start = m.index;
     // Find the matching close tag, allowing for same-tag nesting.
     let depth = 1, i = re.lastIndex;
@@ -201,10 +213,10 @@ export function extractHtmlCopy(html) {
       if (o && o.index < c.index) { depth++; i = o.index + 1; }
       else { depth--; i = c.index + c[0].length; }
     }
-    spans.push([start, i]);
+    spans.push([start, i, kind]);
   }
-  for (const [s, e] of spans.reverse()) {
-    disclaimer.push(body.slice(s, e));
+  for (const [s, e, kind] of spans.reverse()) {
+    buckets[kind].push(body.slice(s, e));
     rest = rest.slice(0, s) + " ".repeat(e - s) + rest.slice(e);
   }
 
@@ -216,7 +228,8 @@ export function extractHtmlCopy(html) {
 
   return {
     copy: toText(rest),
-    disclaimer: disclaimer.flatMap(toText),
+    disclaimer: buckets.disclaimer.flatMap(toText),
+    legal: buckets.legal.flatMap(toText),
   };
 }
 

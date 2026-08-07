@@ -128,7 +128,32 @@ details.palace p{margin:.5rem 0 0;font-size:.88rem}
 .module-b-disclaimer{font-size:.82rem;color:var(--ink-60);margin:.4rem 0 .9rem}
 .advisory p{margin:0 0 .5rem}
 
-.science-link{margin-top:1.25rem;text-align:left}
+.science-link,.report-link{margin-top:.6rem;text-align:left}
+.science-link{margin-top:1.25rem}
+.report-form{padding:1.75rem 1.25rem calc(1.75rem + env(safe-area-inset-bottom))}
+.report-form h2{font-size:1.35rem;margin:.35rem 0 .7rem}
+.report-field{display:block;margin:1rem 0}
+.report-field span{display:block;font-size:.85rem;color:var(--ink-60);margin-bottom:.35rem}
+.report-field select,.report-field textarea{width:100%;font:inherit;font-size:.95rem;
+  padding:.6rem;border:1px solid var(--rule);background:var(--paper-hi);
+  color:var(--ink);border-radius:0}
+.report-field textarea{resize:vertical}
+
+.bar-about{width:auto;margin:0 0 0 auto;padding:.15rem .5rem;font-family:var(--mono);
+  font-size:.66rem;letter-spacing:.05em;background:transparent;color:var(--paper);
+  border:1px solid var(--ink-60)}
+.about{padding:1.75rem 1.25rem calc(1.75rem + env(safe-area-inset-bottom))}
+.about h2{font-size:1.5rem;margin:.35rem 0 .2rem}
+.about-version{font-family:var(--mono);font-size:.72rem;color:var(--ink-30);margin:0 0 1rem}
+.about-flavour{border:1px solid var(--rule);border-left:3px solid var(--jade);
+  background:var(--paper-hi);padding:.9rem 1rem;margin-bottom:1rem}
+.about-flavour p{margin:0 0 .3rem}
+.about-flavour code{font-family:var(--mono);font-size:.78rem}
+.about-links{display:flex;flex-direction:column;gap:.2rem;margin:1rem 0}
+.about-link{display:block;padding:.85em 0;border-bottom:1px solid var(--rule);
+  color:var(--ink);text-decoration:none;font-size:1rem}
+.ack{border-top:1px solid var(--rule);padding:.75rem 0}
+.ack p{margin:0 0 .2rem}
 .science{padding:1.75rem 1.25rem calc(1.75rem + env(safe-area-inset-bottom))}
 .science h2{font-size:1.5rem;line-height:1.15;margin:.4rem 0 .8rem}
 .science-intro{color:var(--ink-60);margin:0 0 .4rem}
@@ -184,6 +209,7 @@ footer{border-top:1px solid var(--rule);margin:2rem 1rem 0;padding:1.5rem 0 3rem
 <div class="bar" role="status" data-copy="disclaimer">
   <span class="dot" aria-hidden="true"></span>
   <strong>FACE READING</strong><span>/</span><span>ENTERTAINMENT, NOT A DIAGNOSTIC DEVICE</span>
+  <button id="about-open" class="bar-about" type="button">About</button>
 </div>
 
 <header>
@@ -230,6 +256,8 @@ footer{border-top:1px solid var(--rule);margin:2rem 1rem 0;padding:1.5rem 0 3rem
 </footer>
 
 <dialog id="science"></dialog>
+<dialog id="report"></dialog>
+<dialog id="about"></dialog>
 
 <dialog id="consent">
   <div class="consent" data-copy="disclaimer">

@@ -118,7 +118,13 @@ function build() {
 
   // Recorded in the artefact so a store submission can be checked against what
   // was actually shipped rather than against what the flag said at the time.
+  // Name and version come from package.json rather than being retyped, so the
+  // About screen cannot drift from the released version.
+  const pkg = JSON.parse(readFileSync(join(REPO, "package.json"), "utf8"));
+
   writeFileSync(join(DIST, "build-info.json"), JSON.stringify({
+    name: pkg.name,
+    version: pkg.version,
     flavour: flavour.name,
     moduleBShipped: flavour.moduleB,
     stubbedModules: stubbed,

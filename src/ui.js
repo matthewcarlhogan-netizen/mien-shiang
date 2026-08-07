@@ -4,6 +4,11 @@ import { renderReading } from "./readingview.js";
 import { renderReferrals, renderHaltNotice, renderAdvisories, renderMeasurementLimits }
   from "./modulebview.js";
 import { renderScienceLink, renderScienceScreen } from "./scienceview.js";
+import {
+  renderReportButton, renderReportForm, renderReportConfirmation,
+  buildReportPayload, sendReport,
+} from "./report.js";
+import { renderAbout, loadBuildInfo } from "./about.js";
 
 const $ = (id) => document.getElementById(id);
 const CONSENT_KEY = "mienshiang.consent.v1";
@@ -99,6 +104,7 @@ function render(r) {
   if (!result.halted) {
     parts.push(renderReading(r.reading));
     parts.push(renderScienceLink());
+    parts.push(renderReportButton());
   }
 
   for (const rec of result.recommendations) {
@@ -121,21 +127,74 @@ function render(r) {
 
   $("out").innerHTML = parts.join("");
   wireScienceScreen();
+  wireReportControl();
+}
+
+// -------------------------------------------------- report this result --
+
+/**
+ * Google Play's AI-Generated Content policy requires a report control on every
+ * generated result, reachable without leaving the app. This opens an in-app
+ * dialog — nothing navigates away, nothing opens a mail client.
+ */
+function openReport() {
+  const dlg = $("report");
+  dlg.innerHTML = renderReportForm();
+  dlg.showModal();
+  dlg.querySelector("#report-cancel").addEventListener("click", () => dlg.close());
+  dlg.querySelector("#report-submit").addEventListener("click", () => {
+    // Built from the form fields only. The reading is not passed in and is not
+    // in scope here: a function that cannot see face data cannot leak it.
+    const payload = buildReportPayload(
+      dlg.querySelector("#report-reason").value,
+      dlg.querySelector("#report-note").value,
+    );
+    sendReport(payload);
+    dlg.innerHTML = renderReportConfirmation();
+    dlg.querySelector("#report-close").addEventListener("click", () => dlg.close());
+  });
+}
+
+function wireReportControl() {
+  $("report-open")?.addEventListener("click", openReport);
 }
 
 // ------------------------------------------------- what the science says --
 
+/** Opens the science screen. Reused by the results screen and by About. */
+function openScience() {
+  const dlg = $("science");
+  dlg.innerHTML = renderScienceScreen();
+  dlg.showModal();
+  dlg.querySelector("#science-close").addEventListener("click", () => dlg.close());
+}
+
 /** One tap from the results screen. Not a menu, not an About page. */
 function wireScienceScreen() {
-  const open = $("science-open");
-  if (!open) return;
-  open.addEventListener("click", () => {
-    const dlg = $("science");
-    dlg.innerHTML = renderScienceScreen();
+  $("science-open")?.addEventListener("click", openScience);
+}
+
+// ------------------------------------------------------------------ about --
+
+/** Opens the About screen, and wires its two in-app controls. */
+function openAbout() {
+  const dlg = $("about");
+  loadBuildInfo().then((info) => {
+    dlg.innerHTML = renderAbout(info);
     dlg.showModal();
-    dlg.querySelector("#science-close").addEventListener("click", () => dlg.close());
+    dlg.querySelector("#about-close").addEventListener("click", () => dlg.close());
+    dlg.querySelector("#about-science").addEventListener("click", () => {
+      dlg.close();
+      openScience();
+    });
+    dlg.querySelector("#about-report").addEventListener("click", () => {
+      dlg.close();
+      openReport();
+    });
   });
 }
+
+$("about-open")?.addEventListener("click", openAbout);
 
 // --------------------------------------------------------- offline support --
 
