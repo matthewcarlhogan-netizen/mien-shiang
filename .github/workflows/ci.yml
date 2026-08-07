@@ -60,8 +60,18 @@ jobs:
           echo "$out"
           echo "$out" | grep -qE "Running [1-9][0-9]* test file" \
             || { echo "::error::test run reported no discovered test files"; exit 1; }
-          total="$(echo "$out" | grep -oE "^. tests [0-9]+" | grep -oE "[0-9]+" | tail -1)"
-          fail="$(echo "$out" | grep -oE "^. fail [0-9]+" | grep -oE "[0-9]+" | tail -1)"
+          # The summary prefix is "#" under the TAP reporter and "ℹ" under spec,
+          # and Node picks between them BY VERSION: 20 and 22 emit TAP here, 24
+          # emits spec. "^." matched the one-byte "#" everywhere, but "ℹ" is
+          # three bytes (U+2139) and grep's "." matches a single BYTE in the
+          # C/POSIX locale that Git Bash uses. So the pattern silently held on
+          # every leg except windows + node 24 — where grep matched nothing,
+          # and because GitHub runs bash with -eo pipefail the step aborted on
+          # the assignment itself, with 208/208 tests passing and no error
+          # message at all. Match a whole non-space token instead, which is
+          # locale-independent and reporter-independent.
+          total="$(echo "$out" | grep -oE "^[^ ]* tests [0-9]+" | grep -oE "[0-9]+" | tail -1)"
+          fail="$(echo "$out" | grep -oE "^[^ ]* fail [0-9]+" | grep -oE "[0-9]+" | tail -1)"
           echo "discovered $total tests, $fail failing"
           [ -n "$total" ] || { echo "::error::could not read the test count"; exit 1; }
           [ "$fail" = "0" ] || { echo "::error::$fail test(s) failing"; exit 1; }
