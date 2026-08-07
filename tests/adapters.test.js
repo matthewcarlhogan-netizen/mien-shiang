@@ -244,11 +244,20 @@ test("the flag gates the LEGACY rule path too, not only the adapter", () => {
   // entertainment-only flavour a label with nothing behind it.
   // Asserted as booleans, not assert.match on the file: a failed match would
   // dump all of rules.js into the output and bury the reason.
+  //
+  // The gate is now COMPOSITION rather than a filter — the entertainment-only
+  // build never puts Module B's rules into the set, instead of building a
+  // combined set and filtering it afterwards. A filter is a predicate that can
+  // be got wrong (mis-typed category, a rule added with the wrong one) and it
+  // fails OPEN, leaving health-adjacent output in a build that declares none.
+  // Composition fails closed.
   const text = src("rules.js");
-  assert.ok(text.includes("MODULE_B_SAFETY_REFERRALS"),
-    "rules.js must consult the flag");
-  assert.ok(/\.filter\([\s\S]{0,160}?safety_gate/.test(text),
-    "runRules must drop safety_gate rules when Module B is disabled");
+  assert.ok(text.includes("MODULE_B_SAFETY_REFERRALS"), "rules.js must consult the flag");
+  assert.ok(/MODULE_B_SAFETY_REFERRALS[\s\S]{0,80}?RULES_B/.test(text),
+    "Module B's rules must be composed in only when the flag is on");
+
+  // rules.js must carry no copy of its own.
+  assert.ok(!/message:\s*["'`]/.test(text), "the composition root must contain no copy");
 
   // And with the flag ON the gate is genuinely reachable, so the filter above
   // is not passing by removing everything.
@@ -286,13 +295,14 @@ test("referrals are never billable, in either flavour", () => {
 
 // ──────────────────────────────────────────── one source for the numbers ───
 
-test("rules.js uses the adapter's thresholds rather than repeating literals", () => {
+test("Module B's rules use the adapter's thresholds rather than repeating literals", () => {
   const malar = RULES.find((r) => r.id === "SG-001-MALAR");
   const cheek = malar.all.find((c) => c.zone === "cheek_left");
   assert.equal(cheek.severity[">="], VIA_RULES.MALAR_CHEEK_SEVERITY);
 
-  // And the file must not have gone back to hardcoded numbers.
-  const text = src("rules.js");
+  // And Module B's rule file must not have gone back to hardcoded numbers.
+  // It did exactly that during the rules.js split; this caught it.
+  const text = src("rules-b.js");
   assert.match(text, /SAFETY_THRESHOLDS\.MALAR_CHEEK_SEVERITY/);
   assert.doesNotMatch(text, /condition:\s*"erythema",\s*severity:\s*\{\s*">=":\s*0\.45\s*\}/,
     "threshold literals must not be reintroduced alongside the imported constants");

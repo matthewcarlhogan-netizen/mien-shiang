@@ -12,7 +12,8 @@ import {
 } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs";
 
 import { analyse, rawScalars, shadesOfGray, regionStats, UNAVAILABLE } from "./engine.js";
-import { ROIS, runRules } from "./rules.js";
+import { ROIS } from "./zones.js";
+import { runRules } from "./rules.js";
 import { readComplexion } from "./adapters/entertainment.js";
 import { evaluateSafety } from "./adapters/safety.js";
 import { BUILD_FLAVOUR } from "./flags.js";

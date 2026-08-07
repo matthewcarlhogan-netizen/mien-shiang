@@ -1,7 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { runRules, ROIS } from "../src/rules.js";
+import { runRules } from "../src/rules.js";
+import { ROIS } from "../src/zones.js";
+import { ZONE_READINGS } from "../src/rules-a.js";
 import { analyse } from "../src/engine.js";
 import { region } from "./engine.test.js";
 
@@ -21,10 +23,14 @@ test("cheek laterality follows MediaPipe's subject-anatomical convention", () =>
   // Liver/Lung cheek distinction.
   assert.ok(ROIS.cheek_right.idx.includes(234));
   assert.ok(ROIS.cheek_left.idx.includes(454));
-  assert.match(ROIS.cheek_right.correspondence, /Lung/);
-  assert.match(ROIS.cheek_left.correspondence, /Liver/);
   assert.ok(ROIS.periorbital_right.idx.includes(33));
   assert.ok(ROIS.periorbital_left.idx.includes(263));
+
+  // The correspondences moved to Module A when rules.js was split — the zone
+  // geometry is measurement config, the organ reading is attributed tradition.
+  // The laterality assertion is the same one either way.
+  assert.match(ZONE_READINGS.cheek_right.correspondence, /Lung/);
+  assert.match(ZONE_READINGS.cheek_left.correspondence, /Liver/);
 });
 
 // ----------------------------------------------------------- safety gates ---
