@@ -6,22 +6,29 @@ interprets them through a Traditional Chinese Medicine (Mien Shiang) rule base.
 Runs entirely in the browser — no server, no upload, no account. Installs to an
 Android home screen as a PWA and works offline after first run.
 
-**General wellness tool. Not a medical device. Not intended to diagnose, treat,
-mitigate, cure or prevent any disease.**
+**Entertainment. Not a medical device. Not intended to diagnose, treat,
+mitigate, cure or prevent any disease.** The reading is presented as tradition
+throughout, and a "What the science says" screen is one tap from every result.
+
+Two build flavours: `entertainment-only` and `wellness`, selected by
+`MODULE_B_SAFETY_REFERRALS` in `src/flags.js`. See [COMPLIANCE.md](COMPLIANCE.md).
 
 ## Quick start
 
 ```bash
 npm start     # http://localhost:5173
-npm test      # 159 tests
+npm test      # 199 tests
+npm run build # dist/
+npm run lint:bundle # compliance guards on dist/
 ```
 
-No dependencies, no build step.
+No npm dependencies. The build performs no transform — `dist/` is a copy of
+`src/`, with Module B stubbed out in the entertainment flavour.
 
 ## On your phone
 
-Needs https. Drag `src/` to [Netlify Drop](https://app.netlify.com/drop), open
-the URL in Chrome on Android, then ⋮ → **Add to Home screen**.
+Needs https. Run `npm run build` and deploy `dist/`.
+
 
 ## What it measures
 

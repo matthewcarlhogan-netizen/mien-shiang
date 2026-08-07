@@ -296,7 +296,90 @@ screen.
 
 ---
 
+---
+
+## Phase 3 — compliance harness
+
+### Verified this session
+
+- **199 tests, 199 passing.** `ℹ tests 199 / pass 199 / fail 0`.
+- **Bundle lint green on BOTH flavours**, run against `dist/`:
+  `copy blocklist ok · attractiveness ok · egress allowlist ok · biometric egress ok`
+  (363 user-facing strings extracted on wellness, 353 on entertainment-only).
+- **The entertainment build genuinely omits Module B.** `scripts/build.js`
+  replaces `adapters/safety.js`, `rules-b.js` and `modulebview.js` with stubs.
+  Verified by inspection of `dist/`: none of "circulation", "iron levels",
+  "dermatologist" or "not as a diagnosis" is present. This is what makes the
+  Play Health declaration true of the artefact rather than only of its
+  behaviour.
+- **Copy lint now covers `index.html`, `ui.js` and `engine.js`.** A canary
+  asserts a known term is found, in `index.html` specifically, with the exact
+  required failure message.
+- **CI dry-run: 19 checks, all passing**, including the paired negative control
+  (a missing file must 404). `act` is unavailable — it needs Docker — so each
+  workflow step was executed directly instead.
+- **App boots from a cleared cache**; consent gate blocks; the science, report
+  and about dialogs are all present and wired.
+- **Report payload verified clean**: exactly
+  `{type, reason, note, sessionId, moduleFlag}`, note capped at 500.
+
+### Reported but unverified
+
+- **CI has still never actually run** — no git remote. The workflow was
+  dry-run locally on Windows only. The ubuntu and macos legs, and Node 20/22,
+  are unexercised.
+- The privacy policy and terms have **not been reviewed by a lawyer**. The
+  terms page says so on its face.
+- `privacy@[yourdomain].com` is a placeholder. No domain is registered.
+- `assetlinks.json` carries a zeroed fingerprint placeholder.
+
+### Unknown
+
+- Whether a Play reviewer accepts "does not exhibit health features" for the
+  entertainment build given the disclaimer text that remains. The reasoning is
+  written up in COMPLIANCE.md; it has not been tested against a real review.
+- Whether the `isProse` heuristic misses copy shapes not yet written.
+
+### Decisions taken, so they are not silently re-litigated
+
+- **A build step was added**, against the standing "no build step" decision.
+  Three Phase 3 requirements (lint the bundle, egress-guard the bundle, CI
+  `npm run build`) presuppose an artefact, and the flavour split needs Module B
+  absent rather than unreachable. It has no dependencies and does no transform.
+- **Google Fonts was removed** rather than allowlisted. It is a third-party
+  request on every load from a product whose claim is that nothing leaves the
+  device, and it broke offline cold start.
+- **The privacy policy describes only what the app actually does.** Sentry and
+  RevenueCat are not integrated, so their sections are marked "Not currently
+  active" instead of being written as live collection. A policy asserting
+  collection that does not happen is an inaccurate legal disclosure.
+- **Bare `score` is not on the attractiveness blocklist.** MediaPipe's
+  blendshape API uses it; person-scoped compounds are matched instead.
+
 ## Exact next action
+
+### Phase 3 exit criteria
+
+| # | Criterion | Status |
+|---|---|---|
+| 1 | copy-guard scans index.html, ui.js, engine.js — confirmed by canary | ✅ |
+| 2 | copy-guard covers the built bundle | ✅ both flavours |
+| 3 | Assertive-phrasing guard passes | ✅ |
+| 4 | Attractiveness-score guard passes | ✅ |
+| 5 | Egress guard passes against the bundle | ✅ |
+| 6 | Report control exists, tested, payload clean | ✅ |
+| 7 | Privacy policy at /privacy, linked from 4 locations | ⚠️ **3 of 4** — consent gate, footer, About. The paywall does not exist yet (Phase 5). |
+| 8 | COMPLIANCE.md with real answers, both flavours | ✅ |
+| 9 | CI configured and would pass on push | ⚠️ **dry-run only** — 19/19 locally, on Windows. No remote, so never actually run. |
+| 10 | About screen shows correct flag state | ✅ |
+| 11 | 0 test failures | ✅ 199/199 |
+| 12 | source-integrity.test.js still passes | ✅ untouched and passing |
+| 13 | HANDOFF updated | ✅ this section |
+
+Two criteria are short, both for the same reason: the thing they depend on does
+not exist yet (a paywall screen; a git remote). Neither is blocked by code.
+
+---
 
 **Phase 2 exit is met except for its first criterion.**
 
@@ -310,12 +393,28 @@ screen.
 | HANDOFF updated with the three sections | ✅ |
 | No copy asserts character, health or attractiveness | ✅ enforced by tests |
 
-So the next action is the **same blocker as Phase 1**: 3–5 selfies in varied
-lighting, at least one off-angle, at least one mid-expression, saved locally.
-They gate the first criterion of both phases and nothing else can substitute —
-the reading has never been driven from a camera.
+## Exact next action — Phase 4
 
-After that, Phase 3: the compliance harness, `COMPLIANCE.md` (Play Health
-declaration posture for the entertainment build is **"does not exhibit health
-features"**, flag-only, no build step), the report-this-result control, the
-egress and attractiveness guards, and the privacy policy page.
+Three things gate Phase 4, in this order:
+
+1. **Add a git remote and push.** CI has never executed. Everything above is
+   verified on one platform by one person; the matrix exists precisely because
+   three defects in this repo's history were invisible on a single platform.
+   `git remote add origin <url> && git push -u origin main`.
+
+2. **Real-photo validation.** Still outstanding from Phase 1 and Phase 2, still
+   the same ask: 3–5 selfies saved locally, varied lighting, at least one
+   off-angle, at least one mid-expression. The reading has never once been
+   driven from a camera. This gates Phase 1's exit, Phase 2's first criterion,
+   and Phase 4's device test.
+
+3. **A domain.** `privacy@[yourdomain].com` and the hosted policy URL are both
+   placeholders, and the Play listing needs a real privacy URL. Registering it
+   also unblocks the HTTPS origin Phase 4 needs.
+
+Then Phase 4 proper: deploy `dist/` to HTTPS hosting, confirm
+`/.well-known/assetlinks.json` is actually served from the origin root before
+building anything, replace the zeroed fingerprint with the real signing key's
+SHA-256, `bubblewrap init` → `build`, and install to the device. If the launched
+app shows a browser address bar, assetlinks is wrong — fix it rather than
+shipping it.

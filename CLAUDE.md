@@ -17,14 +17,23 @@ change the product's regulatory status, not just its tone.
 ## Commands
 
 ```bash
-npm start     # dev server on http://localhost:5173 (honours PORT)
-npm test      # 159 tests, node:test, no dependencies
+npm start        # dev server on http://localhost:5173 (honours PORT)
+npm test         # 199 tests, node:test, no dependencies
+npm run build    # dist/ — copy of src/, Module B stubbed in the entertainment flavour
+npm run lint:bundle   # compliance guards, run against dist/ not src/
 ```
 
-There is no build step and no npm dependencies. `src/` ships as-is. The
+There is a build step now, and still no npm dependencies. It was added in
+Phase 3 because the compliance guards must run on the ARTEFACT — a term in a
+file that never ships is not a finding — and because the entertainment flavour
+needs Module B genuinely absent from the bundle, not merely unreachable, before
+its Google Play Health declaration is true. `scripts/build.js` performs no
+transform: `dist/` is a copy of `src/` with three Module B files replaced by
+stubs when the flag is off.
+
 `package-lock.json` exists only so `npm ci` works in CI; it locks nothing.
 
-159 across ten files. If you see 44, the traversal suite is not being
+199 across fourteen files. If you see 44, the traversal suite is not being
 discovered.
 
 **All 159 pass.** The long-standing `copy-guard` failure on
@@ -225,6 +234,56 @@ equivalent at all.
 must carry a `sourcesDiffer` note) and `every Five Elements mapping names its
 source and its disagreement` (every shape must also name a competing element).
 `readingview.js` renders them all through one pattern, `sourcesNote()`.
+
+### 21. The copy lint has THREE buckets, and the exemptions are narrow
+
+`scripts/copy-scan.js` buckets user-facing text by its `data-copy` marker:
+
+| Bucket | Blocklist | Assertive guard | Disease names |
+|---|---|---|---|
+| (unmarked) — Module A copy | enforced | enforced | rejected |
+| `disclaimer` — consent gate, footer | **exempt** | enforced | rejected |
+| `legal` — privacy.html, terms.html | **exempt** | **exempt** | rejected |
+
+**Why the exemptions exist.** The wellness disclaimer cannot be written without
+"diagnose", "treat", "cure" and "disease"; a terms page has to be able to say
+"rights you have under consumer law". Weakening either to satisfy a vocabulary
+lint would trade a real legal disclosure for a green test.
+
+**Symptom of misuse:** a reading marked as a disclaimer, and health vocabulary
+walks straight into Module A.
+**Pinned by:** `only the two legal pages use the legal exemption` (an exact
+list, not a pattern) and `the disclaimer exemption is narrow and cannot be
+applied to a reading`, which asserts no file under `reading/` carries a marker.
+
+Disease names are rejected in EVERY bucket. TGA exclusion 14B does not survive
+a disease claim on any surface of the product.
+
+### 22. Guards run on `dist/`, and a string literal is not what a regex thinks
+
+`scripts/lint-bundle.js` scans the built artefact. Writing its scanner surfaced
+three defects worth remembering, because each produced confident wrong output:
+
+1. **A naive `/"..."/` regex spans the code between two literals.** JavaScript
+   alternates strings and code, so quote-to-quote matching happily captured
+   `, severity: s, confidence: conf, tone, measured: {` and reported it as
+   user-facing copy. Fixed with a real tokeniser (`tokeniseStringLiterals`).
+2. **Regex literals contain quotes.** `/[&<>"]/g` opened a phantom string that
+   swallowed hundreds of characters. The tokeniser now skips regex literals,
+   resolving the division ambiguity the usual way.
+3. **Banning the bare word "score" is wrong here.** MediaPipe's blendshape
+   categories carry a `score` field. Banning it would force renaming a
+   third-party API to satisfy a lint about English. Person-scoped compounds
+   (`overallScore`, `beautyScore`) are matched instead.
+
+The lint also exits non-zero if it scans zero files or if its canary term is
+not found — a guard that passes by scanning nothing is the false-green this
+repo has shipped twice.
+
+**Documentation links are not egress.** The Apache-2.0 attribution URL and
+RevenueCat's policy link are navigations the user initiates. They are
+allowlisted separately and only with no query string and no fragment, since
+either could hand a value to a third party in a URL the user is invited to tap.
 
 ### 9. The disease-name guard scans EVERY rule, not one fired path
 
