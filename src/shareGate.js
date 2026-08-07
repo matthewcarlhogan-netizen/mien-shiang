@@ -1,10 +1,11 @@
 /*
- * Share-to-unlock gate.
+ * Share-to-unlock gate — Phase 3C extended.
  *
  * After a face reading, the detailed sections (Twelve Palaces, qi-se, the
  * remaining Module A cards) are gated until the user shares a plain text
- * link with two people. This is honour-system only — optimises for reach
- * rather than abuse prevention — and requires no backend.
+ * link with two people OR pays for access. This is honour-system only for the
+ * share path — optimises for reach rather than abuse prevention — and requires
+ * no backend.
  *
  * ── WHAT NEVER GOES IN THE SHARE TEXT ──────────────────────────────────────
  * No numeric scores, no beauty ratings, no health claims. The share message
@@ -17,7 +18,14 @@
  *   "share"        — two successful Web Share calls, or two clipboard copies.
  *   "paid-lifetime"— operator-set via URL param ?unlocked=payment (Stripe
  *                    redirect, pending domain configuration).
+ *   "subscription" — weekly Stripe subscription (?unlocked=subscription).
  *   null           — locked.
+ *
+ * ── UNLOCK PRIORITY ────────────────────────────────────────────────────────
+ *   paid-lifetime             → always unlocked
+ *   subscription (valid)      → unlocked until 7 days after subscriptionStart
+ *   free (share)              → unlocked
+ *   otherwise                 → locked, show teaser + modal
  *
  * ── LOCALITY ───────────────────────────────────────────────────────────────
  * State lives in localStorage on this device. A user who clears storage, or
@@ -25,13 +33,15 @@
  * no-account, no-server policy.
  */
 
-const KEY_UNLOCKED   = "mienshiang.unlock.v1";
-const KEY_SHARE_COUNT = "mienshiang.shareCount.v1";
-const SHARES_REQUIRED = 2;
+const KEY_UNLOCKED         = "mienshiang.unlock.v1";
+const KEY_SHARE_COUNT      = "mienshiang.shareCount.v1";
+const KEY_SUBSCRIPTION_START = "mienshiang.subscriptionStart.v1";
+const SHARES_REQUIRED      = 2;
+const SUBSCRIPTION_MS      = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 // ─────────────────────────────────────────────────────────── read / write ────
 
-/** @returns {"share"|"paid-lifetime"|null} */
+/** @returns {"share"|"paid-lifetime"|"subscription"|null} */
 export function getUnlockState() {
   try {
     return localStorage.getItem(KEY_UNLOCKED) ?? null;
@@ -40,8 +50,35 @@ export function getUnlockState() {
   }
 }
 
-export function isUnlocked() {
-  return getUnlockState() !== null;
+/**
+ * Check subscription validity. Returns true if a subscription is stored and
+ * has not yet expired (7-day window).
+ */
+export function isSubscriptionValid(nowMs = Date.now()) {
+  try {
+    const raw = localStorage.getItem(KEY_SUBSCRIPTION_START);
+    if (!raw) return false;
+    const start = parseInt(raw, 10);
+    return Number.isFinite(start) && (nowMs - start) < SUBSCRIPTION_MS;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Returns true when the full report should be shown.
+ *
+ * Priority order:
+ *   1. paid-lifetime (permanent)
+ *   2. subscription (valid within 7 days)
+ *   3. share (honour system)
+ */
+export function isUnlocked(nowMs = Date.now()) {
+  const state = getUnlockState();
+  if (state === "paid-lifetime") return true;
+  if (state === "subscription") return isSubscriptionValid(nowMs);
+  if (state === "share") return true;
+  return false;
 }
 
 function setUnlocked(value) {
@@ -96,6 +133,13 @@ export function redeemPaymentParam(search) {
     const p = new URLSearchParams(search);
     if (p.get("unlocked") === "payment" && p.get("sid")) {
       setUnlocked("paid-lifetime");
+      return true;
+    }
+    if (p.get("unlocked") === "subscription" && p.get("sid")) {
+      setUnlocked("subscription");
+      try {
+        localStorage.setItem(KEY_SUBSCRIPTION_START, String(Date.now()));
+      } catch { /* ignore */ }
       return true;
     }
   } catch { /* malformed search string */ }
@@ -176,6 +220,7 @@ export function resetUnlockState() {
   try {
     localStorage.removeItem(KEY_UNLOCKED);
     localStorage.removeItem(KEY_SHARE_COUNT);
+    localStorage.removeItem(KEY_SUBSCRIPTION_START);
   } catch { /* ignore */ }
 }
 
@@ -185,4 +230,33 @@ export function resetUnlockState() {
 export function simulateShares() {
   setShareCount(SHARES_REQUIRED);
   setUnlocked("share");
+}
+
+/**
+ * Simulate a subscription redemption. Dev panel only.
+ * @param {number} [startMs]  subscription start time (defaults to now)
+ */
+export function simulateSubscription(startMs = Date.now()) {
+  try {
+    localStorage.setItem(KEY_SUBSCRIPTION_START, String(startMs));
+    setUnlocked("subscription");
+  } catch { /* ignore */ }
+}
+
+/**
+ * Returns the number of milliseconds remaining in the current subscription,
+ * or 0 if there is no active subscription.
+ * @param {number} [nowMs]
+ * @returns {number}
+ */
+export function subscriptionMsRemaining(nowMs = Date.now()) {
+  try {
+    const raw = localStorage.getItem(KEY_SUBSCRIPTION_START);
+    if (!raw) return 0;
+    const start = parseInt(raw, 10);
+    const remaining = SUBSCRIPTION_MS - (nowMs - start);
+    return Math.max(0, remaining);
+  } catch {
+    return 0;
+  }
 }

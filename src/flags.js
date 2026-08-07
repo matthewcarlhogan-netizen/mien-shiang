@@ -72,6 +72,21 @@ export const MODULE_B_IS_NEVER_MONETISED = true;
  * Only Module A (entertainment) content is ever behind this gate.
  * MODULE_B_IS_NEVER_MONETISED = true is a constraint on Module B, not on this.
  *
+ * STRIPE REMINDER: Describe business as "Entertainment app providing Traditional
+ * Chinese Medicine face reading and geometric proportion analysis." Never use
+ * "fortune telling," "psychic," "predict," or "occult" in the Stripe business
+ * description. These risk account termination under Stripe UDAP policy.
+ *
  * ASCII only in this file -- see the comment block at the top.
  */
 export const STRIPE_LIFETIME_LINK = "";
+
+/**
+ * Stripe Payment Link for the weekly subscription tier.
+ *
+ * Stripe success URL should be:
+ *   https://[yourdomain]/?unlocked=subscription&sid={CHECKOUT_SESSION_ID}
+ *
+ * ASCII only in this file -- see the comment block at the top.
+ */
+export const STRIPE_WEEKLY_LINK = "";
