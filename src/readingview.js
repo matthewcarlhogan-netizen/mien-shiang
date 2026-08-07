@@ -112,3 +112,64 @@ export function renderReading(reading) {
     ${renderPalaces(reading.twelvePalaces)}
   </div>`;
 }
+
+/**
+ * Summary card — one-glance overview shown at the top of results.
+ * Distils the four reading sections into a scannable headline block.
+ */
+export function renderSummary(reading) {
+  if (!reading) return "";
+
+  const q = reading.qiSe;
+  const fe = reading.fiveElements;
+  const tc = reading.threeCourts;
+  const tp = reading.twelvePalaces;
+
+  // Glow block
+  let glowBlock = "";
+  if (q?.available) {
+    glowBlock = `
+      <div class="summary-glow">
+        <div class="summary-glow-number">${q.glowIndex}</div>
+        <div>
+          <div class="summary-glow-label">QI SE 氣色 — Complexion glow</div>
+          <div class="summary-glow-desc">${esc(q.reading.split(".")[0])}</div>
+        </div>
+      </div>`;
+  }
+
+  // Pills for the four dimensions
+  const pills = [];
+  if (fe?.available) {
+    pills.push(`<span class="summary-pill active">${esc(fe.name)} ${esc(fe.hanzi)}</span>`);
+  } else {
+    pills.push(`<span class="summary-pill">Element not read</span>`);
+  }
+  if (tc?.available) {
+    const label = tc.balanced ? "Courts balanced" : `${esc(tc.court.name)} dominant`;
+    pills.push(`<span class="summary-pill active">${label}</span>`);
+  }
+  if (tp) {
+    pills.push(`<span class="summary-pill ${tp.measuredCount < tp.totalCount ? "warn" : "active"}">${tp.measuredCount}/${tp.totalCount} palaces read</span>`);
+  }
+
+  // Headline: pick the most prominent dimension
+  let headline = "Reading complete";
+  let subtitle = "Scroll down to explore each section";
+  if (fe?.available) {
+    headline = `${fe.name} type${fe.hanzi ? " — " + fe.hanzi : ""}`;
+    subtitle = fe.reading.length > 90 ? fe.reading.slice(0, 90) + "…" : fe.reading;
+  } else if (q?.available) {
+    headline = `Glow index ${q.glowIndex}`;
+    subtitle = q.reading.length > 90 ? q.reading.slice(0, 90) + "…" : q.reading;
+  }
+
+  return `
+    <div class="summary-card">
+      <p class="eyebrow">Reading summary</p>
+      <h2 class="summary-headline">${esc(headline)}</h2>
+      <p class="summary-subtitle">${esc(subtitle)}</p>
+      <div class="summary-pills">${pills.join("")}</div>
+      ${glowBlock}
+    </div>`;
+}

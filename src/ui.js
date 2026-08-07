@@ -1,6 +1,6 @@
 ﻿import { runAnalysis } from "./analysis.js";
 import { renderGeometry } from "./debugview.js";
-import { renderReading } from "./readingview.js";
+import { renderReading, renderSummary } from "./readingview.js";
 import { renderReferrals, renderHaltNotice, renderAdvisories, renderMeasurementLimits }
   from "./modulebview.js";
 import { renderScienceLink, renderScienceScreen } from "./scienceview.js";
@@ -102,6 +102,7 @@ function render(r) {
   // MODULE A — the reading. Rendered before anything else so it is what the
   // screen is about, and always accompanied by the science link.
   if (!result.halted) {
+    parts.push(renderSummary(r.reading));
     parts.push(renderReading(r.reading));
     parts.push(renderScienceLink());
     parts.push(renderReportButton());
