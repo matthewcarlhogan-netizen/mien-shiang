@@ -93,7 +93,10 @@ test("expression is framed as a momentary state, never as a trait", () => {
     flags: { eyesClosed: true, strongExpression: true },
   };
   const html = renderGeometry(square(), expression, "GPU");
-  assert.match(html, /says nothing about who you are/i);
+  // Reworded from "says nothing about who you are": the assertive-phrasing
+  // guard rejects "you are" outside a tradition-attributed string, and the
+  // denial form still trips it. The meaning is unchanged.
+  assert.match(html, /says nothing about character/i);
   assert.match(html, /eyes look closed/i);
   assert.match(html, /mid-expression/i);
 });

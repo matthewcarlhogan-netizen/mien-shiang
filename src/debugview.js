@@ -73,7 +73,7 @@ export function renderGeometry(g, expression, delegate) {
       ])}
       <p class="muted" style="font-size:.78rem">This describes how you were holding
         your face in this one photo &mdash; nothing more. Expression changes minute
-        to minute and says nothing about who you are.</p>
+        to minute and says nothing about character.</p>
       ${expression.flags?.eyesClosed ? `<p class="halted" style="margin:.6rem 0">Your
         eyes look closed here &mdash; worth retaking.</p>` : ""}
       ${expression.flags?.strongExpression ? `<p class="halted" style="margin:.6rem 0">This

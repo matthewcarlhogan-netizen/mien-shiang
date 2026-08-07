@@ -135,12 +135,12 @@ export const BASELINE_ZONES = ["center_forehead", "chin"];
  * for edema, 3D data a flat photo can't supply). Fabricating a low score would
  * let the UI imply a check happened that didn't. */
 export const UNAVAILABLE = {
-  acne: "needs a lesion detector trained on clinical images",
-  acne_cystic: "needs a lesion detector trained on clinical images",
-  comedone: "needs a lesion detector trained on clinical images",
-  ulcer: "needs a lesion classifier trained on clinical images",
-  dermatitis: "needs a lesion classifier trained on clinical images",
-  focal_pigmented_lesion: "out of scope; needs dermatological assessment",
+  acne: "needs a detector trained on labelled photographs",
+  acne_cystic: "needs a detector trained on labelled photographs",
+  comedone: "needs a detector trained on labelled photographs",
+  ulcer: "needs a classifier trained on labelled photographs",
+  dermatitis: "needs a classifier trained on labelled photographs",
+  focal_pigmented_lesion: "out of scope; needs assessment by a person",
   telangiectasia: "needs a vessel detector validated on facial skin",
   edema: "swelling is a 3D change; not recoverable from one flat photo",
   diagonal_crease: "needs an ear detector; the face mesh has no earlobe points",

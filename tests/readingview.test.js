@@ -8,7 +8,8 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { renderReading, renderModuleB, sourcesNote } from "../src/readingview.js";
+import { renderReading, sourcesNote } from "../src/readingview.js";
+import { renderAdvisories as renderModuleB } from "../src/modulebview.js";
 import { renderScienceLink, renderScienceScreen } from "../src/scienceview.js";
 import { MODULE_B_DISCLAIMER } from "../src/rules-b.js";
 import { composeReading } from "../src/reading/index.js";

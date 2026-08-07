@@ -18,8 +18,8 @@
 export const SCIENCE_TITLE = "What the science says";
 
 export const SCIENCE_INTRO =
-  "You've just read a face reading. Here is what research actually shows about reading faces, stated " +
-  "plainly, because you should have both.";
+  "You've just read a face reading in the Mian Xiang (面相) tradition. Here is what research actually " +
+  "shows about reading faces, stated plainly, because you should have both.";
 
 export const SCIENCE_POINTS = [
   {

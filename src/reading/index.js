@@ -11,6 +11,17 @@
  * merged into this object — the UI renders it under its own disclaimer.
  */
 
+/**
+ * First reference, shown above the reading.
+ *
+ * The product is called Mien Shiang; the scholarly romanisation of 面相 is
+ * Mian Xiang, and the reading copy uses that throughout. This line establishes
+ * the term once so the two spellings are not read as two different things.
+ */
+export const READING_LEAD =
+  "Read in the Mian Xiang (面相) tradition — classical Chinese face reading. " +
+  "Everything below describes what a tradition says, not what is true of you.";
+
 import { readFiveElements } from "./five-elements.js";
 import { readThreeCourts } from "./three-courts.js";
 import { readTwelvePalaces } from "./twelve-palaces.js";

@@ -18,7 +18,7 @@
  *    they are looking at without knowing this app's architecture.
  */
 
-import { MODULE_B_DISCLAIMER } from "./rules-b.js";
+import { READING_LEAD } from "./reading/index.js";
 
 export const esc = (s) => String(s).replace(/[&<>"]/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -105,32 +105,10 @@ function renderPalaces(tp) {
 export function renderReading(reading) {
   if (!reading) return "";
   return `<div class="reading">
+    <p class="reading-lead">${esc(READING_LEAD)}</p>
     ${renderQiSe(reading.qiSe)}
     ${renderFiveElements(reading.fiveElements)}
     ${renderThreeCourts(reading.threeCourts)}
     ${renderPalaces(reading.twelvePalaces)}
   </div>`;
-}
-
-/**
- * Module B's advisories, under Module B's disclaimer.
- *
- * Returns "" when there is nothing to show — including in an
- * entertainment-only build, where the rules were never composed in, so
- * `advisories` is empty and the disclaimer never appears either.
- */
-export function renderModuleB(advisories) {
-  if (!advisories?.length) return "";
-  return `
-    <div class="module-b">
-      <p class="eyebrow">A separate note</p>
-      <p class="module-b-disclaimer">${esc(MODULE_B_DISCLAIMER)}</p>
-      ${advisories.map((a) => `
-        <div class="advisory">
-          <p>${esc(a.message)}</p>
-          ${a.recommend?.length
-            ? `<ul>${a.recommend.map((s) => `<li>${esc(s)}</li>`).join("")}</ul>` : ""}
-          <div class="prov"><b>rule</b> ${esc(a.rule)}</div>
-        </div>`).join("")}
-    </div>`;
 }

@@ -1,6 +1,8 @@
 ﻿import { runAnalysis } from "./analysis.js";
 import { renderGeometry } from "./debugview.js";
-import { renderReading, renderModuleB } from "./readingview.js";
+import { renderReading } from "./readingview.js";
+import { renderReferrals, renderHaltNotice, renderAdvisories, renderMeasurementLimits }
+  from "./modulebview.js";
 import { renderScienceLink, renderScienceScreen } from "./scienceview.js";
 
 const $ = (id) => document.getElementById(id);
@@ -85,34 +87,12 @@ function render(r) {
 
   const parts = [];
 
-  for (const ref of result.referrals) {
-    parts.push(`
-      <div class="referral">
-        <p class="eyebrow">Stop — see a clinician</p>
-        <h3>${ref.referralTo === "dermatologist" ? "Out of scope for this tool" : "Worth a doctor's eyes"}</h3>
-        <p>${ref.message}</p>
-        <div class="prov"><b>rule</b> ${ref.rule}${ref.measured ? ` · <b>measured</b> ${ref.measured}` : ""}</div>
-      </div>`);
-  }
-
-  if (result.halted) {
-    parts.push(`<p class="halted">The traditional reading is paused for this photo.
-      A referral takes precedence — the tool won't offer lifestyle advice that
-      might read as reassurance.</p>`);
-  }
-
-  // What could and couldn't be measured. Stated plainly so nothing implies an
-  // examination happened that didn't.
-  const lowConf = baseline.regime === "low";
-  parts.push(`
-    <div class="limits ${lowConf ? "warn" : ""}">
-      <p class="eyebrow">What this photo could and couldn't measure</p>
-      ${baseline.reason ? `<p>${baseline.reason}</p>` : ""}
-      <p class="notmeasured">Not checked: ${notMeasured.join(", ").replace(/_/g, " ")}</p>
-      <p class="muted" style="font-size:.78rem">Those need a model trained on
-      clinical images, which this build doesn't have. Nothing above is a check
-      for them.</p>
-    </div>`);
+  // Module B renders through its own module — its vocabulary lives with its
+  // content, not on this Module A surface. All of these return "" when Module
+  // B was not composed into the build.
+  parts.push(renderReferrals(result.referrals));
+  parts.push(renderHaltNotice(result.halted));
+  parts.push(renderMeasurementLimits(baseline, notMeasured));
 
   // MODULE A — the reading. Rendered before anything else so it is what the
   // screen is about, and always accompanied by the science link.
@@ -135,7 +115,7 @@ function render(r) {
   // MODULE B — separate block, own disclaimer, never inside the reading.
   // Empty string in an entertainment-only build, where these rules were never
   // composed into the set at all.
-  parts.push(renderModuleB(result.advisories));
+  parts.push(renderAdvisories(result.advisories));
 
   parts.push(renderGeometry(r.geometry, r.expression, r.delegate));
 
