@@ -85,6 +85,50 @@ button:disabled{opacity:.35}
 .notmeasured{margin:.6rem 0 0;padding-top:.55rem;border-top:1px dotted var(--rule);
   font-family:var(--mono);font-size:.7rem;color:var(--ink-60);overflow-wrap:anywhere}
 
+/* The reading — Module A. This is what the screen is about, so it gets the
+   generous type; the instrument readout below it stays deliberately plain. */
+.reading-block{border-top:1px solid var(--rule);padding:1.25rem 0}
+.reading-block h3{font-size:1.3rem;margin:.35rem 0 .6rem}
+.reading-block p{margin:.6rem 0 0}
+.reading-block .hanzi{font-family:var(--annot);color:var(--cinnabar);margin-left:.15rem}
+.small{font-size:.8rem}
+
+/* One consistent pattern for "the classical sources disagree here". Used
+   everywhere a disagreement exists — never a footnote, never omitted. */
+.differ{display:flex;gap:.55rem;align-items:flex-start;margin-top:.9rem;
+  padding:.65rem .8rem;background:var(--paper-hi);border-left:2px solid var(--amber);
+  font-size:.82rem;color:var(--ink-60)}
+.differ-mark{color:var(--amber);flex:none;font-size:.9rem;line-height:1.4}
+
+/* Qi se basis shortfall. Stated in the reading, never tucked into a tooltip. */
+.basis-note{border-left:2px solid var(--jade);padding:.5rem 0 .5rem .8rem;
+  font-size:.86rem;color:var(--ink-60);margin:.2rem 0 .8rem}
+
+details.palace{border-bottom:1px dotted var(--rule);padding:.55rem 0}
+details.palace summary{cursor:pointer;font-size:.92rem}
+details.palace p{margin:.5rem 0 0;font-size:.88rem}
+.tag{font-family:var(--mono);font-size:.62rem;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--ink-30);border:1px solid var(--rule);
+  padding:.05rem .3rem;margin-left:.35rem}
+
+/* Module B. Visually separate from the reading on purpose — a reader must be
+   able to tell these two kinds of statement apart without knowing why. */
+.module-b{border:1px solid var(--jade);border-left-width:3px;padding:1rem;
+  margin-top:1.5rem;background:var(--paper-hi)}
+.module-b .eyebrow{color:var(--jade)}
+.module-b-disclaimer{font-size:.82rem;color:var(--ink-60);margin:.4rem 0 .9rem}
+.advisory p{margin:0 0 .5rem}
+
+.science-link{margin-top:1.25rem;text-align:left}
+.science{padding:1.75rem 1.25rem calc(1.75rem + env(safe-area-inset-bottom))}
+.science h2{font-size:1.5rem;line-height:1.15;margin:.4rem 0 .8rem}
+.science-intro{color:var(--ink-60);margin:0 0 .4rem}
+.science-point{border-top:1px solid var(--rule);padding:1rem 0}
+.science-point h3{font-size:1.05rem;margin-bottom:.4rem}
+.science-point p{margin:0;font-size:.92rem;color:var(--ink-60)}
+.science-refs{border-top:1px solid var(--rule);padding-top:.8rem;margin-top:.4rem;
+  font-family:var(--mono);font-size:.68rem;color:var(--ink-30)}
+
 /* Geometry debug view. Deliberately plain and dense — it exists to be read as
    working, not as a result. */
 .dbg-wrap{border:1px solid var(--rule);background:var(--paper-hi);
@@ -168,6 +212,8 @@ footer{border-top:1px solid var(--rule);margin:2rem 1rem 0;padding:1.5rem 0 3rem
   The organ-to-region correspondences it uses are traditional and are not
   established by controlled evidence. If you have a health concern, see a doctor.
 </footer>
+
+<dialog id="science"></dialog>
 
 <dialog id="consent">
   <div class="consent">

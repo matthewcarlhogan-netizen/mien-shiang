@@ -16,6 +16,7 @@ import { ROIS } from "./zones.js";
 import { runRules } from "./rules.js";
 import { readComplexion } from "./adapters/entertainment.js";
 import { evaluateSafety } from "./adapters/safety.js";
+import { composeReading } from "./reading/index.js";
 import { BUILD_FLAVOUR } from "./flags.js";
 import { createLandmarkerWithFallback } from "./landmarker.js";
 import { geometryReport } from "./geometry.js";
@@ -174,11 +175,14 @@ export async function runAnalysis(file, unmirror, onProgress) {
   if (!res.faceLandmarks?.length) {
     throw new Error("No face found. Face the camera straight on, in even light.");
   }
-  const raw = res.faceLandmarks[0];
-  if (raw.length !== EXPECTED_LANDMARKS) {
-    throw new Error(`Expected ${EXPECTED_LANDMARKS} landmarks, got ${raw.length}.`);
+  // Named `landmarks`, not `raw`: `raw` below is the raw SCALAR contract that
+  // both modules consume, and having two different `raw` bindings in one
+  // function is what broke this file.
+  const landmarks = res.faceLandmarks[0];
+  if (landmarks.length !== EXPECTED_LANDMARKS) {
+    throw new Error(`Expected ${EXPECTED_LANDMARKS} landmarks, got ${landmarks.length}.`);
   }
-  const pts = raw.map((p) => ({ x: p.x * w, y: p.y * h }));
+  const pts = landmarks.map((p) => ({ x: p.x * w, y: p.y * h }));
 
   // Geometry and expression are computed from the landmark set only — no
   // pixels — so they are independent of the colorimetry path and of its
@@ -215,10 +219,14 @@ export async function runAnalysis(file, unmirror, onProgress) {
   const facts = observations.map((o) => ({ fact: "observation", ...o }));
   const result = runRules(facts);
 
+  // Module A's reading. Built from geometry and the entertainment adapter
+  // only — it never sees `observations`, which carry condition names.
+  const reading = composeReading(geometry, complexion, raw);
+
   return {
     canvas, regions, observations, baseline, result,
     geometry, expression, delegate: activeDelegate,
-    complexion, safety, buildFlavour: BUILD_FLAVOUR,
+    complexion, safety, reading, buildFlavour: BUILD_FLAVOUR,
     notMeasured: Object.keys(UNAVAILABLE),
   };
 }

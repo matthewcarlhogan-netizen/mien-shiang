@@ -21,6 +21,22 @@ import assert from "node:assert/strict";
 
 import { RULES_A, ZONE_READINGS } from "../src/rules-a.js";
 import { RULES_B, MODULE_B_DISCLAIMER } from "../src/rules-b.js";
+import { ELEMENTS, SHAPE_TO_ELEMENT } from "../src/reading/five-elements.js";
+import { COURTS, BALANCED_READING, SOURCES_DIFFER as COURTS_DIFFER }
+  from "../src/reading/three-courts.js";
+import { PALACES, TONE_GLOSS, SOURCES_DIFFER as PALACE_DIFFER }
+  from "../src/reading/twelve-palaces.js";
+import { BANDS, SOURCES_DIFFER as QISE_DIFFER } from "../src/reading/qi-se.js";
+import { SCIENCE_POINTS, SCIENCE_INTRO } from "../src/reading/science.js";
+
+/** Every Module A copy surface, so none can be added without being scanned. */
+const MODULE_A_COPY = {
+  RULES_A, ZONE_READINGS,
+  ELEMENTS, SHAPE_TO_ELEMENT,
+  COURTS, BALANCED_READING, COURTS_DIFFER,
+  PALACES, TONE_GLOSS, PALACE_DIFFER,
+  BANDS, QISE_DIFFER,
+};
 
 /* Disease names. Banned in BOTH modules. Deliberately excludes "ulcer" (a
  * lesion, not a disease). Widen on purpose, not by accident. */
@@ -84,15 +100,26 @@ test("no rule payload names a disease, on any path, in EITHER module", () => {
 
 test("Module A carries no health vocabulary anywhere", () => {
   const offenders = [];
-  for (const rule of RULES_A) {
-    offenders.push(...scan(rule, rule.id ?? "(unidentified rule)", MODULE_A_BLOCKLIST));
+  for (const [surface, subject] of Object.entries(MODULE_A_COPY)) {
+    offenders.push(...scan(subject, surface, MODULE_A_BLOCKLIST));
   }
-  offenders.push(...scan(ZONE_READINGS, "ZONE_READINGS", MODULE_A_BLOCKLIST));
 
   assert.deepEqual(offenders, [],
     "Module A is the entertainment module and must contain no health "
     + "vocabulary. If a line genuinely needs these words it belongs in "
     + "rules-b.js, under the Module B disclaimer:\n  " + offenders.join("\n  "));
+});
+
+test("the reading content is covered by the guard, not just the rules", () => {
+  // Guards are worth exactly what they cover. If a new reading surface is
+  // added to src/reading/ and not registered in MODULE_A_COPY, its copy ships
+  // unscanned — which is how the original defect reached production.
+  for (const key of ["ELEMENTS", "COURTS", "PALACES", "BANDS"]) {
+    assert.ok(key in MODULE_A_COPY, `${key} must be registered for scanning`);
+  }
+  const strings = Object.values(MODULE_A_COPY).flatMap((s) => stringsIn(s));
+  assert.ok(strings.length > 100,
+    `expected the reading corpus to be substantial, found ${strings.length} strings`);
 });
 
 test("the relocated advisory really is in Module B, and Module A did not replace it", () => {
@@ -132,6 +159,48 @@ test("every Module A reading names the tradition it comes from", () => {
   }
 });
 
+test("every Five Elements mapping names its source and its disagreement", () => {
+  for (const [shape, m] of Object.entries(SHAPE_TO_ELEMENT)) {
+    assert.ok(ELEMENTS[m.primary], `${shape}: primary element must exist`);
+    assert.ok(m.alternates.length > 0,
+      `${shape}: the texts disagree here, so an alternate reading must be named`);
+    assert.match(m.sourcesDiffer, /Sources differ/,
+      `${shape}: face-shape assignments are not standardised and must say so`);
+    assert.ok(m.sourcesDiffer.length > 60, `${shape}: the note must name both positions`);
+  }
+  for (const [key, el] of Object.entries(ELEMENTS)) {
+    assert.match(el.reading, /Mian Xiang|Classical Chinese face reading/,
+      `ELEMENTS.${key}: must name the tradition inline`);
+  }
+});
+
+test("every reading surface carries a sources-differ note", () => {
+  for (const note of [COURTS_DIFFER, PALACE_DIFFER, QISE_DIFFER]) {
+    assert.match(note, /Sources differ/);
+    assert.ok(note.length > 60);
+  }
+});
+
+test("the science screen states all four required findings, unhedged", () => {
+  const ids = SCIENCE_POINTS.map((p) => p.id);
+  for (const required of ["no-basis", "fwhr", "ml-physiognomy", "first-impressions"]) {
+    assert.ok(ids.includes(required), `science screen missing: ${required}`);
+  }
+  const blob = SCIENCE_POINTS.map((p) => p.heading + " " + p.body).join(" ");
+  assert.match(blob, /no scientific basis|not supported by evidence/i);
+  assert.match(blob, /0\.10/, "the fWHR effect size must be stated, not gestured at");
+  assert.match(blob, /0\.16/);
+  assert.match(blob, /physiognomy/i);
+  assert.match(blob, /100 milliseconds|100-ms|100ms/i);
+  assert.match(blob, /Willis and Todorov|Willis & Todorov/);
+  assert.match(blob, /stereotype/i);
+
+  // Neutral, not apologetic. The screen is information; a sorry tone invites
+  // the reader to skip it.
+  assert.doesNotMatch(blob, /\b(sorry|unfortunately|we apologi[sz]e|just a bit of fun|only a game)\b/i);
+  assert.doesNotMatch(SCIENCE_INTRO, /\b(sorry|unfortunately)\b/i);
+});
+
 test("Module A never asserts a fact about the person", () => {
   // "You are X" / "your personality is X" phrasing. The reading describes what
   // a tradition says, never what the reader is.
@@ -145,10 +214,10 @@ test("Module A never asserts a fact about the person", () => {
     /\bpeople like you\b/i,
   ];
   const offenders = [];
-  for (const rule of RULES_A) {
-    for (const [key, str] of stringsIn(rule)) {
+  for (const [surface, subject] of Object.entries(MODULE_A_COPY)) {
+    for (const [key, str] of stringsIn(subject)) {
       for (const pattern of ASSERTIVE) {
-        if (pattern.test(str)) offenders.push(`${rule.id} .${key}: ${JSON.stringify(str)}`);
+        if (pattern.test(str)) offenders.push(`${surface} .${key}: ${JSON.stringify(str)}`);
       }
     }
   }
@@ -163,10 +232,10 @@ test("Module A never delivers a negative verdict", () => {
     /\byou (should worry|need to worry)\b/i,
   ];
   const offenders = [];
-  for (const rule of RULES_A) {
-    for (const [key, str] of stringsIn(rule)) {
+  for (const [surface, subject] of Object.entries(MODULE_A_COPY)) {
+    for (const [key, str] of stringsIn(subject)) {
       for (const p of NEGATIVE) {
-        if (p.test(str)) offenders.push(`${rule.id} .${key}: ${JSON.stringify(str)}`);
+        if (p.test(str)) offenders.push(`${surface} .${key}: ${JSON.stringify(str)}`);
       }
     }
   }

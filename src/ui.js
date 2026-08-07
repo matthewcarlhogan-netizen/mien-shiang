@@ -1,5 +1,7 @@
 ﻿import { runAnalysis } from "./analysis.js";
 import { renderGeometry } from "./debugview.js";
+import { renderReading, renderModuleB } from "./readingview.js";
+import { renderScienceLink, renderScienceScreen } from "./scienceview.js";
 
 const $ = (id) => document.getElementById(id);
 const CONSENT_KEY = "mienshiang.consent.v1";
@@ -16,7 +18,7 @@ $("accept").addEventListener("click", () => {
   localStorage.setItem(CONSENT_KEY, "1");
   dlg.close();
 });
-// Affirmative acknowledgment only â€” Esc must not dismiss it.
+// Affirmative acknowledgment only — Esc must not dismiss it.
 dlg.addEventListener("cancel", (e) => e.preventDefault());
 
 // -------------------------------------------------------------------- pick --
@@ -86,16 +88,16 @@ function render(r) {
   for (const ref of result.referrals) {
     parts.push(`
       <div class="referral">
-        <p class="eyebrow">Stop â€” see a clinician</p>
+        <p class="eyebrow">Stop — see a clinician</p>
         <h3>${ref.referralTo === "dermatologist" ? "Out of scope for this tool" : "Worth a doctor's eyes"}</h3>
         <p>${ref.message}</p>
-        <div class="prov"><b>rule</b> ${ref.rule}${ref.measured ? ` Â· <b>measured</b> ${ref.measured}` : ""}</div>
+        <div class="prov"><b>rule</b> ${ref.rule}${ref.measured ? ` · <b>measured</b> ${ref.measured}` : ""}</div>
       </div>`);
   }
 
   if (result.halted) {
     parts.push(`<p class="halted">The traditional reading is paused for this photo.
-      A referral takes precedence â€” the tool won't offer lifestyle advice that
+      A referral takes precedence — the tool won't offer lifestyle advice that
       might read as reassurance.</p>`);
   }
 
@@ -112,31 +114,53 @@ function render(r) {
       for them.</p>
     </div>`);
 
+  // MODULE A — the reading. Rendered before anything else so it is what the
+  // screen is about, and always accompanied by the science link.
+  if (!result.halted) {
+    parts.push(renderReading(r.reading));
+    parts.push(renderScienceLink());
+  }
+
   for (const rec of result.recommendations) {
     parts.push(`
       <article class="rec">
         <h3>${rec.name ?? rec.rule}</h3>
         <p>${rec.message}</p>
         ${rec.recommend.length ? `<ul>${rec.recommend.map((s) => `<li>${s}</li>`).join("")}</ul>` : ""}
-        <div class="prov"><b>rule</b> ${rec.rule}${rec.measured ? ` Â· <b>measured</b> ${rec.measured}` : ""}</div>
+        ${rec.sourcesDiffer ? `<p class="differ"><span class="differ-mark">⚖</span>${rec.sourcesDiffer}</p>` : ""}
+        <div class="prov"><b>rule</b> ${rec.rule}${rec.measured ? ` · <b>measured</b> ${rec.measured}` : ""}</div>
       </article>`);
   }
 
+  // MODULE B — separate block, own disclaimer, never inside the reading.
+  // Empty string in an entertainment-only build, where these rules were never
+  // composed into the set at all.
+  parts.push(renderModuleB(result.advisories));
+
   parts.push(renderGeometry(r.geometry, r.expression, r.delegate));
 
-  if (!result.halted && !result.recommendations.length) {
-    parts.push(`<p class="muted" style="margin-top:1rem">No pattern crossed
-      threshold. That's a normal result, not a clean bill of health â€” this tool
-      sees very little.</p>`);
-  }
-
   $("out").innerHTML = parts.join("");
+  wireScienceScreen();
+}
+
+// ------------------------------------------------- what the science says --
+
+/** One tap from the results screen. Not a menu, not an About page. */
+function wireScienceScreen() {
+  const open = $("science-open");
+  if (!open) return;
+  open.addEventListener("click", () => {
+    const dlg = $("science");
+    dlg.innerHTML = renderScienceScreen();
+    dlg.showModal();
+    dlg.querySelector("#science-close").addEventListener("click", () => dlg.close());
+  });
 }
 
 // --------------------------------------------------------- offline support --
 
 if ("serviceWorker" in navigator) {
-  // The catch stays â€” an unhandled rejection here is worse than a logged one â€”
+  // The catch stays — an unhandled rejection here is worse than a logged one —
   // but it must not be empty. An empty handler is what hid a total service
   // worker install failure: no offline support, no error, nothing on screen.
   window.addEventListener("load", () =>
