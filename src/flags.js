@@ -61,3 +61,17 @@ export const BUILD_FLAVOUR = MODULE_B_SAFETY_REFERRALS
  * Asserted by the adapter tests.
  */
 export const MODULE_B_IS_NEVER_MONETISED = true;
+
+/**
+ * Stripe Payment Link for lifetime unlock.
+ *
+ * Leave empty until you have a real HTTPS domain and a Stripe account.
+ * When populated, the "Unlock Forever" button navigates here; Stripe
+ * redirects back to https://[yourdomain]/?unlocked=payment on success.
+ *
+ * Only Module A (entertainment) content is ever behind this gate.
+ * MODULE_B_IS_NEVER_MONETISED = true is a constraint on Module B, not on this.
+ *
+ * ASCII only in this file -- see the comment block at the top.
+ */
+export const STRIPE_LIFETIME_LINK = "";

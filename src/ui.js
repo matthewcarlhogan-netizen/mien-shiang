@@ -1,6 +1,6 @@
 ﻿import { runAnalysis } from "./analysis.js";
 import { renderGeometry } from "./debugview.js";
-import { renderReading, renderSummary } from "./readingview.js";
+import { renderReadingGated, renderSummary } from "./readingview.js";
 import { buildShareModel, renderShareBlob, deliver } from "./sharecard.js";
 import { renderReferrals, renderHaltNotice, renderAdvisories, renderMeasurementLimits }
   from "./modulebview.js";
@@ -10,12 +10,27 @@ import {
   buildReportPayload, sendReport,
 } from "./report.js";
 import { renderAbout, loadBuildInfo } from "./about.js";
+import {
+  isUnlocked, redeemPaymentParam, buildShareText, shareText,
+  recordShare, getShareCount, resetUnlockState, simulateShares,
+} from "./shareGate.js";
+import { STRIPE_LIFETIME_LINK } from "./flags.js";
 
 const $ = (id) => document.getElementById(id);
 const CONSENT_KEY = "mienshiang.consent.v1";
 
 let file = null;
 let objectUrl = null;
+
+// ─────────────────────────────────── payment redirect on page load ──────────
+// Must run before any UI renders, per the unlock priority order.
+if (redeemPaymentParam(location.search)) {
+  // Remove the param so it doesn't persist in browser history.
+  history.replaceState(null, "", location.pathname);
+}
+
+// Cached last result, used to re-render after an in-session unlock.
+let lastResult = null;
 
 // ----------------------------------------------------------------- consent --
 
@@ -69,6 +84,7 @@ $("go").addEventListener("click", async () => {
 // ------------------------------------------------------------------ render --
 
 function render(r) {
+  lastResult = r;
   const { canvas, regions, result, baseline, notMeasured } = r;
 
   // Redraw the plate from the analysed canvas so the overlay lines up exactly
@@ -113,9 +129,15 @@ function render(r) {
   // substitutes for the other.
   parts.push(renderMeasurementLimits(baseline, notMeasured));
 
-  // MODULE A — the reading, in full, beneath the receipt.
+  // MODULE A — the reading, gated when the user has not yet unlocked.
+  // Five Elements (face shape) is always visible; the remaining sections are
+  // shown only after sharing or paying.
   if (!result.halted) {
-    parts.push(renderReading(r.reading));
+    const locked = !isUnlocked();
+    parts.push(renderReadingGated(r.reading, {
+      locked,
+      overlayHtml: locked ? gateOverlayHtml(getShareCount()) : "",
+    }));
     parts.push(renderScienceLink());
     parts.push(renderReportButton());
   }
@@ -142,6 +164,7 @@ function render(r) {
   wireScienceScreen();
   wireReportControl();
   wireShare(r);
+  wireShareGate(r);
 }
 
 /**
@@ -198,6 +221,106 @@ function wireShare(r) {
       setTimeout(() => { btn.textContent = original; }, 4000);
     }
   });
+}
+
+// ----------------------------------------------- share-to-unlock gate ------
+
+/**
+ * HTML for the frosted overlay that sits over the gated reading sections.
+ * Rendered purely — no DOM access. Injected via renderReadingGated.
+ *
+ * All strings here are UI chrome (buttons, counts, a short prompt). They are
+ * not Module A reading copy and carry no health vocabulary.
+ *
+ * @param {number} shareCount  shares completed so far (0, 1, or 2)
+ */
+function gateOverlayHtml(shareCount) {
+  const remaining = Math.max(0, 2 - shareCount);
+  const progressLabel = shareCount >= 2
+    ? "Shared"
+    : shareCount === 1 ? "1 of 2 shared" : "0 of 2 shared";
+
+  const paymentBtn = STRIPE_LIFETIME_LINK
+    ? `<a class="gate-btn gate-btn-pay" href="${STRIPE_LIFETIME_LINK}">Unlock Forever &mdash; $4.99</a>`
+    : `<button id="gate-notify" class="gate-btn gate-btn-pay" type="button">Unlock Forever &mdash; $4.99 (coming soon)</button>`;
+
+  return `
+    <div class="gate-card">
+      <p class="gate-title">Unlock the full reading</p>
+      <p class="gate-sub">Share with ${remaining} more friend${remaining !== 1 ? "s" : ""} to read
+        Three Courts, Qi Se and Twelve Palaces</p>
+      <p class="gate-progress">${progressLabel}</p>
+      <button id="gate-share" class="gate-btn gate-btn-share" type="button">
+        Share now
+      </button>
+      <p class="gate-or">or</p>
+      ${paymentBtn}
+      <p class="gate-caveat">For entertainment and self-reflection only.</p>
+    </div>`;
+}
+
+/**
+ * Wire the share-gate overlay buttons after render.
+ *
+ * The share button calls shareText with a tradition-framed message (no score,
+ * no health claims), records the share, and re-renders on unlock.
+ */
+function wireShareGate(r) {
+  const shareBtn = $("gate-share");
+  if (!shareBtn) return; // not rendered (user is already unlocked)
+
+  shareBtn.addEventListener("click", async () => {
+    shareBtn.disabled = true;
+    const original = shareBtn.textContent;
+
+    // Extract face shape name if available — tradition-attributed framing only.
+    const faceShapeName = r.reading?.fiveElements?.available
+      ? r.reading.fiveElements.name
+      : null;
+    const url = location.href.replace(/[?#].*$/, "");
+    const text = buildShareText(faceShapeName, url);
+
+    try {
+      const result = await shareText(text);
+      if (result === "shared" || result === "copied") {
+        const { unlocked } = recordShare();
+        shareBtn.textContent = result === "copied" ? "Link copied!" : "Shared!";
+        if (unlocked && lastResult) {
+          // Re-render the full reading now that the gate is open.
+          setTimeout(() => render(lastResult), 800);
+        } else {
+          // Update the overlay count without a full re-render.
+          const prog = document.querySelector(".gate-progress");
+          if (prog) prog.textContent = `${getShareCount()} of 2 shared`;
+          const sub = document.querySelector(".gate-sub");
+          if (sub) {
+            const rem = Math.max(0, 2 - getShareCount());
+            sub.textContent = `Share with ${rem} more friend${rem !== 1 ? "s" : ""} to read ` +
+              "Three Courts, Qi Se and Twelve Palaces";
+          }
+        }
+      } else if (result === "cancelled") {
+        shareBtn.textContent = original;
+      } else {
+        shareBtn.textContent = "Could not share";
+      }
+    } catch (err) {
+      shareBtn.textContent = "Could not share";
+      console.error("share gate failed:", err);
+    } finally {
+      shareBtn.disabled = false;
+      setTimeout(() => { if (shareBtn.textContent !== original) shareBtn.textContent = original; }, 3500);
+    }
+  });
+
+  // Payment notify button (only present when STRIPE_LIFETIME_LINK is empty).
+  const notifyBtn = $("gate-notify");
+  if (notifyBtn) {
+    notifyBtn.addEventListener("click", () => {
+      notifyBtn.textContent = "We\u2019ll let you know when it\u2019s ready";
+      notifyBtn.disabled = true;
+    });
+  }
 }
 
 // -------------------------------------------------- report this result --
@@ -275,4 +398,60 @@ if ("serviceWorker" in navigator) {
   window.addEventListener("load", () =>
     navigator.serviceWorker.register("./sw.js").catch((err) =>
       console.warn("Service worker registration failed; offline support is unavailable.", err)));
+}
+
+// ----------------------------------------------------------- dev panel ------
+// Triggered by 7 rapid taps on the wordmark. Hidden from normal users.
+// Shows reset controls for the share-gate unlock state.
+
+(function wireDevPanel() {
+  const wordmark = document.querySelector(".wordmark");
+  if (!wordmark) return;
+
+  let tapCount = 0;
+  let tapTimer = null;
+
+  wordmark.addEventListener("click", () => {
+    tapCount++;
+    clearTimeout(tapTimer);
+    tapTimer = setTimeout(() => { tapCount = 0; }, 2000);
+
+    if (tapCount >= 7) {
+      tapCount = 0;
+      clearTimeout(tapTimer);
+      openDevPanel();
+    }
+  });
+})();
+
+function openDevPanel() {
+  const dlg = $("dev-panel");
+  if (!dlg) return;
+
+  dlg.innerHTML = `
+    <div class="consent" style="min-width:0">
+      <h2 style="font-size:1rem;margin-bottom:.75rem">Dev: unlock state</h2>
+      <p style="font-size:.85rem;color:var(--ink-60);margin:.4rem 0">
+        Current state: <code>${getUnlockState() ?? "locked"}</code> &middot;
+        shares: <code>${getShareCount()}</code>
+      </p>
+      <div style="display:flex;flex-direction:column;gap:.5rem;margin-top:1rem">
+        <button id="dev-reset" class="ghost" type="button">Reset unlock state</button>
+        <button id="dev-simulate" class="ghost" type="button">Simulate 2 shares</button>
+        <button id="dev-close" class="ghost" type="button" style="margin-top:.5rem">Close</button>
+      </div>
+    </div>`;
+
+  dlg.showModal();
+  dlg.querySelector("#dev-close").addEventListener("click", () => dlg.close());
+  dlg.querySelector("#dev-reset").addEventListener("click", () => {
+    resetUnlockState();
+    dlg.close();
+    if (lastResult) render(lastResult);
+  });
+  dlg.querySelector("#dev-simulate").addEventListener("click", () => {
+    simulateShares();
+    dlg.close();
+    if (lastResult) render(lastResult);
+  });
 }

@@ -294,6 +294,32 @@ dialog::backdrop{background:rgba(5,8,12,.92)}
 footer{border-top:1px solid var(--rule);margin:2rem 1rem 0;padding:1.5rem 0 3rem;
   color:var(--ink-30);font-size:.78rem}
 footer a{color:var(--ink-60)}
+
+/* Share-gate frosted overlay */
+.reading-gate-wrap{position:relative;overflow:hidden;border-radius:8px;
+  margin-top:1rem}
+.reading-gate-blur{filter:blur(4px);opacity:.35;user-select:none;
+  pointer-events:none;padding:.5rem}
+.reading-gate-overlay{position:absolute;inset:0;display:flex;
+  align-items:center;justify-content:center;padding:1rem;
+  background:rgba(15,18,22,.55);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.gate-card{background:var(--card-hi);border:1px solid var(--rule);
+  border-radius:8px;padding:1.5rem 1.25rem;max-width:22rem;width:100%;
+  text-align:center}
+.gate-title{font-size:1.05rem;font-weight:600;margin:0 0 .4rem}
+.gate-sub{font-size:.88rem;color:var(--ink-60);margin:0 0 .75rem;line-height:1.45}
+.gate-progress{font-size:.82rem;font-family:var(--mono);color:var(--cinnabar);
+  margin:0 0 .9rem;letter-spacing:.03em}
+.gate-btn{display:block;width:100%;padding:.65rem 1rem;border-radius:6px;
+  font:inherit;font-size:.92rem;font-weight:600;cursor:pointer;
+  border:1px solid var(--rule);background:var(--card);color:var(--ink);
+  margin-bottom:.55rem;text-decoration:none;text-align:center}
+.gate-btn-share{background:var(--cinnabar);border-color:var(--cinnabar);
+  color:#fff}
+.gate-btn:disabled{opacity:.55;cursor:default}
+.gate-or{font-size:.8rem;color:var(--ink-60);margin:.2rem 0 .55rem}
+.gate-caveat{font-size:.75rem;color:var(--ink-30);margin:.8rem 0 0}
 </style>
 </head>
 <body>
@@ -360,6 +386,7 @@ footer a{color:var(--ink-60)}
 <dialog id="science"></dialog>
 <dialog id="report"></dialog>
 <dialog id="about"></dialog>
+<dialog id="dev-panel"></dialog>
 
 <dialog id="consent">
   <div class="consent" data-copy="disclaimer">

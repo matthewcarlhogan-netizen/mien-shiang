@@ -209,6 +209,54 @@ export function renderReading(reading) {
 }
 
 /**
+ * Reading with a share-gate overlay on the deeper sections.
+ *
+ * When `locked` is true, Three Courts, Qi Se and Twelve Palaces are wrapped
+ * in a container with a frosted-glass overlay so their presence is visible
+ * but their detail is not readable without unlocking. Five Elements (face
+ * shape) remains fully visible — it is the tradition-attributed anchor that
+ * tells the user they have a reading to unlock.
+ *
+ * When `locked` is false this is identical to `renderReading`.
+ *
+ * @param {object} reading   composeReading() output
+ * @param {object} opts
+ * @param {boolean}  opts.locked      true → show overlay
+ * @param {string}  [opts.overlayHtml]  HTML injected into the overlay panel
+ *        (the share-gate prompt, supplied by ui.js). Only rendered when locked.
+ */
+export function renderReadingGated(reading, { locked = true, overlayHtml = "" } = {}) {
+  if (!reading) return "";
+
+  let used = false;
+  const openDiffer = () => (used ? false : (used = true));
+
+  const freeSection = `
+    <p class="reading-lead">${esc(READING_LEAD)}</p>
+    ${renderFiveElements(reading.fiveElements, openDiffer)}`;
+
+  const gatedSections = `
+    ${renderQiSe(reading.qiSe, openDiffer)}
+    ${renderThreeCourts(reading.threeCourts, openDiffer)}
+    ${renderPalaces(reading.twelvePalaces, openDiffer)}`;
+
+  if (!locked) {
+    return `<div class="reading">
+      ${freeSection}
+      ${gatedSections}
+    </div>`;
+  }
+
+  return `<div class="reading">
+    ${freeSection}
+    <div class="reading-gate-wrap">
+      <div class="reading-gate-blur" aria-hidden="true">${gatedSections}</div>
+      <div class="reading-gate-overlay">${overlayHtml}</div>
+    </div>
+  </div>`;
+}
+
+/**
  * Summary card — the reading receipt, shown above the detailed sections.
  *
  * ── WHAT CHANGED AND WHY IT MATTERS ────────────────────────────────────────
