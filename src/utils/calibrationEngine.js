@@ -115,15 +115,24 @@ export function calculateBlurRadius(zonePixelArea) {
  * Confidence score for erythema / pallor in the "relative" (tan-band) regime,
  * accounting for asymmetric melanin-erythema crosstalk.
  *
- * Replaces the hard-coded 0.55 in analyse(). The melanin index modulates the
- * base confidence in opposite directions for redness and pallor because:
- *   • Higher melanin increases false-positive erythema risk (melanin absorbs
- *     the same red channel as haemoglobin), so confidence falls.
- *   • Higher melanin decreases false-positive pallor risk (it keeps the red
- *     channel elevated even when perfusion drops), so confidence rises.
+ * Replaces the hard-coded 0.55 in analyse(). Within the tan band, melanin
+ * modulates the two conditions asymmetrically:
+ *   • Erythema: `0.55 * (1 + 0.2 * melaninIndex)` — within the tan band a
+ *     higher melanin index correlates with a warmer baseline that makes the
+ *     within-subject ΔEI signal more salient, so marginal confidence rises
+ *     (capped at 0.85).
+ *   • Pallor: `0.55 * (1 - 0.1 * melaninIndex)` — higher melanin keeps the
+ *     red channel elevated even when perfusion drops, partially masking pallor,
+ *     so confidence falls (floored at 0.30).
+ *
+ * NOTE: The cross-band trend (erythema confidence 0.90→0.42 from light to deep
+ * in ITA_CONFIDENCE) captures the melanin noise floor at the population level.
+ * This function captures the finer, within–tan-band variation for subjects
+ * where the overall regime is already "relative".
  *
  * @param {'erythema'|'pallor'} condition
- * @param {number} melaninIndex  Raw MI value (typically 0–100 for skin tones).
+ * @param {number} melaninIndex  Raw MI value (typically 0–1 normalised, or
+ *   small positive in the tan band). Caller is responsible for normalisation.
  * @returns {number}  Confidence in [0.3, 0.85].
  */
 export function calculateTanDegradation(condition, melaninIndex) {
