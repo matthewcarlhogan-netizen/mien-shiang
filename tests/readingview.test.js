@@ -8,7 +8,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { renderReading, sourcesNote } from "../src/readingview.js";
+import { renderReading, renderReadingGated, sourcesNote } from "../src/readingview.js";
 import { renderAdvisories as renderModuleB } from "../src/modulebview.js";
 import { renderScienceLink, renderScienceScreen } from "../src/scienceview.js";
 import { MODULE_B_DISCLAIMER } from "../src/rules-b.js";
@@ -156,3 +156,46 @@ test("the science screen is not framed apologetically", () => {
 
 /* The encoding guard and the parse check live in tests/source-integrity.test.js,
  * which covers the whole source tree rather than only what this file imports. */
+
+// ─────────────────────────────────────────────── share-gate reading view ───
+
+test("renderReadingGated locked=false produces the same structure as renderReading", () => {
+  const reading = fullReading();
+  const gated   = renderReadingGated(reading, { locked: false });
+  const plain   = renderReading(reading);
+  // Both must include all four section IDs.
+  for (const phrase of ["Five Elements", "Three Courts", "Twelve Palaces", "Qi se"]) {
+    assert.ok(gated.includes(phrase), `gated unlocked missing: ${phrase}`);
+    assert.ok(plain.includes(phrase), `plain missing: ${phrase}`);
+  }
+  // Neither should contain a lock overlay when unlocked.
+  assert.ok(!gated.includes("reading-gate-overlay"), "no overlay when unlocked");
+});
+
+test("renderReadingGated locked=true shows Five Elements and hides the rest behind an overlay", () => {
+  const reading = fullReading();
+  const html = renderReadingGated(reading, { locked: true, overlayHtml: "<p>GATE</p>" });
+  // Five Elements is OUTSIDE the gate-wrap — always visible.
+  const gateWrapStart = html.indexOf("reading-gate-wrap");
+  const fiveElemStart = html.indexOf("Five Elements");
+  assert.ok(fiveElemStart < gateWrapStart,
+    "Five Elements must appear before the gate wrapper");
+  // The overlay is present.
+  assert.ok(html.includes("reading-gate-overlay"), "overlay div present");
+  assert.ok(html.includes("GATE"), "overlay content injected");
+  // The blurred region is aria-hidden.
+  assert.ok(html.includes("aria-hidden=\"true\""), "blurred region is aria-hidden");
+});
+
+test("renderReadingGated locked=true still contains gated section text (for search / a11y)", () => {
+  const reading = fullReading();
+  const html = renderReadingGated(reading, { locked: true, overlayHtml: "" });
+  // Content is in the DOM (aria-hidden blur layer) even when visually obscured.
+  assert.ok(html.includes("Three Courts") || html.includes("Twelve Palaces"),
+    "gated section text present in the DOM even when locked");
+});
+
+test("renderReadingGated with null reading returns empty string", () => {
+  assert.equal(renderReadingGated(null, { locked: true }), "");
+  assert.equal(renderReadingGated(null, { locked: false }), "");
+});
