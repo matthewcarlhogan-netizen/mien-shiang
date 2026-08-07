@@ -18,19 +18,18 @@ change the product's regulatory status, not just its tone.
 
 ```bash
 npm start     # dev server on http://localhost:5173 (honours PORT)
-npm test      # 116 tests, node:test, no dependencies
+npm test      # 159 tests, node:test, no dependencies
 ```
 
 There is no build step and no npm dependencies. `src/` ships as-is. The
 `package-lock.json` exists only so `npm ci` works in CI; it locks nothing.
 
-116 = 44 science/rules + 12 server traversal + 1 copy guard + 25 geometry
-+ 14 debug view + 20 module boundary. If you see 44, the traversal suite is
-not being discovered.
+159 across ten files. If you see 44, the traversal suite is not being
+discovered.
 
-**One test fails on purpose right now** (`copy-guard`, on
-`TCM-202-DAMP-HEAT.recommend[1]`). It is a real defect awaiting the Module A/B
-copy split, not a flaky test. Do not silence it. See item 9.
+**All 159 pass.** The long-standing `copy-guard` failure on
+`TCM-202-DAMP-HEAT.recommend[1]` is resolved — that line moved to Module B in
+the Phase 2 split (see item 19). If a test fails, it is a real defect.
 
 ## Architecture
 
@@ -40,9 +39,19 @@ src/
   ui.js         screen wiring, overlay rendering, consent gate
   analysis.js   MediaPipe landmarking, ROI hull masking, orchestration
   flags.js      build flavour: does Module B ship? (ASCII-only, see item 17)
+  zones.js      ROI geometry — measurement config, owned by neither module
   adapters/
     entertainment.js  MODULE A boundary — raw scalars -> glow/vitality values
     safety.js         MODULE B boundary — raw scalars -> referral thresholds
+  rules.js      composition root — decides which rules exist; contains NO copy
+  rules-a.js    MODULE A reading content
+  rules-b.js    MODULE B safety content + MODULE_B_DISCLAIMER
+  rule-engine.js  matching/chaining machinery, owned by neither module
+  reading/      MODULE A reading layer (all pure, no DOM)
+    five-elements.js  qi-se.js  three-courts.js  twelve-palaces.js
+    science.js        "What the science says" content
+  readingview.js  renders Module A, + Module B under its own disclaimer
+  scienceview.js  the science screen
   landmarker.js GPU→CPU delegate fallback (factory INJECTED, so it is testable)
   geometry.js   facial proportions + face-shape classifier  ← pure, no DOM
   expression.js blendshapes → expression/asymmetry STATE (never traits)
@@ -176,6 +185,46 @@ hole cannot open silently. `tests/serve.traversal.test.js` covers both the
 escape vectors and the sibling case over raw sockets — `fetch`, PowerShell and
 plain `curl` all normalise `/../` before it reaches the wire, so a traversal
 test built on those proves nothing.
+
+### 19. Module A copy obeys four rules, all of them enforced
+
+`rules-a.js` and everything under `reading/` is the entertainment module. Every
+string there must:
+
+1. **Be tradition-attributed, never assertive.** Not "you are steady" but
+   "the classical association is with steadiness".
+2. **Name its source inline** — "In Mian Xiang", "Classical Chinese face
+   reading", "Lavater (1778)", "Both Chinese and Western traditions". A generic
+   "tradition" does not satisfy the guard.
+3. **Carry no health vocabulary.** The blocklist includes `circulation`, `iron`
+   and `blood` because Module B's relocated advisory uses them — they are the
+   marker of content that belongs on the other side of the boundary. It also
+   includes `treat`, which catches the ordinary English sense; four such slips
+   were caught writing the Phase 2 content and rewritten to "regard".
+4. **Never deliver a verdict**, negative or otherwise, about a person.
+
+**Symptom:** a reading that asserts a fact about the reader, or that quietly
+reads as health advice.
+**Pinned by:** `tests/copy-guard.test.js`, which scans every registered Module A
+surface via `MODULE_A_COPY`. **If you add a reading surface, register it there**
+— an unregistered surface ships unscanned, which is how the original defect
+reached production.
+
+Module B may use clinical vocabulary. Neither module may name a disease.
+
+### 20. Where classical sources disagree, the UI says so
+
+The mappings genuinely conflict between texts, most sharply on Five Elements
+face-shape assignment — the square face is Earth in many Mian Xiang texts and
+Metal in others, and "oval" is a modern styling category with no classical
+equivalent at all.
+
+**Symptom:** a contested mapping presented as settled.
+**Cause:** picking one reading silently because the code needs a single answer.
+**Pinned by:** `where classical sources disagree, Module A says so` (every rule
+must carry a `sourcesDiffer` note) and `every Five Elements mapping names its
+source and its disagreement` (every shape must also name a competing element).
+`readingview.js` renders them all through one pattern, `sourcesNote()`.
 
 ### 9. The disease-name guard scans EVERY rule, not one fired path
 
@@ -340,6 +389,38 @@ in `flags.js` before answering anything on a store declaration.
 through PowerShell 5.1 `Get-Content`/`Set-Content` reads non-ASCII as ANSI and
 writes it back double-encoded. That corrupted the file once already. Pinned by
 `flags.js stays pure ASCII`.
+
+### 18a. A test file that cannot import a module does not cover it
+
+`src/analysis.js` imports the MediaPipe bundle from a CDN at module scope, so
+it cannot be imported under `node --test`. Every test file works by importing
+what it tests, so analysis.js was covered by **nothing**.
+
+**Symptom:** the full suite passes and the app does not start at all.
+**Cause:** a hard syntax error in analysis.js — two `const raw` bindings in one
+function, added when the module boundary landed. `ui.js` imports analysis.js,
+so the import chain died at the entry point and the screen stayed blank. 155
+tests were green while this was true.
+**Pinned by:** `tests/source-integrity.test.js` → `every source file parses`,
+which runs `node --check` over every file in `src/` whether or not anything can
+import it. It also checks that every `sw.js` SHELL entry exists and every local
+import resolves.
+
+The general rule: coverage is what the tests can reach, and a module nothing
+imports is a module nothing tests. Check the tree, not the import graph.
+
+### 18b. Never round-trip a source file through PowerShell 5.1
+
+`Get-Content -Raw` reads as ANSI by default and `Set-Content -Encoding utf8`
+writes back UTF-8, so every non-ASCII character is double-encoded.
+
+**Symptom:** em-dashes render as `â€"` and middle dots as `Â·` on screen.
+**Cause:** a script that edits a file in place — flipping the build flag, say —
+without specifying the read encoding. It has damaged two files here: `flags.js`
+(caught at once) and `ui.js` (which **shipped** in the Phase 1 commit).
+**Pinned by:** `no source file contains double-encoded UTF-8`, plus
+`flags.js stays pure ASCII` for the file most likely to be script-edited.
+Use Node (`fs.readFileSync(p, "utf8")`) for in-place edits instead.
 
 ### 18. `glowIndex` is only comparable within its `basis`
 

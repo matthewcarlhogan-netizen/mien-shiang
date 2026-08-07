@@ -234,16 +234,88 @@ No About screen yet, so the flavour is not surfaced to the user.
 
 ---
 
+---
+
+## Phase 2 — reading engine
+
+### Verified this session
+
+- **159 tests, 159 passing.** `ℹ tests 159 / pass 159 / fail 0`. The
+  `copy-guard` failure carried since `d9de32b` is resolved.
+- **rules.js is split.** `zones.js` (measurement geometry) and
+  `rule-engine.js` (machinery) are owned by neither module; `rules-a.js` and
+  `rules-b.js` hold the two copy decks; `rules.js` is a composition root
+  containing no copy at all. Module B is **composed in** when the flag is on
+  rather than filtered out afterwards — composition fails closed, a filter
+  fails open.
+- **TCM-202 resolved as directed.** The line moved to Module B as
+  `SG-010-PERSISTENT-PATTERN` with the supplied wording, categorised
+  `safety_advisory` so it does not halt the reading, and rendered under
+  `MODULE_B_DISCLAIMER`. Module A has no replacement, and a test asserts the
+  absence.
+- **Module A copy is guarded on four axes** — tradition attribution with the
+  source named, no health vocabulary, no assertive second person, no verdicts —
+  across every registered surface, not just the rules.
+- **Disagreements render.** Four `sourcesDiffer` notes on a full reading,
+  through one consistent pattern, verified in the browser.
+- **The science screen is one tap from results**, verified live: dialog opens on
+  a single click, states all four required findings, cites Willis & Todorov
+  (2006), and a test rejects apologetic framing.
+- **Qi se partial basis**, verified live: `"Today's reading is based on two of
+  three colour signals — complexion warmth wasn't measurable in this lighting."`
+- **The app boots**, verified from a cleared cache after the defect below.
+
+### The defect this phase found
+
+`src/analysis.js` did not parse — two `const raw` bindings in one function,
+introduced by the module-boundary commit. `ui.js` imports it, so **the app did
+not start at all**, and 155 tests were green while that was true. analysis.js
+imports MediaPipe from a CDN at module scope, so no test file could import it,
+so nothing covered it.
+
+`tests/source-integrity.test.js` now parses every file in `src/` regardless of
+the import graph, and also checks SHELL entries and local imports resolve. Its
+encoding check immediately caught a second, already-shipped defect: `ui.js` had
+mojibake from an earlier PowerShell round-trip, rendering `—` as `â€"` on
+screen.
+
+### Reported but unverified
+
+- **End-to-end reading from a real capture.** Still blocked on the same thing as
+  Phase 1: there is no face photo in this environment. The reading has been
+  driven end-to-end with synthetic landmark sets and synthetic scalars, in both
+  Node and a browser, but not once from a camera.
+- Whether the Five Elements thresholds sort real faces sensibly.
+- Whether the qi se bands (75 / 55) land usefully on real complexions.
+- CI — still no git remote, so it has still never run.
+
+### Unknown
+
+- How the reading reads to a person who is not its author. No one has seen it.
+- Whether six-of-twelve palaces feels informative or truncated in use.
+
+---
+
 ## Exact next action
 
-The module boundary now exists and both adapters are imported by their
-respective paths, so **reading copy is unblocked**.
+**Phase 2 exit is met except for its first criterion.**
 
-1. Split `rules.js` into Module A and Module B content with separate copy
-   decks. `TCM-202-DAMP-HEAT.recommend[1]` — the one deliberately failing test
-   — resolves here: the "get bloods done" line is Module B content sitting in
-   Module A, so it moves or goes rather than being reworded in place.
-2. Then the Phase 2 content layer on top of the adapters.
+| Criterion | Status |
+|---|---|
+| End-to-end reading renders from a real capture | ❌ **blocked — no face photo available** |
+| `rules.js` split, no mixed-module copy remains | ✅ |
+| `copy-guard` green, including the pre-existing failure | ✅ 159/159 |
+| Science screen exists, reachable in one tap | ✅ verified live |
+| Every string tradition-attributed, never assertive | ✅ enforced by tests |
+| HANDOFF updated with the three sections | ✅ |
+| No copy asserts character, health or attractiveness | ✅ enforced by tests |
 
-Still outstanding from Phase 1, unchanged: **real-photo validation** (see
-"Blocked" above). It gates Phase 1's exit, not Phase 2's start.
+So the next action is the **same blocker as Phase 1**: 3–5 selfies in varied
+lighting, at least one off-angle, at least one mid-expression, saved locally.
+They gate the first criterion of both phases and nothing else can substitute —
+the reading has never been driven from a camera.
+
+After that, Phase 3: the compliance harness, `COMPLIANCE.md` (Play Health
+declaration posture for the entertainment build is **"does not exhibit health
+features"**, flag-only, no build step), the report-this-result control, the
+egress and attractiveness guards, and the privacy policy page.

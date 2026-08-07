@@ -13,13 +13,10 @@ mitigate, cure or prevent any disease.**
 
 ```bash
 npm start     # http://localhost:5173
-npm test      # 116 tests
+npm test      # 159 tests
 ```
 
 No dependencies, no build step.
-
-One test fails deliberately (`copy-guard`) on copy that is awaiting a rewrite.
-It is a real defect, not a flaky test — see CLAUDE.md item 9.
 
 ## On your phone
 
