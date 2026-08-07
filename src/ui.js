@@ -1,7 +1,8 @@
 ﻿import { runAnalysis } from "./analysis.js";
 import { renderGeometry } from "./debugview.js";
 import { renderReading, renderSummary } from "./readingview.js";
-import { buildShareModel, renderShareBlob, deliver } from "./sharecard.js";
+import { buildShareModel, renderShareBlob, deliver, buildInviteUrl, readInviteParams } from "./sharecard.js";
+import { readCompatibility } from "./compatibility.js";
 import { renderReferrals, renderHaltNotice, renderAdvisories, renderMeasurementLimits }
   from "./modulebview.js";
 import { renderScienceLink, renderScienceScreen } from "./scienceview.js";
@@ -16,6 +17,34 @@ const CONSENT_KEY = "mienshiang.consent.v1";
 
 let file = null;
 let objectUrl = null;
+
+// --------------------------------------------------------- invite params --
+
+/**
+ * Params set by the person who shared this link.
+ * Null = ordinary visit; non-null = User B opening an invite.
+ */
+const inviteParams = readInviteParams(globalThis.location?.search ?? "");
+
+// Show an invite banner before consent when the user arrived via a shared link.
+// The banner is informational only — no measurement data from the sharer is
+// shown here, only the tradition-level element label from the URL.
+if (inviteParams) {
+  const banner = document.createElement("div");
+  banner.id = "invite-banner";
+  banner.className = "invite-banner";
+  banner.setAttribute("role", "status");
+  // Element names are lowercase internal labels; capitalise for display.
+  const partnerLabel = inviteParams.element
+    ? inviteParams.element.charAt(0).toUpperCase() + inviteParams.element.slice(1)
+    : "a friend";
+  banner.innerHTML = `
+    <p class="eyebrow">You've been invited</p>
+    <p>Someone who read as <strong>${partnerLabel}</strong> in the Five Elements tradition has shared this link.
+    Take a photo below to see how the classical texts relate your elements.
+    Your scan happens entirely on this device — nothing leaves it.</p>`;
+  document.querySelector("header")?.after(banner);
+}
 
 // ----------------------------------------------------------------- consent --
 
@@ -93,13 +122,17 @@ function render(r) {
 
   const parts = [];
 
+  // Build the invite URL for this reading now so the same value drives both
+  // the share-card CTA and the invite-share button.
+  const inviteUrl = buildInviteUrl(r.reading);
+
   // The receipt goes first, above everything. There is no ordering conflict
   // with Module B: a referral that halts the reading means `r.reading` is
   // never rendered at all, so a summary and a halt notice cannot both appear.
   if (!result.halted) {
     parts.push(renderSummary(r.reading, {
       caveatHtml: summaryCaveatHtml(),
-      actionsHtml: shareControlsHtml(),
+      actionsHtml: shareControlsHtml(Boolean(inviteUrl)),
     }));
   }
 
@@ -138,10 +171,16 @@ function render(r) {
 
   parts.push(renderGeometry(r.geometry, r.expression, r.delegate));
 
+  // When User B arrived via an invite link, show the Five Elements interaction
+  // reading for their pairing after their own results.
+  if (inviteParams && r.reading?.fiveElements?.available) {
+    parts.push(renderCompatibility(r.reading.fiveElements, inviteParams));
+  }
+
   $("out").innerHTML = parts.join("");
   wireScienceScreen();
   wireReportControl();
-  wireShare(r);
+  wireShare(r, inviteUrl);
 }
 
 /**
@@ -158,10 +197,13 @@ function summaryCaveatText() {
   return ($("tpl-summary-caveat")?.content?.textContent ?? "").trim();
 }
 
-function shareControlsHtml() {
+function shareControlsHtml(hasInviteUrl) {
   return `
     <div class="summary-actions">
       <button id="share-card" class="ghost" type="button">Save or share this reading</button>
+      ${hasInviteUrl
+        ? `<button id="share-invite" class="ghost" type="button">Invite someone to compare</button>`
+        : ""}
     </div>
     <label class="toggle" style="margin-top:.55rem">
       <input type="checkbox" id="share-photo" />
@@ -174,7 +216,7 @@ function shareControlsHtml() {
  * Share is wired only after a reading exists, and never becomes a dead end:
  * where the OS cannot take a file, the same button saves a PNG instead.
  */
-function wireShare(r) {
+function wireShare(r, inviteUrl) {
   const btn = $("share-card");
   if (!btn) return;
 
@@ -183,7 +225,7 @@ function wireShare(r) {
     const original = btn.textContent;
     try {
       const includePhoto = $("share-photo")?.checked === true;
-      const model = buildShareModel(r.reading, summaryCaveatText());
+      const model = buildShareModel(r.reading, summaryCaveatText(), { inviteUrl });
       const blob = await renderShareBlob(model, "story", includePhoto ? r.canvas : null);
       const imageFile = new File([blob], "mian-xiang-reading.png", { type: "image/png" });
       const how = await deliver(imageFile);
@@ -198,6 +240,62 @@ function wireShare(r) {
       setTimeout(() => { btn.textContent = original; }, 4000);
     }
   });
+
+  // Invite-to-compare button — shares the URL only, no image.
+  const inviteBtn = $("share-invite");
+  if (!inviteBtn || !inviteUrl) return;
+
+  inviteBtn.addEventListener("click", async () => {
+    inviteBtn.disabled = true;
+    const original = inviteBtn.textContent;
+    try {
+      if (typeof navigator?.share === "function") {
+        await navigator.share({ url: inviteUrl });
+      } else {
+        await navigator.clipboard.writeText(inviteUrl);
+        inviteBtn.textContent = "Link copied";
+      }
+    } catch (err) {
+      if (err?.name !== "AbortError") {
+        // Clipboard may also be unavailable; fall back to telling the user
+        // the URL so they can copy it themselves.
+        console.warn("invite share failed:", err);
+        inviteBtn.textContent = "Copy the URL from your address bar";
+      }
+    } finally {
+      inviteBtn.disabled = false;
+      setTimeout(() => { inviteBtn.textContent = original; }, 4000);
+    }
+  });
+}
+
+// ------------------------------------------------- compatibility panel --
+
+/**
+ * Renders the Five Elements compatibility reading between User B's own element
+ * and the partner element supplied in the invite URL.
+ *
+ * Pure HTML-string output — same pattern as the other render helpers. Shown
+ * only when User B completed a live scan via an invite link.
+ *
+ * Copy displayed here comes entirely from compatibility.js, which is a
+ * registered Module A surface — the copy guard scans it.
+ */
+function renderCompatibility(myFe, partner) {
+  if (!myFe?.available) return "";
+  const compat = readCompatibility(myFe.element, partner.element);
+  if (!compat) return "";
+
+  const myLabel = `${myFe.name} ${myFe.hanzi}`;
+  const partnerLabel = partner.element.charAt(0).toUpperCase() + partner.element.slice(1);
+
+  return `
+    <section class="compat-panel reading-block">
+      <p class="eyebrow">Five Elements — elemental pairing</p>
+      <h3>${myLabel} &amp; ${partnerLabel} — ${compat.title}</h3>
+      <p>${compat.reading}</p>
+      <div class="prov"><b>source</b> Classical Chinese Five Elements cosmology</div>
+    </section>`;
 }
 
 // -------------------------------------------------- report this result --

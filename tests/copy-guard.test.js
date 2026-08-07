@@ -28,6 +28,7 @@ import { PALACES, TONE_GLOSS, SOURCES_DIFFER as PALACE_DIFFER }
   from "../src/reading/twelve-palaces.js";
 import { BANDS, SOURCES_DIFFER as QISE_DIFFER } from "../src/reading/qi-se.js";
 import { SCIENCE_POINTS, SCIENCE_INTRO } from "../src/reading/science.js";
+import { INTERACTION_READINGS } from "../src/compatibility.js";
 
 /** Every Module A copy surface, so none can be added without being scanned. */
 import { NOT_READ_LABEL, NOTHING_READ, EMPHASIS_LEAD } from "../src/reading/summary.js";
@@ -43,6 +44,8 @@ const MODULE_A_COPY = {
   // copy too. Registered here so they are scanned rather than trusted —
   // an unregistered surface ships unread, which is the original defect.
   SUMMARY: { NOT_READ_LABEL, NOTHING_READ, EMPHASIS_LEAD, PALACE_SCOPE_NOTE },
+  // Five Elements interaction readings — the viral compatibility surface.
+  INTERACTION_READINGS,
 };
 
 /* Disease names. Banned in BOTH modules. Deliberately excludes "ulcer" (a

@@ -32,6 +32,57 @@
 
 import { buildSummary } from "./reading/summary.js";
 
+// ─────────────────────────────────── invite URL encode / decode ──────────────
+
+/**
+ * Build a shareable URL encoding the sender's Five Elements archetype.
+ *
+ * Only non-biometric tradition labels are encoded — the element name (e.g.
+ * "wood") and face-shape name (e.g. "oblong"). No landmark coordinates, pixel
+ * data, measurement deltas, or personal identifier of any kind are placed in
+ * the URL. The receiving party sees only a tradition label, not a measurement.
+ *
+ * @param {object} reading  composeReading() output
+ * @param {string} [base]   base URL; defaults to current page URL when called
+ *                          in a browser, empty string in Node (returns "" then).
+ * @returns {string}  full URL string, or "" when no Five Elements reading is
+ *                    available or when the base URL cannot be parsed.
+ */
+export function buildInviteUrl(reading, base = globalThis.location?.href ?? "") {
+  const fe = reading?.fiveElements;
+  if (!fe?.available) return "";
+  if (!base) return "";
+  try {
+    const url = new URL(base);
+    url.search = "";
+    url.hash = "";
+    url.searchParams.set("partnerElement", fe.element);
+    if (fe.shape) url.searchParams.set("partnerShape", fe.shape);
+    return url.toString();
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Read invite params from a URL search string.
+ *
+ * Returns null when no invite params are present — a plain visit to the app.
+ * The shape param is optional: it is carried for UI labelling only and must
+ * never be used to skip a measurement.
+ *
+ * @param {string} search  e.g. window.location.search
+ * @returns {{element:string, shape:string}|null}
+ */
+export function readInviteParams(search) {
+  const p = new URLSearchParams(search);
+  const element = p.get("partnerElement");
+  if (!element) return null;
+  return { element, shape: p.get("partnerShape") ?? "" };
+}
+
+// ──────────────────────────────────────────────────────── share card ─────────
+
 export const SIZES = {
   story: { w: 1080, h: 1920 },
   square: { w: 1080, h: 1080 },
@@ -51,8 +102,12 @@ const DISPLAY = "system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
  * @param {object} reading  composeReading() output
  * @param {string} caveatText  supplied by the caller from index.html's
  *        disclaimer template — never a literal here, see readingview.js
+ * @param {{ inviteUrl?: string }} [opts]
+ *        inviteUrl — when present, the card gains an invite-to-compare CTA.
+ *        Only the URL itself is stored; no copy that could constitute a verdict
+ *        lives here.
  */
-export function buildShareModel(reading, caveatText) {
+export function buildShareModel(reading, caveatText, { inviteUrl = "" } = {}) {
   const s = buildSummary(reading);
   return {
     wordmark: "面相",
@@ -62,6 +117,11 @@ export function buildShareModel(reading, caveatText) {
     caveat: caveatText ?? "",
     /** Mirrors the summary: nothing read means nothing claimed. */
     anyRead: s.anyRead,
+    /**
+     * When present, a "Scan to compare" CTA is drawn on the card.
+     * Null when the feature is not in use (plain share, no invite).
+     */
+    cta: inviteUrl || null,
   };
 }
 
@@ -174,6 +234,38 @@ export function drawShareCard(ctx, model, size, photo = null) {
       ctx.fillText(line, pad, y);
       y += Math.round(w * 0.052);
     }
+  }
+
+  // Invite CTA — drawn only when the caller supplies an invite URL.
+  // The copy here is a prompt about the reading context, not a verdict.
+  if (model.cta) {
+    y += Math.round(w * 0.04);
+    const ctaPad = Math.round(w * 0.032);
+    const ctaH = Math.round(w * 0.14);
+    const ctaY = y;
+    ctx.fillStyle = "#1A2028";
+    ctx.beginPath();
+    const r4 = Math.round(w * 0.015);
+    ctx.roundRect(pad, ctaY, maxW, ctaH, r4);
+    ctx.fill();
+    ctx.strokeStyle = CINNABAR;
+    ctx.lineWidth = Math.round(w * 0.004);
+    ctx.stroke();
+
+    const ctaLineY = ctaY + ctaPad + Math.round(w * 0.028);
+    ctx.fillStyle = INK;
+    ctx.font = `600 ${Math.round(w * 0.031)}px ${DISPLAY}`;
+    ctx.fillText("Scan your face to compare readings", pad + ctaPad, ctaLineY);
+
+    ctx.fillStyle = INK_60;
+    ctx.font = `${Math.round(w * 0.022)}px ${MONO}`;
+    const urlLines = wrapText(ctx, model.cta, maxW - ctaPad * 2);
+    let uy = ctaLineY + Math.round(w * 0.044);
+    for (const line of urlLines.slice(0, 2)) {
+      ctx.fillText(line, pad + ctaPad, uy);
+      uy += Math.round(w * 0.032);
+    }
+    y = ctaY + ctaH + Math.round(w * 0.02);
   }
 
   // Opt-in photo, drawn only when the user explicitly asked for it.

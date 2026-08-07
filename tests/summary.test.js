@@ -15,7 +15,8 @@ import { fileURLToPath } from "node:url";
 
 import { buildSummary, NOT_READ_LABEL, SECTION_IDS } from "../src/reading/summary.js";
 import { renderSummary, renderReading, sourcesNote, PALACE_SCOPE_NOTE } from "../src/readingview.js";
-import { buildShareModel, chooseDelivery, wrapText, SIZES } from "../src/sharecard.js";
+import { buildShareModel, chooseDelivery, wrapText, SIZES,
+  buildInviteUrl, readInviteParams } from "../src/sharecard.js";
 
 const SRC = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "src");
 
@@ -257,4 +258,52 @@ test("canvas text wrapping breaks on width and never loses a word", () => {
   const lines = wrapText(ctx, "one two three four five six", 70);
   assert.ok(lines.length > 1, "expected the text to wrap");
   assert.equal(lines.join(" "), "one two three four five six");
+});
+
+// ─────────────────────────────────────────── invite URL encode / decode ──
+
+test("buildInviteUrl encodes only element and shape, nothing biometric", () => {
+  const reading = {
+    fiveElements: { available: true, element: "fire", shape: "heart", name: "Fire", hanzi: "火" },
+  };
+  const url = buildInviteUrl(reading, "https://example.com/");
+  const p = new URL(url).searchParams;
+  assert.equal(p.get("partnerElement"), "fire");
+  assert.equal(p.get("partnerShape"), "heart");
+  // Critically: no measurement deltas, no coordinates, nothing biometric.
+  assert.ok([...p.keys()].every((k) => k === "partnerElement" || k === "partnerShape"));
+});
+
+test("buildInviteUrl returns empty string when Five Elements reading is unavailable", () => {
+  const noFe = { fiveElements: { available: false } };
+  assert.equal(buildInviteUrl(noFe, "https://example.com/"), "");
+
+  const noReading = {};
+  assert.equal(buildInviteUrl(noReading, "https://example.com/"), "");
+});
+
+test("buildInviteUrl returns empty string when no base URL is provided in Node", () => {
+  // In Node there is no window.location, so base defaults to "" — the
+  // function must not throw and must return "" rather than a relative URL.
+  const reading = { fiveElements: { available: true, element: "wood", shape: "oblong" } };
+  assert.equal(buildInviteUrl(reading, ""), "");
+});
+
+test("readInviteParams round-trips through buildInviteUrl", () => {
+  const reading = { fiveElements: { available: true, element: "earth", shape: "square" } };
+  const url = buildInviteUrl(reading, "https://example.com/");
+  const params = readInviteParams(new URL(url).search);
+  assert.equal(params?.element, "earth");
+  assert.equal(params?.shape, "square");
+});
+
+test("readInviteParams returns null on a plain URL with no invite params", () => {
+  assert.equal(readInviteParams(""), null);
+  assert.equal(readInviteParams("?other=value"), null);
+});
+
+test("readInviteParams handles missing shape gracefully", () => {
+  const params = readInviteParams("?partnerElement=metal");
+  assert.equal(params?.element, "metal");
+  assert.equal(params?.shape, "");
 });
