@@ -29,6 +29,10 @@ No npm dependencies. The build performs no transform — `dist/` is a copy of
 
 Needs https. Run `npm run build` and deploy `dist/`.
 
+For Android installs from the phone, the free path is the GitHub Pages PWA.
+Trusted Web Activity / app-link verification still needs a host that can serve
+`/.well-known/assetlinks.json` at the origin root.
+
 
 ## What it measures
 

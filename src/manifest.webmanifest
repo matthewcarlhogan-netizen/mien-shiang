@@ -2,7 +2,7 @@
   "id": "/",
   "name": "Mien Shiang",
   "short_name": "Mien Shiang",
-  "description": "Offline skin-tone and surface observation tool.",
+  "description": "On-device facial reading PWA.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

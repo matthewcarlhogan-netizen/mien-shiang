@@ -32,6 +32,28 @@ const EXPECTED_LANDMARKS = 478;    // 468 mesh + 10 iris
 let landmarker = null;
 let activeDelegate = null;   // "GPU" | "CPU" — surfaced in the debug view
 
+function captureQualityWarning(pts, canvas) {
+  const leftEye = pts[33];
+  const rightEye = pts[263];
+  const apex = pts[10];
+  const menton = pts[152];
+  const cheekL = pts[454];
+  const cheekR = pts[234];
+  if (!leftEye || !rightEye || !apex || !menton || !cheekL || !cheekR) return null;
+
+  const roll = Math.abs(Math.atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x) * 180 / Math.PI);
+  const luminance = (p) => p ? p.y : 0;
+  const framedEdge = [leftEye, rightEye, apex, menton].some((p) =>
+    p.x < canvas.width * 0.08 || p.x > canvas.width * 0.92 ||
+    p.y < canvas.height * 0.08 || p.y > canvas.height * 0.92);
+  const cheekTilt = Math.abs(luminance(cheekL) - luminance(cheekR)) / Math.max(canvas.height, 1);
+
+  if (roll > 12) return "This photo is tilted too much. Hold the phone level and try again.";
+  if (framedEdge) return "Move back a little so the whole forehead and chin fit in the frame.";
+  if (cheekTilt > 0.12) return "The light looks one-sided. Face the light more evenly and try again.";
+  return null;
+}
+
 // ------------------------------------------------------------------ model ---
 
 async function getLandmarker(onProgress) {
@@ -163,7 +185,7 @@ export async function runAnalysis(file, unmirror, onProgress) {
   const lm = await getLandmarker(onProgress);
 
   onProgress?.("Reading photo…");
-  const bitmap = await createImageBitmap(file);
+  const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
   const canvas = drawToCanvas(bitmap, unmirror);
   bitmap.close?.();
 
@@ -183,6 +205,11 @@ export async function runAnalysis(file, unmirror, onProgress) {
     throw new Error(`Expected ${EXPECTED_LANDMARKS} landmarks, got ${landmarks.length}.`);
   }
   const pts = landmarks.map((p) => ({ x: p.x * w, y: p.y * h }));
+
+  const captureWarning = captureQualityWarning(pts, canvas);
+  if (captureWarning) {
+    throw new Error(captureWarning);
+  }
 
   // Geometry and expression are computed from the landmark set only — no
   // pixels — so they are independent of the colorimetry path and of its
