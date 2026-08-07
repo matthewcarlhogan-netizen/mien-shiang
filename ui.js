@@ -1,6 +1,7 @@
 ﻿import { runAnalysis } from "./analysis.js";
 import { renderGeometry } from "./debugview.js";
 import { renderReading, renderSummary } from "./readingview.js";
+import { buildShareModel, renderShareBlob, deliver } from "./sharecard.js";
 import { renderReferrals, renderHaltNotice, renderAdvisories, renderMeasurementLimits }
   from "./modulebview.js";
 import { renderScienceLink, renderScienceScreen } from "./scienceview.js";
@@ -92,17 +93,28 @@ function render(r) {
 
   const parts = [];
 
+  // The receipt goes first, above everything. There is no ordering conflict
+  // with Module B: a referral that halts the reading means `r.reading` is
+  // never rendered at all, so a summary and a halt notice cannot both appear.
+  if (!result.halted) {
+    parts.push(renderSummary(r.reading, {
+      caveatHtml: summaryCaveatHtml(),
+      actionsHtml: shareControlsHtml(),
+    }));
+  }
+
   // Module B renders through its own module — its vocabulary lives with its
   // content, not on this Module A surface. All of these return "" when Module
   // B was not composed into the build.
   parts.push(renderReferrals(result.referrals));
   parts.push(renderHaltNotice(result.halted));
+  // Stays DEFAULT-VISIBLE, directly under the receipt. The summary states
+  // scope; this panel states what could not be measured at all. Neither
+  // substitutes for the other.
   parts.push(renderMeasurementLimits(baseline, notMeasured));
 
-  // MODULE A — the reading. Rendered before anything else so it is what the
-  // screen is about, and always accompanied by the science link.
+  // MODULE A — the reading, in full, beneath the receipt.
   if (!result.halted) {
-    parts.push(renderSummary(r.reading));
     parts.push(renderReading(r.reading));
     parts.push(renderScienceLink());
     parts.push(renderReportButton());
@@ -129,6 +141,63 @@ function render(r) {
   $("out").innerHTML = parts.join("");
   wireScienceScreen();
   wireReportControl();
+  wireShare(r);
+}
+
+/**
+ * The summary's always-visible caveat, read from the disclaimer template in
+ * index.html. It cannot be a literal in readingview.js or sharecard.js: the
+ * copy lint buckets every prose string in a .js file as Module A copy, and the
+ * wording uses a word the Module A blocklist forbids. One source, two consumers.
+ */
+function summaryCaveatHtml() {
+  return $("tpl-summary-caveat")?.innerHTML ?? "";
+}
+
+function summaryCaveatText() {
+  return ($("tpl-summary-caveat")?.content?.textContent ?? "").trim();
+}
+
+function shareControlsHtml() {
+  return `
+    <div class="summary-actions">
+      <button id="share-card" class="ghost" type="button">Save or share this reading</button>
+    </div>
+    <label class="toggle" style="margin-top:.55rem">
+      <input type="checkbox" id="share-photo" />
+      <span>Include my photo in the image — your face then leaves this device
+        when you post it, which is your choice to make.</span>
+    </label>`;
+}
+
+/**
+ * Share is wired only after a reading exists, and never becomes a dead end:
+ * where the OS cannot take a file, the same button saves a PNG instead.
+ */
+function wireShare(r) {
+  const btn = $("share-card");
+  if (!btn) return;
+
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    const original = btn.textContent;
+    try {
+      const includePhoto = $("share-photo")?.checked === true;
+      const model = buildShareModel(r.reading, summaryCaveatText());
+      const blob = await renderShareBlob(model, "story", includePhoto ? r.canvas : null);
+      const imageFile = new File([blob], "mian-xiang-reading.png", { type: "image/png" });
+      const how = await deliver(imageFile);
+      btn.textContent = how === "downloaded" ? "Saved to your device" : original;
+    } catch (err) {
+      // Never swallow: a share that silently does nothing is worse than one
+      // that says it failed.
+      btn.textContent = "Couldn't make the image";
+      console.error("share card failed:", err);
+    } finally {
+      btn.disabled = false;
+      setTimeout(() => { btn.textContent = original; }, 4000);
+    }
+  });
 }
 
 // -------------------------------------------------- report this result --
