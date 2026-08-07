@@ -16,6 +16,11 @@ import {
   frontality, normaliseRoll, shapeRatios, SHAPE_THRESHOLDS,
 } from "../src/geometry.js";
 
+import {
+  calculateAdaptiveScale, getZoneFullScale, ZONE_FULL_SCALE,
+  calculateBlurRadius, calculateTanDegradation, getOrientedGLCMScore,
+} from "../src/utils/calibrationEngine.js";
+
 /**
  * Build a 478-point set with the landmarks this layer reads placed
  * deliberately. Unused indices are filled with the face centre, which is
@@ -264,4 +269,142 @@ test("thresholds are exported so the debug view can show what was compared", () 
   for (const [k, v] of Object.entries(SHAPE_THRESHOLDS)) {
     assert.equal(typeof v, "number", `${k} must be a number`);
   }
+});
+
+// ──────────────────────────────────────── calibrationEngine.js unit tests ────
+
+// FIX 1 — calculateAdaptiveScale
+
+test("calculateAdaptiveScale: all-zero input clamps to floor 0.5", () => {
+  const result = calculateAdaptiveScale(new Float32Array(20));
+  assert.equal(result, 0.5, "all-zero structureness should return the floor (0.5)");
+});
+
+test("calculateAdaptiveScale: uniform 0.06 input returns exactly 2.0", () => {
+  const vals = new Float32Array(100).fill(0.06);
+  const result = calculateAdaptiveScale(vals);
+  // Float32 stores 0.06 as ~0.05999999865889549, so the result is marginally
+  // below 2.0 due to floating-point representation. Accept 1e-4 tolerance.
+  assert.ok(Math.abs(result - 2.0) < 1e-4, `expected ≈2.0, got ${result}`);
+});
+
+test("calculateAdaptiveScale: realistic mixed input stays within [0.5, 4.0]", () => {
+  // Simulate a real frame: most pixels near noise floor (~0.02–0.08),
+  // a minority reaching furrow-level structureness (~0.12–0.18).
+  const vals = new Float32Array(200);
+  for (let i = 0; i < 180; i++) vals[i] = 0.02 + (i / 180) * 0.06;  // 0.02–0.08
+  for (let i = 180; i < 200; i++) vals[i] = 0.10 + (i - 180) * 0.01; // 0.10–0.29
+  const result = calculateAdaptiveScale(vals);
+  assert.ok(result >= 0.5, `result ${result} is below floor`);
+  assert.ok(result <= 4.0, `result ${result} exceeds ceiling`);
+  assert.ok(result > 1.0, "realistic input with genuine structure should produce scale > 1");
+});
+
+// FIX 2 — getZoneFullScale
+
+test("getZoneFullScale: all 6 named zones return their specified values", () => {
+  assert.equal(getZoneFullScale("forehead"),    ZONE_FULL_SCALE.forehead);
+  assert.equal(getZoneFullScale("glabella"),    ZONE_FULL_SCALE.glabella);
+  assert.equal(getZoneFullScale("periorbital"), ZONE_FULL_SCALE.periorbital);
+  assert.equal(getZoneFullScale("nasolabial"),  ZONE_FULL_SCALE.nasolabial);
+  assert.equal(getZoneFullScale("cheeks"),      ZONE_FULL_SCALE.cheeks);
+  assert.equal(getZoneFullScale("chin"),        ZONE_FULL_SCALE.chin);
+
+  // Spot-check the literal values match the spec.
+  assert.equal(getZoneFullScale("forehead"),    0.08);
+  assert.equal(getZoneFullScale("glabella"),    0.09);
+  assert.equal(getZoneFullScale("periorbital"), 0.04);
+});
+
+test("getZoneFullScale: unknown zone falls back to default (0.06)", () => {
+  assert.equal(getZoneFullScale("unknown_zone"), 0.06);
+  assert.equal(getZoneFullScale(""), 0.06);
+});
+
+// FIX 3 — calculateBlurRadius
+
+test("calculateBlurRadius: tiny zone (5 pixels) returns the floor 0.6", () => {
+  const r = calculateBlurRadius(5);
+  // 1.2 * sqrt(5/1000) ≈ 0.085 < 0.6 → clamped to 0.6
+  assert.ok(Math.abs(r - 0.6) < 1e-9, `expected 0.6, got ${r}`);
+});
+
+test("calculateBlurRadius: medium zone (500 pixels) is between floor and 1.2", () => {
+  const r = calculateBlurRadius(500);
+  // 1.2 * sqrt(0.5) ≈ 0.849
+  const expected = 1.2 * Math.sqrt(500 / 1000);
+  assert.ok(Math.abs(r - expected) < 1e-9, `expected ${expected}, got ${r}`);
+  assert.ok(r > 0.6, "500-pixel zone should exceed floor");
+  assert.ok(r < 1.2, "500-pixel zone should be less than original static sigma");
+});
+
+test("calculateBlurRadius: large zone (5000 pixels) exceeds original sigma 1.2", () => {
+  const r = calculateBlurRadius(5000);
+  // 1.2 * sqrt(5) ≈ 2.683
+  assert.ok(r > 1.2, `large zone should get more blur than the old static 1.2, got ${r}`);
+  assert.ok(r < 5,   `unreasonably large sigma for 5000 pixels: ${r}`);
+});
+
+// FIX 4 — calculateTanDegradation
+
+test("calculateTanDegradation: erythema rises with melanin index", () => {
+  const e0 = calculateTanDegradation("erythema", 0);   // 0.55 * (1 + 0) = 0.55
+  const e1 = calculateTanDegradation("erythema", 1);   // 0.55 * 1.2 = 0.66
+  const e3 = calculateTanDegradation("erythema", 3);   // 0.55 * 1.6 = 0.88 → clamped 0.85
+
+  assert.ok(Math.abs(e0 - 0.55) < 1e-9,  `MI=0: expected 0.55, got ${e0}`);
+  assert.ok(Math.abs(e1 - 0.66) < 1e-9,  `MI=1: expected 0.66, got ${e1}`);
+  assert.equal(e3, 0.85, `MI=3: expected upper clamp 0.85, got ${e3}`);
+
+  // Monotonically increasing with melanin for erythema.
+  assert.ok(e0 < e1, "erythema confidence should rise with melanin index");
+  assert.ok(e1 < e3, "erythema confidence should continue rising until clamped");
+});
+
+test("calculateTanDegradation: pallor falls with melanin index", () => {
+  const p0 = calculateTanDegradation("pallor", 0);   // 0.55 * 1.0 = 0.55
+  const p1 = calculateTanDegradation("pallor", 1);   // 0.55 * 0.9 = 0.495
+  const p3 = calculateTanDegradation("pallor", 3);   // 0.55 * 0.7 = 0.385
+
+  assert.ok(Math.abs(p0 - 0.55)   < 1e-9, `MI=0: expected 0.55, got ${p0}`);
+  assert.ok(Math.abs(p1 - 0.495)  < 1e-9, `MI=1: expected 0.495, got ${p1}`);
+  assert.ok(Math.abs(p3 - 0.385)  < 1e-9, `MI=3: expected 0.385, got ${p3}`);
+
+  // Monotonically decreasing with melanin for pallor.
+  assert.ok(p0 > p1, "pallor confidence should fall with melanin index");
+  assert.ok(p1 > p3, "pallor confidence should continue falling");
+});
+
+test("calculateTanDegradation: output is always in [0.3, 0.85]", () => {
+  for (const condition of ["erythema", "pallor"]) {
+    for (const mi of [0, 0.5, 1, 3, 10, 100]) {
+      const c = calculateTanDegradation(condition, mi);
+      assert.ok(c >= 0.3 && c <= 0.85,
+        `${condition} MI=${mi}: ${c} is outside [0.3, 0.85]`);
+    }
+  }
+});
+
+// FIX 6 — getOrientedGLCMScore
+
+test("getOrientedGLCMScore: returns dominantAngle in [0, 45, 90, 135]", () => {
+  const valid = new Set([0, 45, 90, 135]);
+  const zones = ["forehead", "nasolabial", "cheeks", "unknown"];
+  // Random-ish pixel array: 20×20 square patch.
+  const pixels = new Uint8Array(400);
+  for (let i = 0; i < 400; i++) pixels[i] = (i * 37 + 13) % 256;
+
+  for (const zone of zones) {
+    const { energy, dominantAngle } = getOrientedGLCMScore(zone, pixels);
+    assert.ok(valid.has(dominantAngle),
+      `zone "${zone}": dominantAngle ${dominantAngle} not in [0, 45, 90, 135]`);
+    assert.ok(Number.isFinite(energy) && energy >= 0,
+      `zone "${zone}": energy should be a non-negative finite number, got ${energy}`);
+  }
+});
+
+test("getOrientedGLCMScore: empty pixel array returns dominantAngle 0", () => {
+  const { dominantAngle, energy } = getOrientedGLCMScore("forehead", []);
+  assert.equal(dominantAngle, 0);
+  assert.equal(energy, 0);
 });

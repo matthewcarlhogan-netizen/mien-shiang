@@ -7,6 +7,8 @@
  * Runs entirely on the phone. No pixels ever leave the device.
  */
 
+import { calculateBlurRadius } from "./utils/calibrationEngine.js";
+
 // ---------------------------------------------------------------- colour ----
 
 // EI = 100*log10(R_red/R_green)   MI = 100*log10(1/R_red)
@@ -164,17 +166,17 @@ function sev(value, fullScale) {
   return Math.min(value / fullScale, 1);
 }
 
-/** Haralick GLCM contrast, d=1, four orientations averaged, 8 grey levels. */
+/** Haralick GLCM contrast, d=2, four orientations averaged, 16 grey levels. */
 export function glcmContrast(gray, mask, w, h) {
-  const offs = [[0, 1], [-1, 1], [-1, 0], [-1, -1]];
+  const offs = [[0, 2], [-2, 2], [-2, 0], [-2, -2]];
   const q = new Uint8Array(gray.length);
-  for (let i = 0; i < gray.length; i++) q[i] = Math.min(7, gray[i] >> 5);
+  for (let i = 0; i < gray.length; i++) q[i] = Math.min(15, gray[i] >> 4);
 
   const out = [];
   for (const [dy, dx] of offs) {
     let sum = 0, n = 0;
-    for (let y = 1; y < h - 1; y++) {
-      for (let x = 1; x < w - 1; x++) {
+    for (let y = 2; y < h - 2; y++) {
+      for (let x = 2; x < w - 2; x++) {
         const i = y * w + x;
         const j = (y + dy) * w + (x + dx);
         if (!mask[i] || !mask[j]) continue;
@@ -230,7 +232,16 @@ function gaussianBlur(src, w, h, sigma) {
  *  the subject's own baseline in analyse(). */
 export function ridgeResponse(gray, mask, w, h, vertical = true) {
   const f = Float64Array.from(gray);
-  const base = gaussianBlur(f, w, h, 1.2);
+  // FIX 3: dynamic blur radius based on zone pixel area (mask-in pixels),
+  // replacing the unconditional sigma=1.2 used previously.
+  // Cap at 1.5: ridgeResponse uses a 3-point Laplacian whose Hessian response
+  // scales roughly as 1/σ³. Above sigma≈1.7 the signal from fine wrinkles
+  // (~3 px wide) drops below the emit threshold. The cap retains the dynamic
+  // benefit for small zones (less blur, down to 0.6) while guarding against
+  // regression on larger zones where the formula would over-smooth fine detail.
+  const area = mask.reduce((s, v) => s + (v ? 1 : 0), 0);
+  const blurSigma = Math.min(calculateBlurRadius(area), 1.5);
+  const base = gaussianBlur(f, w, h, blurSigma);
   const best = new Float64Array(gray.length);
 
   for (const sigma of [1.5, 2.5, 3.5]) {
@@ -248,8 +259,18 @@ export function ridgeResponse(gray, mask, w, h, vertical = true) {
         const l1 = 0.5 * (Ixx + Iyy + tmp);
         const l2 = 0.5 * (Ixx + Iyy - tmp);
         if (l1 <= 0) continue;                       // dark ridges only
-        if (vertical ? Math.abs(Ixx) <= Math.abs(Iyy)
-                     : Math.abs(Iyy) <= Math.abs(Ixx)) continue;
+
+        // FIX 8: angular tolerance gate — capture wrinkles within ±30° of
+        // the target axis rather than the strict quadrant split used before.
+        // atan2(|lyy|, |lxx|) measures how far the dominant curvature deviates
+        // from the Ixx axis; ≤30° keeps the orientation close to vertical.
+        if (vertical) {
+          const angle = Math.atan2(Math.abs(Iyy), Math.abs(Ixx)) * (180 / Math.PI);
+          if (angle > 30) continue;
+        } else {
+          const angle = Math.atan2(Math.abs(Ixx), Math.abs(Iyy)) * (180 / Math.PI);
+          if (angle > 30) continue;
+        }
 
         const rb = Math.abs(l2) / Math.max(Math.abs(l1), 1e-9);
         const st = Math.sqrt(l1 * l1 + l2 * l2);
@@ -285,7 +306,12 @@ export function regionStats(rgba, mask, w, h) {
   if (n < 256) return null;
 
   return {
-    ei: trimmedMedian(ei),
+    // FIX 7: erythema index uses tighter trimming (20th–80th) to preserve
+    // localised pathology such as malar rash, which typically covers ~15% of
+    // the zone. The wider 10th–90th band would trim into the signal itself.
+    // All other channels keep the original 10th–90th to stay robust against
+    // shadow edges and specular highlights in the tails.
+    ei: trimmedMedian(ei, 20, 80),
     mi: trimmedMedian(mi),
     L: trimmedMedian(Ls),
     b: trimmedMedian(bs),

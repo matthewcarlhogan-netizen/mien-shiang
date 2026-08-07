@@ -5,7 +5,7 @@
  * second launch works with no connection at all. */
 // Bumped when the shell list changes: the activate handler deletes every cache
 // whose name is not CACHE, so a stale v1 holding an old SHELL cannot survive.
-const CACHE = "mienshiang-v7";
+const CACHE = "mienshiang-v8";
 const SHELL = [
   "./", "./index.html", "./ui.js", "./analysis.js", "./engine.js",
   "./geometry.js", "./landmarker.js", "./expression.js",
@@ -24,6 +24,8 @@ const SHELL = [
   // while rules.js still imports it would break the app offline rather than
   // produce an entertainment-only build.
   "./adapters/entertainment.js", "./adapters/safety.js",
+  // Calibration utilities (Phase 1). Imported by engine.js, must be cached.
+  "./utils/calibrationEngine.js",
   "./manifest.webmanifest", "./icon-192.png", "./icon-512.png",
   "./icon-512-maskable.png",
 ];
