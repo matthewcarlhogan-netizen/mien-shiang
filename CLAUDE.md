@@ -18,7 +18,7 @@ change the product's regulatory status, not just its tone.
 
 ```bash
 npm start        # dev server on http://localhost:5173 (honours PORT)
-npm test         # 199 tests, node:test, no dependencies
+npm test         # 217 tests, node:test, no dependencies
 npm run build    # dist/ — copy of src/, Module B stubbed in the entertainment flavour
 npm run lint:bundle   # compliance guards, run against dist/ not src/
 ```
@@ -33,10 +33,10 @@ stubs when the flag is off.
 
 `package-lock.json` exists only so `npm ci` works in CI; it locks nothing.
 
-199 across fourteen files. If you see 44, the traversal suite is not being
+217 across fifteen files. If you see 44, the traversal suite is not being
 discovered.
 
-**All 159 pass.** The long-standing `copy-guard` failure on
+**All 217 pass.** The long-standing `copy-guard` failure on
 `TCM-202-DAMP-HEAT.recommend[1]` is resolved — that line moved to Module B in
 the Phase 2 split (see item 19). If a test fails, it is a real defect.
 
@@ -58,8 +58,10 @@ src/
   rule-engine.js  matching/chaining machinery, owned by neither module
   reading/      MODULE A reading layer (all pure, no DOM)
     five-elements.js  qi-se.js  three-courts.js  twelve-palaces.js
+    summary.js        the reading receipt — measured values only (see item 24)
     science.js        "What the science says" content
   readingview.js  renders Module A, + Module B under its own disclaimer
+  sharecard.js    on-device canvas share image; photo EXCLUDED by default
   scienceview.js  the science screen
   landmarker.js GPU→CPU delegate fallback (factory INJECTED, so it is testable)
   geometry.js   facial proportions + face-shape classifier  ← pure, no DOM
@@ -391,7 +393,8 @@ cache, which does not contain the new module.
 release that works perfectly on a fresh install.
 **Cause:** new entry in `SHELL`, unchanged `CACHE` name.
 
-Currently `mienshiang-v3` (bumped when the adapters were added).
+Currently `mienshiang-v6` (bumped when `reading/summary.js` and
+`sharecard.js` were added).
 
 ### 16. The module boundary sits BELOW labelling, not at it
 
@@ -502,6 +505,85 @@ group by it and refuse to plot across a change. Relevant the moment Phase 5
 adds history.
 **Pinned by:** `glowIndex is tagged with its basis, because rescaling makes
 regimes incomparable`.
+
+### 24. The summary may only repeat what was measured
+
+`reading/summary.js` builds the receipt shown above the detailed sections. It is
+the one place in the app where the format actively wants to lie: a headline
+wants a single confident value, and the readings underneath are routinely
+partial.
+
+The previous summary card built its subtitle by **truncating a reading to 90
+characters**, or by taking `reading.split(".")[0]`. Every Module A string opens
+with its attribution — "In Mian Xiang…", "Classical Chinese face reading…" — so
+cutting at a fixed offset can strand that attribution and turn a statement about
+a tradition into a statement about the reader. The copy guards never saw it:
+they scan the source strings, not what a view does to them afterwards.
+
+So the summary **repeats measured values and never excerpts prose.** Its one
+sentence is composed from the constructs that were read, with the attribution
+built in.
+
+**Symptom:** a confident headline the sections below do not support — an element
+named for a face whose shape was refused, a glow index with no note that the
+basis was short, or a reading paragraph beheaded mid-attribution.
+**Cause:** treating the summary as a presentation layer over prose rather than
+as a second consumer of the same measured values.
+**Pinned by:** `tests/summary.test.js` — `the summary names only constructs that
+were actually read`, `an unread construct gets a neutral not-read chip, never a
+value`, `a partial colour basis is stated as scope, never rounded up`, and `the
+summary never excerpts a reading paragraph`.
+
+Related, and easy to undo by accident: **the summary's always-visible caveat
+lives in `index.html`, not in a module.** The wording is "Entertainment, not
+diagnosis. Everything here describes a tradition, not you." — and `diagnosis` is
+on the Module A blocklist. `scripts/lint-bundle.js` buckets *every* prose string
+in a `.js` file as Module A copy and has no disclaimer bucket for JS, so the
+sentence can only exist inside the marked block in the HTML. `ui.js` reads that
+template and passes it to `renderSummary()` and to the share card, so there is
+one copy of the wording and two consumers. Move it into a module and
+`npm run lint:bundle` fails — which is the intended alarm, not an obstacle.
+
+### 25. Caveats may collapse, but collapsing is not deleting
+
+The four "Sources differ" notices are now `<details>` disclosures, and exactly
+**one — whichever renders first — is open by default**. Four identical open
+boxes read as boilerplate and stop being read at all, which costs the honesty
+they exist to buy; four *closed* boxes would hide it. One open is the point.
+
+The text is unchanged and stays in the document whether open or shut, so search
+and screen readers still reach it. The global "what this photo could and
+couldn't measure" panel stays **default-visible** and is not a disclosure.
+
+**Symptom:** a reading that looks more settled than the sources are.
+**Pinned by:** `exactly one 'sources differ' notice starts open, and none are
+dropped`, which asserts four render and one is open.
+
+### 26. Share excludes the photo by default, and never dead-ends
+
+`sharecard.js` draws the receipt to a canvas on the device. Two constraints:
+
+- **`includePhoto` defaults to false.** "No photo leaves your device" survives
+  right up until the user posts an image with their face in it. Defaulting to
+  include would convert a privacy guarantee into a privacy hazard at the moment
+  the user is least likely to be thinking about it. The toggle is opt-in and
+  says what posting the image does.
+- **`chooseDelivery()` takes the navigator as an argument**, for the same reason
+  `createLandmarkerWithFallback()` takes its factory: the fallback is the path
+  that matters (Firefox has no `share`, iOS and desktop Safari refuse files, and
+  some in-app browsers *throw* from `canShare` rather than returning false), and
+  a fallback nothing can execute is a fallback nobody has run. It returns
+  `"share"` or `"download"` and nothing else.
+
+The card draws with the system font stack and vector shapes only — no webfont,
+no image asset — so there is nothing to preload and nothing new in the precache
+beyond the two modules. A canvas drawn before a webfont resolves rasterises
+blank boxes; the repo removed its webfont on purpose (see the top of
+`index.html`), which is what makes that whole class of bug unreachable here.
+
+**Pinned by:** `share falls back to download rather than dead-ending` (four
+platform shapes, including the throwing one) and `the share card carries the
+caveat and only measured values`.
 
 ## The measurement layer
 
