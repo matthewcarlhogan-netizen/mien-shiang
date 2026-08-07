@@ -11,7 +11,7 @@ const SHELL = [
   "./geometry.js", "./landmarker.js", "./expression.js",
   "./debugview.js", "./flags.js", "./zones.js",
   "./modulebview.js", "./report.js", "./about.js",
-  "./privacy.html", "./terms.html",
+  "./privacy.html", "./terms.html", "./.well-known/assetlinks.json",
   // Rule layer, split by module.
   "./rules.js", "./rules-a.js", "./rules-b.js", "./rule-engine.js",
   // Module A reading + its views.
