@@ -7,6 +7,16 @@
  * Runs entirely on the phone. No pixels ever leave the device.
  */
 
+import {
+  calculateAdaptiveScale, calculateBlurSigma, rhytideFullScale,
+  crosstalkConfidence, orientationWeight, hessianOrientation, targetAxisRadians,
+  BLUR_BASE_SIGMA,
+} from "./utils/calibrationEngine.js";
+import {
+  orientedGlcm, isotropyWeight, robustCentre, focalExcess,
+  ERYTHEMA_TRIM_LO, ERYTHEMA_TRIM_HI,
+} from "./utils/textureAnalyzer.js";
+
 // ---------------------------------------------------------------- colour ----
 
 // EI = 100*log10(R_red/R_green)   MI = 100*log10(1/R_red)
@@ -126,8 +136,17 @@ export const DELTA_MI_FULL_SCALE = 10.0;
 // 1.0 puts the response curve between the two.
 export const RIDGE_STRUCTURE_SCALE = 1.0;
 export const RHYTIDE_FULL_SCALE = 0.06;
-export const TEXTURE_CONTRAST_FULL_SCALE = 0.35;
+/* GLCM contrast is now NORMALISED by (levels-1)^2 in textureAnalyzer.js, so it
+ * lands in [0,1] and no longer moves when the quantisation changes. The old
+ * 0.35 was in raw 8-level units and does not transfer: re-derived here on the
+ * same synthetic smooth-versus-rough pair the old constant sat between, at 16
+ * levels and d=2. Still a reasoned starting point, not a fitted value. */
+export const TEXTURE_CONTRAST_FULL_SCALE = 0.006;
 export const EMIT_THRESHOLD = 0.15;
+/* Rhytide confidence when the per-image ridge normaliser hit its ceiling. See
+ * the note at the emit site: at the rail, a noisy capture and a textured face
+ * are indistinguishable, so the reading survives but says less. */
+export const RHYTIDE_CLAMPED_CONFIDENCE = 0.35;
 
 export const BASELINE_ZONES = ["center_forehead", "chin"];
 
@@ -228,10 +247,18 @@ function gaussianBlur(src, w, h, sigma) {
  *  region's own percentile. That earlier approach was self-normalising, so
  *  flat noisy skin scored higher than real furrows. Interpreted relative to
  *  the subject's own baseline in analyse(). */
-export function ridgeResponse(gray, mask, w, h, vertical = true) {
+export function ridgeField(gray, mask, w, h, opts = {}) {
+  const vertical = opts.vertical ?? true;
+  const blurSigma = opts.blurSigma ?? BLUR_BASE_SIGMA;
+  const target = targetAxisRadians(vertical);
+
   const f = Float64Array.from(gray);
-  const base = gaussianBlur(f, w, h, 1.2);
-  const best = new Float64Array(gray.length);
+  const base = gaussianBlur(f, w, h, blurSigma);
+
+  const st = new Float64Array(gray.length);   // structureness, orientation-UNgated
+  const rb = new Float64Array(gray.length);   // blobness
+  const wt = new Float64Array(gray.length);   // orientation weight in [0,1]
+  let positives = 0;
 
   for (const sigma of [1.5, 2.5, 3.5]) {
     const s = gaussianBlur(base, w, h, sigma);
@@ -248,22 +275,59 @@ export function ridgeResponse(gray, mask, w, h, vertical = true) {
         const l1 = 0.5 * (Ixx + Iyy + tmp);
         const l2 = 0.5 * (Ixx + Iyy - tmp);
         if (l1 <= 0) continue;                       // dark ridges only
-        if (vertical ? Math.abs(Ixx) <= Math.abs(Iyy)
-                     : Math.abs(Iyy) <= Math.abs(Ixx)) continue;
 
-        const rb = Math.abs(l2) / Math.max(Math.abs(l1), 1e-9);
-        const st = Math.sqrt(l1 * l1 + l2 * l2);
-        const v =
-          Math.exp(-(rb * rb) / 0.5) *
-          (1 - Math.exp(-(st * st) / (2 * RIDGE_STRUCTURE_SCALE ** 2)));
-        if (v > best[i]) best[i] = v;
+        // Scale selection by MAXIMUM STRUCTURENESS rather than maximum
+        // vesselness. Vesselness depends on the normaliser, and the normaliser
+        // is not known yet at this point — it is estimated from these very
+        // values. Selecting on structureness keeps the field independent of the
+        // scale, which is the only reason one pass can serve both jobs.
+        const s2 = Math.sqrt(l1 * l1 + l2 * l2);
+        if (s2 <= st[i]) continue;
+        if (st[i] === 0) positives++;
+        st[i] = s2;
+        rb[i] = Math.abs(l2) / Math.max(Math.abs(l1), 1e-9);
+        wt[i] = orientationWeight(hessianOrientation(Ixx, Iyy, Ixy), target);
       }
     }
   }
 
+  return { st, rb, wt, mask, positives, blurSigma, vertical, n: w * h };
+}
+
+/** Mean vesselness over a prepared field, at a given normaliser. Cheap. */
+export function ridgeMean(field, scale = RIDGE_STRUCTURE_SCALE) {
+  const { st, rb, wt, mask } = field;
+  const denom = 2 * scale * scale;
   let sum = 0, n = 0;
-  for (let i = 0; i < best.length; i++) if (mask[i]) { sum += best[i]; n++; }
+  for (let i = 0; i < st.length; i++) {
+    if (!mask[i]) continue;
+    if (st[i] > 0) {
+      sum += wt[i] *
+        Math.exp(-(rb[i] * rb[i]) / 0.5) *
+        (1 - Math.exp(-(st[i] * st[i]) / denom));
+    }
+    n++;
+  }
   return n ? sum / n : NaN;
+}
+
+/**
+ * Multi-scale Hessian ridge response, orientation-gated (Frangi 1998;
+ * directional gating after Ng et al. HHF, ACCV 2014).
+ *
+ * Returns MEAN vesselness with a FIXED normaliser — not area above the
+ * region's own percentile. That earlier approach was self-normalising, so flat
+ * noisy skin scored higher than real furrows. Interpreted relative to the
+ * subject's own baseline in analyse().
+ *
+ * Kept as a single-call convenience. The pipeline uses ridgeField() +
+ * ridgeMean() instead, so that the per-image normaliser can be estimated from
+ * the field before the response is reduced — computing the Hessian twice would
+ * double the most expensive operation in the app.
+ */
+export function ridgeResponse(gray, mask, w, h, vertical = true, opts = {}) {
+  const field = ridgeField(gray, mask, w, h, { vertical, blurSigma: opts.blurSigma });
+  return ridgeMean(field, opts.scale ?? RIDGE_STRUCTURE_SCALE);
 }
 
 /** Per-region stats from already-white-balanced pixels. */
@@ -284,12 +348,23 @@ export function regionStats(rgba, mask, w, h) {
   }
   if (n < 256) return null;
 
+  const texture = orientedGlcm(gray, mask, w, h);
+
   return {
-    ei: trimmedMedian(ei),
+    // The colour centre uses the 20-80 window. Note what that does and does
+    // not buy: the median of a symmetric trim is the median, so this does not
+    // recover a localised patch — `focalEi` below is the statistic that sees
+    // one. See robustCentre() in textureAnalyzer.js.
+    ei: robustCentre(ei, ERYTHEMA_TRIM_LO, ERYTHEMA_TRIM_HI),
+    /** How far the reddest fifth of the region sits above its own middle. A
+     *  uniformly ruddy region and a region with one raised patch have similar
+     *  medians and very different values here. Measured, not yet graded. */
+    focalEi: focalExcess(ei),
     mi: trimmedMedian(mi),
     L: trimmedMedian(Ls),
     b: trimmedMedian(bs),
-    contrast: glcmContrast(gray, mask, w, h),
+    contrast: texture.meanContrast,
+    texture,
     gray, n,
   };
 }
@@ -306,8 +381,59 @@ export function regionStats(rgba, mask, w, h) {
  * spans both cheeks and the nose bridge, so a whole-face average would fold
  * the rash into its own control and hide it.
  */
-export function rawScalars(regions) {
+export function rawScalars(regions, opts = {}) {
+  const adaptive = opts.adaptive !== false;
+
+  /* ── PHASE A ──────────────────────────────────────────────────────────────
+   * One Hessian pass per zone, producing a field that does NOT yet depend on
+   * the normaliser. The normaliser is estimated from these fields, so it
+   * cannot be applied while building them, and building them twice would
+   * double the most expensive operation in the app. */
+  /* The blur reference is the MEDIAN ZONE AREA OF THIS IMAGE, not a constant.
+   * ROI areas scale with capture resolution, so a fixed reference puts every
+   * zone of every real photo at the clamp — an adaptive parameter that is
+   * silently constant, and constant at the wrong value. Against the median, a
+   * typical zone gets the 1.2 the detector was derived at and the rest vary
+   * around it, which is what "small zones less, large zones more" requires. */
+  const areas = Object.values(regions)
+    .filter((r) => r.stats).map((r) => r.stats.n).sort((a, b) => a - b);
+  const referenceArea = areas.length ? areas[areas.length >> 1] : undefined;
+
+  const fields = {};
+  let totalMasked = 0;
+  for (const [key, r] of Object.entries(regions)) {
+    if (!r.stats) continue;
+    const vertical = key === "glabella";
+    const blur = calculateBlurSigma(r.stats.n, referenceArea);
+    fields[key] = {
+      field: ridgeField(r.stats.gray, r.mask, r.w, r.h,
+                        { vertical, blurSigma: blur.sigma }),
+      vertical, blur,
+    };
+    totalMasked += r.stats.n;
+  }
+
+  /* Structureness is pooled ACROSS ZONES — per image, never per zone. Per-zone
+   * normalisation is the defect CLAUDE.md item 4 exists to prevent: a region
+   * normalised by its own content lets furrows raise their own divisor, so
+   * flat noisy skin outscores real furrows. Pooling makes furrows a small
+   * minority of the sample, and the clamp inside calculateAdaptiveScale()
+   * bounds what is left of the effect. */
+  const stride = Math.max(1, Math.ceil(totalMasked / 20000));
+  const pooled = [];
+  let seen = 0;
+  for (const { field } of Object.values(fields)) {
+    const { st, mask } = field;
+    for (let i = 0; i < st.length; i++) {
+      if (!mask[i] || st[i] <= 0) continue;
+      if (seen++ % stride === 0) pooled.push(st[i]);
+    }
+  }
+  const calibration = calculateAdaptiveScale(pooled, Object.keys(fields).length);
+  const ridgeScale = adaptive ? calibration.scale : RIDGE_STRUCTURE_SCALE;
+
   const baseEi = [], baseMi = [], baseC = [], baseR = [], baseL = [], baseB = [];
+  const baseBlur = [];
   let basePx = 0;
 
   for (const key of BASELINE_ZONES) {
@@ -318,7 +444,15 @@ export function rawScalars(regions) {
     baseL.push(r.stats.L);
     baseB.push(r.stats.b);
     if (isFinite(r.stats.contrast)) baseC.push(r.stats.contrast);
-    const rr = ridgeResponse(r.stats.gray, r.mask, r.w, r.h, true);
+    // The baseline ridge is taken on the VERTICAL axis regardless of the
+    // zone's own axis, which is the reference the deltas below are against.
+    // Reusing the zone's field here instead would silently change what
+    // ridgeDelta means for every zone at once.
+    const blur = fields[key]?.blur ?? calculateBlurSigma(r.stats.n, referenceArea);
+    baseBlur.push(blur.sigma);
+    const bf = ridgeField(r.stats.gray, r.mask, r.w, r.h,
+                          { vertical: true, blurSigma: blur.sigma });
+    const rr = ridgeMean(bf, ridgeScale);
     if (isFinite(rr)) baseR.push(rr);
     basePx += r.stats.n;
   }
@@ -336,16 +470,26 @@ export function rawScalars(regions) {
   const med = (a) => (a.length ? Float64Array.from(a).sort()[a.length >> 1] : NaN);
   const ita = itaDegrees(med(baseL), med(baseB));
   const { regime, reason } = erythemaConfidence(ita);
+  const baselineBlur = med(baseBlur);
   const baseline = {
     ei: med(baseEi), mi: med(baseMi), contrast: med(baseC), ridge: med(baseR),
     ita, band: itaBand(ita), regime, reason, n: basePx,
+    /** The per-image ridge normaliser actually used, and how it was reached.
+     *  Carried on the result rather than left implicit because two runs at
+     *  different normalisers produce ridge numbers that are not comparable —
+     *  the same hazard the `basis` tag guards on glowIndex. */
+    ridgeScale, ridgeScaleRaw: calibration.raw, ridgeScaleP90: calibration.p90,
+    ridgeScaleClamped: calibration.clamped, ridgeScaleFallback: calibration.fallback,
+    ridgeScaleSamples: calibration.n,
+    blurSigma: baselineBlur,
   };
 
   const zones = {};
   for (const [key, r] of Object.entries(regions)) {
     if (!r.stats) continue;
-    const vertical = key === "glabella";
-    const ridge = ridgeResponse(r.stats.gray, r.mask, r.w, r.h, vertical);
+    const held = fields[key];
+    const vertical = held.vertical;
+    const ridge = ridgeMean(held.field, ridgeScale);
 
     zones[key] = {
       // NULL, NOT ZERO, in the low-confidence regime. This is the whole
@@ -362,6 +506,27 @@ export function rawScalars(regions) {
       ridge,
       ridgeDelta: isFinite(baseline.ridge) ? ridge - baseline.ridge : null,
       ridgeAxis: vertical ? "vertical" : "horizontal",
+
+      /* ── CALIBRATION PROVENANCE, CARRIED NOT IMPLIED ───────────────────────
+       * The pre-blur is now a function of the zone's own pixel area, so two
+       * ridge numbers taken at different sigmas are measuring at different
+       * spatial scales. `ridgeDelta` is exactly such a comparison — zone
+       * against baseline — so the mismatch has to travel with the number
+       * rather than be re-derived by whoever plots it. Same reasoning as the
+       * `basis` tag on glowIndex: a value whose comparability depends on a
+       * hidden parameter will eventually be compared across it. */
+      blurSigma: held.blur.sigma,
+      blurClamped: held.blur.clamped,
+      blurMatched: Math.abs(held.blur.sigma - baselineBlur) < 0.05,
+      rhytideFullScale: rhytideFullScale(key),
+
+      /** Which way the surface structure runs, and how one-directional it is.
+       *  Measured only — nothing grades these yet, and nothing should until
+       *  there is labelled data to fit against. */
+      textureAxis: r.stats.texture?.axisDegrees ?? null,
+      textureDirectionality: r.stats.texture?.directionality ?? null,
+      focalEi: r.stats.focalEi ?? null,
+
       L: r.stats.L,
       b: r.stats.b,
       pixels: r.stats.n,
@@ -396,14 +561,23 @@ export function analyse(regions, precomputed) {
 
   for (const [key, z] of Object.entries(raw.zones)) {
     if (z.deltaEi !== null) {
-      const conf = baseline.regime === "full" ? 0.8 : 0.55;
+      /* Confidence in the relative regime is now asymmetric between the two
+       * readings taken off the SAME delta. Melanin biases a photographic
+       * redness reading upward (Wilkes et al., rho up to 0.78), so erythema
+       * fails toward a false positive and pallor toward a false negative. The
+       * first is the direction that ends in an unwarranted referral, so it is
+       * degraded faster. The full regime is unchanged at 0.8. */
+      const full = baseline.regime === "full";
+      const confE = full ? 0.8 : crosstalkConfidence("erythema", baseline.ita).confidence;
+      const confP = full ? 0.8 : crosstalkConfidence("pallor", baseline.ita).confidence;
+
       const s = sev(z.deltaEi, DELTA_EI_FULL_SCALE);
       if (s >= EMIT_THRESHOLD)
-        obs.push({ zone: key, condition: "erythema", severity: s, confidence: conf, tone,
-                   measured: { delta_ei: z.deltaEi } });
+        obs.push({ zone: key, condition: "erythema", severity: s, confidence: confE, tone,
+                   measured: { delta_ei: z.deltaEi, focal_ei: z.focalEi } });
       const sp = sev(-z.deltaEi, DELTA_EI_FULL_SCALE);
       if (sp >= EMIT_THRESHOLD)
-        obs.push({ zone: key, condition: "pallor", severity: sp, confidence: conf, tone,
+        obs.push({ zone: key, condition: "pallor", severity: sp, confidence: confP, tone,
                    measured: { delta_ei: z.deltaEi } });
     }
 
@@ -412,20 +586,48 @@ export function analyse(regions, precomputed) {
       obs.push({ zone: key, condition: "hyperpigmentation", severity: sm, confidence: 0.75, tone,
                  measured: { delta_mi: z.deltaMi } });
 
-    const sr = z.ridgeDelta !== null ? sev(z.ridgeDelta, RHYTIDE_FULL_SCALE) : 0;
+    // Full scale is per anatomical family now: thin periorbital skin saturates
+    // at a smaller delta than a glabella furrow does. See the direction note on
+    // RHYTIDE_FULL_SCALE_BY_FAMILY — these are divisors, so smaller is more
+    // sensitive, and the table is easy to read backwards.
+    const rFull = z.rhytideFullScale ?? RHYTIDE_FULL_SCALE;
+    const sr = z.ridgeDelta !== null ? sev(z.ridgeDelta, rFull) : 0;
     if (sr >= EMIT_THRESHOLD)
       obs.push({
         zone: key,
         condition: z.ridgeAxis === "vertical"
           ? "deep_rhytide_vertical" : "deep_rhytide_horizontal",
-        severity: sr, confidence: 0.5, tone, measured: { ridge: z.ridge },
+        /* A clamped normaliser means the pooled structureness ran past the
+         * ceiling, and NOTHING HERE CAN TELL WHY: a high-ISO capture and a
+         * genuinely textured face raise it identically. The reading is still
+         * emitted — the clamp keeps it usable — but it is emitted knowing less
+         * than usual, and the number that says so has to travel with it. */
+        severity: sr,
+        confidence: baseline.ridgeScaleClamped ? RHYTIDE_CLAMPED_CONFIDENCE : 0.5,
+        tone,
+        measured: {
+          ridge: z.ridge, full_scale: rFull, blur_sigma: z.blurSigma,
+          ridge_scale: baseline.ridgeScale,
+          ridge_scale_clamped: !!baseline.ridgeScaleClamped,
+        },
       });
 
     if (z.deltaContrast !== null) {
-      const sx = sev(z.deltaContrast, TEXTURE_CONTRAST_FULL_SCALE);
+      /* Excess contrast that runs in ONE direction is more likely to be a line
+       * the ridge measurement has already counted than a change in surface
+       * quality, and counting it in both places would report one thing twice.
+       * Attenuated in proportion to how directional it is, with a floor — a
+       * ratio of four noisy numbers must not be able to delete a measurement
+       * outright. */
+      const iso = isotropyWeight(z.textureDirectionality);
+      const sx = sev(z.deltaContrast, TEXTURE_CONTRAST_FULL_SCALE) * iso;
       if (sx >= EMIT_THRESHOLD)
         obs.push({ zone: key, condition: "xerosis", severity: sx, confidence: 0.4, tone,
-                   measured: { delta_contrast: z.deltaContrast } });
+                   measured: {
+                     delta_contrast: z.deltaContrast,
+                     directionality: z.textureDirectionality,
+                     isotropy_weight: iso,
+                   } });
     }
   }
 

@@ -18,7 +18,7 @@ change the product's regulatory status, not just its tone.
 
 ```bash
 npm start        # dev server on http://localhost:5173 (honours PORT)
-npm test         # 217 tests, node:test, no dependencies
+npm test         # 264 tests, node:test, no dependencies
 npm run build    # dist/ — copy of src/, Module B stubbed in the entertainment flavour
 npm run lint:bundle   # compliance guards, run against dist/ not src/
 ```
@@ -33,10 +33,10 @@ stubs when the flag is off.
 
 `package-lock.json` exists only so `npm ci` works in CI; it locks nothing.
 
-217 across fifteen files. If you see 44, the traversal suite is not being
+264 across seventeen files. If you see 44, the traversal suite is not being
 discovered.
 
-**All 217 pass.** The long-standing `copy-guard` failure on
+**All 264 pass.** The long-standing `copy-guard` failure on
 `TCM-202-DAMP-HEAT.recommend[1]` is resolved — that line moved to Module B in
 the Phase 2 split (see item 19). If a test fails, it is a real defect.
 
@@ -68,6 +68,10 @@ src/
   expression.js blendshapes → expression/asymmetry STATE (never traits)
   debugview.js  renders the geometry trace  ← pure, no DOM
   engine.js     colorimetry + texture measurement  ← the science
+  utils/
+    calibrationEngine.js  adaptive ridge scale, per-zone constants, dynamic
+                          blur, melanin crosstalk  ← pure, owned by NEITHER module
+    textureAnalyzer.js    oriented GLCM, robust statistics  ← pure, same
   rules.js      facial zone definitions + forward-chaining rule engine
   sw.js         offline cache (app shell + WASM + model)
   manifest.webmanifest   PWA metadata; must be served as application/manifest+json
@@ -79,6 +83,8 @@ scripts/
   run-tests.js  test discovery; exits 1 on zero files found
 tests/
   engine.test.js          colorimetry, detectors, self-reference
+  calibration.test.js     adaptive scale, per-zone scales, blur, crosstalk, gating
+  texture.test.js         oriented GLCM, normalisation, robust statistics
   rules.test.js           gate precedence, chaining, pixels-to-referral
   serve.traversal.test.js raw-socket path traversal + positive control
 ```
@@ -138,6 +144,13 @@ This constant is specific to the 3-point Laplacian used here. The Python version
 used `cv2.Sobel(ksize=5)` with far larger kernel gain and a constant of `120`;
 copying that value makes the response vanish. **If you change the derivative
 kernel, re-derive the constant by measuring structureness on noise vs furrows.**
+
+**Superseded as the operative normaliser, not as the reasoning.** `rawScalars()`
+now derives a per-image scale (item 27) and `RIDGE_STRUCTURE_SCALE` is its
+fallback — used whenever the estimate has too few samples or too few zones to be
+trusted. Every word above still governs: the noise-versus-furrow measurement is
+what anchors `NOISE_FLOOR_STRUCTURENESS`, and the adaptive path is safe only
+because it is pooled and clamped. Read item 27 before touching either.
 
 ### 5. Cheek laterality is subject-anatomical
 
@@ -505,6 +518,157 @@ group by it and refuse to plot across a change. Relevant the moment Phase 5
 adds history.
 **Pinned by:** `glowIndex is tagged with its basis, because rescaling makes
 regimes incomparable`.
+
+### 27. The adaptive ridge normaliser is safe ONLY because it is clamped
+
+`utils/calibrationEngine.js` replaces the static `RIDGE_STRUCTURE_SCALE` with a
+per-image one: `scale = 2 · (p90(structureness) / 0.06)`, pooled **across
+zones**. Two guards make that legitimate rather than a re-run of item 4, and
+both are load-bearing.
+
+**Pooling across zones, never per zone.** Per-zone percentile normalisation is
+item 4's defect verbatim — a region normalised by its own content lets furrows
+raise their own divisor. Pooling works only because furrows are a minority of
+*pooled* face-skin pixels.
+
+**A ceiling, because pooling is not sufficient on its own.** Measured on twelve
+synthetic zones, varying how many carry furrows, delta between a furrowed zone
+and the plain baseline:
+
+| furrowed zones | 1/12 | 3/12 | 6/12 | 9/12 | 12/12 |
+|---|---|---|---|---|---|
+| ceiling 4 | 6.90e-2 | 6.90e-2 | 6.90e-2 | 6.90e-2 | 6.91e-2 |
+| uncapped | 7.45e-2 | 2.65e-3 | 2.48e-4 | 1.61e-4 | 1.09e-4 |
+
+Uncapped, **the face with the most furrows reports the fewest** — a 680-fold
+collapse. The ceiling is the only thing in front of that.
+
+**Symptom:** wrinkle readings that fall as a face ages, or that vanish on the
+most textured faces while looking perfectly plausible on smooth ones.
+**Cause:** removing the clamp, raising it far, or moving the percentile back
+inside a zone.
+**Pinned by:** `a heavily furrowed face does not normalise its own furrows away`
+and `adaptation separates furrows from grain better than a static scale`.
+
+Two consequences that are easy to undo separately:
+
+- `RIDGE_SCALE_MIN_ZONES = 6`. Pooling's premise is a statement about zone
+  *count*; at three zones with one furrowed, a third of the pool is the signal.
+  Below the floor the static constant is used. Removing this broke three
+  existing tests.
+- **A clamped scale reaches the confidence.** At the rail, a high-ISO capture
+  and a genuinely textured face are indistinguishable — p90 rises identically
+  for both — so rhytide confidence drops to `RHYTIDE_CLAMPED_CONFIDENCE`.
+
+### 28. An adaptive parameter with a fixed reference is a constant at a rail
+
+`calculateBlurSigma(area, referenceArea)` takes the reference as an argument,
+and `rawScalars()` passes **the median zone area of that image**.
+
+A fixed reference cannot work and fails silently. ROI areas scale with capture
+resolution, so against a fixed 1000 px every zone of every real photo lands
+above the ceiling: the "adaptive" sigma is constant, and constant at 2.0 rather
+than the 1.2 the detector was derived at.
+
+**Symptom:** furrows stop being detected after a change that looks like pure
+parameterisation. Measured when this was wrong: the pre-blur smeared 3-pixel
+furrows, the glabella reading fell ~360×, and three tests failed.
+**Pinned by:** `the blur reference is image-relative, not a fixed pixel count`,
+which asserts the same face at two capture resolutions blurs identically.
+
+Because sigma now varies per zone, `ridgeDelta` compares two responses taken at
+different spatial scales. Each zone carries `blurSigma` and `blurMatched` so a
+consumer can refuse the comparison — same hazard as `basis` on `glowIndex`
+(item 18).
+
+### 29. Quantisation changes rescale a Haralick feature — normalise or re-derive
+
+GLCM is now 16 levels at d=2, and `cooccurrence()` divides contrast by
+`(levels-1)²`.
+
+Raw Haralick contrast scales with the **square** of the level count, so 8 → 16
+multiplies it by ~4 with nothing about the skin changing. Left raw,
+`TEXTURE_CONTRAST_FULL_SCALE` would saturate immediately — silently, and in the
+over-reporting direction. The constant was re-derived once for the normalised
+units (0.35 raw-8-level → **0.006** normalised) and is now quantisation-independent.
+
+**Symptom:** every zone reports dry skin after a "sensitivity improvement".
+**Pinned by:** `contrast is normalised, so the level count can change without
+rescaling`, which asserts 8, 16 and 32 levels agree within 2×.
+
+Related, and the reason orientation is kept: **excess contrast that runs in one
+direction is probably a furrow the ridge measurement already counted.** Xerosis
+severity is attenuated by `isotropyWeight(directionality)`, floored at 0.4 —
+attenuate, never erase, because a ratio of four noisy numbers must not be able
+to delete a measurement. `axisDegrees` is the **argmin** of contrast (structure
+varies least *along* a furrow); reporting the argmax names the perpendicular and
+is wrong by exactly 90°, which reads as plausible either way.
+
+### 30. The trim window is not what protects a localised patch
+
+The audit finding was that a 10–90 trimmed median "discards real pathology". It
+does not, and narrowing it to 20–80 does not fix anything: the median of a
+**symmetric** trim is the median, because trimming removes the same count from
+each side of the middle. A patch covering under half a region does not move it
+either way.
+
+The statistic that does see one is `focalExcess()` — how far the region's high
+tail sits above its own centre. A uniformly ruddy region has a high median and a
+small focal excess; an ordinary region with one raised area has an ordinary
+median and a large one. **Two numbers separate shapes that either alone cannot.**
+Carried as `focalEi`, measured only, ungraded pending labelled data.
+
+**Symptom:** the trim window being widened or narrowed again in the belief that
+it does something it does not.
+**Pinned by:** `the trim window barely moves the centre, whichever width is
+used` and `focal excess sees the localised patch the median cannot`.
+
+### 31. Melanin crosstalk is asymmetric, and the term must be normalised
+
+`crosstalkConfidence(kind, ita)` replaces the hard-coded 0.55 in the relative
+regime.
+
+Two corrections were needed before the brief's formula was evaluable, and both
+are the kind that look like nitpicks and are not:
+
+1. **The term must be normalised.** `melaninIndex()` here is `100·log₁₀(1/R_red)`
+   — unbounded, routinely 20–120. `0.55 · (1 + 0.2 · 70)` is **8.25**, which is
+   not a confidence. `melaninProxy(ita)` maps ITA into [0,1] instead.
+2. **The sign was inverted.** Wilkes et al. (n=503) found device erythema
+   readings correlated with the subject's *own* melanin at ρ up to 0.78, and
+   **positively** — melanin pushes the redness reading *up*. So confidence must
+   fall as melanin rises, not climb.
+
+The asymmetry (0.2 vs 0.1) is kept exactly, and it is the point: erythema fails
+toward a **false positive**, which is the direction that ends in an unwarranted
+referral, so it is degraded faster. Pallor fails toward a false negative, the
+safer direction, so it is degraded more slowly.
+
+**Pinned by:** `the crosstalk term is normalised, so confidence stays a
+confidence` and `melanin degrades erythema confidence faster than pallor, and
+downward`.
+
+### 32. The ridge orientation gate is a taper, not a boundary
+
+The old gate was binary — `|Ixx| > |Iyy|`, a hard cut at 45° — so an oblique
+crow's foot or nasolabial fold contributed exactly zero.
+
+**Replacing it with a *narrower* hard cut at ±30° would be worse, not better: a
+narrower hard gate discards more.** What was wanted is a plateau to 30°, a
+cosine taper to zero at 60°. An oblique furrow is now attenuated in proportion,
+and the response no longer steps discontinuously as a head rotates.
+Perpendicular is still weighted zero, which is what keeps glabella furrows from
+reading as forehead lines.
+
+Orientation comes from `hessianOrientation()` — the **double-angle** form
+`½·atan2(2·Ixy, Ixx−Iyy)`, the eigenvector angle of a symmetric 2×2. An
+`atan2(dy, dx)` over two positions answers a different question. The result is
+an **axis**, meaningful only mod π; `axisSeparationDegrees()` wraps accordingly,
+and getting that wrap wrong is invisible in any test using angles near zero.
+
+**Pinned by:** `the orientation gate attenuates an angled furrow instead of
+discarding it`, `axis separation wraps modulo 180`, and `the Hessian axis is the
+double-angle one`.
 
 ### 24. The summary may only repeat what was measured
 
