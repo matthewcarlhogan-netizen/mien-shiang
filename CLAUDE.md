@@ -18,7 +18,7 @@ change the product's regulatory status, not just its tone.
 
 ```bash
 npm start        # dev server on http://localhost:5173 (honours PORT)
-npm test         # 299 tests, node:test, no dependencies
+npm test         # 308 tests, node:test, no dependencies
 npm run build    # dist/ — copy of src/, Module B stubbed in the entertainment flavour
 npm run lint:bundle   # compliance guards, run against dist/ not src/
 ```
@@ -33,10 +33,10 @@ stubs when the flag is off.
 
 `package-lock.json` exists only so `npm ci` works in CI; it locks nothing.
 
-299 across twenty files. If you see 44, the traversal suite is not being
+308 across twenty-one files. If you see 44, the traversal suite is not being
 discovered.
 
-**All 299 pass.** The long-standing `copy-guard` failure on
+**All 308 pass.** The long-standing `copy-guard` failure on
 `TCM-202-DAMP-HEAT.recommend[1]` is resolved — that line moved to Module B in
 the Phase 2 split (see item 19). If a test fails, it is a real defect.
 
