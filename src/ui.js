@@ -140,6 +140,7 @@ function render(r) {
     parts.push(renderReadingGated(r.reading, {
       locked,
       overlayHtml: locked ? gateOverlayHtml(getShareCount()) : "",
+      insightsCaveatText: insightsCaveatText(),
     }));
     parts.push(renderScienceLink());
     parts.push(renderReportButton());
@@ -182,6 +183,11 @@ function summaryCaveatHtml() {
 
 function summaryCaveatText() {
   return ($("tpl-summary-caveat")?.content?.textContent ?? "").trim();
+}
+
+/** Insights narrative caveat. Same arrangement, same reason — see above. */
+function insightsCaveatText() {
+  return ($("tpl-insights-caveat")?.content?.textContent ?? "").trim();
 }
 
 /** Share-card footer. Same arrangement, same reason — see above. */
