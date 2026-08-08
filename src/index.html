@@ -193,6 +193,17 @@ button:disabled{opacity:.35}
 .reading-block .hanzi{font-family:var(--annot);color:var(--cinnabar);margin-left:.15rem}
 .small{font-size:.8rem}
 
+/* Insights narrative. The teaser sits on the free side of the share gate and
+   the report on the gated side, so they are styled as one family but are not
+   one block — see renderReadingGated(). */
+.insights-teaser{margin:.9rem 0 0;padding-left:.85rem;border-left:2px solid var(--rule)}
+.insights-teaser p{margin:.35rem 0 0;color:var(--ink-60);font-size:.92rem;max-width:66ch}
+.insights-report{border-top:1px solid var(--rule);padding:1.25rem 0}
+.insights-report h3{font-size:1.25rem;margin:.35rem 0 .6rem;color:var(--ink)}
+.insights-report p{margin:.6rem 0 0;color:var(--ink-60);max-width:66ch}
+.insights-report ul{margin:.6rem 0 0;padding-left:1.1rem}
+.insights-report li{margin:.3rem 0;color:var(--ink-60);max-width:66ch}
+
 .differ{display:flex;gap:.55rem;align-items:flex-start;margin-top:.9rem;
   padding:.65rem .8rem;background:rgba(212,160,48,.07);border-left:2px solid var(--amber);
   border-radius:0 4px 4px 0;font-size:.82rem;color:var(--ink-60)}

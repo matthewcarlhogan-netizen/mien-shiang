@@ -5,12 +5,14 @@
  * second launch works with no connection at all. */
 // Bumped when the shell list changes: the activate handler deletes every cache
 // whose name is not CACHE, so a stale v1 holding an old SHELL cannot survive.
-const CACHE = "mienshiang-v10";
+const CACHE = "mienshiang-v11";
 const SHELL = [
   "./", "./index.html", "./ui.js", "./analysis.js", "./engine.js",
   // Measurement calibration. Owned by neither module; engine.js imports both,
   // so omitting them here breaks the app offline rather than degrading it.
   "./utils/calibrationEngine.js", "./utils/textureAnalyzer.js",
+  // Module A insights narrative, imported by readingview.js.
+  "./utils/insights.js",
   "./geometry.js", "./landmarker.js", "./expression.js",
   "./debugview.js", "./flags.js", "./zones.js", "./roi.js",
   "./modulebview.js", "./report.js", "./about.js",
