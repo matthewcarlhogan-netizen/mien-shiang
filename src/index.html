@@ -394,6 +394,12 @@ footer a{color:var(--ink-60)}
 
 <template id="tpl-summary-caveat"><p class="summary-caveat" data-copy="disclaimer">Entertainment, not diagnosis. Everything here describes a tradition, not you.</p></template>
 
+<!-- Read by utils/insights.js, for the same reason as the two above: the
+     wording contains "clinical" and "diagnosis", and lint-bundle.js buckets
+     every prose string in a .js file as Module A copy with no disclaimer
+     bucket for JS. As a literal in that module it fails the blocklist twice. -->
+<template id="tpl-insights-caveat"><span data-copy="disclaimer">Entertainment only. These patterns are drawn from Traditional Chinese Medicine tradition. Not a clinical diagnosis.</span></template>
+
 <!-- data-copy="disclaimer" marks text that is ALLOWED to use health vocabulary,
      because its whole job is to say what this app is not and does not do. The
      copy lint exempts these blocks from the Module A blocklist and nothing
