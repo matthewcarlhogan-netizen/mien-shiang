@@ -35,6 +35,7 @@ const {
   grantSubscription,
   grantLifetime,
   subscriptionRemainingMs,
+  forceExpireSubscription,
   SUBSCRIPTION_DAYS,
 } = await import("../src/shareGate.js");
 
@@ -273,4 +274,79 @@ test("simulateShares sets share-unlock state immediately", () => {
   simulateShares();
   assert.equal(isUnlocked(), true);
   assert.equal(getShareCount(), 2);
+});
+
+
+// ───────────────────────────────────────────── dev-panel transitions ────────
+
+/**
+ * The dev panel's actions, exercised through the real state machine.
+ *
+ * These are the paths a tester uses to reach states that otherwise take a week
+ * or a purchase to observe, so a broken one hides whatever it was meant to
+ * reveal. Driven through the exported functions rather than by writing
+ * localStorage directly — poking the keys would test the test's idea of the
+ * schema instead of the code's.
+ */
+test("dev: reset returns every state to locked", () => {
+  clearStore();
+  const t0 = 1_700_000_000_000;
+  grantSubscription(t0);
+  simulateShares();
+  grantLifetime();
+
+  resetUnlockState();
+  assert.equal(getUnlockState(t0), null);
+  assert.equal(getShareCount(), 0);
+});
+
+test("dev: simulate share x2 reaches the share unlock the real path reaches", () => {
+  clearStore();
+  simulateShares();
+  assert.equal(getShareCount(), 2);
+  assert.equal(getUnlockState(), "share");
+  assert.equal(isUnlocked(), true);
+});
+
+test("dev: force-expire lapses a live subscription and only a live one", () => {
+  clearStore();
+  const t0 = 1_700_000_000_000;
+
+  // A no-op unless something is actually live — the panel reports this rather
+  // than presenting a button that silently does nothing.
+  assert.equal(forceExpireSubscription(t0), false, "nothing to expire");
+
+  grantSubscription(t0);
+  assert.equal(getUnlockState(t0), "subscription");
+  assert.equal(forceExpireSubscription(t0), true);
+  assert.equal(getUnlockState(t0), null, "expired immediately, without moving the clock");
+
+  // It must not lapse a lifetime unlock, which has no expiry to move.
+  clearStore();
+  grantLifetime();
+  assert.equal(forceExpireSubscription(t0), false);
+  assert.equal(getUnlockState(t0), "paid-lifetime");
+});
+
+test("dev: force paid-lifetime survives where a subscription would lapse", () => {
+  clearStore();
+  const t0 = 1_700_000_000_000;
+  grantLifetime();
+  assert.equal(getUnlockState(t0 + 400 * DAY), "paid-lifetime");
+  assert.equal(subscriptionRemainingMs(t0), null);
+});
+
+test("dev: the three grants are mutually exclusive, last one wins", () => {
+  // Each writes the single unlock slot. If a stale expiry survived a switch to
+  // lifetime, the lifetime unlock would inherit someone else's deadline.
+  clearStore();
+  const t0 = 1_700_000_000_000;
+  grantSubscription(t0);
+  grantLifetime();
+  assert.equal(getUnlockState(t0 + 400 * DAY), "paid-lifetime",
+    "a stale expiry must not follow the state that replaced it");
+
+  grantSubscription(t0);
+  assert.equal(getUnlockState(t0), "subscription");
+  assert.equal(getUnlockState(t0 + 8 * DAY), null);
 });

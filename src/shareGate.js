@@ -280,5 +280,25 @@ export function resetUnlockState() {
  */
 export function simulateShares() {
   setShareCount(SHARES_REQUIRED);
-  setUnlocked("share");
+  setUnlocked(UNLOCK_SHARE);
+}
+
+/**
+ * Push a live subscription past its expiry, for testing the lapse path.
+ *
+ * Sets the stored EXPIRY into the past rather than winding a start time back.
+ * This model stores an absolute expiry, not a start plus a duration, and the
+ * difference matters: with a start time, "expired" is recomputed on every read
+ * from a clock the device owns, so a lapsed week reopens the moment the system
+ * date moves. Testing has to exercise the model that ships, not a different one
+ * that happens to be easier to fake.
+ */
+export function forceExpireSubscription(now = Date.now()) {
+  try {
+    if (localStorage.getItem(KEY_UNLOCKED) !== UNLOCK_SUBSCRIPTION) return false;
+    localStorage.setItem(KEY_EXPIRES_AT, String(now - 1));
+    return true;
+  } catch {
+    return false;
+  }
 }

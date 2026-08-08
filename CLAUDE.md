@@ -18,7 +18,7 @@ change the product's regulatory status, not just its tone.
 
 ```bash
 npm start        # dev server on http://localhost:5173 (honours PORT)
-npm test         # 282 tests, node:test, no dependencies
+npm test         # 299 tests, node:test, no dependencies
 npm run build    # dist/ — copy of src/, Module B stubbed in the entertainment flavour
 npm run lint:bundle   # compliance guards, run against dist/ not src/
 ```
@@ -33,10 +33,10 @@ stubs when the flag is off.
 
 `package-lock.json` exists only so `npm ci` works in CI; it locks nothing.
 
-282 across nineteen files. If you see 44, the traversal suite is not being
+299 across twenty files. If you see 44, the traversal suite is not being
 discovered.
 
-**All 282 pass.** The long-standing `copy-guard` failure on
+**All 299 pass.** The long-standing `copy-guard` failure on
 `TCM-202-DAMP-HEAT.recommend[1]` is resolved — that line moved to Module B in
 the Phase 2 split (see item 19). If a test fails, it is a real defect.
 
@@ -87,6 +87,7 @@ tests/
   calibration.test.js     adaptive scale, per-zone scales, blur, crosstalk, gating
   texture.test.js         oriented GLCM, normalisation, robust statistics
   harmony.test.js         canon matching, dropped components, no-verdict guard
+  sharecard-modes.test.js locked/unlocked card, whole-reading guard
   rules.test.js           gate precedence, chaining, pixels-to-referral
   serve.traversal.test.js raw-socket path traversal + positive control
 ```
@@ -744,6 +745,60 @@ segment cannot contain `?` or `#`. A checkout URL is the one place it would feel
 natural to append context, and any such value would be face-derived data handed
 to a third party in a URL the app invites the user to open. The regex makes that
 unrepresentable rather than merely discouraged.
+
+### 35. The share card is the most public surface, and it drops rather than trims
+
+`sharecard.js` has a locked and an unlocked mode. Three constraints, all pinned:
+
+- **Locked is the default.** `buildShareModel()` returns `mode: "locked"` unless
+  told otherwise, and the locked card must not contain the gated prose — if it
+  did, the gate would be decorative.
+- **Readings are carried WHOLE or dropped entirely.** The brief asked for "the
+  first line of the narrative", which is item 24's defect exactly: every Module
+  A string opens with its attribution, so cutting at a line, a sentence or a
+  character count strands the opening and turns a statement about a tradition
+  into a statement about the reader. A line that does not fit the canvas is left
+  out. Dropping loses content; trimming changes meaning.
+- **The canon value is never drawn without its label.** A bare `82/100` beside a
+  face shape, on an image about to be posted publicly, reads as a rating of a
+  person — which consent clause 04 promises the app does not produce. The label
+  is not decoration around the figure, it is what makes the figure true.
+
+**The padlock is vector, not an emoji.** This file loads no fonts on purpose; an
+emoji is the same hazard in different clothes, because where the codepoint is
+missing the card rasterises a tofu box in the middle of an image nobody can
+inspect afterwards. Pinned by a test asserting no pictographic character is ever
+drawn as text.
+
+**The footer wording lives in `index.html`, not here.** "Not a clinical reading"
+contains `clinical`, and `lint-bundle.js` buckets every prose string in a `.js`
+file as Module A copy with no disclaimer bucket for JS. Verified in both
+directions: as a literal it fails with
+`[copy-blocklist] sharecard.js: "clinical" in: Entertainment only. Not a clinical reading.`,
+and injected from the marked template all four guards pass. Same arrangement as
+the summary caveat (item 24) — one wording, two consumers.
+
+### 36. The dev panel expires the model that ships
+
+`forceExpireSubscription()` moves the stored **expiry** into the past. The brief
+specified winding a `subscriptionStart` back by eight days, which describes a
+different model from the one in `shareGate.js`: this stores an absolute expiry,
+not a start plus a duration.
+
+The difference is the point. With a start time, "expired" is recomputed on every
+read from a clock the device owns, so a lapsed week reopens the moment the
+system date moves — which is why item 34 stores the expiry and clears it on
+lapse. A test harness that fakes a start time would be exercising a model the
+app does not have.
+
+`console.warn` on open is deliberate and survives minification: the panel hands
+out every unlock state for free, so the one thing that must not happen is it
+shipping unnoticed.
+
+**Pinned by:** `dev: force-expire lapses a live subscription and only a live
+one` and `dev: the three grants are mutually exclusive, last one wins` — the
+second guards a stale expiry following the state that replaced it, which would
+give a lifetime unlock someone else's deadline.
 
 ### 24. The summary may only repeat what was measured
 

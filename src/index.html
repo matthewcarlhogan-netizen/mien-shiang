@@ -384,6 +384,14 @@ footer a{color:var(--ink-60)}
      assertive-phrasing guards still apply to it. ui.js reads this template and
      passes it to renderSummary(), so there is exactly one copy of the wording
      and the share card draws the same sentence. -->
+<!-- Share-card footer. It says "clinical", which is on the Module A blocklist,
+     and scripts/lint-bundle.js buckets EVERY prose string in a .js file as
+     Module A copy with no disclaimer bucket for JS. So this sentence can only
+     exist inside a marked block here; sharecard.js receives it as an argument.
+     Moving it into the module fails `npm run lint:bundle`, which is the alarm
+     working, not an obstacle. Same arrangement as the summary caveat below. -->
+<template id="tpl-sharecard-caveat"><span data-copy="disclaimer">Entertainment only. Not a clinical reading.</span></template>
+
 <template id="tpl-summary-caveat"><p class="summary-caveat" data-copy="disclaimer">Entertainment, not diagnosis. Everything here describes a tradition, not you.</p></template>
 
 <!-- data-copy="disclaimer" marks text that is ALLOWED to use health vocabulary,

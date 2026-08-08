@@ -13,6 +13,8 @@ import { renderAbout, loadBuildInfo } from "./about.js";
 import {
   isUnlocked, redeemPaymentParam, buildShareText, shareText,
   recordShare, getShareCount, resetUnlockState, simulateShares,
+  getUnlockState, grantLifetime, grantSubscription, forceExpireSubscription,
+  subscriptionRemainingMs,
 } from "./shareGate.js";
 import { CHECKOUT_LIFETIME_LINK, CHECKOUT_WEEKLY_LINK, CHECKOUT_CONFIGURED }
   from "./flags.js";
@@ -182,6 +184,11 @@ function summaryCaveatText() {
   return ($("tpl-summary-caveat")?.content?.textContent ?? "").trim();
 }
 
+/** Share-card footer. Same arrangement, same reason — see above. */
+function shareCardCaveatText() {
+  return ($("tpl-sharecard-caveat")?.content?.textContent ?? "").trim();
+}
+
 function shareControlsHtml() {
   return `
     <div class="summary-actions">
@@ -207,7 +214,11 @@ function wireShare(r) {
     const original = btn.textContent;
     try {
       const includePhoto = $("share-photo")?.checked === true;
-      const model = buildShareModel(r.reading, summaryCaveatText());
+      // The card mirrors the gate: locked unless this device has unlocked.
+      const model = buildShareModel(r.reading, shareCardCaveatText(), {
+        unlocked: isUnlocked(),
+        url: location.href.replace(/[?#].*$/, ""),
+      });
       const blob = await renderShareBlob(model, "story", includePhoto ? r.canvas : null);
       const imageFile = new File([blob], "mian-xiang-reading.png", { type: "image/png" });
       const how = await deliver(imageFile);
@@ -443,30 +454,66 @@ function openDevPanel() {
   const dlg = $("dev-panel");
   if (!dlg) return;
 
+  /* Loud on purpose. This panel hands out every unlock state for free, so the
+   * one thing that must never happen is it shipping unnoticed. A console line
+   * survives minification, shows up in a remote debugging session on a real
+   * handset, and costs nothing when the panel is absent. */
+  console.warn("\u26A0\uFE0F DEV PANEL ACTIVE \u2014 remove before production release");
+
+  // Interpolated below: all three come from this module's own constants or are
+  // numbers, so there is no user-supplied text on this path.
+  const state = getUnlockState() ?? "locked";
+  const remaining = subscriptionRemainingMs();
+  const days = remaining === null ? null : (remaining / 86400000).toFixed(2);
+
+  const actions = [
+    ["dev-reset", "Reset all unlock state"],
+    ["dev-simulate", "Simulate share \u00D7 2"],
+    ["dev-subscribe", "Start weekly subscription"],
+    ["dev-expire", "Force expire subscription"],
+    ["dev-lifetime", "Force paid-lifetime"],
+    ["dev-consent", "Reset consent"],
+  ];
+
   dlg.innerHTML = `
     <div class="consent" style="min-width:0">
       <h2 style="font-size:1rem;margin-bottom:.75rem">Dev: unlock state</h2>
       <p style="font-size:.85rem;color:var(--ink-60);margin:.4rem 0">
-        Current state: <code>${getUnlockState() ?? "locked"}</code> &middot;
-        shares: <code>${getShareCount()}</code>
+        Current state: <code>${state}</code> &middot;
+        shares: <code>${getShareCount()}</code>${
+          days === null ? "" : ` &middot; expires in <code>${days}d</code>`}
       </p>
       <div style="display:flex;flex-direction:column;gap:.5rem;margin-top:1rem">
-        <button id="dev-reset" class="ghost" type="button">Reset unlock state</button>
-        <button id="dev-simulate" class="ghost" type="button">Simulate 2 shares</button>
+        ${actions.map(([id, label]) =>
+          `<button id="${id}" class="ghost" type="button">${label}</button>`).join("")}
         <button id="dev-close" class="ghost" type="button" style="margin-top:.5rem">Close</button>
       </div>
     </div>`;
 
   dlg.showModal();
-  dlg.querySelector("#dev-close").addEventListener("click", () => dlg.close());
-  dlg.querySelector("#dev-reset").addEventListener("click", () => {
-    resetUnlockState();
+
+  // Every action re-renders, so the panel never leaves the screen showing
+  // state it has just invalidated.
+  const act = (id, fn) => dlg.querySelector(`#${id}`)?.addEventListener("click", () => {
+    fn();
     dlg.close();
     if (lastResult) render(lastResult);
   });
-  dlg.querySelector("#dev-simulate").addEventListener("click", () => {
-    simulateShares();
-    dlg.close();
-    if (lastResult) render(lastResult);
+
+  dlg.querySelector("#dev-close").addEventListener("click", () => dlg.close());
+  act("dev-reset", resetUnlockState);
+  act("dev-simulate", simulateShares);
+  act("dev-lifetime", grantLifetime);
+  act("dev-subscribe", () => grantSubscription());
+  act("dev-expire", () => {
+    // Reports rather than failing silently: expiring is a no-op unless a
+    // subscription is actually live, and a dead button reads as a bug.
+    if (!forceExpireSubscription()) {
+      console.warn("Dev panel: no live subscription to expire. Start one first.");
+    }
+  });
+  act("dev-consent", () => {
+    localStorage.removeItem(CONSENT_KEY);
+    location.reload();
   });
 }
