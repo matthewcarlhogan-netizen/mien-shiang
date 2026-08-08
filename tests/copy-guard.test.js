@@ -32,6 +32,8 @@ import { SCIENCE_POINTS, SCIENCE_INTRO } from "../src/reading/science.js";
 /** Every Module A copy surface, so none can be added without being scanned. */
 import { NOT_READ_LABEL, NOTHING_READ, EMPHASIS_LEAD } from "../src/reading/summary.js";
 import { PALACE_SCOPE_NOTE } from "../src/readingview.js";
+import { HARMONY_LEAD, HARMONY_NOT_MEASURED, SOURCES_DIFFER as HARMONY_SOURCES_DIFFER }
+  from "../src/reading/harmony.js";
 
 const MODULE_A_COPY = {
   RULES_A, ZONE_READINGS,
@@ -43,6 +45,9 @@ const MODULE_A_COPY = {
   // copy too. Registered here so they are scanned rather than trusted —
   // an unregistered surface ships unread, which is the original defect.
   SUMMARY: { NOT_READ_LABEL, NOTHING_READ, EMPHASIS_LEAD, PALACE_SCOPE_NOTE },
+  // Proportion harmony. Its whole risk is that a number about canons reads as
+  // a verdict about a person, so its copy is scanned like every other surface.
+  HARMONY: { HARMONY_LEAD, HARMONY_NOT_MEASURED, HARMONY_SOURCES_DIFFER },
 };
 
 /* Disease names. Banned in BOTH modules. Deliberately excludes "ulcer" (a

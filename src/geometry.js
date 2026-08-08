@@ -67,6 +67,35 @@ export const LM = {
    *  FACE_LANDMARKS_LEFT_EYE it runs 466-388-387-386-385-384-398, so 386 is. */
   UPPER_LID_A: 159,
   UPPER_LID_B: 386,
+
+  /** Mouth corners. Read off the perioral ROI in zones.js, whose upper-lip
+   *  ring runs 61-185-40-39-37-0-267-269-270-409-291 — so 61 and 291 are its
+   *  two endpoints, i.e. the corners. */
+  CHEILION_A: 61,
+  CHEILION_B: 291,
+
+  /** Outer nostril edges, for nose width.
+   *
+   *  HONEST PROVENANCE, because it is weaker than the rest of this table: the
+   *  face-oval indices above were walked out of the library's own connection
+   *  set, and these were not. 129 and 358 are the widest pair in the nose_apex
+   *  ROI in zones.js and are conventionally the alare points, but that is
+   *  convention plus a local cross-check, not a reading of the library. If a
+   *  nose-width figure ever looks systematically off, suspect these first. */
+  ALARE_A: 129,
+  ALARE_B: 358,
+
+  /** Jaw ring neighbours either side of the gonial pair.
+   *
+   *  Taken from the face-oval ring in the header comment: on the subject's
+   *  right it runs ... 58, 172, 136 ... and on the left ... 288, 397, 365 ...
+   *  so these are the points immediately before and after each gonion. Using
+   *  ring-adjacent points is what makes the angle at the corner meaningful —
+   *  an arbitrary pair of jaw landmarks measures some other angle. */
+  RAMUS_A: 58,   // subject's right, toward the ear
+  JAWBODY_A: 136, // subject's right, toward the chin
+  RAMUS_B: 288,  // subject's left, toward the ear
+  JAWBODY_B: 365, // subject's left, toward the chin
 };
 
 // ───────────────────────────────────────────────────────────────── maths ────
@@ -396,6 +425,165 @@ export function classifyFaceShape(metrics) {
   };
 }
 
+// ──────────────────────────────────────────────── canon proportions ─────────
+
+/*
+ * Proportions that named historical canons make a claim about.
+ *
+ * ── EACH RATIO IS COMPARED TO ITS OWN CANON, NOT ALL OF THEM TO PHI ────────
+ * This is the correction that matters here. Only ONE of the three ratios below
+ * is a golden-ratio claim. The other two have canonical values of 1/3 and 1/5,
+ * from the Three Courts and the facial fifths respectively, and comparing them
+ * to 1.618 would not be a stricter test — it would be a different and false
+ * one, scoring every face against a number no tradition ever applied to that
+ * measurement.
+ *
+ * So each entry carries the canon it is measured against and where that canon
+ * comes from. Nothing here says a face SHOULD match; the value is a distance
+ * from a historical convention, and the reading layer is what frames it.
+ */
+
+export const CANON = {
+  /** Neoclassical: the mouth is phi times the width of the nose. */
+  MOUTH_TO_NOSE: { value: (1 + Math.sqrt(5)) / 2, tolerance: 0.35 },
+  /** Three Courts: the middle court is a third of the face. */
+  MIDDLE_COURT: { value: 1 / 3, tolerance: 0.08 },
+  /** Facial fifths: the inter-ocular gap is a fifth of the width. */
+  CENTRAL_FIFTH: { value: 1 / 5, tolerance: 0.06 },
+};
+
+/**
+ * How closely a measured value sits to a canonical one, in [0, 1].
+ *
+ * 1 is an exact match and 0 is a full tolerance away or further. The tolerance
+ * is what makes this a match rather than a rank: without one, the only way to
+ * turn a distance into a score is to compare faces to each other, which is the
+ * thing this file does not do.
+ *
+ * The tolerances are reasoned starting points, in the same category as every
+ * other constant in this repo that has no labelled data behind it.
+ */
+export function canonMatch(value, canon) {
+  if (!Number.isFinite(value)) return null;
+  const d = Math.abs(value - canon.value) / canon.tolerance;
+  return Math.max(0, 1 - d);
+}
+
+/** The three canon-bearing ratios, measured. No meaning attached. */
+export function canonProportions(pts, courts, five) {
+  const noseWidth = dist(pts[LM.ALARE_A], pts[LM.ALARE_B]);
+  const mouthWidth = dist(pts[LM.CHEILION_A], pts[LM.CHEILION_B]);
+
+  return {
+    mouthToNose: {
+      value: noseWidth > 0 ? mouthWidth / noseWidth : NaN,
+      canon: CANON.MOUTH_TO_NOSE.value,
+      source: "neoclassical proportion, after Lavater and the della Porta tradition",
+    },
+    middleCourt: {
+      value: courts.middleFraction,
+      canon: CANON.MIDDLE_COURT.value,
+      source: "the Three Courts of Mian Xiang",
+    },
+    centralFifth: {
+      value: five.fractions[2],
+      canon: CANON.CENTRAL_FIFTH.value,
+      source: "the facial fifths",
+    },
+  };
+}
+
+/**
+ * Bilateral symmetry, from mirror-twin distances about the midline.
+ *
+ * ── A FLAT PHOTO CANNOT SEPARATE ASYMMETRY FROM YAW ────────────────────────
+ * A turned head shortens one side of every pair, which is indistinguishable
+ * here from a face that is genuinely uneven. `frontality()` already measures
+ * that confusion; this returns `reliable: false` when it is too large, and the
+ * reading layer must drop the component rather than report a number it cannot
+ * stand behind. Reporting a symmetry figure from a turned head is the single
+ * easiest way for this measurement to be confidently wrong.
+ */
+export const SYMMETRY_PAIRS = [
+  [LM.FRONTOTEMPORAL_A, LM.FRONTOTEMPORAL_B],
+  [LM.ZYGION_A, LM.ZYGION_B],
+  [LM.GONION_A, LM.GONION_B],
+  [LM.RAMUS_A, LM.RAMUS_B],
+  [LM.JAWBODY_A, LM.JAWBODY_B],
+];
+
+export function symmetryIndex(pts, pose) {
+  const a = pts[LM.OVAL_APEX], b = pts[LM.MENTON];
+  const vx = b.x - a.x, vy = b.y - a.y;
+  const len = Math.hypot(vx, vy) || 1;
+  const perp = (p) => Math.abs((p.x - a.x) * vy - (p.y - a.y) * vx) / len;
+
+  const deviations = [];
+  for (const [i, j] of SYMMETRY_PAIRS) {
+    const dA = perp(pts[i]), dB = perp(pts[j]);
+    const sum = dA + dB;
+    if (sum > 0) deviations.push(Math.abs(dA - dB) / sum);
+  }
+  if (!deviations.length) return { value: null, reliable: false, pairs: 0 };
+
+  const mean = deviations.reduce((x, y) => x + y, 0) / deviations.length;
+  return {
+    /** 1 is perfectly even about the midline, 0 is one side collapsed. */
+    value: 1 - Math.min(mean * 2, 1),
+    meanDeviation: mean,
+    pairs: deviations.length,
+    reliable: pose.frontal,
+    caveat: pose.frontal ? null
+      : "The head is turned far enough that evenness cannot be separated from the angle of the photo.",
+  };
+}
+
+/**
+ * Gonial angle — the corner of the jaw, in degrees, averaged over both sides.
+ *
+ * Measured at each gonion between its two RING-ADJACENT neighbours, so the
+ * angle is the one the jaw outline actually turns through at that point. An
+ * arbitrary set of nearby jaw landmarks measures some other angle and still
+ * returns a plausible number.
+ *
+ * A smaller angle is a sharper corner. Nothing here calls that better.
+ */
+export function jawAngle(pts) {
+  const at = (prev, vertex, next) => {
+    const p = pts[prev], v = pts[vertex], n = pts[next];
+    const ax = p.x - v.x, ay = p.y - v.y;
+    const bx = n.x - v.x, by = n.y - v.y;
+    const la = Math.hypot(ax, ay), lb = Math.hypot(bx, by);
+    if (la === 0 || lb === 0) return NaN;
+    const cos = Math.min(1, Math.max(-1, (ax * bx + ay * by) / (la * lb)));
+    return (Math.acos(cos) * 180) / Math.PI;
+  };
+
+  const right = at(LM.RAMUS_A, LM.GONION_A, LM.JAWBODY_A);
+  const left = at(LM.RAMUS_B, LM.GONION_B, LM.JAWBODY_B);
+  const both = [right, left].filter(Number.isFinite);
+  return {
+    right, left,
+    degrees: both.length ? both.reduce((a, b) => a + b, 0) / both.length : NaN,
+  };
+}
+
+/**
+ * How far the cheekbones stand out from the forehead and jaw.
+ *
+ * Deliberately NOT compared to a canon: there is no classical figure for this
+ * the way there is for the courts and the fifths, and inventing one would be
+ * manufacturing a standard rather than measuring against a historical one.
+ * Reported as a plain proportion for the reading layer to describe.
+ */
+export function cheekboneProminence(m) {
+  const others = (m.frontotemporalWidth + m.bigonialWidth) / 2;
+  return {
+    value: others > 0 ? m.bizygomaticWidth / others : NaN,
+    definition: "bizygomatic width / mean of frontotemporal and bigonial widths",
+  };
+}
+
 // ────────────────────────────────────────────────────────────── orchestra ───
 
 /**
@@ -411,15 +599,21 @@ export function geometryReport(rawPts) {
   const metrics = faceMetrics(pts);
   const pose = frontality(pts);
   const shape = classifyFaceShape(metrics);
+  const courts = thirds(pts);
+  const five = fifths(pts);
 
   return {
     rollDegrees,
     pose,
     metrics,
-    thirds: thirds(pts),
-    fifths: fifths(pts),
+    thirds: courts,
+    fifths: five,
     fwhr: fwhr(pts),
     shape,
+    canon: canonProportions(pts, courts, five),
+    symmetry: symmetryIndex(pts, pose),
+    jaw: jawAngle(pts),
+    cheekbones: cheekboneProminence(metrics),
     /** Set when the head is turned far enough that the widths — and therefore
      *  the shape label built on them — should not be trusted. The label is
      *  still returned so the debug view can show its working, but the UI must

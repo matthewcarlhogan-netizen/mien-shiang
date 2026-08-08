@@ -18,7 +18,7 @@ change the product's regulatory status, not just its tone.
 
 ```bash
 npm start        # dev server on http://localhost:5173 (honours PORT)
-npm test         # 264 tests, node:test, no dependencies
+npm test         # 282 tests, node:test, no dependencies
 npm run build    # dist/ — copy of src/, Module B stubbed in the entertainment flavour
 npm run lint:bundle   # compliance guards, run against dist/ not src/
 ```
@@ -33,10 +33,10 @@ stubs when the flag is off.
 
 `package-lock.json` exists only so `npm ci` works in CI; it locks nothing.
 
-264 across seventeen files. If you see 44, the traversal suite is not being
+282 across nineteen files. If you see 44, the traversal suite is not being
 discovered.
 
-**All 264 pass.** The long-standing `copy-guard` failure on
+**All 282 pass.** The long-standing `copy-guard` failure on
 `TCM-202-DAMP-HEAT.recommend[1]` is resolved — that line moved to Module B in
 the Phase 2 split (see item 19). If a test fails, it is a real defect.
 
@@ -59,6 +59,7 @@ src/
   reading/      MODULE A reading layer (all pure, no DOM)
     five-elements.js  qi-se.js  three-courts.js  twelve-palaces.js
     summary.js        the reading receipt — measured values only (see item 24)
+    harmony.js        canon-match proportions — about the canons, NOT the face
     science.js        "What the science says" content
   readingview.js  renders Module A, + Module B under its own disclaimer
   sharecard.js    on-device canvas share image; photo EXCLUDED by default
@@ -85,6 +86,7 @@ tests/
   engine.test.js          colorimetry, detectors, self-reference
   calibration.test.js     adaptive scale, per-zone scales, blur, crosstalk, gating
   texture.test.js         oriented GLCM, normalisation, robust statistics
+  harmony.test.js         canon matching, dropped components, no-verdict guard
   rules.test.js           gate precedence, chaining, pixels-to-referral
   serve.traversal.test.js raw-socket path traversal + positive control
 ```
@@ -669,6 +671,79 @@ and getting that wrap wrong is invisible in any test using angles near zero.
 **Pinned by:** `the orientation gate attenuates an angled furrow instead of
 discarding it`, `axis separation wraps modulo 180`, and `the Hessian axis is the
 double-angle one`.
+
+### 33. The harmony value is about the canons, not about the face
+
+`reading/harmony.js` reports how closely measured proportions sit to what
+**named historical canons** treated as ideal. That is a statement about the
+canons. It is not a rating of a person, and the distinction is not a wording
+trick — it changes what the number can be wrong about. *"These proportions are
+0.62 of the way to the neoclassical figure"* is checkable against the arithmetic
+and the cited convention; *"this face is a 62"* is a claim no measurement here
+supports.
+
+Four properties keep that true, and each is pinned:
+
+- **No comparison between people.** No percentile, no rank, no "above average".
+  There is no population in this repo to be average against.
+- **Each ratio is measured against ITS OWN canon.** Only mouth-to-nose is a
+  golden-section claim; the middle court is 1/3 and the central fifth is 1/5.
+  Scoring all three against φ is not a stricter test, it is a false one.
+- **Symmetry is dropped, not guessed, on a turned head.** A flat photo cannot
+  separate genuine asymmetry from yaw. `symmetryIndex()` returns
+  `reliable: false` above the `frontality()` threshold and the reading drops the
+  component.
+- **`basis` travels with the value**, exactly as on `glowIndex` (item 18) — and
+  with the same trap: dropping a below-average component makes the composite go
+  **up**. Group by `basis` before comparing two results, and never plot across a
+  change.
+
+**Symptom:** a harmony figure presented as a verdict, or two figures compared
+across different component sets.
+**Pinned by:** `the harmony value describes canons and never ranks a person`,
+`each ratio is measured against its OWN canon, not all against phi`, `symmetry
+refuses to report from a turned head`, and `a dropped component changes the
+basis, and the basis travels`.
+
+The weights (40/30/20/10) are **editorial, not measured** — no data here
+supports one split over another, so they sit in one declared table rather than
+inside an expression. `treat` was caught by the copy guard while writing this
+file, in its ordinary English sense, exactly as item 19 warns; it is now
+"regard".
+
+### 34. The unlock gate is soft, and saying so is the feature
+
+`shareGate.js` has three unlock states and no backend. Every one lives in
+localStorage, so anyone with devtools can grant themselves any of them, and the
+redeem URL can be shared by hand. **Nothing there is an entitlement; it is a
+courtesy latch.**
+
+That is not a defect awaiting a fix — it follows directly from no-account,
+no-server, nothing-leaves-the-device. The only real fix is a server that
+verifies a receipt, which means an account, which is what the privacy posture
+exists to avoid. What follows:
+
+- Nothing goes behind the gate that would be harmful to leak.
+- **Module B is never behind it** (`MODULE_B_IS_NEVER_MONETISED`). Safety
+  content is not paid content.
+- Do not add obfuscation that makes it look authoritative. A latch that
+  pretends to be a lock invites someone downstream to trust it.
+
+Two failure directions were chosen deliberately: a subscription whose expiry is
+missing or unparseable **fails closed**, and expiry **clears** the stored state
+rather than being recomputed each read — otherwise a lapsed week reopens by
+moving a clock the user controls.
+
+**Pinned by:** `a weekly window is open inside its term and shut after it`
+(asserts the exact boundary instant), `a subscription with a missing or corrupt
+expiry fails CLOSED`, and `expiry clears the stored state rather than leaving it
+to be re-read`.
+
+The checkout host is allowlisted with a pattern anchored at both ends whose path
+segment cannot contain `?` or `#`. A checkout URL is the one place it would feel
+natural to append context, and any such value would be face-derived data handed
+to a third party in a URL the app invites the user to open. The regex makes that
+unrepresentable rather than merely discouraged.
 
 ### 24. The summary may only repeat what was measured
 

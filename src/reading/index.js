@@ -26,6 +26,7 @@ import { readFiveElements } from "./five-elements.js";
 import { readThreeCourts } from "./three-courts.js";
 import { readTwelvePalaces } from "./twelve-palaces.js";
 import { readQiSe } from "./qi-se.js";
+import { readHarmony } from "./harmony.js";
 
 /**
  * @param {object} geometry    geometryReport() output
@@ -39,7 +40,8 @@ export function composeReading(geometry, complexion, raw) {
     threeCourts: geometry ? readThreeCourts(geometry) : null,
     twelvePalaces: raw ? readTwelvePalaces(raw) : null,
     qiSe: complexion ? readQiSe(complexion) : null,
+    harmony: geometry ? readHarmony(geometry, raw) : null,
   };
 }
 
-export { readFiveElements, readThreeCourts, readTwelvePalaces, readQiSe };
+export { readFiveElements, readThreeCourts, readTwelvePalaces, readQiSe, readHarmony };

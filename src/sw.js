@@ -5,7 +5,7 @@
  * second launch works with no connection at all. */
 // Bumped when the shell list changes: the activate handler deletes every cache
 // whose name is not CACHE, so a stale v1 holding an old SHELL cannot survive.
-const CACHE = "mienshiang-v8";
+const CACHE = "mienshiang-v9";
 const SHELL = [
   "./", "./index.html", "./ui.js", "./analysis.js", "./engine.js",
   // Measurement calibration. Owned by neither module; engine.js imports both,
@@ -20,7 +20,7 @@ const SHELL = [
   // Module A reading + its views.
   "./reading/index.js", "./reading/five-elements.js", "./reading/three-courts.js",
   "./reading/twelve-palaces.js", "./reading/qi-se.js", "./reading/science.js",
-  "./reading/summary.js",
+  "./reading/summary.js", "./reading/harmony.js",
   "./readingview.js", "./scienceview.js", "./sharecard.js", "./shareGate.js",
   // Both module adapters ship in both flavours. The flag governs BEHAVIOUR,
   // not bytes — see the honest limitation in flags.js. Omitting safety.js here
