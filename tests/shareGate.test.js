@@ -32,7 +32,13 @@ const {
   recordShare,
   resetUnlockState,
   simulateShares,
+  grantSubscription,
+  grantLifetime,
+  subscriptionRemainingMs,
+  SUBSCRIPTION_DAYS,
 } = await import("../src/shareGate.js");
+
+const DAY = 24 * 60 * 60 * 1000;
 
 // Helper: clear storage between tests.
 function clearStore() { store.clear(); }
@@ -57,32 +63,116 @@ test("resetUnlockState clears all keys", () => {
 
 // ─────────────────────────────────────────── payment URL redemption ────────
 
-test("redeemPaymentParam stores paid-lifetime when ?unlocked=payment&sid= present", () => {
+test("redeemPaymentParam stores paid-lifetime for a one-time order", () => {
   clearStore();
-  const changed = redeemPaymentParam("?unlocked=payment&sid=cs_test_abc123");
-  assert.equal(changed, true);
+  const redeemed = redeemPaymentParam("?unlocked=payment&oid=ls_order_abc123");
+  assert.equal(redeemed, "paid-lifetime");
   assert.equal(getUnlockState(), "paid-lifetime");
   assert.equal(isUnlocked(), true);
 });
 
-test("redeemPaymentParam does nothing when sid is missing (prevents trivial bypass)", () => {
+test("a one-time unlock carries no expiry and survives a year", () => {
   clearStore();
-  const changed = redeemPaymentParam("?unlocked=payment");
-  assert.equal(changed, false);
+  const t0 = 1_700_000_000_000;
+  redeemPaymentParam("?unlocked=payment&oid=ls_order_abc123", t0);
+  assert.equal(getUnlockState(t0 + 365 * 24 * 3600 * 1000), "paid-lifetime");
+});
+
+test("redeemPaymentParam starts a dated window for a subscription order", () => {
+  clearStore();
+  const t0 = 1_700_000_000_000;
+  const redeemed = redeemPaymentParam("?unlocked=subscription&oid=ls_order_xyz", t0);
+  assert.equal(redeemed, "subscription");
+  assert.equal(getUnlockState(t0), "subscription");
+});
+
+test("redeemPaymentParam does nothing without an order id (prevents trivial bypass)", () => {
+  // Not security — see the soft-gate note in shareGate.js. It only stops the
+  // unlock URL from being guessable at a glance.
+  clearStore();
+  assert.equal(redeemPaymentParam("?unlocked=payment"), null);
+  assert.equal(getUnlockState(), null);
+  assert.equal(redeemPaymentParam("?unlocked=subscription"), null);
   assert.equal(getUnlockState(), null);
 });
 
 test("redeemPaymentParam does nothing for unrelated params", () => {
   clearStore();
-  const changed = redeemPaymentParam("?foo=bar");
-  assert.equal(changed, false);
+  assert.equal(redeemPaymentParam("?foo=bar"), null);
+  assert.equal(getUnlockState(), null);
+  assert.equal(redeemPaymentParam("?foo=bar&oid=ls_order_abc"), null);
   assert.equal(getUnlockState(), null);
 });
 
 test("redeemPaymentParam handles empty search string", () => {
   clearStore();
-  const changed = redeemPaymentParam("");
-  assert.equal(changed, false);
+  assert.equal(redeemPaymentParam(""), null);
+});
+
+// ─────────────────────────────────────────── subscription expiry ──────────
+
+test("a weekly window is open inside its term and shut after it", () => {
+  clearStore();
+  const t0 = 1_700_000_000_000;
+  grantSubscription(t0);
+
+  assert.equal(getUnlockState(t0), "subscription");
+  assert.equal(getUnlockState(t0 + 6 * DAY), "subscription", "day six is inside");
+
+  // The boundary itself is CLOSED. A window described as seven days must not
+  // be seven days and a bit, and an off-by-one here is invisible unless the
+  // exact instant is asserted.
+  const expiry = t0 + SUBSCRIPTION_DAYS * DAY;
+  assert.equal(getUnlockState(expiry - 1), "subscription");
+  assert.equal(getUnlockState(expiry), null, "the expiry instant is expired");
+  assert.equal(getUnlockState(expiry + DAY), null);
+});
+
+test("expiry clears the stored state rather than leaving it to be re-read", () => {
+  clearStore();
+  const t0 = 1_700_000_000_000;
+  grantSubscription(t0);
+  assert.equal(getUnlockState(t0 + 8 * DAY), null);
+  // Reading at a time BEFORE the expiry must not resurrect it: the lapse is
+  // recorded, not recomputed from a clock the user controls.
+  assert.equal(getUnlockState(t0), null, "a lapsed window must stay lapsed");
+});
+
+test("a subscription with a missing or corrupt expiry fails CLOSED", () => {
+  // Failing toward locked is recoverable by re-purchasing. Failing toward open
+  // cannot be walked back once it has shipped.
+  clearStore();
+  store.set("mienshiang.unlock.v1", "subscription");
+  assert.equal(getUnlockState(), null, "no timestamp at all");
+
+  clearStore();
+  store.set("mienshiang.unlock.v1", "subscription");
+  store.set("mienshiang.unlockExpires.v1", "not-a-number");
+  assert.equal(getUnlockState(), null, "unparseable timestamp");
+});
+
+test("remaining time is reported only for a live subscription", () => {
+  clearStore();
+  const t0 = 1_700_000_000_000;
+  assert.equal(subscriptionRemainingMs(t0), null, "nothing bought");
+
+  grantLifetime();
+  assert.equal(subscriptionRemainingMs(t0), null, "lifetime does not expire");
+
+  clearStore();
+  grantSubscription(t0);
+  assert.equal(subscriptionRemainingMs(t0 + 2 * DAY), 5 * DAY);
+  assert.equal(subscriptionRemainingMs(t0 + 99 * DAY), null, "expired reports nothing");
+});
+
+test("resetting clears the expiry too, not just the state", () => {
+  clearStore();
+  const t0 = 1_700_000_000_000;
+  grantSubscription(t0);
+  resetUnlockState();
+  assert.equal(getUnlockState(t0), null);
+  assert.equal(store.get("mienshiang.unlockExpires.v1"), undefined,
+    "a stale expiry left behind would apply to the next purchase");
 });
 
 // ─────────────────────────────────────────────── share text ───────────────

@@ -44,6 +44,22 @@ const DIST = join(REPO, "dist");
 export const EGRESS_ALLOWLIST = [
   { pattern: /^https:\/\/cdn\.jsdelivr\.net\/npm\/@mediapipe\//, why: "MediaPipe WASM runtime" },
   { pattern: /^https:\/\/storage\.googleapis\.com\/mediapipe-models\//, why: "MediaPipe face_landmarker model" },
+  /*
+   * Lemon Squeezy hosted checkout — the ONLY payment destination.
+   *
+   * Constrained the same way the documentation links are, and for the same
+   * reason: the pattern is anchored at both ends and the path segment excludes
+   * `?` and `#`, so a query string or fragment cannot match. That is not
+   * decoration. A checkout URL is the one place in this app where it would be
+   * natural to append "context" — a zone name, a face shape, a score — and any
+   * such value would be biometric-derived data handed to a third party in a URL
+   * the user is invited to tap. The regex makes that unrepresentable rather
+   * than merely discouraged.
+   *
+   * The product IDs are placeholders until the products exist in the dashboard.
+   * Swapping them changes only the path segment, so this entry does not move.
+   */
+  { pattern: /^https:\/\/checkout\.lemonsqueezy\.com\/buy\/[A-Za-z0-9-]+$/, why: "Lemon Squeezy hosted checkout" },
 ];
 
 /** Accepted only when a DSN is configured at runtime; never hardcoded. */
