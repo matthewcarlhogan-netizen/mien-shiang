@@ -15,10 +15,10 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { join } from "node:path";
+import { join, dirname, resolve, relative } from "node:path";
 
 const SRC = fileURLToPath(new URL("../src", import.meta.url));
 
@@ -110,4 +110,64 @@ test("every local module imported by a source file exists on disk", () => {
     }
   }
   assert.deepEqual(missing, [], "broken local imports:\n  " + missing.join("\n  "));
+});
+
+
+/**
+ * Every named import must actually be exported by its target.
+ *
+ * ── WHY node --check DOES NOT COVER THIS ───────────────────────────────────
+ * Importing a name a module does not export is a LINK-time error, not a syntax
+ * error. Each file parses perfectly on its own; the failure happens when the
+ * browser resolves the module graph, and it takes out the whole entry point —
+ * a blank screen, with nothing wrong in any single file.
+ *
+ * The suite cannot catch it by importing, either. `ui.js` reaches MediaPipe
+ * over a CDN through `analysis.js`, so it can never be loaded under
+ * `node --test`, which is exactly the gap CLAUDE.md item 18a is about: the
+ * files most likely to break this way are the ones no test can import.
+ *
+ * This was not hypothetical. Renaming an export in `flags.js` left `ui.js`
+ * importing the old name; 271 tests stayed green and the app would not have
+ * booted. Static resolution is the only thing that sees it.
+ */
+test("every named import resolves to a real export", () => {
+  const exportsOf = (src) => {
+    const names = new Set();
+    for (const m of src.matchAll(/export\s+(?:async\s+)?(?:const|let|var|function\*?|class)\s+([A-Za-z_$][\w$]*)/g))
+      names.add(m[1]);
+    // Re-export and grouped-export lists: export { a, b as c }
+    for (const m of src.matchAll(/export\s*\{([^}]*)\}/g)) {
+      for (const part of m[1].split(",")) {
+        const t = part.trim();
+        if (!t) continue;
+        const as = t.split(/\s+as\s+/);
+        names.add((as[1] ?? as[0]).trim());
+      }
+    }
+    if (/export\s+\*/.test(src)) names.add("*");
+    return names;
+  };
+
+  const problems = [];
+  for (const file of walk(SRC).filter((f) => f.endsWith(".js"))) {
+    const src = readFileSync(file, "utf8");
+    for (const m of src.matchAll(/import\s*\{([^}]*)\}\s*from\s*["'](\.[^"']+)["']/g)) {
+      const target = resolve(dirname(file), m[2]);
+      if (!existsSync(target)) continue;   // covered by the resolution test above
+      const available = exportsOf(readFileSync(target, "utf8"));
+      if (available.has("*")) continue;
+      for (const part of m[1].split(",")) {
+        const name = part.trim().split(/\s+as\s+/)[0].trim();
+        if (!name) continue;
+        if (!available.has(name)) {
+          problems.push(`${relative(SRC, file)} imports { ${name} } from ` +
+                        `${m[2]}, which does not export it`);
+        }
+      }
+    }
+  }
+  assert.deepEqual(problems, [],
+    "a missing named export is a link-time failure that takes out the whole " +
+    "module graph:\n  " + problems.join("\n  "));
 });
