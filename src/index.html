@@ -319,7 +319,25 @@ footer a{color:var(--ink-60)}
   color:#fff}
 .gate-btn:disabled{opacity:.55;cursor:default}
 .gate-or{font-size:.8rem;color:var(--ink-60);margin:.2rem 0 .55rem}
-.gate-caveat{font-size:.75rem;color:var(--ink-30);margin:.8rem 0 0}
+.gate-caveat{font-size:.75rem;color:var(--ink-30);margin:.8rem 0 0;line-height:1.5}
+/* Three unlock options. Stacked on a phone, in a row once there is width for
+   it. The free option is FIRST in source order, so it is first for a screen
+   reader and first on the narrow layout where most of these are read. */
+.gate-opts{display:flex;flex-direction:column;gap:.6rem;margin:.5rem 0 0}
+.gate-opt{border:1px solid var(--rule);border-radius:7px;padding:.6rem;
+  background:var(--card);position:relative;display:flex;flex-direction:column;
+  justify-content:flex-end}
+.gate-opt-popular{border-color:#c9a227}
+.gate-flag{font-size:.68rem;font-weight:700;letter-spacing:.08em;
+  text-transform:uppercase;color:#c9a227;margin:0 0 .4rem}
+.gate-opt .gate-btn{margin-bottom:.35rem}
+.gate-note{font-size:.74rem;color:var(--ink-60);margin:0}
+.gate-opt .gate-progress{font-size:.74rem;margin:0;display:inline}
+@media (min-width:560px){
+  .gate-card{max-width:34rem}
+  .gate-opts{flex-direction:row;align-items:stretch}
+  .gate-opts>*{flex:1 1 0}
+}
 </style>
 </head>
 <body>
@@ -366,6 +384,14 @@ footer a{color:var(--ink-60)}
      assertive-phrasing guards still apply to it. ui.js reads this template and
      passes it to renderSummary(), so there is exactly one copy of the wording
      and the share card draws the same sentence. -->
+<!-- Share-card footer. It says "clinical", which is on the Module A blocklist,
+     and scripts/lint-bundle.js buckets EVERY prose string in a .js file as
+     Module A copy with no disclaimer bucket for JS. So this sentence can only
+     exist inside a marked block here; sharecard.js receives it as an argument.
+     Moving it into the module fails `npm run lint:bundle`, which is the alarm
+     working, not an obstacle. Same arrangement as the summary caveat below. -->
+<template id="tpl-sharecard-caveat"><span data-copy="disclaimer">Entertainment only. Not a clinical reading.</span></template>
+
 <template id="tpl-summary-caveat"><p class="summary-caveat" data-copy="disclaimer">Entertainment, not diagnosis. Everything here describes a tradition, not you.</p></template>
 
 <!-- data-copy="disclaimer" marks text that is ALLOWED to use health vocabulary,
@@ -396,7 +422,7 @@ footer a{color:var(--ink-60)}
     <div class="clause"><span class="n">02</span><div>This is entertainment. Mian Xiang (面相) is a traditional practice, and its core claim — that facial features reveal character — has no scientific basis. Read the output as tradition, not as fact about you.</div></div>
     <div class="clause"><span class="n">03</span><div>It is not a medical device and is not intended to diagnose, treat, cure or prevent any disease. Nothing here substitutes for a clinician. If a symptom worries you, see a doctor, and don't let anything this app says delay that.</div></div>
     <div class="clause"><span class="n">04</span><div>It does not rate you. There is no attractiveness score, no ranking, and no comparison with anyone else — by design, and enforced by tests.</div></div>
-    <div class="clause"><span class="n">05</span><div>You can read exactly what the research says at any time, from the link on your results. <a href="./privacy.html">Privacy policy</a>.</div></div>
+    <div class="clause"><span class="n">05</span><div>Results move with the photo. Lighting, camera and skin tone all change what can be measured, and some measurements are refused outright on deeper skin tones because the physics does not support them. You can read exactly what the research says, and what this photo could and couldn't measure, from the link on your results. <a href="./privacy.html">Privacy policy</a>.</div></div>
     <label>
       <input type="checkbox" id="agree" />
       <span>I've read all five points and understand this is a traditional face reading for entertainment, not a diagnosis.</span>
