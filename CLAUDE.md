@@ -18,7 +18,7 @@ change the product's regulatory status, not just its tone.
 
 ```bash
 npm start        # dev server on http://localhost:5173 (honours PORT)
-npm test         # 299 tests, node:test, no dependencies
+npm test         # 308 tests, node:test, no dependencies
 npm run build    # dist/ — copy of src/, Module B stubbed in the entertainment flavour
 npm run lint:bundle   # compliance guards, run against dist/ not src/
 ```
@@ -33,10 +33,10 @@ stubs when the flag is off.
 
 `package-lock.json` exists only so `npm ci` works in CI; it locks nothing.
 
-299 across twenty files. If you see 44, the traversal suite is not being
+308 across twenty-one files. If you see 44, the traversal suite is not being
 discovered.
 
-**All 299 pass.** The long-standing `copy-guard` failure on
+**All 308 pass.** The long-standing `copy-guard` failure on
 `TCM-202-DAMP-HEAT.recommend[1]` is resolved — that line moved to Module B in
 the Phase 2 split (see item 19). If a test fails, it is a real defect.
 
@@ -49,6 +49,7 @@ src/
   analysis.js   MediaPipe landmarking, ROI hull masking, orchestration
   flags.js      build flavour: does Module B ship? (ASCII-only, see item 17)
   zones.js      ROI geometry — measurement config, owned by neither module
+  roi.js        hull + drop decision for a zone  ← pure, no DOM (see item 23)
   adapters/
     entertainment.js  MODULE A boundary — raw scalars -> glow/vitality values
     safety.js         MODULE B boundary — raw scalars -> referral thresholds
@@ -89,7 +90,10 @@ tests/
   harmony.test.js         canon matching, dropped components, no-verdict guard
   sharecard-modes.test.js locked/unlocked card, whole-reading guard
   rules.test.js           gate precedence, chaining, pixels-to-referral
+  roi-extraction.test.js  every ROI encloses area; the malar gate is reachable
   serve.traversal.test.js raw-socket path traversal + positive control
+  fixtures/
+    canonical-face.js     MediaPipe's reference mesh — never a real subject
 ```
 
 The icons are valid and correctly sized but are **placeholder art**, not
@@ -878,6 +882,59 @@ blank boxes; the repo removed its webfont on purpose (see the top of
 **Pinned by:** `share falls back to download rather than dead-ending` (four
 platform shapes, including the throwing one) and `the share card carries the
 caveat and only measured values`.
+
+### 23. An ROI's landmarks must enclose AREA, or the zone is silently deleted
+
+`nose_bridge` was defined as `[6, 197, 195, 5, 168]` — five points on the
+vertical midline of the nose. A convex hull of collinear points has no width,
+`pad` expands about the centroid so a sliver stays a sliver, and
+`extractRegions()` drops anything under `MIN_ROI_PX` (8px) per side. The zone
+was therefore **dropped on every real face**: 4.2px wide on a 768×1024 working
+canvas, and *exactly 0px* on MediaPipe's bilaterally symmetric canonical mesh.
+
+That deleted the Module B malar gate, which reads `nose_bridge`.
+`evaluateSafety()` got `undefined?.deltaEi`, returned
+`{assessable: false, reason: "colourNotMeasurable"}`, and never evaluated the
+pattern. The legacy `safety_gate` rule in `rules-b.js` needs a `nose_bridge`
+erythema observation, so the second door into Module B was dead too — meaning
+item 17's "the flag gates both doors" was, for a time, passing **vacuously**:
+both doors were gated and both were already bricked up.
+
+**Symptom:** the safety gate never fires, for anyone, and the app looks like it
+is honestly declining to measure. `complexion.zonesRead` is 11 where `ROIS` has
+12 — the only visible tell, and nothing asserted on it.
+**Cause:** an ROI landmark set that is collinear (or near enough) along one
+axis. Midline zones are where this lurks, because their anatomical landmarks
+genuinely do run down the centre.
+**Why it survived 199 tests:** every fixture supplied `nose_bridge` by hand —
+`tests/adapters.test.js:57`, `tests/rules.test.js:117`, `tests/engine.test.js:186`.
+Nothing built a region set from `ROIS` + landmarks, so the geometry that killed
+the zone was never executed. Coverage is what the tests can reach (item 18a).
+**Pinned by:** `tests/roi-extraction.test.js` — `EVERY zone in ROIS survives
+extraction on the canonical face` and `no ROI is degenerate`, which assert
+against MediaPipe's published `canonical_face_model.obj` (committed as
+`tests/fixtures/canonical-face.js`; a reference mesh, never a real subject's —
+a 478-point mesh of a real face is a biometric template and does not belong in
+this repo). `Module B can REACH a decision when the zones it needs are
+extractable` is the one that would have caught the dead gate.
+
+Two structural changes exist to stop the next one being silent:
+
+- `src/roi.js` holds the hull and the drop decision, **pure and DOM-free**, for
+  the reason `geometry.js` is outside `ui.js` — `analysis.js` imports MediaPipe
+  from a CDN at module scope and cannot be loaded under `node --test`. Anything
+  left inside it is untestable by construction.
+- `extractRegions()` returns `{regions, dropped}` and `runAnalysis` surfaces
+  `droppedRegions`. A dropped zone is now reported with a reason
+  (`no_hull` / `too_small`) rather than skipped by a bare `continue`.
+- `adapters/safety.js` distinguishes `zoneNotExtracted` (a bug) from
+  `colourNotMeasurable` (the honest deep-skin refusal). Collapsing those two is
+  what made a dead gate indistinguishable from a working one. **Do not merge
+  them back.** The deep-skin refusal itself is correct and must not be weakened.
+
+**If a zone goes missing, fix its landmarks — never lower `MIN_ROI_PX`.** Below
+8px there are too few pixels for the colorimetry to mean anything, so relaxing
+the floor buys a zone whose measurements are noise.
 
 ## The measurement layer
 

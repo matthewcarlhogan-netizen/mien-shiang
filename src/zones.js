@@ -42,7 +42,15 @@ export const ROIS = {
   },
   nose_bridge: {
     label: "Nose bridge", side: "midline",
-    idx: [6, 197, 195, 5, 168], pad: 0.10,
+    // MUST span both sidewalls, not just the dorsal midline. The original set
+    // ([6, 197, 195, 5, 168]) was five collinear midline points, so its convex
+    // hull was 4.2px wide on a 768x1024 working canvas against extractRegions'
+    // 8px floor — the zone was dropped on EVERY real face, which silently
+    // killed the malar safety gate that reads it. See CLAUDE.md item 23.
+    // 196/419 and 3/248 are the sidewall pairs at t=0.42 and t=0.60 of the
+    // nasion->tip axis: below the medial canthi, above the alae (which begin
+    // around 0.10 face-widths off midline). Measured hull: 37.8 x 81.9 px.
+    idx: [168, 6, 197, 195, 196, 419, 3, 248], pad: 0.10,
   },
   nose_apex: {
     label: "Nose tip", side: "midline",
