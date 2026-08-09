@@ -1,0 +1,81 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+      - codex/qise-scanner-share-flow
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Audit deployable artefact
+        run: npm run lint:bundle
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artefact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+          include-hidden-files: true
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Verify live scanner entry point
+        shell: bash
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          ok=0
+          for attempt in $(seq 1 24); do
+            if curl -fsS "${PAGE_URL}qise.html" -o /tmp/qise.html \
+              && grep -q '<title>Qi Se tracker</title>' /tmp/qise.html; then
+              ok=1
+              break
+            fi
+            sleep 5
+          done
+          [ "$ok" = "1" ] || { echo "::error::live Qi Se page did not become ready"; exit 1; }
+          curl -fsS "${PAGE_URL}manifest.webmanifest" -o /tmp/manifest.webmanifest
+          node -e "const m=require('/tmp/manifest.webmanifest');if(m.start_url!=='./qise.html')process.exit(1)"
+          echo "Live scanner: ${PAGE_URL}qise.html"
