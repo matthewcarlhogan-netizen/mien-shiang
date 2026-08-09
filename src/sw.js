@@ -5,7 +5,7 @@
  * second launch works with no connection at all. */
 // Bumped when the shell list changes: the activate handler deletes every cache
 // whose name is not CACHE, so a stale v1 holding an old SHELL cannot survive.
-const CACHE = "mienshiang-v11";
+const CACHE = "mienshiang-v12";
 const SHELL = [
   "./", "./index.html", "./ui.js", "./analysis.js", "./engine.js",
   // Measurement calibration. Owned by neither module; engine.js imports both,
@@ -29,6 +29,17 @@ const SHELL = [
   // while rules.js still imports it would break the app offline rather than
   // produce an entertainment-only build.
   "./adapters/entertainment.js", "./adapters/safety.js",
+  // Qi Se longitudinal tracker. A separate page and a separate module tree,
+  // precached whole: the feature is useless offline if any one of these is
+  // missing, and Promise.allSettled means an absent entry costs only itself
+  // rather than the whole install.
+  "./qise.html",
+  "./qise/consent.js", "./qise/color.js", "./qise/rois.js", "./qise/sclera.js",
+  "./qise/gates.js", "./qise/camera.js", "./qise/metrics.js",
+  "./qise/baseline.js", "./qise/store.js", "./qise/passages.js",
+  "./qise/patterns.js",
+  "./ui/qise/palette.js", "./ui/qise/seal.js", "./ui/qise/screens.js",
+  "./ui/qise/app.js",
   "./manifest.webmanifest", "./icon-192.png", "./icon-512.png",
   "./icon-512-maskable.png",
 ];

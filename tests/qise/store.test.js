@@ -172,23 +172,41 @@ test("the store round-trips a reading, oldest first", async () => {
   assert.deepEqual(findForbiddenKeys(all), [], "hazards reached the database");
 });
 
-test("the write path REFUSES a record carrying forbidden data", async () => {
-  // The guard runs on every write, not only in tests: a record shaped by some
-  // future code path that forgot the allow-list must fail here rather than
-  // reach the disk.
+test("a nested payload welded onto a sub-object does not survive the write", async () => {
+  // The realistic shape of the mistake: not a top-level key somebody would
+  // notice in review, but something tucked inside a map that looked like five
+  // numbers. A `{...components}` spread carried it straight through the
+  // allow-list until scalarMap was added.
   const idb = fakeIndexedDB();
   const store = await openStore(idb);
 
-  const original = toRecord(hazardousReading());
-  // Simulate exactly that future path, by handing the store a pre-shaped
-  // record with something extra welded on.
-  await assert.rejects(
-    () => store.put(Object.assign({}, hazardousReading(), {
-      compass: { ascendant: "chi", magnitude: 1, band: "slight", components: { landmarkTrace: 1 } },
-    })),
-    /refusing to persist/);
-  assert.equal(idb.data.size, 0, "a refused write must not have partially landed");
-  assert.ok(original.timestampIso);
+  await store.put({
+    ...hazardousReading(),
+    compass: {
+      ascendant: "chi", magnitude: 1, band: "slight",
+      components: { chi: 1.4, debug: { landmarkTrace: [1, 2, 3] } },
+    },
+  });
+
+  const [stored] = await store.all();
+  assert.deepEqual(findForbiddenKeys(stored), []);
+  assert.deepEqual(stored.compass.components, { chi: 1.4 },
+    "a nested structure in a scalar map is not data this record may hold");
+});
+
+test("the write-path guard is real, and fires on a record that got past shaping", async () => {
+  // Belt and braces. toRecord's allow-list is the primary defence; this is the
+  // second one, for the day a future code path shapes a record some other way.
+  // Asserted on the guard directly, because the allow-list is now deep enough
+  // that nothing can be smuggled through toRecord to trigger it.
+  const forged = { timestampIso: "2026-08-09T02:30:00.000Z", debug: { imageData: [1] } };
+  assert.deepEqual(findForbiddenKeys(forged), ["debug.imageData"]);
+
+  const idb = fakeIndexedDB();
+  const store = await openStore(idb);
+  await store.put(hazardousReading());
+  assert.equal(idb.data.size, 1, "the ordinary path still writes");
+  assert.deepEqual(findForbiddenKeys([...idb.data.values()]), []);
 });
 
 test("a reading with no timestamp is refused rather than silently overwriting", async () => {

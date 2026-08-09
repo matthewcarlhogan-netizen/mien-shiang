@@ -35,6 +35,34 @@ export const STORE_READINGS = "qise_readings";
  */
 export const FORBIDDEN_KEY_PATTERN = /image|pixel|landmark|embedding|blob|dataUrl/i;
 
+/** The five colours a compass component may be keyed by. */
+const COMPASS_COMPONENTS = Object.freeze(["qing", "chi", "huang", "bai", "hei"]);
+
+/**
+ * Keep the scalars, drop everything else.
+ *
+ * ── WHY A SPREAD IS NOT AN ALLOW-LIST ──────────────────────────────────────
+ * `{...r.compass.components}` looked like a copy of a map of five numbers, and
+ * it is — right up until something hangs a debug payload off it. Then the
+ * spread carries the payload straight through the allow-list the rest of this
+ * function is built on, and the record has landmark data in it under a key
+ * nobody would think to look at. That was a live defect here, caught by the
+ * Phase 7 gate scanning three levels down.
+ *
+ * So every map persisted from this file passes through a filter that keeps
+ * numbers, booleans, strings and null, and drops objects and arrays. A nested
+ * structure in one of these maps is not data this record is allowed to hold.
+ */
+function scalarMap(obj, allowKeys = null) {
+  if (!obj || typeof obj !== "object") return null;
+  const out = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (allowKeys && !allowKeys.includes(k)) continue;
+    if (v === null || ["number", "boolean", "string"].includes(typeof v)) out[k] = v;
+  }
+  return out;
+}
+
 /**
  * Shape one reading for storage. Explicit allow-list, never a spread.
  *
@@ -53,16 +81,16 @@ export function toRecord(reading) {
       corrected: cleanMetrics(r.metrics && r.metrics.corrected),
     },
 
-    axes: r.axes ? { ...r.axes } : null,
-    deltas: r.deltas ? { ...r.deltas } : null,
+    axes: scalarMap(r.axes),
+    deltas: scalarMap(r.deltas),
     compass: r.compass ? {
-      ascendant: r.compass.ascendant,
-      magnitude: r.compass.magnitude,
-      band: r.compass.band,
-      components: { ...r.compass.components },
+      ascendant: r.compass.ascendant ?? null,
+      magnitude: r.compass.magnitude ?? null,
+      band: r.compass.band ?? null,
+      components: scalarMap(r.compass.components, COMPASS_COMPONENTS),
     } : null,
 
-    tags: Array.isArray(r.tags) ? [...r.tags] : [],
+    tags: Array.isArray(r.tags) ? r.tags.filter((t) => typeof t === "string") : [],
 
     // A HASH of the device fingerprint, not the fingerprint. The only question
     // ever asked of it is "is this the same device as last time", and a hash
@@ -72,12 +100,15 @@ export function toRecord(reading) {
     captureMode: r.captureMode ?? null,
     consentVersion: r.consentVersion ?? null,
 
-    gateMargins: r.gateMargins ? { ...r.gateMargins } : null,
+    gateMargins: scalarMap(r.gateMargins),
 
     sclera: r.sclera ? {
-      gains: r.sclera.gains ? { ...r.sclera.gains } : null,
-      rawRatios: r.sclera.rawRatios ? { ...r.sclera.rawRatios } : null,
-      personalDelta: r.sclera.personalDelta ? { ...r.sclera.personalDelta } : null,
+      gains: scalarMap(r.sclera.gains, ["r", "g", "b"]),
+      rawRatios: scalarMap(r.sclera.rawRatios, ["r", "g", "b"]),
+      // `mads` is a nested object and is deliberately not carried: the delta
+      // is what a later reading is compared against, and the MADs behind it
+      // are recomputed from the history every time.
+      personalDelta: scalarMap(r.sclera.personalDelta, ["r", "g", "b"]),
       confidence: r.sclera.confidence ?? null,
       // No `pixelCount`. It is a scalar integer and harmless in itself, but it
       // matches /pixel/i and so trips the Phase 7 guard — and the right
@@ -88,7 +119,7 @@ export function toRecord(reading) {
 
     // Per-region VALIDITY, which is a boolean and a reason — never the region's
     // geometry and never its contents.
-    roiValidity: r.roiValidity ? { ...r.roiValidity } : null,
+    roiValidity: scalarMap(r.roiValidity),
 
     frameJitter: r.frameJitter ?? null,
     confidence: r.confidence ?? null,

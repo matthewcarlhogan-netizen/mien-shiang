@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#DCDBD3" />
+<title>Qi Se tracker</title>
+<link rel="manifest" href="./manifest.webmanifest" />
+<link rel="apple-touch-icon" href="./icon-192.png" />
+
+<!-- The palette is INJECTED from src/ui/qise/palette.js rather than written
+     here. One source for the five hex values and their Su Wen similes; a hex
+     corrected in one place and not the other is invisible until somebody
+     screenshots both. Same arrangement as the summary caveat in the main app. -->
+<style id="qise-palette"></style>
+
+<!-- NO WEBFONT. The brief names four families, and none of them is committed:
+     an @font-face pointing at a file that does not exist fires a 404 on every
+     load and precaches a missing entry. The families are recorded in
+     palette.js and the outstanding subsetting is recorded in
+     docs/QISE_NOTES.md. Google Fonts is not an option either — it is a
+     third-party request on every load for a product whose claim is that
+     nothing leaves the device, and the egress guard treats it as a failure. -->
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%}
+body{
+  background:var(--ground); color:var(--hei);
+  font-family:var(--display); font-size:16px; line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+  padding:0 0 env(safe-area-inset-bottom);
+}
+.wrap{max-width:34rem;margin:0 auto;padding:1.25rem 1rem 3rem}
+h1,h2,h3{margin:0 0 .4rem;font-weight:600;letter-spacing:-.01em}
+h1{font-size:1.45rem}
+h2{font-size:1.05rem}
+p{margin:0 0 .7rem}
+.cjk{font-family:var(--cjk)}
+.num{font-family:var(--numeric);font-variant-numeric:tabular-nums}
+.passage{font-family:var(--passage);font-size:1.06rem;line-height:1.62}
+.muted{opacity:.68;font-size:.86rem}
+
+/* Focus must be VISIBLE. A focus ring removed for tidiness makes the whole
+   flow unusable by keyboard, and this flow has no shutter button to fall back
+   on. */
+:focus-visible{outline:3px solid var(--chi);outline-offset:2px;border-radius:2px}
+
+button{
+  font:inherit;color:inherit;background:transparent;
+  border:1.5px solid var(--hei);border-radius:2px;
+  padding:.6rem 1rem;cursor:pointer;min-height:44px;
+}
+button[disabled]{opacity:.45;cursor:not-allowed}
+.primary{background:var(--hei);color:var(--bai)}
+.danger{border-color:var(--chi);color:var(--chi)}
+
+.screen{display:none}
+.screen[data-active="true"]{display:block}
+
+/* ── the seal ─────────────────────────────────────────────────────────── */
+.qise-seal{width:100%;height:auto;color:var(--hei);display:block}
+.seal-frame{width:min(60vw,13rem);margin:0 auto 1rem}
+
+/* The ink-bleed settling, and the gate ring filling, are the only two moving
+   things in the interface, and both stop on request. */
+@keyframes qise-settle{from{opacity:.45;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
+.qise-seal [data-dot]{animation:qise-settle .5s ease-out both;transform-origin:center}
+.ring-fill{transition:stroke-dashoffset .25s linear}
+@media (prefers-reduced-motion: reduce){
+  .qise-seal [data-dot]{animation:none}
+  .ring-fill{transition:none}
+  *{scroll-behavior:auto}
+}
+.qise-seal[data-reduced-motion="true"] [data-dot]{animation:none}
+
+/* ── gauges ───────────────────────────────────────────────────────────── */
+.gauge{margin:.6rem 0}
+.gauge-track{position:relative;height:10px;background:rgba(27,25,23,.10);border-radius:5px}
+.gauge-band{position:absolute;top:0;bottom:0;background:rgba(27,25,23,.22);border-radius:5px}
+.gauge-mark{position:absolute;top:-4px;width:3px;height:18px;background:var(--chi)}
+
+/* ── courts, chips, sparkline ─────────────────────────────────────────── */
+.courts{display:flex;gap:.4rem;margin:.8rem 0}
+.court{flex:1;border:1px solid rgba(27,25,23,.25);padding:.45rem .5rem;border-radius:2px}
+.chips{display:flex;flex-wrap:wrap;gap:.4rem;margin:.6rem 0}
+.chip{border:1px solid rgba(27,25,23,.4);border-radius:999px;padding:.3rem .7rem;font-size:.86rem}
+.spark{width:100%;height:44px;display:block}
+.history{display:grid;grid-template-columns:repeat(auto-fill,minmax(4.5rem,1fr));gap:.7rem}
+.history figure{margin:0;text-align:center}
+.history figcaption{font-size:.72rem;opacity:.7;font-family:var(--numeric)}
+
+.notice{border-left:3px solid var(--huang);padding:.5rem .7rem;margin:.8rem 0;font-size:.9rem}
+
+/* 360px is the floor. Below the wrapper padding, nothing is allowed to force
+   a horizontal scroll. */
+@media (max-width:360px){
+  .wrap{padding:1rem .7rem 2.5rem}
+  .courts{flex-direction:column}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ═══ Phase 0 — the consent gate ══════════════════════════════════════
+     Marked as a disclaimer for the copy lint. That exemption covers the
+     BLOCKLIST only: disease names and assertive phrasing are still rejected
+     here, and this text makes no claim about the reader. -->
+<section class="screen" id="screen-consent" data-active="true" aria-labelledby="consent-h">
+  <div data-copy="disclaimer">
+    <h1 id="consent-h">Before the camera opens</h1>
+
+    <p>This app measures the colour of a few areas of the face and describes
+      what a classical Chinese tradition reads into them. It is for
+      entertainment. It is not intended to diagnose, treat or cure anything,
+      and it does not rate you.</p>
+
+    <p><strong>What happens on this device.</strong> A 478-point map of your
+      face is generated here, on this phone, purely to locate the areas being
+      measured. It is used for the measurement and discarded immediately. It
+      is never uploaded, never stored, and never linked to you. No photograph
+      leaves this device, because no photograph is kept.</p>
+
+    <p><strong>What is kept.</strong> Only the numbers: a handful of colour
+      measurements per reading, so the app can compare today against your own
+      previous readings. No image, no face map. One tap deletes all of it.</p>
+
+    <p><strong>What this is not.</strong> The mapping between facial colour
+      and anything else has no scientific basis that would support a health
+      claim, and none is made here. Nothing in this app is a medical opinion
+      or a substitute for one.</p>
+
+    <p class="muted">Australian Privacy Act: generating that face map counts
+      as collecting sensitive information even though it is discarded
+      milliseconds later, which is why this screen exists before the camera
+      rather than after it. EU AI Act Article 50(3): this app categorises
+      complexion, and this is the disclosure of that.</p>
+  </div>
+
+  <!-- Unbundled. One decision, on its own, with nothing else attached to it,
+       and no way past this screen without it. -->
+  <p><button class="primary" id="consent-grant">I understand — open the camera</button></p>
+  <p><a href="./privacy.html">Privacy policy</a> · <a href="./index.html">Back</a></p>
+</section>
+
+<!-- ═══ Phase 4 — capture ════════════════════════════════════════════════ -->
+<section class="screen" id="screen-capture" aria-labelledby="capture-h">
+  <h1 id="capture-h">Hold steady</h1>
+  <video id="preview" playsinline muted autoplay aria-label="Camera preview"
+         style="width:100%;border-radius:3px;transform:scaleX(-1)"></video>
+
+  <!-- One line at a time: the worst-margin failure, and nothing else. A list
+       of everything wrong is a list nobody reads. -->
+  <p id="gate-line" role="status" aria-live="polite">Starting the camera…</p>
+  <svg class="spark" id="gate-ring" viewBox="0 0 100 6" aria-hidden="true">
+    <line x1="0" y1="3" x2="100" y2="3" stroke="rgba(27,25,23,.15)" stroke-width="4" />
+    <line class="ring-fill" id="ring-fill" x1="0" y1="3" x2="100" y2="3"
+          stroke="var(--chi)" stroke-width="4" stroke-dasharray="100" stroke-dashoffset="100" />
+  </svg>
+  <p class="muted">There is no shutter. The reading is taken when the frame is good.</p>
+</section>
+
+<!-- ═══ Phase 9 — the reading ════════════════════════════════════════════ -->
+<section class="screen" id="screen-reading" aria-labelledby="reading-h">
+  <h1 id="reading-h">Today</h1>
+  <div class="seal-frame" id="reading-seal"></div>
+  <h2 id="reading-verdict"></h2>
+  <div id="reading-gauges"></div>
+  <div class="courts" id="reading-courts"></div>
+  <p class="passage" id="reading-passage"></p>
+  <div class="chips" id="reading-tags"></div>
+  <svg class="spark" id="reading-spark" viewBox="0 0 300 44" aria-label="Thirty days of lustre"></svg>
+  <div id="reading-notices"></div>
+  <p>
+    <button id="go-history">The column</button>
+    <button id="go-capture">Read again</button>
+  </p>
+</section>
+
+<!-- ═══ Phase 9 — the column ═════════════════════════════════════════════ -->
+<section class="screen" id="screen-history" aria-labelledby="history-h">
+  <h1 id="history-h">The column</h1>
+  <p class="muted">One seal a day. A hollow dot marks a reading the app was
+    less sure of.</p>
+  <div class="history" id="history-column"></div>
+  <p>
+    <button id="share-column">Share this column</button>
+    <button id="export-all">Export my readings</button>
+  </p>
+  <p>
+    <button class="danger" id="withdraw">Withdraw consent and delete everything</button>
+  </p>
+  <p><button id="back-reading">Back</button></p>
+</section>
+
+</div>
+<script type="module" src="./ui/qise/app.js"></script>
+</body>
+</html>

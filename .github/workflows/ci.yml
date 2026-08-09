@@ -7,7 +7,7 @@ on:
 env:
   # Regression gate on test deletion. Raise it when the suite grows; never
   # lower it to make a red build green.
-  MIN_TESTS: 159
+  MIN_TESTS: 540
 
 jobs:
   test:
@@ -168,6 +168,23 @@ jobs:
           for page in privacy.html terms.html; do
             code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PORT}/$page")"
             [ "$code" = "200" ] || { echo "::error::/$page returned $code"; exit 1; }
+          done
+
+          # The Qi Se tracker is a second entry point with its own module tree.
+          # A 200 on / says nothing about whether this page and its imports are
+          # reachable, and an unreachable entry point is the exact defect the
+          # smoke job exists for.
+          echo "--- /qise.html and its module tree ---"
+          code="$(curl -s -o /tmp/qise.html -w '%{http_code}' "http://127.0.0.1:${PORT}/qise.html")"
+          [ "$code" = "200" ] || { echo "::error::/qise.html returned $code"; exit 1; }
+          grep -q "<title>Qi Se tracker</title>" /tmp/qise.html \
+            || { echo "::error::/qise.html responded but did not serve the tracker"; exit 1; }
+          for mod in ui/qise/app.js ui/qise/palette.js ui/qise/seal.js ui/qise/screens.js \
+                     qise/consent.js qise/color.js qise/rois.js qise/sclera.js qise/gates.js \
+                     qise/camera.js qise/metrics.js qise/baseline.js qise/store.js \
+                     qise/passages.js qise/patterns.js; do
+            code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PORT}/$mod")"
+            [ "$code" = "200" ] || { echo "::error::/$mod returned $code"; exit 1; }
           done
 
           # NEGATIVE CONTROL, paired with the positives above. A server that
