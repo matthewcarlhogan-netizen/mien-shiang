@@ -30,6 +30,7 @@ import { interpretReading, readingConfidence, axesOf } from "../../qise/baseline
 import { openStore } from "../../qise/store.js";
 import { readingScreenModel, historyColumnModel } from "./screens.js";
 import { SHARE_CADENCES, shareReadings } from "./share.js";
+import { createThemeController } from "./theme.js";
 import { findPatterns, describePattern } from "../../qise/patterns.js";
 import * as color from "../../qise/color.js";
 
@@ -366,10 +367,10 @@ function drawSparkline(svg, model) {
   if (current.length) runs.push(current);
 
   svg.innerHTML = runs.filter((r) => r.length > 1).map((run) =>
-    `<polyline fill="none" stroke="var(--hei)" stroke-width="1.5" points="${
+    `<polyline fill="none" stroke="var(--qise-ink)" stroke-width="1.5" points="${
       run.map((p) => `${x(p.i).toFixed(1)},${y(p.value).toFixed(1)}`).join(" ")}" />`).join("")
     + measured.filter((p) => p.lowConfidence).map((p) =>
-      `<circle cx="${x(p.i).toFixed(1)}" cy="${y(p.value).toFixed(1)}" r="2" fill="none" stroke="var(--hei)" />`).join("");
+      `<circle cx="${x(p.i).toFixed(1)}" cy="${y(p.value).toFixed(1)}" r="2" fill="none" stroke="var(--qise-ink)" />`).join("");
 }
 
 async function renderHistory() {
@@ -404,6 +405,15 @@ async function shareCurrent(cadence) {
 
 async function boot() {
   document.getElementById("qise-palette").textContent = paletteCss();
+  let themeStorage = null;
+  try { themeStorage = window.localStorage; } catch { /* session-only theme */ }
+  createThemeController({
+    root: document.documentElement,
+    button: $("theme-toggle"),
+    storage: themeStorage,
+    media: window.matchMedia("(prefers-color-scheme: dark)"),
+    themeMeta: $("theme-color"),
+  });
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("./sw.js").catch((error) => {
       console.warn("qise: offline shell registration failed", error);

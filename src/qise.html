@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<meta name="theme-color" content="#DCDBD3" />
+<meta name="theme-color" id="theme-color" content="#DCDBD3" />
 <title>Qi Se tracker</title>
 <link rel="manifest" href="./manifest.webmanifest" />
 <link rel="apple-touch-icon" href="./icon-192.png" />
@@ -24,8 +24,33 @@
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;min-height:100%}
+:root{
+  color-scheme:light;
+  --qise-ink:var(--hei);--qise-action-fg:var(--bai);
+  --qise-surface:rgba(237,232,220,.55);--qise-border:rgba(27,25,23,.18);
+  --qise-track:rgba(27,25,23,.10);--qise-band:rgba(27,25,23,.22);
+  --qise-selected:var(--bai);--qise-shadow:rgba(27,25,23,.12);
+  --qise-link:#294F48;--qise-danger:var(--chi);
+}
+@media (prefers-color-scheme:dark){
+  html:not([data-theme]){
+    color-scheme:dark;--ground:#151311;--qise-ink:#F1EDE4;--qise-action-fg:#151311;
+    --qise-surface:#24211E;--qise-border:rgba(237,232,220,.20);
+    --qise-track:rgba(237,232,220,.12);--qise-band:rgba(237,232,220,.28);
+    --qise-selected:#34302B;--qise-shadow:rgba(0,0,0,.32);
+    --qise-link:#8BB5AD;--qise-danger:#E17A6C;
+  }
+}
+html[data-theme="dark"]{
+  color-scheme:dark;--ground:#151311;--qise-ink:#F1EDE4;--qise-action-fg:#151311;
+  --qise-surface:#24211E;--qise-border:rgba(237,232,220,.20);
+  --qise-track:rgba(237,232,220,.12);--qise-band:rgba(237,232,220,.28);
+  --qise-selected:#34302B;--qise-shadow:rgba(0,0,0,.32);
+  --qise-link:#8BB5AD;--qise-danger:#E17A6C;
+}
+html[data-theme="light"]{color-scheme:light}
 body{
-  background:var(--ground); color:var(--hei);
+  background:var(--ground); color:var(--qise-ink);
   font-family:var(--display); font-size:16px; line-height:1.55;
   -webkit-font-smoothing:antialiased;
   padding:0 0 env(safe-area-inset-bottom);
@@ -35,6 +60,7 @@ h1,h2,h3{margin:0 0 .4rem;font-weight:600;letter-spacing:-.01em}
 h1{font-size:clamp(1.55rem,5vw,2.25rem);line-height:1.12}
 h2{font-size:1.05rem}
 p{margin:0 0 .7rem}
+a{color:var(--qise-link)}
 .cjk{font-family:var(--cjk)}
 .num{font-family:var(--numeric);font-variant-numeric:tabular-nums}
 .passage{font-family:var(--passage);font-size:1.06rem;line-height:1.62}
@@ -47,17 +73,19 @@ p{margin:0 0 .7rem}
 
 button{
   font:inherit;color:inherit;background:transparent;
-  border:1.5px solid var(--hei);border-radius:2px;
+  border:1.5px solid var(--qise-ink);border-radius:2px;
   padding:.6rem 1rem;cursor:pointer;min-height:44px;
 }
 button[disabled]{opacity:.45;cursor:not-allowed}
-.primary{background:var(--hei);color:var(--bai)}
-.danger{border-color:var(--chi);color:var(--chi)}
-.app-head{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:2.25rem}
+.primary{background:var(--qise-ink);color:var(--qise-action-fg)}
+.danger{border-color:var(--qise-danger);color:var(--qise-danger)}
+.app-head{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:2.25rem;flex-wrap:wrap}
 .wordmark{font-size:.78rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+.head-actions{display:flex;align-items:center;gap:.65rem}
 .privacy-mark{display:flex;align-items:center;gap:.35rem;font-size:.76rem;opacity:.66}
 .privacy-mark::before{content:"";width:.52rem;height:.52rem;border-radius:50%;background:var(--qing)}
-.surface{background:rgba(237,232,220,.55);border:1px solid rgba(27,25,23,.12);border-radius:18px;padding:1.1rem;margin:1rem 0}
+.theme-toggle{min-height:36px;padding:.35rem .65rem;border-color:var(--qise-border);border-radius:999px;font-size:.76rem}
+.surface{background:var(--qise-surface);border:1px solid var(--qise-border);border-radius:18px;padding:1.1rem;margin:1rem 0}
 .eyebrow{color:var(--chi);font-size:.73rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-bottom:.5rem}
 .actions{display:grid;grid-template-columns:1fr 1fr;gap:.65rem;margin-top:1.25rem}
 .actions .primary,.actions .wide{grid-column:1/-1}
@@ -69,7 +97,7 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .screen[data-active="true"]{display:block}
 
 /* ── the seal ─────────────────────────────────────────────────────────── */
-.qise-seal{width:100%;height:auto;color:var(--hei);display:block}
+.qise-seal{width:100%;height:auto;color:var(--qise-ink);display:block}
 .seal-frame{width:min(60vw,13rem);margin:0 auto 1rem}
 
 /* The ink-bleed settling, and the gate ring filling, are the only two moving
@@ -87,28 +115,28 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 /* ── gauges ───────────────────────────────────────────────────────────── */
 .gauge{margin:.8rem 0}
 .gauge-label{display:flex;justify-content:space-between;gap:1rem;align-items:baseline;margin-bottom:.35rem}
-.gauge-track{position:relative;height:10px;background:rgba(27,25,23,.10);border-radius:5px}
-.gauge-band{position:absolute;top:0;bottom:0;background:rgba(27,25,23,.22);border-radius:5px}
+.gauge-track{position:relative;height:10px;background:var(--qise-track);border-radius:5px}
+.gauge-band{position:absolute;top:0;bottom:0;background:var(--qise-band);border-radius:5px}
 .gauge-mark{position:absolute;top:-4px;width:3px;height:18px;background:var(--chi)}
 
 /* ── courts, chips, sparkline ─────────────────────────────────────────── */
 .courts{display:flex;gap:.4rem;margin:.8rem 0}
-.court{flex:1;border:1px solid rgba(27,25,23,.25);padding:.45rem .5rem;border-radius:2px}
+.court{flex:1;border:1px solid var(--qise-border);padding:.45rem .5rem;border-radius:2px}
 .chips{display:flex;flex-wrap:wrap;gap:.4rem;margin:.6rem 0}
-.chip{border:1px solid rgba(27,25,23,.4);border-radius:999px;padding:.3rem .7rem;font-size:.86rem}
+.chip{border:1px solid var(--qise-border);border-radius:999px;padding:.3rem .7rem;font-size:.86rem}
 .spark{width:100%;height:44px;display:block}
 .history{display:grid;grid-template-columns:repeat(auto-fill,minmax(4.5rem,1fr));gap:.7rem;margin:1rem 0 1.4rem}
 .history figure{margin:0;text-align:center}
 .history figcaption{font-size:.72rem;opacity:.7;font-family:var(--numeric)}
 
 .notice{border-left:3px solid var(--huang);padding:.5rem .7rem;margin:.8rem 0;font-size:.9rem}
-.segmented{display:grid;grid-template-columns:repeat(3,1fr);gap:.35rem;background:rgba(27,25,23,.08);padding:.3rem;border-radius:12px;margin:1rem 0}
+.segmented{display:grid;grid-template-columns:repeat(3,1fr);gap:.35rem;background:var(--qise-track);padding:.3rem;border-radius:12px;margin:1rem 0}
 .segmented button{border:0;border-radius:9px;padding:.45rem .35rem;font-size:.82rem}
-.segmented button[aria-pressed="true"]{background:var(--bai);box-shadow:0 1px 5px rgba(27,25,23,.12)}
+.segmented button[aria-pressed="true"]{background:var(--qise-selected);box-shadow:0 1px 5px var(--qise-shadow)}
 .share-status{min-height:1.5em;margin-top:.8rem}
 .reading-intro{text-align:center}
 .reading-intro h1{margin-bottom:.25rem}
-.capture-frame{overflow:hidden;border:1px solid rgba(27,25,23,.2);border-radius:18px;background:var(--hei)}
+.capture-frame{overflow:hidden;border:1px solid var(--qise-border);border-radius:18px;background:#0B0A09}
 .capture-frame video{display:block}
 
 /* 360px is the floor. Below the wrapper padding, nothing is allowed to force
@@ -123,7 +151,10 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 <div class="wrap">
 <header class="app-head">
   <div class="wordmark">Mien Shiang · 面相</div>
-  <div class="privacy-mark">On-device face scanner</div>
+  <div class="head-actions">
+    <div class="privacy-mark">On-device face scanner</div>
+    <button class="theme-toggle" id="theme-toggle" type="button" aria-pressed="false">Dark mode</button>
+  </div>
 </header>
 
 <!-- ═══ Phase 0 — the consent gate ══════════════════════════════════════
@@ -179,7 +210,7 @@ button[disabled]{opacity:.45;cursor:not-allowed}
        of everything wrong is a list nobody reads. -->
   <p id="gate-line" role="status" aria-live="polite">Starting the camera…</p>
   <svg class="spark" id="gate-ring" viewBox="0 0 100 6" aria-hidden="true">
-    <line x1="0" y1="3" x2="100" y2="3" stroke="rgba(27,25,23,.15)" stroke-width="4" />
+    <line x1="0" y1="3" x2="100" y2="3" stroke="var(--qise-track)" stroke-width="4" />
     <line class="ring-fill" id="ring-fill" x1="0" y1="3" x2="100" y2="3"
           stroke="var(--chi)" stroke-width="4" stroke-dasharray="100" stroke-dashoffset="100" />
   </svg>
