@@ -78,7 +78,10 @@ export function computeMetrics(lab, lumRatio, options = {}) {
   const basis = [...present].sort().join("+");
 
   if (present.length < 2) {
-    return { hueVector: null, ming: null, run: null, han: null, xue: null, basis, roisRead: present.length };
+    return {
+      hueVector: null, ming: null, run: null, han: null, xue: null,
+      meanChroma: null, meanL: null, periorbitalL: null, basis, roisRead: present.length,
+    };
   }
 
   /* hueVector — the mean colour coordinate across the face. The compass
@@ -152,6 +155,11 @@ export function computeMetrics(lab, lumRatio, options = {}) {
   return {
     hueVector, ming, run, han, xue,
     meanChroma: ownChroma,
+    // The remaining compass axes. `hei` is the one colour that is not read off
+    // the face set: it is driven by -dL* and weighted by the periorbital
+    // region, which is exactly the region hueVector and han exclude.
+    meanL: mean(present.map((r) => lab[r].L)),
+    periorbitalL: lab.periorbital ? lab.periorbital.L : null,
     basis,
     roisRead: present.length,
   };
