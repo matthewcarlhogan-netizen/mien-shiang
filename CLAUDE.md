@@ -18,7 +18,7 @@ change the product's regulatory status, not just its tone.
 
 ```bash
 npm start        # dev server on http://localhost:5173 (honours PORT)
-npm test         # 551 tests, node:test, no dependencies
+npm test         # 564 tests, node:test, no dependencies
 npm run build    # dist/ — copy of src/, Module B stubbed in the entertainment flavour
 npm run lint:bundle   # compliance guards, run against dist/ not src/
 node scripts/qise-bakeoff.mjs --self-test   # Phase 5b decision table
@@ -34,10 +34,10 @@ stubs when the flag is off.
 
 `package-lock.json` exists only so `npm ci` works in CI; it locks nothing.
 
-551 across twenty-eight files. If you see 44, the traversal suite is not being
+564 across twenty-nine files. If you see 44, the traversal suite is not being
 discovered; if you see 312, the `tests/qise/` tree is not.
 
-**All 551 pass.** The long-standing `copy-guard` failure on
+**All 564 pass.** The long-standing `copy-guard` failure on
 `TCM-202-DAMP-HEAT.recommend[1]` is resolved — that line moved to Module B in
 the Phase 2 split (see item 19). If a test fails, it is a real defect.
 
@@ -97,6 +97,7 @@ src/
     sclera.js     four-filter illuminant estimate + personal drift baseline
     gates.js      ten capture gates, each with a normalised margin
     camera.js     burst capture; every browser object INJECTED (item 14)
+    pose.js       head pose from landmarks; an unmeasured axis is null (item 43)
     metrics.js    hueVector/ming/run/han/xue, computed twice (raw + corrected)
     baseline.js   median/MAD baseline, five-colour compass, `ping` default
     store.js      IndexedDB; toRecord() is a pure allow-list (item 39)
@@ -974,6 +975,36 @@ canthi. On the canonical mesh at nominal framing the outer span is ~35% of frame
 width and the inner span ~15%, so reading a 22% threshold against the inner
 canthi rejects every correctly framed capture — and presents as a user who can
 never get close enough.
+
+### 43. A gate fed a literal is a gate that can never fire
+
+`src/qise/gates.js` shipped correct, with ten gates and paired controls for
+each — and the capture loop passed it `pose: { yaw: 0, pitch: 0, roll: 0 }`. So
+the pose gate reported itself passing on every frame and contributed a constant
+to the ring. Correct, tested, dead: item 23's shape exactly.
+
+**Symptom:** none from the inside. The tests pass because the gate is right;
+the app "works" because nothing ever fails; the only tell is a margin that
+never moves.
+**Cause:** a placeholder at the call site, in a file no test can reach.
+**Pinned by:** `tests/qise/pose.test.js` → `a real posed mesh drives the gate
+end to end`, which rotates a synthetic mesh by known angles and requires the
+gate to trip.
+
+Two things learned building the fix, both of which look right and are not:
+
+- **Orthonormality cannot disambiguate a matrix layout.** Reading a rotation
+  matrix row-major when it is column-major yields its TRANSPOSE, and the
+  transpose of an orthonormal matrix is orthonormal — so "keep whichever
+  reading is orthonormal" passes for both and silently returns the first. That
+  guard was written here and only a compose-then-recover test caught it. There
+  is also no canonical decomposition to recover: twelve Tait-Bryan orderings
+  exist and disagree by tens of degrees on a turned head.
+- **An unmeasured axis is not a zero.** `Math.abs(null)` is 0, so feeding an
+  unmeasured axis into the gate reports it as perfectly straight. `headPose()`
+  returns `null` per axis and carries `axesMeasured`; the gate judges only what
+  was measured and records which. Same distinction as `basis` on `glowIndex`
+  (item 18) and `zoneNotExtracted` on the safety adapter (item 23).
 
 ### 24. The summary may only repeat what was measured
 

@@ -182,6 +182,7 @@ jobs:
           for mod in ui/qise/app.js ui/qise/palette.js ui/qise/seal.js ui/qise/screens.js \
                      qise/consent.js qise/color.js qise/rois.js qise/sclera.js qise/gates.js \
                      qise/camera.js qise/metrics.js qise/baseline.js qise/store.js \
+                     qise/pose.js \
                      qise/passages.js qise/patterns.js; do
             code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PORT}/$mod")"
             [ "$code" = "200" ] || { echo "::error::/$mod returned $code"; exit 1; }

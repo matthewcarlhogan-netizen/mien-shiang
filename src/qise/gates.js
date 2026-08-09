@@ -81,14 +81,28 @@ export const GATES = Object.freeze([
     message: "Look straight at the camera.",
     evaluate: ({ pose }) => {
       if (!pose) return null;
-      const parts = [
-        marginBelow(Math.abs(pose.yaw), POSE_YAW_MAX),
-        marginBelow(Math.abs(pose.pitch), POSE_PITCH_MAX),
-        marginBelow(Math.abs(pose.roll), POSE_ROLL_MAX),
-      ];
+
+      // Only the axes that were actually MEASURED are judged. `Math.abs(null)`
+      // is 0, so treating an unmeasured axis as a number silently reports it
+      // as perfectly straight — which is the same defect as a gate whose input
+      // is missing passing by default, one level further down.
+      //
+      // Roll comes from two landmarks and is always available; yaw and pitch
+      // need MediaPipe's transformation matrix. A frame with only roll is
+      // still worth gating on roll, and the reading records which axes were
+      // checked rather than implying all three were.
+      const limits = { yaw: POSE_YAW_MAX, pitch: POSE_PITCH_MAX, roll: POSE_ROLL_MAX };
+      const measured = Object.keys(limits).filter((k) => typeof pose[k] === "number" && Number.isFinite(pose[k]));
+      if (measured.length === 0) return null;
+
+      const parts = measured.map((k) => marginBelow(Math.abs(pose[k]), limits[k]));
       // The worst axis governs: a head straight in yaw and 20 degrees off in
       // roll is not two-thirds acceptable.
-      return { value: pose, limit: { yaw: POSE_YAW_MAX, pitch: POSE_PITCH_MAX, roll: POSE_ROLL_MAX }, margin: Math.min(...parts) };
+      return {
+        value: { ...pose, axesChecked: measured },
+        limit: limits,
+        margin: Math.min(...parts),
+      };
     },
   },
   {

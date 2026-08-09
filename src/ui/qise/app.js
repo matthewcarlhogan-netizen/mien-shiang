@@ -22,6 +22,7 @@ import { createConsent, assertConsentGranted } from "../../qise/consent.js";
 import { paletteCss } from "./palette.js";
 import { openCamera, createLandmarkerGuarded, releaseCapture, GreenLatch, PolygonSmoother, BURST_FRAMES, trimmedMedianLab, reduceBurst } from "../../qise/camera.js";
 import { readRois } from "../../qise/rois.js";
+import { headPose } from "../../qise/pose.js";
 import { sampleSclera } from "../../qise/sclera.js";
 import { evaluateGates } from "../../qise/gates.js";
 import { computeReadingMetrics, lumRatioP90P50 } from "../../qise/metrics.js";
@@ -112,7 +113,15 @@ async function runCapture() {
     const mesh = result && result.faceLandmarks && result.faceLandmarks[0];
 
     if (mesh) {
-      const pts = mesh.map((p) => ({ x: p.x * canvas.width, y: p.y * canvas.height }));
+      // z is carried through, not dropped. Without it `headPose` can only
+      // measure roll, and the pose gate silently stops checking two of its
+      // three axes. MediaPipe normalises z by image WIDTH, the same as x, so
+      // it is scaled the same way.
+      const pts = mesh.map((p) => ({
+        x: p.x * canvas.width,
+        y: p.y * canvas.height,
+        z: typeof p.z === "number" ? p.z * canvas.width : undefined,
+      }));
       lastLandmarks = pts;
 
       if (previous) {
@@ -128,7 +137,7 @@ async function runCapture() {
       smoother.push(Object.fromEntries(
         Object.entries(lastRois.rois).map(([k, v]) => [k, v.polygons.map((p) => p.hull)])));
 
-      const stats = frameStats(image, lastRois, canvas.width, drift);
+      const stats = frameStats(image, lastRois, canvas.width, drift, headPose(pts));
       const gates = evaluateGates(stats, pts, lastSclera);
 
       $("gate-line").textContent = gates.pass ? "Hold it there…" : gates.failures[0].message;
@@ -158,7 +167,7 @@ async function runCapture() {
 }
 
 /** Frame statistics the gates need, gathered once per frame. */
-function frameStats(image, rois, frameWidth, drift) {
+function frameStats(image, rois, frameWidth, drift, pose) {
   let total = 0, hot = 0, cold = 0, lap = 0, lapN = 0;
   const cheekL = [], cheekR = [];
 
@@ -190,7 +199,10 @@ function frameStats(image, rois, frameWidth, drift) {
 
   return {
     frameWidth,
-    pose: { yaw: 0, pitch: 0, roll: 0 },
+    // Real pose, from the landmarks. Feeding a literal here is what made the
+    // pose gate dead code: it reported itself passing on every frame and
+    // contributed a constant to the ring. See src/qise/pose.js.
+    pose,
     skinPixelCount: total,
     skinPixelsAtOrAbove250: hot,
     skinPixelsAtOrBelow12: cold,

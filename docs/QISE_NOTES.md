@@ -140,9 +140,9 @@ All figures below were observed in this session on the host in §0.
 ### Test suite
 
 ```
-Running 28 test file(s)
-# tests 551
-# pass 551
+Running 29 test file(s)
+# tests 564
+# pass 564
 # fail 0
 ```
 
@@ -275,7 +275,33 @@ The guard now requires a term to **start an identifier segment** (camelCase,
 snake_case or SCREAMING_CASE), as a prefix rather than an equality so `rankings`
 still matches `rank`. Pinned by a regression test naming the false positives.
 
-### 3.5 `treat`, in its ordinary English sense
+### 3.5 A gate fed a literal is a gate that can never fire
+
+`gates.js` was written first, fully tested, ten gates with paired controls —
+and the capture loop passed it `pose: { yaw: 0, pitch: 0, roll: 0 }`. The pose
+gate therefore reported itself passing on every frame and contributed a
+constant to the ring. Correct, tested, and dead: the same shape as CLAUDE.md
+item 23, where the malar gate was all three for the same reason.
+
+Fixed by `src/qise/pose.js`, which derives all three axes from the landmarks.
+Two things fell out of building it that are worth keeping:
+
+- **The obvious implementation does not work.** Decomposing MediaPipe's
+  `facialTransformationMatrixes` needs the memory layout, and reading a
+  rotation matrix row-major when it is column-major yields its transpose — a
+  different rotation. The tempting guard is "keep whichever reading is
+  orthonormal", which is useless: **the transpose of an orthonormal matrix is
+  orthonormal**, so both readings pass and the first is returned silently. That
+  guard was written here, read convincingly, and was caught only by a test that
+  composed a known rotation and asked for it back. The matrix path was dropped.
+- **Cross-axis error was measured rather than assumed.** Over the gate's whole
+  window the worst magnitude error is yaw 0.26°, pitch 0.11°, roll 2.53°. Roll
+  is the loose one and necessarily so — it is read from the projected
+  inter-ocular axis, and a yawed head foreshortens that projection. The 2.5°
+  under-read only occurs with yaw simultaneously at its own limit, by which
+  point the gate has already failed on yaw.
+
+### 3.6 `treat`, in its ordinary English sense
 
 "the classical texts **treat** that pair as one observation" tripped the Module A
 blocklist, exactly as CLAUDE.md items 19 and 33 warn. Five occurrences across the
