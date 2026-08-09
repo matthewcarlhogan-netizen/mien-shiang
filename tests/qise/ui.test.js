@@ -275,14 +275,15 @@ test("the reading screen is in the order the brief specifies", () => {
   }
 });
 
-test("the verdict is one sentence, names the colour, and never the reader", () => {
+test("the verdict speaks to the reader but makes no claim about their traits", () => {
   const v = verdictFor({ ascendant: "chi", band: "clear" });
   assert.equal(v.split(".").filter((s) => s.trim()).length, 1);
   assert.match(v, /chi/);
-  assert.doesNotMatch(v, /\byou\b/i);
-  assert.equal(verdictFor({ ascendant: "ping" }), "Level today — 平.");
-  assert.equal(verdictFor(null), "Level today — 平.");
-  assert.equal(verdictFor({ ascendant: "nonsense" }), "Level today — 平.");
+  assert.match(v, /your reading/i);
+  assert.doesNotMatch(v, /personality|health|future|will happen/i);
+  assert.equal(verdictFor({ ascendant: "ping" }), "Today, your reading is level — 平.");
+  assert.equal(verdictFor(null), "Today, your reading is level — 平.");
+  assert.equal(verdictFor({ ascendant: "nonsense" }), "Today, your reading is level — 平.");
 });
 
 test("a low-confidence reading is hollow all the way through the model", () => {

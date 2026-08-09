@@ -48,7 +48,10 @@ const metricOf = (r, key) => {
 export function gaugeModel(history, todayValue, key, label) {
   const values = (history || []).map((r) => metricOf(r, key)).filter((v) => v !== null).slice(-30);
   if (values.length < 4 || typeof todayValue !== "number") {
-    return { key, label, measured: false, today: todayValue ?? null, n: values.length };
+    return {
+      key, label, measured: false, today: todayValue ?? null, n: values.length,
+      relativeLabel: "Building your personal range",
+    };
   }
 
   const low = quantile(values, 0.25);
@@ -64,6 +67,9 @@ export function gaugeModel(history, todayValue, key, label) {
     band: { from: at(low), to: at(high), low, high },
     mark: at(todayValue),
     outside: todayValue > high ? "above" : (todayValue < low ? "below" : null),
+    relativeLabel: todayValue > high
+      ? "Above your recent range"
+      : (todayValue < low ? "Below your recent range" : "Within your recent range"),
   };
 }
 
@@ -120,14 +126,14 @@ export function sparklineModel(history, key = "ming", days = 30) {
   };
 }
 
-/** One-sentence verdict. Names the colour, never the reader. */
+/** One sentence addressed to the reader, without turning it into a trait. */
 export function verdictFor(compass) {
   const ascendant = (compass && compass.ascendant) || "ping";
-  if (ascendant === "ping") return "Level today — 平.";
+  if (ascendant === "ping") return "Today, your reading is level — 平.";
   const colour = PALETTE[ascendant];
-  if (!colour) return "Level today — 平.";
+  if (!colour) return "Today, your reading is level — 平.";
   const band = compass.band ? `${compass.band} ` : "";
-  return `A ${band}showing of ${ascendant} — ${colour.simile.split(",")[0]}.`;
+  return `Today, your reading shows ${band}${ascendant} — ${colour.simile.split(",")[0]}.`;
 }
 
 /**

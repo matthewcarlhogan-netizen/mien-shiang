@@ -29,6 +29,7 @@ import { computeReadingMetrics, lumRatioP90P50 } from "../../qise/metrics.js";
 import { interpretReading, readingConfidence, axesOf } from "../../qise/baseline.js";
 import { openStore } from "../../qise/store.js";
 import { readingScreenModel, historyColumnModel } from "./screens.js";
+import { SHARE_CADENCES, shareReadings } from "./share.js";
 import { findPatterns, describePattern } from "../../qise/patterns.js";
 import * as color from "../../qise/color.js";
 
@@ -43,6 +44,7 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
 const consent = createConsent();
 let store = null;
 let scratch = null;
+let activeShareCadence = "week";
 
 /* ── screens ─────────────────────────────────────────────────────────────── */
 
@@ -307,12 +309,12 @@ async function renderReading(reading) {
   $("reading-verdict").textContent = m.verdict;
 
   $("reading-gauges").innerHTML = m.gauges.map((g) => g.measured
-    ? `<div class="gauge"><div class="muted">${esc(g.label)} <span class="num">${g.today.toFixed(3)}</span></div>
+    ? `<div class="gauge"><div class="gauge-label"><span>${esc(g.label)}</span><span class="muted">${esc(g.relativeLabel)}</span></div>
        <div class="gauge-track">
          <div class="gauge-band" style="left:${(g.band.from * 100).toFixed(1)}%;width:${((g.band.to - g.band.from) * 100).toFixed(1)}%"></div>
          <div class="gauge-mark" style="left:${(g.mark * 100).toFixed(1)}%"></div>
        </div></div>`
-    : `<div class="gauge muted">${esc(g.label)} — not enough readings yet (${g.n}).</div>`).join("");
+    : `<div class="gauge"><div class="gauge-label"><span>${esc(g.label)}</span><span class="muted">${esc(g.relativeLabel)} (${g.n}/4)</span></div></div>`).join("");
 
   $("reading-courts").innerHTML = m.courts.map((c) =>
     `<div class="court"><div class="cjk">${esc(c.cjk)}</div>
@@ -371,17 +373,42 @@ function drawSparkline(svg, model) {
 }
 
 async function renderHistory() {
-  const col = historyColumnModel(await store.all());
+  const limit = SHARE_CADENCES[activeShareCadence].days;
+  const col = historyColumnModel(await store.all(), { limit });
   $("history-column").innerHTML = col.rows.map((r) =>
     `<figure>${r.svg}<figcaption>${esc(r.date)}</figcaption></figure>`).join("")
     || `<p class="muted">Nothing recorded yet.</p>`;
+  for (const button of document.querySelectorAll("[data-cadence]")) {
+    const selected = button.dataset.cadence === activeShareCadence;
+    button.setAttribute("aria-pressed", String(selected));
+  }
+  $("share-column").textContent = activeShareCadence === "today"
+    ? "Share today's seal"
+    : `Share ${SHARE_CADENCES[activeShareCadence].label.toLowerCase()}`;
   show("screen-history");
+}
+
+async function shareCurrent(cadence) {
+  const status = document.querySelector('.screen[data-active="true"] .share-status') || $("share-status");
+  status.textContent = "Preparing your private share card…";
+  const result = await shareReadings(await store.all(), cadence);
+  status.textContent = {
+    empty: "Complete a face scan before sharing.",
+    shared: "Shared. The card contains no face photo or raw measurements.",
+    downloaded: "Saved as a PNG. The card contains no face photo or raw measurements.",
+    cancelled: "Share cancelled. Nothing was sent.",
+  }[result.status] || "Share card ready.";
 }
 
 /* ── boot ────────────────────────────────────────────────────────────────── */
 
 async function boot() {
   document.getElementById("qise-palette").textContent = paletteCss();
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./sw.js").catch((error) => {
+      console.warn("qise: offline shell registration failed", error);
+    });
+  }
   store = await openStore();
 
   $("consent-grant").addEventListener("click", async () => {
@@ -400,6 +427,22 @@ async function boot() {
   $("go-capture").addEventListener("click", () => runCapture().catch((e) => console.error(e)));
   $("go-history").addEventListener("click", () => renderHistory().catch((e) => console.error(e)));
   $("back-reading").addEventListener("click", () => show("screen-reading"));
+  $("share-today").addEventListener("click", () => shareCurrent("today").catch((e) => {
+    console.error(e);
+    const status = document.querySelector('.screen[data-active="true"] .share-status') || $("share-status");
+    status.textContent = "The share card could not be created. Your reading is still stored on this device.";
+  }));
+  $("share-column").addEventListener("click", () => shareCurrent(activeShareCadence).catch((e) => {
+    console.error(e);
+    const status = document.querySelector('.screen[data-active="true"] .share-status') || $("share-status");
+    status.textContent = "The share card could not be created. Your readings are unchanged.";
+  }));
+  for (const button of document.querySelectorAll("[data-cadence]")) {
+    button.addEventListener("click", () => {
+      activeShareCadence = button.dataset.cadence;
+      renderHistory().catch((e) => console.error(e));
+    });
+  }
 
   $("export-all").addEventListener("click", async () => {
     const doc = await store.exportAll();

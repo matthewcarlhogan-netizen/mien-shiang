@@ -1,9 +1,9 @@
 {
-  "id": "/",
+  "id": "/qise",
   "name": "Mien Shiang",
   "short_name": "Mien Shiang",
-  "description": "Offline skin-tone and surface observation tool.",
-  "start_url": "./",
+  "description": "A private, on-device Mien Shiang face scanner and personal reading column.",
+  "start_url": "./qise.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
