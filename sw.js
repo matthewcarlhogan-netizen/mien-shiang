@@ -5,11 +5,16 @@
  * second launch works with no connection at all. */
 // Bumped when the shell list changes: the activate handler deletes every cache
 // whose name is not CACHE, so a stale v1 holding an old SHELL cannot survive.
-const CACHE = "mienshiang-v6";
+const CACHE = "mienshiang-v13";
 const SHELL = [
   "./", "./index.html", "./ui.js", "./analysis.js", "./engine.js",
+  // Measurement calibration. Owned by neither module; engine.js imports both,
+  // so omitting them here breaks the app offline rather than degrading it.
+  "./utils/calibrationEngine.js", "./utils/textureAnalyzer.js",
+  // Module A insights narrative, imported by readingview.js.
+  "./utils/insights.js",
   "./geometry.js", "./landmarker.js", "./expression.js",
-  "./debugview.js", "./flags.js", "./zones.js",
+  "./debugview.js", "./flags.js", "./zones.js", "./roi.js",
   "./modulebview.js", "./report.js", "./about.js",
   "./privacy.html", "./terms.html", "./.well-known/assetlinks.json",
   // Rule layer, split by module.
@@ -17,13 +22,24 @@ const SHELL = [
   // Module A reading + its views.
   "./reading/index.js", "./reading/five-elements.js", "./reading/three-courts.js",
   "./reading/twelve-palaces.js", "./reading/qi-se.js", "./reading/science.js",
-  "./reading/summary.js",
-  "./readingview.js", "./scienceview.js", "./sharecard.js",
+  "./reading/summary.js", "./reading/harmony.js",
+  "./readingview.js", "./scienceview.js", "./sharecard.js", "./shareGate.js",
   // Both module adapters ship in both flavours. The flag governs BEHAVIOUR,
   // not bytes — see the honest limitation in flags.js. Omitting safety.js here
   // while rules.js still imports it would break the app offline rather than
   // produce an entertainment-only build.
   "./adapters/entertainment.js", "./adapters/safety.js",
+  // Qi Se longitudinal tracker. A separate page and a separate module tree,
+  // precached whole: the feature is useless offline if any one of these is
+  // missing, and Promise.allSettled means an absent entry costs only itself
+  // rather than the whole install.
+  "./qise.html",
+  "./qise/consent.js", "./qise/color.js", "./qise/rois.js", "./qise/sclera.js",
+  "./qise/gates.js", "./qise/camera.js", "./qise/metrics.js", "./qise/pose.js",
+  "./qise/baseline.js", "./qise/store.js", "./qise/passages.js",
+  "./qise/patterns.js",
+  "./ui/qise/palette.js", "./ui/qise/seal.js", "./ui/qise/screens.js",
+  "./ui/qise/app.js",
   "./manifest.webmanifest", "./icon-192.png", "./icon-512.png",
   "./icon-512-maskable.png",
 ];

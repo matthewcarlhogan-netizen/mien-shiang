@@ -68,6 +68,25 @@ export function evaluateSafety(raw) {
   const zones = raw?.zones ?? {};
   const sev = (key) => severityFromDeltaEi(zones[key]?.deltaEi);
 
+  const REQUIRED = ["cheek_left", "cheek_right", "nose_bridge"];
+
+  // A zone that is ABSENT is a bug in the ROI geometry; a zone that is present
+  // with a null deltaEi is the honest deep-skin refusal. These used to collapse
+  // into one `colourNotMeasurable`, and that is precisely how a dead malar gate
+  // stayed invisible: nose_bridge never extracted at all (its hull was 4px
+  // wide), and the refusal it produced was indistinguishable from the correct
+  // one. Report them apart so the next such failure is legible on inspection.
+  const missing = REQUIRED.filter((k) => !(k in zones));
+  if (missing.length) {
+    return {
+      enabled: true,
+      assessable: false,
+      referrals: [],
+      reason: "zoneNotExtracted",
+      missingZones: missing,
+    };
+  }
+
   const cheekL = sev("cheek_left");
   const cheekR = sev("cheek_right");
   const bridge = sev("nose_bridge");

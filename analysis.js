@@ -21,6 +21,7 @@ import { BUILD_FLAVOUR } from "./flags.js";
 import { createLandmarkerWithFallback } from "./landmarker.js";
 import { geometryReport } from "./geometry.js";
 import { expressionState } from "./expression.js";
+import { roiFootprint } from "./roi.js";
 
 const WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm";
 const MODEL =
@@ -73,34 +74,6 @@ function drawToCanvas(bitmap, unmirror) {
   return c;
 }
 
-/** Padded convex hull of a landmark set, in pixels. */
-function hullFor(idx, pts, pad) {
-  const sel = idx.map((i) => pts[i]).filter(Boolean);
-  if (sel.length < 3) return null;
-
-  // Monotone chain convex hull.
-  const p = [...sel].sort((a, b) => a.x - b.x || a.y - b.y);
-  const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
-  const lower = [], upper = [];
-  for (const q of p) {
-    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], q) <= 0) lower.pop();
-    lower.push(q);
-  }
-  for (let i = p.length - 1; i >= 0; i--) {
-    const q = p[i];
-    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], q) <= 0) upper.pop();
-    upper.push(q);
-  }
-  const hull = lower.slice(0, -1).concat(upper.slice(0, -1));
-
-  const cx = hull.reduce((s, q) => s + q.x, 0) / hull.length;
-  const cy = hull.reduce((s, q) => s + q.y, 0) / hull.length;
-  return hull.map((q) => ({
-    x: cx + (q.x - cx) * (1 + pad),
-    y: cy + (q.y - cy) * (1 + pad),
-  }));
-}
-
 /**
  * Extract every region from the ALREADY WHITE-BALANCED full frame.
  *
@@ -110,17 +83,18 @@ function hullFor(idx, pts, pad) {
  */
 function extractRegions(balanced, w, h, pts) {
   const regions = {};
+  // A dropped zone is REPORTED, never merely skipped. Silently losing one is
+  // indistinguishable downstream from an honest refusal to measure, and that
+  // ambiguity is what hid the dead malar gate — see roi.js.
+  const dropped = {};
 
   for (const [key, def] of Object.entries(ROIS)) {
-    const hull = hullFor(def.idx, pts, def.pad);
-    if (!hull) continue;
-
-    let x0 = Math.max(0, Math.floor(Math.min(...hull.map((q) => q.x))));
-    let y0 = Math.max(0, Math.floor(Math.min(...hull.map((q) => q.y))));
-    let x1 = Math.min(w, Math.ceil(Math.max(...hull.map((q) => q.x))));
-    let y1 = Math.min(h, Math.ceil(Math.max(...hull.map((q) => q.y))));
-    const rw = x1 - x0, rh = y1 - y0;
-    if (rw < 8 || rh < 8) continue;
+    const fp = roiFootprint(def, pts, w, h);
+    if (fp.dropped) {
+      dropped[key] = { reason: fp.dropped, rw: fp.rw, rh: fp.rh };
+      continue;
+    }
+    const { hull, x0, y0, rw, rh } = fp;
 
     // Rasterise the hull to a mask so background and hair pixels don't
     // contaminate the colour statistics.
@@ -154,7 +128,7 @@ function extractRegions(balanced, w, h, pts) {
       stats: regionStats(rgba, mask, rw, rh),
     };
   }
-  return regions;
+  return { regions, dropped };
 }
 
 // ---------------------------------------------------------------- pipeline --
@@ -197,7 +171,7 @@ export async function runAnalysis(file, unmirror, onProgress) {
   const img = ctx.getImageData(0, 0, w, h);
   const balanced = shadesOfGray(img.data);      // ONCE, whole frame
 
-  const regions = extractRegions(balanced, w, h, pts);
+  const { regions, dropped: droppedRegions } = extractRegions(balanced, w, h, pts);
 
   // ── the module boundary ─────────────────────────────────────────────────
   // One measurement pass produces neutral physical scalars. Both modules
@@ -224,7 +198,7 @@ export async function runAnalysis(file, unmirror, onProgress) {
   const reading = composeReading(geometry, complexion, raw);
 
   return {
-    canvas, regions, observations, baseline, result,
+    canvas, regions, droppedRegions, observations, baseline, result,
     geometry, expression, delegate: activeDelegate,
     complexion, safety, reading, buildFlavour: BUILD_FLAVOUR,
     notMeasured: Object.keys(UNAVAILABLE),

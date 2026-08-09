@@ -1,6 +1,6 @@
 ﻿import { runAnalysis } from "./analysis.js";
 import { renderGeometry } from "./debugview.js";
-import { renderReading, renderSummary } from "./readingview.js";
+import { renderReadingGated, renderSummary } from "./readingview.js";
 import { buildShareModel, renderShareBlob, deliver } from "./sharecard.js";
 import { renderReferrals, renderHaltNotice, renderAdvisories, renderMeasurementLimits }
   from "./modulebview.js";
@@ -10,12 +10,30 @@ import {
   buildReportPayload, sendReport,
 } from "./report.js";
 import { renderAbout, loadBuildInfo } from "./about.js";
+import {
+  isUnlocked, redeemPaymentParam, buildShareText, shareText,
+  recordShare, getShareCount, resetUnlockState, simulateShares,
+  getUnlockState, grantLifetime, grantSubscription, forceExpireSubscription,
+  subscriptionRemainingMs,
+} from "./shareGate.js";
+import { CHECKOUT_LIFETIME_LINK, CHECKOUT_WEEKLY_LINK, CHECKOUT_CONFIGURED }
+  from "./flags.js";
 
 const $ = (id) => document.getElementById(id);
 const CONSENT_KEY = "mienshiang.consent.v1";
 
 let file = null;
 let objectUrl = null;
+
+// ─────────────────────────────────── payment redirect on page load ──────────
+// Must run before any UI renders, per the unlock priority order.
+if (redeemPaymentParam(location.search)) {
+  // Remove the param so it doesn't persist in browser history.
+  history.replaceState(null, "", location.pathname);
+}
+
+// Cached last result, used to re-render after an in-session unlock.
+let lastResult = null;
 
 // ----------------------------------------------------------------- consent --
 
@@ -69,6 +87,7 @@ $("go").addEventListener("click", async () => {
 // ------------------------------------------------------------------ render --
 
 function render(r) {
+  lastResult = r;
   const { canvas, regions, result, baseline, notMeasured } = r;
 
   // Redraw the plate from the analysed canvas so the overlay lines up exactly
@@ -113,9 +132,16 @@ function render(r) {
   // substitutes for the other.
   parts.push(renderMeasurementLimits(baseline, notMeasured));
 
-  // MODULE A — the reading, in full, beneath the receipt.
+  // MODULE A — the reading, gated when the user has not yet unlocked.
+  // Five Elements (face shape) is always visible; the remaining sections are
+  // shown only after sharing or paying.
   if (!result.halted) {
-    parts.push(renderReading(r.reading));
+    const locked = !isUnlocked();
+    parts.push(renderReadingGated(r.reading, {
+      locked,
+      overlayHtml: locked ? gateOverlayHtml(getShareCount()) : "",
+      insightsCaveatText: insightsCaveatText(),
+    }));
     parts.push(renderScienceLink());
     parts.push(renderReportButton());
   }
@@ -142,6 +168,7 @@ function render(r) {
   wireScienceScreen();
   wireReportControl();
   wireShare(r);
+  wireShareGate(r);
 }
 
 /**
@@ -156,6 +183,16 @@ function summaryCaveatHtml() {
 
 function summaryCaveatText() {
   return ($("tpl-summary-caveat")?.content?.textContent ?? "").trim();
+}
+
+/** Insights narrative caveat. Same arrangement, same reason — see above. */
+function insightsCaveatText() {
+  return ($("tpl-insights-caveat")?.content?.textContent ?? "").trim();
+}
+
+/** Share-card footer. Same arrangement, same reason — see above. */
+function shareCardCaveatText() {
+  return ($("tpl-sharecard-caveat")?.content?.textContent ?? "").trim();
 }
 
 function shareControlsHtml() {
@@ -183,7 +220,11 @@ function wireShare(r) {
     const original = btn.textContent;
     try {
       const includePhoto = $("share-photo")?.checked === true;
-      const model = buildShareModel(r.reading, summaryCaveatText());
+      // The card mirrors the gate: locked unless this device has unlocked.
+      const model = buildShareModel(r.reading, shareCardCaveatText(), {
+        unlocked: isUnlocked(),
+        url: location.href.replace(/[?#].*$/, ""),
+      });
       const blob = await renderShareBlob(model, "story", includePhoto ? r.canvas : null);
       const imageFile = new File([blob], "mian-xiang-reading.png", { type: "image/png" });
       const how = await deliver(imageFile);
@@ -198,6 +239,120 @@ function wireShare(r) {
       setTimeout(() => { btn.textContent = original; }, 4000);
     }
   });
+}
+
+// ----------------------------------------------- share-to-unlock gate ------
+
+/**
+ * HTML for the frosted overlay that sits over the gated reading sections.
+ * Rendered purely — no DOM access. Injected via renderReadingGated.
+ *
+ * All strings here are UI chrome (buttons, counts, a short prompt). They are
+ * not Module A reading copy and carry no health vocabulary.
+ *
+ * @param {number} shareCount  shares completed so far (0, 1, or 2)
+ */
+function gateOverlayHtml(shareCount) {
+  const remaining = Math.max(0, 2 - shareCount);
+  const progressLabel = shareCount >= 2
+    ? "Shared"
+    : shareCount === 1 ? "1 of 2 shared" : "0 of 2 shared";
+
+  /* Paid options render as disabled buttons until the checkout links are real.
+   * Sending someone to a placeholder checkout that cannot complete is worse
+   * than showing the price and saying it is not ready — the first looks like a
+   * payment failure and the second is simply true. CHECKOUT_CONFIGURED is
+   * derived from the links themselves, so this cannot drift out of step. */
+  const payCard = (id, href, price, note, popular) => {
+    const inner = CHECKOUT_CONFIGURED
+      ? `<a class="gate-btn gate-btn-pay" href="${href}">${price}</a>`
+      : `<button id="${id}" class="gate-btn gate-btn-pay" type="button">${price} (coming soon)</button>`;
+    return `
+      <div class="gate-opt${popular ? " gate-opt-popular" : ""}">
+        ${popular ? '<p class="gate-flag">Most popular</p>' : ""}
+        ${inner}
+        <p class="gate-note">${note}</p>
+      </div>`;
+  };
+
+  return `
+    <div class="gate-card">
+      <p class="gate-title">Unlock the full reading</p>
+      <p class="gate-sub">Three Courts, Qi Se and Twelve Palaces</p>
+      <div class="gate-opts">
+        <div class="gate-opt">
+          <button id="gate-share" class="gate-btn gate-btn-share" type="button">
+            Share with ${remaining} friend${remaining !== 1 ? "s" : ""}
+          </button>
+          <p class="gate-note">Free &middot; <span class="gate-progress">${progressLabel}</span></p>
+        </div>
+        ${payCard("gate-notify-lifetime", CHECKOUT_LIFETIME_LINK, "Unlock forever &mdash; $4.99", "One-time", true)}
+        ${payCard("gate-notify-weekly", CHECKOUT_WEEKLY_LINK, "Weekly access &mdash; $2.99", "Renews weekly", false)}
+      </div>
+      <p class="gate-caveat">For entertainment and self-reflection only.
+        Unlocks are stored on this device, so clearing your browser clears them.</p>
+    </div>`;
+}
+
+/**
+ * Wire the share-gate overlay buttons after render.
+ *
+ * The share button calls shareText with a tradition-framed message (no score,
+ * no health claims), records the share, and re-renders on unlock.
+ */
+function wireShareGate(r) {
+  const shareBtn = $("gate-share");
+  if (!shareBtn) return; // not rendered (user is already unlocked)
+
+  shareBtn.addEventListener("click", async () => {
+    shareBtn.disabled = true;
+    const original = shareBtn.textContent;
+
+    // Extract face shape name if available — tradition-attributed framing only.
+    const faceShapeName = r.reading?.fiveElements?.available
+      ? r.reading.fiveElements.name
+      : null;
+    const url = location.href.replace(/[?#].*$/, "");
+    const text = buildShareText(faceShapeName, url);
+
+    try {
+      const result = await shareText(text);
+      if (result === "shared" || result === "copied") {
+        const { unlocked } = recordShare();
+        shareBtn.textContent = result === "copied" ? "Link copied!" : "Shared!";
+        if (unlocked && lastResult) {
+          // Re-render the full reading now that the gate is open.
+          setTimeout(() => render(lastResult), 800);
+        } else {
+          // Update the overlay count without a full re-render.
+          const prog = document.querySelector(".gate-progress");
+          if (prog) prog.textContent = `${getShareCount()} of 2 shared`;
+          const rem = Math.max(0, 2 - getShareCount());
+          shareBtn.textContent = `Share with ${rem} friend${rem !== 1 ? "s" : ""}`;
+        }
+      } else if (result === "cancelled") {
+        shareBtn.textContent = original;
+      } else {
+        shareBtn.textContent = "Could not share";
+      }
+    } catch (err) {
+      shareBtn.textContent = "Could not share";
+      console.error("share gate failed:", err);
+    } finally {
+      shareBtn.disabled = false;
+      setTimeout(() => { if (shareBtn.textContent !== original) shareBtn.textContent = original; }, 3500);
+    }
+  });
+
+  // Present only while the checkout links are still placeholders.
+  for (const id of ["gate-notify-lifetime", "gate-notify-weekly"]) {
+    const btn = $(id);
+    if (!btn) continue;
+    btn.addEventListener("click", () => {
+      btn.textContent = "We\u2019ll let you know when it\u2019s ready";
+      btn.disabled = true;
+    });
+  }
 }
 
 // -------------------------------------------------- report this result --
@@ -275,4 +430,96 @@ if ("serviceWorker" in navigator) {
   window.addEventListener("load", () =>
     navigator.serviceWorker.register("./sw.js").catch((err) =>
       console.warn("Service worker registration failed; offline support is unavailable.", err)));
+}
+
+// ----------------------------------------------------------- dev panel ------
+// Triggered by 7 rapid taps on the wordmark. Hidden from normal users.
+// Shows reset controls for the share-gate unlock state.
+
+(function wireDevPanel() {
+  const wordmark = document.querySelector(".wordmark");
+  if (!wordmark) return;
+
+  let tapCount = 0;
+  let tapTimer = null;
+
+  wordmark.addEventListener("click", () => {
+    tapCount++;
+    clearTimeout(tapTimer);
+    tapTimer = setTimeout(() => { tapCount = 0; }, 2000);
+
+    if (tapCount >= 7) {
+      tapCount = 0;
+      clearTimeout(tapTimer);
+      openDevPanel();
+    }
+  });
+})();
+
+function openDevPanel() {
+  const dlg = $("dev-panel");
+  if (!dlg) return;
+
+  /* Loud on purpose. This panel hands out every unlock state for free, so the
+   * one thing that must never happen is it shipping unnoticed. A console line
+   * survives minification, shows up in a remote debugging session on a real
+   * handset, and costs nothing when the panel is absent. */
+  console.warn("\u26A0\uFE0F DEV PANEL ACTIVE \u2014 remove before production release");
+
+  // Interpolated below: all three come from this module's own constants or are
+  // numbers, so there is no user-supplied text on this path.
+  const state = getUnlockState() ?? "locked";
+  const remaining = subscriptionRemainingMs();
+  const days = remaining === null ? null : (remaining / 86400000).toFixed(2);
+
+  const actions = [
+    ["dev-reset", "Reset all unlock state"],
+    ["dev-simulate", "Simulate share \u00D7 2"],
+    ["dev-subscribe", "Start weekly subscription"],
+    ["dev-expire", "Force expire subscription"],
+    ["dev-lifetime", "Force paid-lifetime"],
+    ["dev-consent", "Reset consent"],
+  ];
+
+  dlg.innerHTML = `
+    <div class="consent" style="min-width:0">
+      <h2 style="font-size:1rem;margin-bottom:.75rem">Dev: unlock state</h2>
+      <p style="font-size:.85rem;color:var(--ink-60);margin:.4rem 0">
+        Current state: <code>${state}</code> &middot;
+        shares: <code>${getShareCount()}</code>${
+          days === null ? "" : ` &middot; expires in <code>${days}d</code>`}
+      </p>
+      <div style="display:flex;flex-direction:column;gap:.5rem;margin-top:1rem">
+        ${actions.map(([id, label]) =>
+          `<button id="${id}" class="ghost" type="button">${label}</button>`).join("")}
+        <button id="dev-close" class="ghost" type="button" style="margin-top:.5rem">Close</button>
+      </div>
+    </div>`;
+
+  dlg.showModal();
+
+  // Every action re-renders, so the panel never leaves the screen showing
+  // state it has just invalidated.
+  const act = (id, fn) => dlg.querySelector(`#${id}`)?.addEventListener("click", () => {
+    fn();
+    dlg.close();
+    if (lastResult) render(lastResult);
+  });
+
+  dlg.querySelector("#dev-close").addEventListener("click", () => dlg.close());
+  act("dev-reset", resetUnlockState);
+  act("dev-simulate", simulateShares);
+  act("dev-lifetime", grantLifetime);
+  act("dev-subscribe", () => grantSubscription());
+  act("dev-expire", () => {
+    // Reports rather than failing silently: expiring is a no-op unless a
+    // subscription is actually live, and a dead button reads as a bug.
+    if (!forceExpireSubscription()) {
+      console.warn("Dev panel: no live subscription to expire. Start one first.");
+    }
+  });
+  act("dev-consent", () => {
+    localStorage.removeItem(CONSENT_KEY);
+    location.reload();
+  });
 }

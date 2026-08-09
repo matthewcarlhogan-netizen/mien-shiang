@@ -52,17 +52,81 @@ const DISPLAY = "system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
  * @param {string} caveatText  supplied by the caller from index.html's
  *        disclaimer template — never a literal here, see readingview.js
  */
-export function buildShareModel(reading, caveatText) {
+export function buildShareModel(reading, caveatText, opts = {}) {
   const s = buildSummary(reading);
+  const { unlocked = false, url = "" } = opts;
+
+  const fe = reading?.fiveElements;
+  const h = reading?.harmony;
+
+  /* The canon value is ALWAYS rendered with what it is a match TO.
+   * A bare "82/100" beside someone's face shape, on an image they are about
+   * to post publicly, reads as a rating of them — which is the one thing this
+   * number is not, and the thing consent clause 04 promises the app does not
+   * do. The label is not decoration around the figure; it is what makes the
+   * figure true. Never draw one without the other. */
+  const canon = Number.isFinite(h?.value)
+    ? { value: h.value, label: "MATCH TO THE CLASSICAL CANONS", basis: h.basis }
+    : null;
+
   return {
     wordmark: "面相",
-    headline: s.headline.map((h) => `${h.label} ${h.hanzi}`),
+    mode: unlocked ? "unlocked" : "locked",
+    shapeLine: fe?.available ? `${titleCase(fe.shape)} — ${fe.name} Element` : null,
+    canon,
+    headline: s.headline.map((x) => `${x.label} ${x.hanzi}`),
     coverage: s.coverage,
     emphasis: s.emphasis,
+    /* WHOLE attributed strings, never excerpts.
+     *
+     * The brief asked for "the first line of the narrative". That is precisely
+     * the defect CLAUDE.md item 24 records: every Module A string opens with
+     * its attribution — "In Mian Xiang…", "Classical Chinese face reading…" —
+     * so cutting at a line, a sentence or a character count can strand that
+     * opening and turn a statement about a tradition into a statement about
+     * the reader. The copy guards never see it, because they scan the source
+     * strings and not what a view does to them afterwards.
+     *
+     * So these are complete sentences, taken whole. If one does not fit the
+     * card it is DROPPED, not trimmed — see fitWhole() in the draw step. */
+    readings: unlocked ? [fe?.reading, h?.components?.[0]?.reads].filter(Boolean) : [],
+    teaser: unlocked ? null : "Full TCM Report + Aesthetic Analysis",
+    cta: unlocked || !url ? null : `Scan your face → ${url}`,
     caveat: caveatText ?? "",
     /** Mirrors the summary: nothing read means nothing claimed. */
     anyRead: s.anyRead,
   };
+}
+
+const titleCase = (str) =>
+  String(str ?? "").replace(/^[a-z]/, (c) => c.toUpperCase());
+
+/**
+ * A padlock, drawn as vector rather than set as an emoji glyph.
+ *
+ * This file loads no fonts and no images on purpose — a canvas drawn before a
+ * webfont resolves rasterises blank boxes. An emoji is the same hazard wearing
+ * different clothes: 🔒 depends on a colour emoji font being present and
+ * having that codepoint, and where it is missing the card renders a tofu box
+ * in the middle of the image with no way to detect it after the fact. Two
+ * rounded rectangles and an arc always draw.
+ */
+export function drawPadlock(ctx, x, y, size, colour) {
+  const body = size * 0.62;
+  const shackleR = size * 0.26;
+  ctx.save();
+  ctx.strokeStyle = colour;
+  ctx.fillStyle = colour;
+  ctx.lineWidth = Math.max(2, size * 0.09);
+
+  ctx.beginPath();
+  ctx.arc(x + size / 2, y + size - body - shackleR * 0.15, shackleR, Math.PI, 0);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.rect(x, y + size - body, size, body);
+  ctx.fill();
+  ctx.restore();
 }
 
 /**
@@ -137,6 +201,47 @@ export function drawShareCard(ctx, model, size, photo = null) {
   ctx.fillText("READING RECEIPT", pad, y);
   y += Math.round(w * 0.075);
 
+  // Face shape, when it was actually typed. Absent rather than guessed.
+  if (model.shapeLine) {
+    ctx.fillStyle = INK;
+    ctx.font = `600 ${Math.round(w * 0.046)}px ${DISPLAY}`;
+    ctx.fillText(model.shapeLine, pad, y);
+    y += Math.round(w * 0.072);
+  }
+
+  // The canon value, and never without the line that says what it matches.
+  if (model.canon) {
+    ctx.fillStyle = CINNABAR;
+    ctx.font = `700 ${Math.round(w * 0.105)}px ${DISPLAY}`;
+    ctx.fillText(`${model.canon.value}/100`, pad, y);
+    y += Math.round(w * 0.038);
+    ctx.fillStyle = INK_60;
+    ctx.font = `${Math.round(w * 0.024)}px ${MONO}`;
+    ctx.fillText(model.canon.label, pad, y);
+    y += Math.round(w * 0.062);
+  }
+
+  if (model.mode === "locked") {
+    const iconSize = Math.round(w * 0.075);
+    drawPadlock(ctx, pad, y - iconSize, iconSize, INK_60);
+
+    ctx.fillStyle = INK;
+    ctx.font = `600 ${Math.round(w * 0.040)}px ${DISPLAY}`;
+    ctx.fillText(model.teaser, pad + iconSize + Math.round(w * 0.035), y - Math.round(w * 0.012));
+    y += Math.round(w * 0.085);
+
+    if (model.cta) {
+      ctx.fillStyle = CINNABAR;
+      ctx.font = `600 ${Math.round(w * 0.032)}px ${DISPLAY}`;
+      for (const line of wrapText(ctx, model.cta, maxW)) {
+        ctx.fillText(line, pad, y);
+        y += Math.round(w * 0.048);
+      }
+    }
+    drawCaveat(ctx, model, w, h, pad, maxW);
+    return ctx;
+  }
+
   // Headline constructs — one per line, only what was measured.
   ctx.fillStyle = INK;
   const headSize = Math.round(w * 0.062);
@@ -176,6 +281,30 @@ export function drawShareCard(ctx, model, size, photo = null) {
     }
   }
 
+  /* Whole attributed readings — fitted or dropped, never trimmed.
+   *
+   * The budget stops at the caveat, which is pinned to the bottom. A line that
+   * does not fit is left out entirely: truncating one would cut the end off a
+   * sentence whose opening is its attribution, which is how a statement about
+   * a tradition becomes a statement about the reader. Dropping loses content;
+   * trimming changes meaning. */
+  if (model.readings?.length) {
+    ctx.font = `${Math.round(w * 0.032)}px ${DISPLAY}`;
+    const lineH = Math.round(w * 0.046);
+    const budget = h - Math.round(w * 0.30);
+    for (const text of model.readings) {
+      const lines = wrapText(ctx, text, maxW);
+      if (y + lines.length * lineH > budget) continue;   // drop, do not trim
+      y += Math.round(w * 0.028);
+      ctx.fillStyle = INK;
+      ctx.font = `${Math.round(w * 0.032)}px ${DISPLAY}`;
+      for (const line of lines) {
+        ctx.fillText(line, pad, y);
+        y += lineH;
+      }
+    }
+  }
+
   // Opt-in photo, drawn only when the user explicitly asked for it.
   if (photo) {
     const boxTop = y + Math.round(w * 0.04);
@@ -188,7 +317,16 @@ export function drawShareCard(ctx, model, size, photo = null) {
     }
   }
 
-  // Caveat, pinned to the bottom so it survives any amount of content above.
+  drawCaveat(ctx, model, w, h, pad, maxW);
+  return ctx;
+}
+
+/**
+ * Caveat, pinned to the bottom so it survives any amount of content above, and
+ * drawn by BOTH modes. A locked card is the one most likely to be posted
+ * publicly, so it is the last place the disclaimer may be dropped.
+ */
+function drawCaveat(ctx, model, w, h, pad, maxW) {
   ctx.fillStyle = INK_60;
   ctx.font = `${Math.round(w * 0.026)}px ${DISPLAY}`;
   const caveatLines = wrapText(ctx, model.caveat, maxW);
@@ -197,7 +335,6 @@ export function drawShareCard(ctx, model, size, photo = null) {
     ctx.fillText(line, pad, cy);
     cy += Math.round(w * 0.04);
   }
-  return ctx;
 }
 
 /**

@@ -20,6 +20,7 @@
 
 import { READING_LEAD } from "./reading/index.js";
 import { buildSummary, SECTION_IDS } from "./reading/summary.js";
+import { generateInsights } from "./utils/insights.js";
 
 export const esc = (s) => String(s).replace(/[&<>"]/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -192,19 +193,131 @@ function renderPalaces(tp, openDiffer) {
 }
 
 /** Module A only. Module B is rendered separately, by renderModuleB(). */
-export function renderReading(reading) {
+/**
+ * The insights narrative, split across the gate.
+ *
+ * ── WHY THIS REFUSES RATHER THAN DEFAULTING ────────────────────────────────
+ * `generateInsights()` falls back to SHAPE_COPY.oval for an unrecognised
+ * shape. Rendering that fallback when the shape was never established would
+ * present the RESIDUAL class as a finding — item 13's defect, arriving
+ * through the view instead of the classifier. So when Five Elements is
+ * unavailable (a turned head, or no geometry at all) this renders nothing.
+ * An unread construct gets no narrative, exactly as the summary gives it no
+ * value.
+ *
+ * The canon proportion is read from the harmony component rather than
+ * recomputed. `null` when it was not measured, and passed through as null —
+ * insights.js has a not-measured branch and must be allowed to use it.
+ */
+function insightsFor(reading, caveatText = "") {
+  const five = reading?.fiveElements;
+  if (!five?.available || !five.shape) return null;
+
+  const canon = reading?.harmony?.components?.find((c) => c.key === "canon");
+  const canonProportion = Number.isFinite(canon?.value) ? canon.value : null;
+
+  return generateInsights(five.shape, canonProportion, null, caveatText);
+}
+
+/** Teaser lines. Always visible — they are what tells the user there is more. */
+function renderInsightsTeaser(insights) {
+  if (!insights?.teaserLines?.length) return "";
+  return `<div class="insights-teaser">
+    ${insights.teaserLines.map((l) => `<p>${esc(l)}</p>`).join("")}
+  </div>`;
+}
+
+/** The full narrative. Behind the gate, alongside the other deep sections. */
+function renderInsightsReport(insights) {
+  if (!insights?.fullReport) return "";
+  const r = insights.fullReport;
+  const list = (items) =>
+    items?.length ? `<ul>${items.map((s) => `<li>${esc(s)}</li>`).join("")}</ul>` : "";
+
+  return `<section class="insights-report">
+    <h3>What the traditions associate with this shape</h3>
+    <p>${esc(r.summary)}</p>
+    ${list(r.strengths)}
+    ${list(r.tendencies)}
+    <p>${esc(r.tcmNarrative)}</p>
+    ${list(r.reflectionPrompts)}
+  </section>`;
+}
+
+export function renderReading(reading, { insightsCaveatText = "" } = {}) {
   if (!reading) return "";
   // Exactly one disagreement notice starts open — whichever renders first —
   // so the honesty is visible without four identical boxes competing.
   let used = false;
   const openDiffer = () => (used ? false : (used = true));
 
+  const insights = insightsFor(reading, insightsCaveatText);
+
   return `<div class="reading">
     <p class="reading-lead">${esc(READING_LEAD)}</p>
     ${renderQiSe(reading.qiSe, openDiffer)}
     ${renderFiveElements(reading.fiveElements, openDiffer)}
+    ${renderInsightsTeaser(insights)}
     ${renderThreeCourts(reading.threeCourts, openDiffer)}
     ${renderPalaces(reading.twelvePalaces, openDiffer)}
+    ${renderInsightsReport(insights)}
+  </div>`;
+}
+
+/**
+ * Reading with a share-gate overlay on the deeper sections.
+ *
+ * When `locked` is true, Three Courts, Qi Se and Twelve Palaces are wrapped
+ * in a container with a frosted-glass overlay so their presence is visible
+ * but their detail is not readable without unlocking. Five Elements (face
+ * shape) remains fully visible — it is the tradition-attributed anchor that
+ * tells the user they have a reading to unlock.
+ *
+ * When `locked` is false this is identical to `renderReading`.
+ *
+ * @param {object} reading   composeReading() output
+ * @param {object} opts
+ * @param {boolean}  opts.locked      true → show overlay
+ * @param {string}  [opts.overlayHtml]  HTML injected into the overlay panel
+ *        (the share-gate prompt, supplied by ui.js). Only rendered when locked.
+ */
+export function renderReadingGated(
+  reading, { locked = true, overlayHtml = "", insightsCaveatText = "" } = {},
+) {
+  if (!reading) return "";
+
+  let used = false;
+  const openDiffer = () => (used ? false : (used = true));
+
+  const insights = insightsFor(reading, insightsCaveatText);
+
+  // The teaser sits with Five Elements on the free side: both are the
+  // tradition-attributed anchor that tells the user a reading exists. The
+  // full narrative sits with the deep sections, behind the gate.
+  const freeSection = `
+    <p class="reading-lead">${esc(READING_LEAD)}</p>
+    ${renderFiveElements(reading.fiveElements, openDiffer)}
+    ${renderInsightsTeaser(insights)}`;
+
+  const gatedSections = `
+    ${renderQiSe(reading.qiSe, openDiffer)}
+    ${renderThreeCourts(reading.threeCourts, openDiffer)}
+    ${renderPalaces(reading.twelvePalaces, openDiffer)}
+    ${renderInsightsReport(insights)}`;
+
+  if (!locked) {
+    return `<div class="reading">
+      ${freeSection}
+      ${gatedSections}
+    </div>`;
+  }
+
+  return `<div class="reading">
+    ${freeSection}
+    <div class="reading-gate-wrap">
+      <div class="reading-gate-blur" aria-hidden="true">${gatedSections}</div>
+      <div class="reading-gate-overlay">${overlayHtml}</div>
+    </div>
   </div>`;
 }
 
