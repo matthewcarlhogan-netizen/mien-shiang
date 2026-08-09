@@ -15,7 +15,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  headPose, rollFromLandmarks, yawFromLandmarks, pitchFromLandmarks,
+  headPose, rollFromLandmarks, yawFromLandmarks, pitchFromLandmarks, correctRoll,
   ROLL_LANDMARKS, YAW_LANDMARKS, PITCH_LANDMARKS,
 } from "../../src/qise/pose.js";
 import { evaluateGates, POSE_ROLL_MAX, POSE_YAW_MAX, POSE_PITCH_MAX } from "../../src/qise/gates.js";
@@ -94,33 +94,62 @@ test("pitch is recovered from a known rotation", () => {
   }
 });
 
-test("cross-axis error stays inside a measured envelope across the gate's window", () => {
-  // Each axis is exact in isolation; combined, they interfere. What matters is
-  // whether the interference is large enough to change a gate decision, so the
-  // envelope is measured over the whole window rather than asserted at one
-  // convenient point.
+test("roll is recovered EXACTLY, including the yaw-by-pitch cross term", () => {
+  // The projected inter-ocular angle is not the roll. Applying yaw b, pitch a
+  // and roll c puts the projection at c + atan(tan b * sin a) — a bias that
+  // vanishes whenever either yaw or pitch is zero, which is precisely why the
+  // per-axis tests above pass and this one had to be written separately.
   //
-  // Roll is the loose one, and necessarily: it is read from the PROJECTED
-  // inter-ocular axis, and a yawed head foreshortens that projection, so the
-  // in-plane angle genuinely shrinks. That is optics, not arithmetic. The
-  // consequence is bounded and acceptable — a 2.5-degree under-read of roll
-  // only occurs when yaw is simultaneously at its own limit, and the gate has
-  // already failed on yaw by then.
-  let worst = { yaw: 0, pitch: 0, roll: 0 };
-  for (const yaw of [-12, -6, 0, 6, 12]) {
-    for (const pitch of [-12, -6, 0, 6, 12]) {
-      for (const roll of [-8, -4, 0, 4, 8]) {
-        const p = headPose(posed({ yaw, pitch, roll }));
-        worst.yaw = Math.max(worst.yaw, Math.abs(Math.abs(p.yaw) - Math.abs(yaw)));
-        worst.pitch = Math.max(worst.pitch, Math.abs(Math.abs(p.pitch) - Math.abs(pitch)));
-        worst.roll = Math.max(worst.roll, Math.abs(Math.abs(p.roll) - Math.abs(roll)));
+  // Uncorrected the bias reaches 3.45 degrees over this window, and it is not
+  // cosmetic: yaw -12 / pitch -11 / roll -10 projects to -7.68 and clears the
+  // 8-degree roll limit.
+  let worstRaw = 0, worstCorrected = 0;
+  for (let y = -14; y <= 14; y += 2) {
+    for (let p = -14; p <= 14; p += 2) {
+      for (let c = -12; c <= 12; c += 2) {
+        const pts = posed({ yaw: y, pitch: p, roll: c });
+        worstRaw = Math.max(worstRaw, Math.abs(rollFromLandmarks(pts) - c));
+        worstCorrected = Math.max(worstCorrected, Math.abs(headPose(pts).roll - c));
       }
     }
   }
-  // Observed: yaw 0.262, pitch 0.114, roll 2.530 degrees.
-  assert.ok(worst.yaw < 0.5, `yaw error ${worst.yaw.toFixed(3)} deg`);
-  assert.ok(worst.pitch < 0.5, `pitch error ${worst.pitch.toFixed(3)} deg`);
-  assert.ok(worst.roll < 3.0, `roll error ${worst.roll.toFixed(3)} deg`);
+  assert.ok(worstRaw > 2, `the raw projection should be visibly biased; measured ${worstRaw.toFixed(3)}`);
+  assert.ok(worstCorrected < 0.2,
+    `corrected roll error ${worstCorrected.toFixed(4)} deg (raw was ${worstRaw.toFixed(3)})`);
+
+  // Yaw and pitch are unaffected by the correction and stay near-exact.
+  let worstYaw = 0, worstPitch = 0;
+  for (let y = -12; y <= 12; y += 3) {
+    for (let p = -12; p <= 12; p += 3) {
+      const m = headPose(posed({ yaw: y, pitch: p, roll: 5 }));
+      worstYaw = Math.max(worstYaw, Math.abs(m.yaw - y));
+      worstPitch = Math.max(worstPitch, Math.abs(m.pitch - p));
+    }
+  }
+  assert.ok(worstYaw < 0.5, `yaw error ${worstYaw.toFixed(3)}`);
+  assert.ok(worstPitch < 0.5, `pitch error ${worstPitch.toFixed(3)}`);
+});
+
+test("the specific head that used to slip through the roll gate now trips it", () => {
+  // The regression, stated as the case rather than as a bound. Note that the
+  // yaw gate does NOT catch this one: marginBelow(12, 12) is 0, and 0 passes.
+  const pose = headPose(posed({ yaw: -12, pitch: -11, roll: -10 }));
+  assert.ok(Math.abs(pose.yaw) <= POSE_YAW_MAX, "yaw is exactly at its limit, so it passes");
+  assert.ok(Math.abs(pose.roll) > POSE_ROLL_MAX,
+    `roll measured ${pose.roll.toFixed(2)}, which must exceed the ${POSE_ROLL_MAX} limit`);
+  assert.ok(run(pose).failures.some((f) => f.id === "pose"), "the pose gate let a 10-degree roll through");
+});
+
+test("the correction is a no-op when there is nothing to correct", () => {
+  // It must not perturb the common case, and must not fire when an axis it
+  // needs is absent.
+  assert.equal(correctRoll(6, 0, 0), 6);
+  assert.equal(correctRoll(6, null, -10), 6);
+  assert.equal(correctRoll(6, -10, null), 6);
+  assert.equal(correctRoll(null, 1, 2), null);
+  // Yaw alone or pitch alone leaves the projection unbiased.
+  assert.ok(Math.abs(headPose(posed({ yaw: 12, roll: 7 })).roll - 7) < 1e-6);
+  assert.ok(Math.abs(headPose(posed({ pitch: 12, roll: 7 })).roll - 7) < 1e-6);
 });
 
 test("yaw stays exact well past the limit, so a badly turned head is caught", () => {
@@ -137,6 +166,10 @@ test("a degenerate pair is refused rather than reported as zero", () => {
   assert.equal(pitchFromLandmarks(collapsed), null);
   assert.equal(rollFromLandmarks([]), null);
   assert.equal(rollFromLandmarks(null), null);
+  // Coincident eye corners give atan2(0, 0) === 0 — a confident report of
+  // "perfectly level" from a frame that measured nothing.
+  assert.equal(rollFromLandmarks(collapsed), null);
+  assert.deepEqual(headPose(collapsed).axesMeasured, []);
 });
 
 /* ─────────────────────────────────────────────────────────────── headPose ── */
@@ -155,6 +188,15 @@ test("headPose reports which axes it actually measured", () => {
   const nothing = headPose([]);
   assert.deepEqual(nothing.axesMeasured, []);
   assert.equal(nothing.source, "none");
+
+  // `source` is derived from what was measured, not from roll alone. A frame
+  // with depth but no usable eye corners measures two axes, and reporting
+  // "none" beside an axesMeasured of length two is a contradiction.
+  const noEyes = posed({ yaw: 6, pitch: 4 }).map((p, i) =>
+    (i === 33 || i === 263) ? { x: 100, y: 100, z: p.z } : p);
+  const partial = headPose(noEyes);
+  assert.deepEqual(partial.axesMeasured, ["yaw", "pitch"]);
+  assert.notEqual(partial.source, "none");
 });
 
 /* ─────────────────────────────────────────── the gate, on real pose input ── */

@@ -1005,6 +1005,42 @@ Two things learned building the fix, both of which look right and are not:
   returns `null` per axis and carries `axesMeasured`; the gate judges only what
   was measured and records which. Same distinction as `basis` on `glowIndex`
   (item 18) and `zoneNotExtracted` on the safety adapter (item 23).
+- **Per-axis tests pass while a CROSS-TERM hides.** The projected inter-ocular
+  angle is not the roll: under yaw *b* and pitch *a* it reads
+  `c + atan(tan b · sin a)`. That bias is zero whenever either yaw or pitch is
+  zero, so every single-axis test is exact and the error only exists where no
+  test looked. It reaches 3.45 deg over the gate's window — enough that yaw −12
+  / pitch −11 / roll −10 projected to −7.68 and cleared the 8-degree limit.
+  Subtracting the cross term takes the worst error to 0.105 deg.
+
+  The mitigation first written here was that yaw would have failed by then. It
+  would not: `marginBelow(12, 12)` is **0**, and 0 passes. A margin of exactly
+  zero is a PASS at the threshold — worth remembering before leaning on "the
+  other gate catches it" anywhere else.
+
+### 44. A correct flag over an incorrect buffer
+
+`rois.js` takes a required `mirrored` flag precisely so laterality cannot
+invert (item 5). The Qi Se capture loop passed it correctly — and drew the
+measurement canvas with `ctx.scale(-1, 1)` under a comment about "un-mirroring"
+the preview.
+
+The preview's mirroring is a CSS `transform` on the `<video>`. **A CSS
+transform does not touch the pixels `drawImage` and `detectForVideo` see**;
+both already receive the un-mirrored stream. So the flip un-mirrored nothing
+and instead put the pixel buffer in the opposite space from the landmarks:
+every off-midline region sampled its own reflection, and `quan_l`/`quan_r`
+swapped.
+
+**Symptom:** none available to the test suite. `rois.js` was handed a correct
+flag and correct landmarks and did exactly the right thing with them; the lie
+was in the pixels underneath. Every laterality test passes, because they build
+their own image.
+**Cause:** treating a display transform as if it were a pixel transform.
+**Not regression-tested** — it lives in `ui/qise/app.js`, which nothing can
+import. The defence is that the file stays thin enough to read, which is the
+standing reason everything else in that tree is a pure function elsewhere.
+
 
 ### 24. The summary may only repeat what was measured
 

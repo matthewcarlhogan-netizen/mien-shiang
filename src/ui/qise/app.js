@@ -93,20 +93,24 @@ async function runCapture() {
 
   const burst = {};
   let collecting = 0;
-  let lastLandmarks = null, lastSclera = null, lastRois = null;
+  let lastLandmarks = null, lastSclera = null, lastRois = null, lastMargins = null;
 
   const step = async (nowMs) => {
     if (!scratch) return;
     canvas.width = video.videoWidth || 1280;
     canvas.height = video.videoHeight || 960;
 
-    // Un-mirror before landmarking. The preview is mirrored for the user's
-    // benefit; the measurement is not.
-    ctx.save();
-    ctx.translate(canvas.width, 0);
-    ctx.scale(-1, 1);
+    // ── THE CANVAS AND THE LANDMARKS MUST BE IN THE SAME SPACE ─────────────
+    // Drawn WITHOUT a flip, deliberately. The preview is mirrored by a CSS
+    // `transform: scaleX(-1)` on the <video>, and a CSS transform does not
+    // touch the pixels that drawImage and detectForVideo see — both get the
+    // un-mirrored stream. Flipping the canvas here therefore does not
+    // "un-mirror" anything; it puts the pixel buffer into the opposite space
+    // from the landmark coordinates, so every off-midline region samples its
+    // reflection and quan_l/quan_r swap. That is CLAUDE.md item 5's inversion
+    // arriving through the back door, past the `mirrored` flag that exists to
+    // prevent it — the flag was correct and the buffer underneath it was not.
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    ctx.restore();
 
     const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const result = landmarker.detectForVideo(video, nowMs);
@@ -144,7 +148,7 @@ async function runCapture() {
       const held = latch.update(gates.pass, nowMs);
       $("ring-fill").setAttribute("stroke-dashoffset", String(100 - Math.round(held.progress * 100)));
 
-      if (held.ready) collecting = BURST_FRAMES;
+      if (held.ready) { collecting = BURST_FRAMES; lastMargins = gates.margins; }
 
       if (collecting > 0) {
         for (const [name, roi] of Object.entries(lastRois.rois)) {
@@ -153,7 +157,7 @@ async function runCapture() {
         }
         collecting--;
         if (collecting === 0) {
-          await finish(burst, lastRois, lastSclera, opened, history);
+          await finish(burst, lastRois, lastSclera, opened, history, lastMargins);
           return;
         }
       }
@@ -215,7 +219,7 @@ function frameStats(image, rois, frameWidth, drift, pose) {
 
 /* ── finishing a reading ─────────────────────────────────────────────────── */
 
-async function finish(burst, rois, sclera, opened, history) {
+async function finish(burst, rois, sclera, opened, history, gateMargins) {
   const { lab: rawLab, frameJitter } = reduceBurst(burst);
 
   const correctedLab = {};
@@ -250,7 +254,11 @@ async function finish(burst, rois, sclera, opened, history) {
     deviceFingerprintHash: await fingerprintHash(),
     captureMode: opened.captureMode,
     consentVersion: consent.read() && consent.read().version,
-    gateMargins: null,
+    // The margins from the frame that opened the burst. gates.js normalises
+    // them precisely so a capture that scraped through at +0.02 can later be
+    // told apart from one that sailed through, and storing null here would
+    // have made that claim false of every record ever written.
+    gateMargins,
     sclera,
     roiValidity: Object.fromEntries(Object.entries(rois.rois).map(([k, v]) => [k, v.valid])),
     frameJitter: frameJitter.overall,

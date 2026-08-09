@@ -51,15 +51,52 @@ const deg = (rad) => (rad * 180) / Math.PI;
 const has3d = (p) => p && typeof p.z === "number" && Number.isFinite(p.z);
 
 /**
- * Roll, in degrees, from the inter-ocular axis.
+ * The PROJECTED angle of the inter-ocular axis, in degrees.
  *
- * Exact, needs no depth, and available on every frame that has a face in it.
+ * Needs no depth and is available on any frame with a face in it. It is the
+ * true roll only when the head is not simultaneously yawed and pitched — see
+ * `correctRoll` for why, and for the exact correction.
+ *
  * Positive is clockwise in image space.
  */
 export function rollFromLandmarks(landmarks) {
   const [right, left] = ROLL_LANDMARKS.map((i) => landmarks && landmarks[i]);
   if (!right || !left) return null;
-  return deg(Math.atan2(left.y - right.y, left.x - right.x));
+  const dx = left.x - right.x, dy = left.y - right.y;
+  // Coincident corners give atan2(0, 0) === 0, which is a confident report of
+  // "perfectly level" from a frame that measured nothing at all.
+  if (dx === 0 && dy === 0) return null;
+  return deg(Math.atan2(dy, dx));
+}
+
+/**
+ * Recover true roll from the projected angle, given yaw and pitch.
+ *
+ * ── WHY THE PROJECTED ANGLE IS NOT THE ROLL ────────────────────────────────
+ * Take the inter-ocular vector as (d, 0, 0) and apply yaw b, pitch a, roll c.
+ * Its projection onto the image plane comes out as
+ *
+ *   x' = d(cos b cos c − sin b sin a sin c)
+ *   y' = d(cos b sin c + sin b sin a cos c)
+ *
+ * so atan2(y', x') = c + atan(tan b · sin a). The bias vanishes when either
+ * yaw or pitch is zero — which is exactly why per-axis tests pass and the
+ * error only appears when the head is turned in two directions at once.
+ *
+ * Uncorrected it reaches 3.45 degrees over the gate's window, and that is
+ * enough to matter: a head at yaw −12, pitch −11, roll −10 projects to −7.68
+ * and clears the 8-degree roll limit. The mitigation originally recorded here
+ * — "yaw has already failed by then" — was simply wrong, because
+ * `marginBelow(12, 12)` is 0, and 0 passes.
+ *
+ * Correcting it takes the worst error over the same window to 0.105 degrees,
+ * the residue being pitch's own measurement error propagating through.
+ */
+export function correctRoll(projectedRoll, yaw, pitch) {
+  if (projectedRoll === null) return null;
+  if (yaw === null || pitch === null) return projectedRoll;
+  const bias = deg(Math.atan(Math.tan((yaw * Math.PI) / 180) * Math.sin((pitch * Math.PI) / 180)));
+  return projectedRoll - bias;
 }
 
 /**
@@ -106,15 +143,19 @@ export function pitchFromLandmarks(landmarks) {
  * `zoneNotExtracted` carries on the safety adapter (item 23).
  */
 export function headPose(landmarks) {
-  const roll = rollFromLandmarks(landmarks);
   const yaw = yawFromLandmarks(landmarks);
   const pitch = pitchFromLandmarks(landmarks);
+  const roll = correctRoll(rollFromLandmarks(landmarks), yaw, pitch);
 
   const values = { yaw, pitch, roll };
   const axesMeasured = ["yaw", "pitch", "roll"].filter((k) => values[k] !== null);
 
-  return {
-    yaw, pitch, roll, axesMeasured,
-    source: axesMeasured.length === 3 ? "landmarks3d" : (roll === null ? "none" : "landmarks2d"),
-  };
+  // Derived from what was measured, not from roll alone: a frame with depth
+  // but no usable eye corners measures two axes, and reporting "none" beside
+  // an axesMeasured of length two is a contradiction a reader has to resolve.
+  const source = axesMeasured.length === 0
+    ? "none"
+    : (axesMeasured.length === 3 ? "landmarks3d" : "landmarks2d");
+
+  return { yaw, pitch, roll, axesMeasured, source };
 }

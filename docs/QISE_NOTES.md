@@ -193,7 +193,7 @@ triangles, comfortably over the 150 floor after filtering.
 Served locally and driven with Chromium via Playwright:
 
 - `/qise.html` → HTTP 200, `<title>Qi Se tracker</title>`.
-- All 17 modules in the graph → HTTP 200 (16 feature modules plus `src/roi.js`).
+- All 18 modules in the graph → HTTP 200 (17 feature modules plus `src/roi.js`).
 - Negative control: `/definitely-not-here.txt` → **404**, so the server is not
   returning 200 to everything.
 - **No page errors, no failed requests.** This matters specifically: a missing
@@ -301,7 +301,42 @@ Two things fell out of building it that are worth keeping:
   under-read only occurs with yaw simultaneously at its own limit, by which
   point the gate has already failed on yaw.
 
-### 3.6 `treat`, in its ordinary English sense
+### 3.6 Roll is not the projected inter-ocular angle
+
+Found by a review pass after the pose work landed. Apply yaw *b*, pitch *a* and
+roll *c* to the inter-ocular vector and its image-plane projection comes out at
+`c + atan(tan b · sin a)`. The bias vanishes whenever **either** yaw or pitch is
+zero, which is exactly why every per-axis test passed.
+
+It is not cosmetic. Over the gate's window the bias reaches **3.45°**, and a
+head at yaw −12 / pitch −11 / roll −10 projects to **−7.68°** — clearing the 8°
+roll limit. The mitigation originally recorded here, that "yaw has already
+failed by then", was **wrong**: `marginBelow(12, 12)` is 0, and 0 passes.
+
+Corrected by subtracting the cross term, which takes the worst error over the
+same window to **0.105°**. Pinned by `roll is recovered EXACTLY, including the
+yaw-by-pitch cross term` and by a test naming the specific head that used to
+slip through.
+
+### 3.7 The measurement canvas was flipped and the landmarks were not
+
+Also found by review. The capture loop drew the video with `ctx.scale(-1, 1)`
+under a comment claiming to "un-mirror" it — but the preview's mirroring is a
+CSS `transform` on the `<video>`, and a CSS transform does not touch the pixels
+`drawImage` and `detectForVideo` see. Both already get the un-mirrored stream.
+
+So the flip did not un-mirror anything; it put the pixel buffer in the opposite
+space from the landmark coordinates. Every off-midline region sampled its own
+reflection and `quan_l`/`quan_r` swapped — CLAUDE.md item 5's inversion arriving
+underneath the `mirrored` flag that exists to prevent it. The flag was right and
+the buffer beneath it was wrong, which is why no test caught it: `rois.js` was
+handed a correct flag and correct landmarks, and the lie was in the pixels.
+
+Fixed by drawing without the flip. **Not directly regression-tested** — it lives
+in `app.js`, which no test in this repository can reach. That is the standing
+limitation recorded in §4.5.
+
+### 3.8 `treat`, in its ordinary English sense
 
 "the classical texts **treat** that pair as one observation" tripped the Module A
 blocklist, exactly as CLAUDE.md items 19 and 33 warn. Five occurrences across the
@@ -418,11 +453,11 @@ bump.
 ```
 [x] Host OS/shell stated; sandbox-vs-target divergence resolved  (§0 — divergence
       STATED, not resolved: Windows is covered only by CI)
-[x] Test count > 0 and quoted verbatim                            (551 / 551 / 0)
+[x] Test count > 0 and quoted verbatim                            (564 / 564 / 0)
 [x] Positive + negative controls both run, both quoted            (§2)
 [x] Shipped artefact built and linted, both flavours              (§2)
 [x] Every referenced file confirmed present (both directions)     (source-integrity
-      + the 17-module browser load in §2)
+      + the 18-module browser load in §2)
 [x] No new swallowed errors                                       (every catch logs)
 [ ] Gate 4 — real Android device                                  (§4.1)
 [ ] Gate 5b — bake-off on real data, and the pipeline decision    (§4.2)
