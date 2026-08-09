@@ -77,5 +77,5 @@ jobs:
           done
           [ "$ok" = "1" ] || { echo "::error::live Qi Se page did not become ready"; exit 1; }
           curl -fsS "${PAGE_URL}manifest.webmanifest" -o /tmp/manifest.webmanifest
-          node -e "const m=require('/tmp/manifest.webmanifest');if(m.start_url!=='./qise.html')process.exit(1)"
+          node -e "const fs=require('node:fs');const m=JSON.parse(fs.readFileSync('/tmp/manifest.webmanifest','utf8'));if(m.start_url!=='./qise.html')process.exit(1)"
           echo "Live scanner: ${PAGE_URL}qise.html"
