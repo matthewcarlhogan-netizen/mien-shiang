@@ -174,20 +174,59 @@ function guardCopyBlocklist(file, text, flavour) {
   }
 }
 
+/**
+ * Split an identifier into its segments: camelCase, snake_case, SCREAMING_CASE.
+ *
+ * ── WHY SUBSTRING MATCHING IS NOT GOOD ENOUGH HERE ─────────────────────────
+ * The original patterns matched `\w*rating\w*`, which is a substring test, and
+ * a substring test on English inside identifiers finds things that are not
+ * there. `CALIBRATING_READINGS` contains "RATING" and was reported as a
+ * rating-like scalar; so would `operatingMode`, `generatingFn` and
+ * `decoratingStyle`. This is the same class of defect as CLAUDE.md item 22,
+ * where a scanner produced confident findings about code it had misparsed —
+ * and the same wrong fix is available, which is renaming working code to
+ * satisfy a lint about English.
+ *
+ * A term now has to START A SEGMENT. `beautyScore` and `userRating` still
+ * match; `rankings` still matches, because the check is a prefix rather than
+ * equality; `CALIBRATING_READINGS` does not.
+ */
+export function identifierSegments(name) {
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .split(/[_$\s]+/)
+    .filter(Boolean)
+    .map((s) => s.toLowerCase());
+}
+
+export const identifierCarriesTerm = (name, term) =>
+  identifierSegments(name).some((seg) => seg.startsWith(term));
+
+/** Positions where a rating-like NAME would be defined or handed back. */
+const NAMED_POSITIONS = [
+  /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=/g,
+  /\b([A-Za-z_$][\w$]*)\s*:\s*(?:[\d.]|\w+\s*[*/+-])/g,
+  /\breturn\s+([A-Za-z_$][\w$]*)\b/g,
+  /\bfunction\s+([A-Za-z_$][\w$]*)\s*\(/g,
+];
+
 function guardAttractiveness(file, text) {
   const code = stripComments(text);
-  for (const term of SCORE_TERMS) {
-    // Assignment, property definition, or return of a rating-like name.
-    const patterns = [
-      new RegExp(String.raw`\b(?:const|let|var)\s+\w*${term}\w*\s*=`, "i"),
-      new RegExp(String.raw`\b\w*${term}\w*\s*:\s*(?:[\d.]|\w+\s*[*/+-])`, "i"),
-      new RegExp(String.raw`\breturn\s+\w*${term}\w*\b`, "i"),
-      new RegExp(String.raw`\bfunction\s+\w*${term}\w*\s*\(`, "i"),
-    ];
-    for (const p of patterns) {
-      if (p.test(code)) record("attractiveness", file, `rating-like scalar: "${term}"`);
+  const seen = new Set();
+
+  for (const pattern of NAMED_POSITIONS) {
+    for (const m of code.matchAll(pattern)) {
+      const name = m[1];
+      for (const term of SCORE_TERMS) {
+        if (!identifierCarriesTerm(name, term)) continue;
+        const key = `${term}:${name}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        record("attractiveness", file, `rating-like scalar: "${name}" (matches "${term}")`);
+      }
     }
   }
+
   for (const p of SCORE_COMPOUNDS) {
     const m = code.match(p);
     if (m) record("attractiveness", file, `person-scoped score: "${m[0]}"`);

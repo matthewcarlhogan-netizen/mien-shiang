@@ -18,9 +18,10 @@ change the product's regulatory status, not just its tone.
 
 ```bash
 npm start        # dev server on http://localhost:5173 (honours PORT)
-npm test         # 312 tests, node:test, no dependencies
+npm test         # 564 tests, node:test, no dependencies
 npm run build    # dist/ — copy of src/, Module B stubbed in the entertainment flavour
 npm run lint:bundle   # compliance guards, run against dist/ not src/
+node scripts/qise-bakeoff.mjs --self-test   # Phase 5b decision table
 ```
 
 There is a build step now, and still no npm dependencies. It was added in
@@ -33,12 +34,18 @@ stubs when the flag is off.
 
 `package-lock.json` exists only so `npm ci` works in CI; it locks nothing.
 
-312 across twenty-two files. If you see 44, the traversal suite is not being
-discovered.
+564 across twenty-nine files. If you see 44, the traversal suite is not being
+discovered; if you see 312, the `tests/qise/` tree is not.
 
-**All 312 pass.** The long-standing `copy-guard` failure on
+**All 564 pass.** The long-standing `copy-guard` failure on
 `TCM-202-DAMP-HEAT.recommend[1]` is resolved — that line moved to Module B in
 the Phase 2 split (see item 19). If a test fails, it is a real defect.
+
+The Qi Se longitudinal tracker (`src/qise/`, `src/ui/qise/`, `src/qise.html`) is
+a second feature with its own entry point, its own module tree and its own six
+compliance gates. Its working notes, its disagreements with the brief that
+specified it, and — importantly — the list of things that could NOT be verified
+without a phone live in `docs/QISE_NOTES.md`. Read that before touching it.
 
 ## Architecture
 
@@ -81,9 +88,30 @@ src/
   icon-192.png           install icon (purpose: any)
   icon-512.png           install icon (purpose: any)
   icon-512-maskable.png  install icon (purpose: maskable) — placeholder art
+  qise.html     Qi Se tracker entry point; consent gate copy lives here, marked
+                as a disclaimer (one wording, two consumers — see item 24)
+  qise/         THE QI SE LONGITUDINAL TRACKER — all pure, all DOM-free
+    consent.js    unbundled opt-in; withdraw() REQUIRES an eraser (item 37)
+    color.js      sRGB->Lab, ITA, dE76, dE2000, sCWeight, von Kries
+    rois.js       eight regions; `mirrored` is required, never defaulted
+    sclera.js     four-filter illuminant estimate + personal drift baseline
+    gates.js      ten capture gates, each with a normalised margin
+    camera.js     burst capture; every browser object INJECTED (item 14)
+    pose.js       head pose from landmarks; an unmeasured axis is null (item 43)
+    metrics.js    hueVector/ming/run/han/xue, computed twice (raw + corrected)
+    baseline.js   median/MAD baseline, five-colour compass, `ping` default
+    store.js      IndexedDB; toRecord() is a pure allow-list (item 39)
+    passages.js   attributed passage corpus, composed from three keyed parts
+    patterns.js   frequency-only statements, n >= 5, n always shown
+  ui/qise/      the tracker's view layer — pure models, string renderers
+    palette.js    five colours + Su Wen similes; emits the CSS custom properties
+    seal.js       the compass as a carved seal, seeded from the timestamp
+    screens.js    reading-screen order, gauges, courts strip, sparkline
+    app.js        DOM wiring ONLY; MediaPipe is a dynamic import (item 41)
 scripts/
   serve.js      local dev server ONLY — never deployed
   run-tests.js  test discovery; exits 1 on zero files found
+  qise-bakeoff.mjs  Phase 5b: decides raw vs sclera-corrected by measurement
 tests/
   engine.test.js          colorimetry, detectors, self-reference
   calibration.test.js     adaptive scale, per-zone scales, blur, crosstalk, gating
@@ -96,6 +124,16 @@ tests/
   serve.traversal.test.js raw-socket path traversal + positive control
   fixtures/
     canonical-face.js     MediaPipe's reference mesh — never a real subject
+  qise/                   the tracker's suite, including its six compliance gates
+    no-network.test.js            no fetch/XHR/WebSocket/sendBeacon/EventSource
+    no-medical-language.test.js   the vocabulary that keeps TGA item 14B available
+    no-absolutes.test.js          no ITA, no MI proxy, no cross-user comparison
+    persistence-shape.test.js     no image/pixel/landmark/embedding may be stored
+    consent-precedes-inference.test.js  behavioural AND static: every door gated
+    discovery-guard.test.js       the runner fails on zero discovered files
+    fixtures/
+      ciede2000-sharma.js   the 34 published CIEDE2000 pairs, committed verbatim
+      synthetic.js          synthetic frames built from the canonical mesh
 ```
 
 The icons are valid and correctly sized but are **placeholder art**, not
@@ -805,6 +843,204 @@ shipping unnoticed.
 one` and `dev: the three grants are mutually exclusive, last one wins` — the
 second guards a stale expiry following the state that replaced it, which would
 give a lifetime unlock someone else's deadline.
+
+### 37. A rank test is degenerate on a flat region
+
+The sclera's specular filter was "top 5% luminance AND bottom 20% chroma AND
+near a local maximum" — three rank tests. Where every pixel has the same L*,
+every pixel is simultaneously in the top 5% and a local maximum, so the filter
+**deleted all 524 pixels of an evenly lit synthetic sclera**. Evenly lit is the
+BEST case for this measurement, not the worst.
+
+A catchlight is defined by contrast, not by rank. The bright cut is now
+`max(p95, median + SPECULAR_MIN_CONTRAST_L)`, which also fixes the opposite
+failure the pure rank had: a catchlight covering less than 5% of the region sits
+ABOVE the 95th percentile, so the rank cut lands on ordinary sclera and misses
+the glint entirely. A peak must additionally be strictly brighter than at least
+one sampled neighbour, or a flat patch is one continuous plateau of "maxima".
+
+**Symptom:** a sclera estimate that refuses on good photographs and works on bad
+ones, or a correction that silently includes the catchlight.
+**Pinned by:** `a neutral sclera yields near-unity gains and enough surviving
+pixels` and `the corneal catchlight is dropped, and the filter reports having
+done it`.
+
+Percentiles are taken on the GEOMETRIC set, before the luminance trim. After the
+trim the catchlight's core is already gone and only its penumbra remains — which
+is dimmer than the pixels the trim kept and so can never be in anybody's top 5%.
+The penumbra is exactly what a trim cannot catch and exactly what this filter is
+for.
+
+### 38. A pixel count is not a darkness check
+
+A closed eye, a deep lid shadow or a mis-placed triangle yields ~500 pixels, all
+near black. Near black the three channels are equal because 8-bit quantisation
+flattened them, **not** because the light is neutral — so `sampleSclera` returned
+a confident 1.00/1.00/1.00 and every downstream correction became a no-op
+justified by nothing.
+
+**Symptom:** an illuminant correction that does nothing, on exactly the captures
+where it was most needed, while reporting full confidence.
+**Cause:** guarding on sample SIZE when the hazard is sample CONTENT.
+**Pinned by:** `the refusal distinguishes 'too dark' from 'too few pixels'`,
+which asserts the pixel count is HEALTHY in the dark case.
+
+Keep the two refusal reasons apart. They point at different bugs: too dark is a
+capture problem, too few pixels is a landmark problem. This is the same argument
+as `zoneNotExtracted` vs `colourNotMeasurable` in item 23.
+
+### 39. A spread is not an allow-list
+
+`store.js` builds its record field by field precisely so nothing unexpected is
+persisted — and then wrote `components: { ...r.compass.components }`. That is a
+copy of a map of five numbers right up until something hangs a debug payload off
+it, at which point the spread carries landmark data straight through the
+allow-list the rest of the function exists to be.
+
+**Symptom:** none. The record looks correct, the guard reads as thorough, and
+the data this product promises never to hold is on the disk.
+**Cause:** an explicit allow-list at the top level with a spread one level down.
+**Pinned by:** `a nested payload welded onto a sub-object does not survive the
+write`, and by `findForbiddenKeys` walking to arbitrary depth.
+
+Every map persisted from that file passes through `scalarMap`, which keeps
+numbers, booleans, strings and null and drops objects and arrays. A nested
+structure inside one of those maps is not data the record may hold.
+
+Related, and the reason the guard is worth having twice: `sclera.pixelCount`
+matches `/pixel/i`. It is a scalar integer, it is harmless, and it is not on the
+brief's persist list — so the FIELD was dropped, not the pattern loosened.
+Loosening it is how the next thing called `...Pixels` gets through.
+
+### 40. The rating lint matches identifier SEGMENTS, not substrings
+
+`scripts/lint-bundle.js` matched `\w*rating\w*` and reported
+`CALIBRATING_READINGS` as a rating-like scalar. So would `operatingMode`,
+`generatingFn` and `decoratingStyle`. This is item 22's class of defect — a
+scanner confidently wrong about code it misread — and it offers the same wrong
+fix, which is renaming working code to satisfy a lint about English.
+
+A term must now START a segment, where segments are split on camelCase,
+underscores and `$`. Prefix rather than equality, so `rankings` still matches
+`rank` and `attractivenessIndex` still matches `attractiveness`.
+
+**Symptom:** a lint finding on an identifier that has nothing to do with rating
+people, and a maintainer who renames a good name to make CI green.
+**Pinned by:** `the bundle lint matches rating terms at SEGMENT boundaries, not
+as substrings`, which names the four false positives explicitly and re-asserts
+seven true positives.
+
+### 41. Two doors into biometric processing, and both are gated
+
+Consent guards the camera AND the mesh. Guarding only `getUserMedia` leaves the
+landmarker reachable from a still image nobody thought about — and generating a
+478-point facial mesh IS the collection, whatever the pixels came from.
+
+The assertion THROWS rather than returning false: a boolean can be ignored by a
+caller who forgot to check it.
+
+**Symptom:** a consent gate that is genuinely enforced on the path somebody
+wrote a test for, and absent on the one added afterwards.
+**Pinned by:** `consent-precedes-inference.test.js`, which is behavioural AND
+static. The behavioural half drives the real modules; the static half walks
+every file in both trees, fails any that touches `getUserMedia`,
+`FaceLandmarker`, `createFromOptions` or `detectForVideo` without an assertion,
+and pins the list of touching files to exactly two — so the list growing is a
+deliberate review rather than a silent one.
+
+`ui/qise/app.js` reaches MediaPipe through a **dynamic** `import()` inside a
+function, never at module scope. Item 18a is the reason: a module-scope CDN
+import is why `analysis.js` cannot be loaded under `node --test` and how it
+shipped a hard syntax error behind 155 green tests. It also means the CDN is not
+touched until after consent exists, which is the behaviour the gate is for.
+
+### 42. The motion gate is 6px because 2px is below human physiology
+
+Breathing moves the head, and so does ballistocardiographic motion — the cranial
+displacement driven by blood ejection from the aortic arch, which is involuntary
+and continuous. Sub-2px stillness is not achievable handheld by anyone, so a 2px
+gate is not a strict gate, it is a gate nobody passes.
+
+**Symptom:** a capture flow that never fires, reported as "the app doesn't work".
+**Cause:** picking a threshold from what a tripod can do.
+**Pinned by:** `gate: motion — 6px, because 2px is below the floor human
+physiology allows`, which also asserts that a 3px drift — ordinary stillness —
+is accepted.
+
+Stability is bought by burst capture instead: fifteen frames and a median across
+them, which averages out exactly the motion this gate would otherwise forbid.
+
+Related, same file, same class: the `distance` gate is measured on the OUTER
+canthi. On the canonical mesh at nominal framing the outer span is ~35% of frame
+width and the inner span ~15%, so reading a 22% threshold against the inner
+canthi rejects every correctly framed capture — and presents as a user who can
+never get close enough.
+
+### 43. A gate fed a literal is a gate that can never fire
+
+`src/qise/gates.js` shipped correct, with ten gates and paired controls for
+each — and the capture loop passed it `pose: { yaw: 0, pitch: 0, roll: 0 }`. So
+the pose gate reported itself passing on every frame and contributed a constant
+to the ring. Correct, tested, dead: item 23's shape exactly.
+
+**Symptom:** none from the inside. The tests pass because the gate is right;
+the app "works" because nothing ever fails; the only tell is a margin that
+never moves.
+**Cause:** a placeholder at the call site, in a file no test can reach.
+**Pinned by:** `tests/qise/pose.test.js` → `a real posed mesh drives the gate
+end to end`, which rotates a synthetic mesh by known angles and requires the
+gate to trip.
+
+Two things learned building the fix, both of which look right and are not:
+
+- **Orthonormality cannot disambiguate a matrix layout.** Reading a rotation
+  matrix row-major when it is column-major yields its TRANSPOSE, and the
+  transpose of an orthonormal matrix is orthonormal — so "keep whichever
+  reading is orthonormal" passes for both and silently returns the first. That
+  guard was written here and only a compose-then-recover test caught it. There
+  is also no canonical decomposition to recover: twelve Tait-Bryan orderings
+  exist and disagree by tens of degrees on a turned head.
+- **An unmeasured axis is not a zero.** `Math.abs(null)` is 0, so feeding an
+  unmeasured axis into the gate reports it as perfectly straight. `headPose()`
+  returns `null` per axis and carries `axesMeasured`; the gate judges only what
+  was measured and records which. Same distinction as `basis` on `glowIndex`
+  (item 18) and `zoneNotExtracted` on the safety adapter (item 23).
+- **Per-axis tests pass while a CROSS-TERM hides.** The projected inter-ocular
+  angle is not the roll: under yaw *b* and pitch *a* it reads
+  `c + atan(tan b · sin a)`. That bias is zero whenever either yaw or pitch is
+  zero, so every single-axis test is exact and the error only exists where no
+  test looked. It reaches 3.45 deg over the gate's window — enough that yaw −12
+  / pitch −11 / roll −10 projected to −7.68 and cleared the 8-degree limit.
+  Subtracting the cross term takes the worst error to 0.105 deg.
+
+  The mitigation first written here was that yaw would have failed by then. It
+  would not: `marginBelow(12, 12)` is **0**, and 0 passes. A margin of exactly
+  zero is a PASS at the threshold — worth remembering before leaning on "the
+  other gate catches it" anywhere else.
+
+### 44. A correct flag over an incorrect buffer
+
+`rois.js` takes a required `mirrored` flag precisely so laterality cannot
+invert (item 5). The Qi Se capture loop passed it correctly — and drew the
+measurement canvas with `ctx.scale(-1, 1)` under a comment about "un-mirroring"
+the preview.
+
+The preview's mirroring is a CSS `transform` on the `<video>`. **A CSS
+transform does not touch the pixels `drawImage` and `detectForVideo` see**;
+both already receive the un-mirrored stream. So the flip un-mirrored nothing
+and instead put the pixel buffer in the opposite space from the landmarks:
+every off-midline region sampled its own reflection, and `quan_l`/`quan_r`
+swapped.
+
+**Symptom:** none available to the test suite. `rois.js` was handed a correct
+flag and correct landmarks and did exactly the right thing with them; the lie
+was in the pixels underneath. Every laterality test passes, because they build
+their own image.
+**Cause:** treating a display transform as if it were a pixel transform.
+**Not regression-tested** — it lives in `ui/qise/app.js`, which nothing can
+import. The defence is that the file stays thin enough to read, which is the
+standing reason everything else in that tree is a pure function elsewhere.
+
 
 ### 24. The summary may only repeat what was measured
 
