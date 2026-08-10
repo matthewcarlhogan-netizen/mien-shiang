@@ -78,6 +78,26 @@ button:disabled{opacity:.35}
 .empty{border:1px dashed var(--rule);aspect-ratio:3/4;display:grid;place-content:center;
   text-align:center;padding:1.5rem;color:var(--ink-60);gap:.5rem;border-radius:4px}
 
+/* ── Three-step rail ──────────────────────────────────────────────────────
+   Photo → Read → Result. Meaning survives without colour: the current step
+   carries aria-current and a filled numeral, not only a cinnabar rule. */
+.steps{display:flex;list-style:none;margin:.9rem 0 .85rem;padding:0;gap:.4rem;
+  font-family:var(--mono);font-size:.66rem;letter-spacing:.06em;text-transform:uppercase}
+.step{flex:1 1 0;display:flex;align-items:center;gap:.4rem;color:var(--ink-30);
+  border-top:2px solid var(--rule);padding-top:.45rem}
+.step-n{display:grid;place-content:center;width:1.15rem;height:1.15rem;flex:none;
+  border:1px solid currentColor;border-radius:50%;font-size:.62rem;line-height:1}
+.step.is-current{color:var(--cinnabar);border-top-color:var(--cinnabar)}
+.step.is-current .step-n{background:var(--cinnabar);border-color:var(--cinnabar);color:#fff}
+.step.is-done{color:var(--jade);border-top-color:var(--jade)}
+
+.shot-hint{margin:.7rem 0 0;font-size:.82rem;color:var(--ink-60)}
+/* The un-mirror control is load-bearing (laterality) but it is not a choice a
+   user can reason about unaided, so the reason sits next to it rather than in
+   the parenthetical it used to be compressed into. */
+.toggle-why{margin:.35rem 0 0;font-size:.76rem;color:var(--ink-30);max-width:60ch}
+.err button{margin-top:.75rem;width:auto}
+
 /* ── Type scale ───────────────────────────────────────────────────────────
    Four steps, used consistently: section label (mono eyebrow), result value
    (h3), body, caveat. Body copy is capped at ~66ch because the dense
@@ -370,18 +390,39 @@ footer a{color:var(--ink-60)}
 <main>
   <div class="plate">
     <p class="eyebrow">Plate 01 — zone extraction</p>
+
+    <!-- Where the user is, in three steps. The flow was previously unsignposted:
+         after choosing a photo nothing said another tap was required, and the
+         results rendered below the fold so the app looked inert. `ui.js` moves
+         `is-current` and sets `aria-current`; nothing here is decorative. -->
+    <ol class="steps" id="steps">
+      <li class="step is-current" aria-current="step"><span class="step-n">1</span>Photo</li>
+      <li class="step"><span class="step-n">2</span>Read</li>
+      <li class="step"><span class="step-n">3</span>Result</li>
+    </ol>
+
     <div id="plate"><div class="empty">
       <p class="eyebrow">Awaiting exposure</p>
-      <p style="margin:0">Front-facing photo, even indirect light, no glasses.</p>
     </div></div>
 
+    <!-- Framing guidance lives OUTSIDE the empty state on purpose. It used to
+         sit inside it, so it vanished the moment a photo was chosen — which is
+         precisely when the user can still act on it and retake. -->
+    <p class="shot-hint">Front-facing photo, even indirect light, no glasses.</p>
+
     <input id="file" type="file" accept="image/*" capture="user" hidden />
+    <!-- `go` is FIRST in source order even though it starts hidden. Once a photo
+         exists it becomes the primary action, and a primary action rendered
+         underneath the secondary one reads as the lesser of the two. -->
+    <button id="go" hidden>Read this photo</button>
     <button id="pick">Take or choose a photo</button>
-    <button id="go" class="ghost" hidden>Read this photo</button>
     <label class="toggle">
       <input type="checkbox" id="mirror" checked />
-      <span>Selfie camera (un-mirror before analysing)</span>
+      <span>Taken with the front (selfie) camera</span>
     </label>
+    <p class="toggle-why">Front cameras flip the preview left to right. This puts
+      it back the right way round before measuring, so the left and right sides
+      of the face are not swapped.</p>
   </div>
 
   <div id="out"></div>

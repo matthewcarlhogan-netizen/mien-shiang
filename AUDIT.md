@@ -276,10 +276,11 @@ needs a tighter pattern than `\byou (are|have)\b`.
   discovery line, pins `PORT`, and includes a positive control on the smoke
   test — but "CI green" is currently unverifiable, and would fail today anyway
   on the copy-guard test.
-- `mien-shiang-deploy.zip` (98 KB) is a build artifact committed to the repo.
-  Contents verified: 10 flat entries (the contents of `src/`, no directory
-  prefix) — correct for Netlify Drop, but it is a second copy of the app that
-  can drift from `src/` silently. It is not covered by `.gitignore`.
+- ~~`mien-shiang-deploy.zip` (98 KB) is a build artifact committed to the repo.~~
+  **Resolved.** Contents were verified at the time: 10 flat entries (the
+  contents of `src/`, no directory prefix) — correct for Netlify Drop, but a
+  second copy of the app that can drift from `src/` silently. Removed from the
+  tree; `*.zip` is now in `.gitignore`.
 - Third-party origins referenced from `src/`: `cdn.jsdelivr.net` (MediaPipe),
   `storage.googleapis.com` (model), `fonts.googleapis.com` (Google Fonts
   `@import` in `index.html`). `fonts.gstatic.com` also appears at runtime —
