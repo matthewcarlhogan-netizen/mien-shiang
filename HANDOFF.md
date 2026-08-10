@@ -211,8 +211,11 @@ No About screen yet, so the flavour is not surfaced to the user.
 - `sw.js` caches every same-origin GET, including query-string variants, with
   no size bound. Harmless today (nothing appends query strings) but it means
   the cache can grow without limit if cache-busting is ever introduced.
-- `mien-shiang-deploy.zip` is still a committed build artifact and still not in
-  `.gitignore`. Deleting it is the user's call.
+- ~~`mien-shiang-deploy.zip` is still a committed build artifact and still not in
+  `.gitignore`.~~ **Resolved.** Removed from the tree, and `*.zip` added to
+  `.gitignore` so the next one cannot be committed by accident. `dist/` is
+  produced by `scripts/build.js`; an archive of it is an artefact, not a source,
+  and a second copy of the app in the repo can drift from `src/` silently.
 
 ---
 

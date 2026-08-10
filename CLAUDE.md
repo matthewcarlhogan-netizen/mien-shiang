@@ -18,7 +18,7 @@ change the product's regulatory status, not just its tone.
 
 ```bash
 npm start        # dev server on http://localhost:5173 (honours PORT)
-npm test         # 564 tests, node:test, no dependencies
+npm test         # 571 tests, node:test, no dependencies
 npm run build    # dist/ — copy of src/, Module B stubbed in the entertainment flavour
 npm run lint:bundle   # compliance guards, run against dist/ not src/
 node scripts/qise-bakeoff.mjs --self-test   # Phase 5b decision table
@@ -34,10 +34,15 @@ stubs when the flag is off.
 
 `package-lock.json` exists only so `npm ci` works in CI; it locks nothing.
 
-564 across twenty-nine files. If you see 44, the traversal suite is not being
-discovered; if you see 312, the `tests/qise/` tree is not.
+571 across forty-three files — 317 in `tests/`, 254 in `tests/qise/`. Those two
+subtotals are the useful sentinels: if you see 317 the tracker's tree is not
+being discovered, and if you see 254 the top-level suite is not. Both are
+measurable directly (`node --test tests/*.test.js`, `node --test
+tests/qise/*.test.js`), so a drifted figure here is checkable rather than
+folklore — the previous version of this line quoted counts from three phases
+back and had stopped meaning anything.
 
-**All 564 pass.** The long-standing `copy-guard` failure on
+**All 571 pass.** The long-standing `copy-guard` failure on
 `TCM-202-DAMP-HEAT.recommend[1]` is resolved — that line moved to Module B in
 the Phase 2 split (see item 19). If a test fails, it is a real defect.
 
@@ -121,6 +126,7 @@ tests/
   rules.test.js           gate precedence, chaining, pixels-to-referral
   roi-extraction.test.js  every ROI encloses area; the malar gate is reachable
   insights-view.test.js   teaser renders free, full report renders gated
+  capture-flow.test.js    the flow affordances ui.js cannot be tested through
   serve.traversal.test.js raw-socket path traversal + positive control
   fixtures/
     canonical-face.js     MediaPipe's reference mesh — never a real subject
@@ -1041,6 +1047,58 @@ their own image.
 import. The defence is that the file stays thin enough to read, which is the
 standing reason everything else in that tree is a pure function elsewhere.
 
+### 45. The capture flow's affordances are markup, because behaviour is untestable
+
+`ui.js` imports `analysis.js`, which imports MediaPipe from a CDN at module
+scope, so nothing about the flow can be driven under `node --test` (item 18a).
+The flow therefore degrades the way item 43 describes: silently, with every
+test still green, because the page renders and the buttons still work.
+
+Four properties are pinned from `index.html` instead, by
+`tests/capture-flow.test.js`:
+
+- **`#go` precedes `#pick` in source order, and ships without `ghost`.** Once a
+  photo exists, "Read this photo" is the primary action and the picker is
+  demoted. Both facts are needed: `ghost` in the markup makes the promotion a
+  no-op, and the wrong source order renders the promoted primary *underneath*
+  the demoted secondary — where the only button that still looks primary is the
+  one offering to discard the photo just chosen.
+- **The step rail has three steps, exactly one starts current, and the current
+  one carries `aria-current`.** Colour alone is not a state; the rail tints
+  cinnabar, which is nothing to a screen reader.
+- **Framing guidance lives OUTSIDE `.empty`.** It used to live inside, and
+  `ui.js` replaces that node with the chosen image — so the advice was
+  destroyed at exactly the moment the user could still act on it and retake.
+- **The un-mirror toggle stays `checked`.** Item 5 is the whole reason: front
+  cameras mirror the preview, so defaulting this off swaps the subject's left
+  and right cheeks — Lung read as Liver — on the capture path most people use.
+
+**Symptom:** a flow that works and feels broken. The tap that does the work
+renders its result below the fold, so the app appears not to respond to it.
+**Cause:** treating capture chrome as decoration. It is the only part of this
+product most users will ever consciously operate.
+
+Related, same file, not pinned by anything: `render()` scrolls only on the
+analyse path. It is also called to redraw after an unlock and from the dev
+panel, and yanking the viewport on a redraw the user did not ask for is its own
+defect.
+
+### 46. A label restored from a snapshot goes stale
+
+The share-gate button captured `const original = shareBtn.textContent` at click
+time and restored it 3.5 seconds later. On a share that counted but did not
+unlock, the handler correctly relabelled the button to the new remaining count
+— and the restore then overwrote that with the pre-click label.
+
+**Symptom:** the button reads "Share with 2 friends" beside a progress line
+reading "1 of 2 shared". Both are drawn by the same handler, in the same
+function, 3.5 seconds apart.
+**Cause:** a snapshot captured before an operation whose entire purpose is to
+change the thing snapshotted.
+**The fix:** `settledLabel()` recomputes from `getShareCount()`. A derived
+label cannot go stale; a captured one always can.
+**Not regression-tested** — same reason as item 45, and the same defence: the
+handler stays short enough to read.
 
 ### 24. The summary may only repeat what was measured
 

@@ -49,6 +49,53 @@ dlg.addEventListener("cancel", (e) => e.preventDefault());
 
 // -------------------------------------------------------------------- pick --
 
+/**
+ * Move the three-step rail. Photo (1) → Read (2) → Result (3).
+ *
+ * The flow was previously unsignposted, and the two failures compounded: after
+ * choosing a photo nothing indicated that a second tap was needed, and the
+ * results rendered below the fold, so the app appeared not to respond to the
+ * tap that did the work. The rail says where the user is; scrollToOutput()
+ * below is the other half.
+ */
+function setStep(n) {
+  const items = document.querySelectorAll("#steps .step");
+  items.forEach((li, i) => {
+    const idx = i + 1;
+    li.classList.toggle("is-current", idx === n);
+    li.classList.toggle("is-done", idx < n);
+    if (idx === n) li.setAttribute("aria-current", "step");
+    else li.removeAttribute("aria-current");
+  });
+}
+
+/**
+ * Promote "Read this photo" to the primary action and demote the picker.
+ *
+ * Reducing the number of AMBIGUOUS decisions matters more than reducing the
+ * number of taps: with both buttons live, the one still styled as primary was
+ * the one that discards the photo just chosen.
+ */
+function armReadAction() {
+  const go = $("go"), pick = $("pick");
+  go.hidden = false;
+  go.classList.remove("ghost");
+  pick.classList.add("ghost");
+  pick.textContent = "Choose a different photo";
+}
+
+/* Respected rather than assumed: the same sweep animation is already disabled
+ * under this query, so an abrupt jump is the consistent behaviour here. */
+const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+
+/** Bring the output region to the top of the viewport. */
+function scrollToOutput() {
+  $("out")?.scrollIntoView({
+    behavior: reducedMotion?.matches ? "auto" : "smooth",
+    block: "start",
+  });
+}
+
 $("pick").addEventListener("click", () => $("file").click());
 
 $("file").addEventListener("change", (e) => {
@@ -62,7 +109,8 @@ $("file").addEventListener("change", (e) => {
 
   $("plate").innerHTML =
     `<div class="frame"><img id="shot" src="${objectUrl}" alt="" /></div>`;
-  $("go").hidden = false;
+  armReadAction();
+  setStep(2);
   $("out").innerHTML = "";
 });
 
@@ -75,18 +123,42 @@ $("go").addEventListener("click", async () => {
   const say = (m) => { $("out").innerHTML = `<p class="mono">${m}</p><div class="scan"></div>`; };
 
   try {
+    // The status line and the scan bar render into #out, which sits below the
+    // plate and so below the fold on a phone. Scrolling once at the start puts
+    // progress on screen, and render() then lands the receipt in the same place.
+    scrollToOutput();
     const r = await runAnalysis(file, $("mirror").checked, say);
-    render(r);
+    render(r, { scroll: true });
   } catch (err) {
-    $("out").innerHTML = `<div class="err"><p style="margin:0">${err.message}</p></div>`;
+    showError(err);
   } finally {
     go.disabled = false;
   }
 });
 
+/**
+ * A failed reading must not be a dead end. The picker is the way out of every
+ * error this path can produce — no face found, unreadable file, model fetch
+ * failed — so it is offered here rather than left to be found back up the page.
+ *
+ * The message is written with textContent, not interpolated: it is the one
+ * string on this path that originates outside this module.
+ */
+function showError(err) {
+  $("out").innerHTML = `
+    <div class="err">
+      <p style="margin:0" id="err-msg"></p>
+      <button id="err-retry" class="ghost" type="button">Try another photo</button>
+    </div>`;
+  $("err-msg").textContent = err.message;
+  $("err-retry").addEventListener("click", () => $("file").click());
+  setStep(2);
+  scrollToOutput();
+}
+
 // ------------------------------------------------------------------ render --
 
-function render(r) {
+function render(r, { scroll = false } = {}) {
   lastResult = r;
   const { canvas, regions, result, baseline, notMeasured } = r;
 
@@ -169,6 +241,12 @@ function render(r) {
   wireReportControl();
   wireShare(r);
   wireShareGate(r);
+  setStep(3);
+
+  // Only the analyse path scrolls. render() is also called to redraw after an
+  // unlock and from the dev panel, and yanking the viewport on a redraw the
+  // user did not ask for is its own defect.
+  if (scroll) scrollToOutput();
 }
 
 /**
@@ -304,9 +382,25 @@ function wireShareGate(r) {
   const shareBtn = $("gate-share");
   if (!shareBtn) return; // not rendered (user is already unlocked)
 
+  /**
+   * The label the button should settle on, derived from the CURRENT count
+   * rather than captured before the click.
+   *
+   * It used to restore a `const original` snapshot taken at click time. On a
+   * share that counted but did not unlock, the handler correctly relabelled the
+   * button to the new remaining count — and 3.5s later the restore overwrote it
+   * with the stale pre-click label, leaving the button reading "Share with 2
+   * friends" beside a progress line reading "1 of 2 shared". Recomputing cannot
+   * go stale.
+   */
+  const settledLabel = () => {
+    const rem = Math.max(0, 2 - getShareCount());
+    return `Share with ${rem} friend${rem !== 1 ? "s" : ""}`;
+  };
+
   shareBtn.addEventListener("click", async () => {
     shareBtn.disabled = true;
-    const original = shareBtn.textContent;
+    const original = settledLabel();
 
     // Extract face shape name if available — tradition-attributed framing only.
     const faceShapeName = r.reading?.fiveElements?.available
@@ -327,8 +421,6 @@ function wireShareGate(r) {
           // Update the overlay count without a full re-render.
           const prog = document.querySelector(".gate-progress");
           if (prog) prog.textContent = `${getShareCount()} of 2 shared`;
-          const rem = Math.max(0, 2 - getShareCount());
-          shareBtn.textContent = `Share with ${rem} friend${rem !== 1 ? "s" : ""}`;
         }
       } else if (result === "cancelled") {
         shareBtn.textContent = original;
@@ -340,7 +432,10 @@ function wireShareGate(r) {
       console.error("share gate failed:", err);
     } finally {
       shareBtn.disabled = false;
-      setTimeout(() => { if (shareBtn.textContent !== original) shareBtn.textContent = original; }, 3500);
+      // Settles on the count as it now stands. Where the share unlocked the
+      // reading, render() has already replaced this node and the write lands
+      // on a detached element, which is harmless.
+      setTimeout(() => { shareBtn.textContent = settledLabel(); }, 3500);
     }
   });
 
