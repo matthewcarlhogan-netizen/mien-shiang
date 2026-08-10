@@ -18,10 +18,11 @@ change the product's regulatory status, not just its tone.
 
 ```bash
 npm start        # dev server on http://localhost:5173 (honours PORT)
-npm test         # 564 tests, node:test, no dependencies
+npm test         # 580 tests, node:test, no dependencies
 npm run build    # dist/ — copy of src/, Module B stubbed in the entertainment flavour
 npm run lint:bundle   # compliance guards, run against dist/ not src/
 node scripts/qise-bakeoff.mjs --self-test   # Phase 5b decision table
+node scripts/engine-bench.mjs out.txt       # engine timings + measurement fingerprint
 ```
 
 There is a build step now, and still no npm dependencies. It was added in
@@ -34,12 +35,23 @@ stubs when the flag is off.
 
 `package-lock.json` exists only so `npm ci` works in CI; it locks nothing.
 
-564 across twenty-nine files. If you see 44, the traversal suite is not being
+580 across thirty files. If you see 44, the traversal suite is not being
 discovered; if you see 312, the `tests/qise/` tree is not.
 
-**All 564 pass.** The long-standing `copy-guard` failure on
+**All 580 pass.** The long-standing `copy-guard` failure on
 `TCM-202-DAMP-HEAT.recommend[1]` is resolved — that line moved to Module B in
 the Phase 2 split (see item 19). If a test fails, it is a real defect.
+
+`scripts/engine-bench.mjs` is the measurement engine's stopwatch, and it prints
+a FINGERPRINT alongside the timings — every scalar the pipeline produces, at 17
+significant digits, over the twelve real ROIs. The engine's optimisations are
+all bit-exact by construction (items 45–49), so the workflow for anything that
+touches `engine.js`, `textureAnalyzer.js` or `calibrationEngine.js` is: write a
+fingerprint before, write one after, and require the diff to be EMPTY. A
+difference of any size means an optimisation changed the arithmetic. The script
+refuses to run if its fixture stops emitting at least three observations, or if
+any severity pegs at the clamp — a clamped severity cannot see a change in the
+constant that produced it, which is a hole this fixture already had once.
 
 The Qi Se longitudinal tracker (`src/qise/`, `src/ui/qise/`, `src/qise.html`) is
 a second feature with its own entry point, its own module tree and its own six
@@ -112,8 +124,10 @@ scripts/
   serve.js      local dev server ONLY — never deployed
   run-tests.js  test discovery; exits 1 on zero files found
   qise-bakeoff.mjs  Phase 5b: decides raw vs sclera-corrected by measurement
+  engine-bench.mjs  engine timings + the bit-exactness fingerprint (items 45-49)
 tests/
   engine.test.js          colorimetry, detectors, self-reference
+  measurement-invariance.test.js  every fast path against the slow one it replaced
   calibration.test.js     adaptive scale, per-zone scales, blur, crosstalk, gating
   texture.test.js         oriented GLCM, normalisation, robust statistics
   harmony.test.js         canon matching, dropped components, no-verdict guard
@@ -1040,6 +1054,211 @@ their own image.
 **Not regression-tested** — it lives in `ui/qise/app.js`, which nothing can
 import. The defence is that the file stays thin enough to read, which is the
 standing reason everything else in that tree is a pure function elsewhere.
+
+---
+
+## The engine is optimised, and every optimisation is bit-exact
+
+Items 45–49 all come from one change and share one rule, so it is stated once
+here rather than five times below.
+
+The measurement engine was made about **4.4x faster** — 265.41 ms to 58.85 ms
+for a whole-face pass over the twelve real ROIs at 768x1024, measured with
+`scripts/engine-bench.mjs` on the same machine, in the same session, against
+the same synthetic capture. The breakdown, HEAD versus now:
+
+| stage | before | after |
+|---|---|---|
+| `shadesOfGray`, whole frame | 136.84 ms | 12.90 ms |
+| `regionStats`, twelve zones | 73.59 ms | 15.92 ms |
+| `rawScalars`, ridge pyramid | 54.98 ms | 30.04 ms |
+| **total** | **265.41 ms** | **58.85 ms** |
+
+**Not one measured value changed.** All 211 scalars the pipeline produces are
+identical at 17 significant digits, verified by running the same benchmark
+script against a `git worktree` of HEAD and diffing. That is the whole
+constraint: a faster engine that measures something slightly different is not a
+faster engine, it is a regression with a good stopwatch. Nothing here is an
+approximation, a fitted curve, a lower precision, or a reordered floating-point
+sum. Every one is the same arithmetic on the same operands.
+
+**So the workflow for touching any of this is fixed.** Fingerprint before,
+fingerprint after, require an empty diff. `tests/measurement-invariance.test.js`
+pins each fast path against the slow one it replaced, in the same run — the
+tables against the expressions they tabulate, the selection against a full sort,
+the split convolution against the single-path one. Those are `Object.is`
+assertions, not tolerance assertions, on purpose. **If one of them starts
+needing an epsilon, the change underneath it is not the change that was
+reviewed.** Do not add the epsilon.
+
+Two things were deliberately NOT done, and should stay not done:
+
+- **Cascading the Gaussian pyramid.** Blurring 1.5 then 2.0 to reach 2.5 is
+  algebraically the same and numerically is not — truncated discrete kernels do
+  not compose exactly. It would save maybe a third of the blur and it would
+  move every ridge number by a little, which is the one thing this engine's
+  history says never to do quietly.
+- **Pairing symmetric kernel taps.** `(src[c-i] + src[c+i]) * k` halves the
+  multiplies and is not `src[c-i]*k + src[c+i]*k` in floating point.
+
+The largest remaining cost is `gaussianBlur` at 46% of the ridge path. The exact
+win still on the table is restricting the convolution to the mask's dilated
+support — the hulls fill about 66% of their bounding boxes — and it was left
+alone because the bookkeeping at the band edges is fiddly and an off-by-one
+there is a plausible-looking wrong number rather than a crash.
+
+### 45. A lookup table here is the arithmetic, never an approximation
+
+Two hot paths are table-driven, and both tabulate a function of an 8-bit
+channel — a domain of exactly 256 values.
+
+`srgbToLinear()` was called **six times per masked pixel** (twice by
+`erythemaIndex`, once by `melaninIndex`, three times by `rgbToLab`) and has a
+`pow()` in it. `shadesOfGray()` did three `pow()` and three divides for every
+pixel of the whole frame, which alone was over half the measurement cost of the
+app. Both now read tables holding the result of the identical expression at the
+identical precision.
+
+**The tables must stay exhaustive-and-exact, not fitted.** A piecewise fit or an
+interpolation would be smaller and faster and would also move subjects between
+ITA tone strata, and the tone stratum is what decides whether erythema is
+reported at all (see the dark-skin limit). An approximation there is a
+compliance change wearing a performance costume.
+
+**Non-integer and out-of-range inputs must keep falling through to the
+arithmetic.** The guard is `v >= 0 && v <= 255 && (v | 0) === v`; NaN fails both
+comparisons and takes the slow path, where it stays NaN. `shadesOfGray` makes
+the same distinction once per call, on the buffer type, so a float buffer or a
+plain Array still gets the real curve.
+
+**Symptom:** cool-toned or deep-toned subjects shifting a band, and the erythema
+gates changing sensitivity, after a change described as caching.
+**Cause:** rounding an input into the table, or replacing the table with a fit.
+**Pinned by:** `the sRGB table is the arithmetic, at every one of its 256
+inputs`, `a non-integer or out-of-range channel still takes the arithmetic
+path`, and `the white-balance tables agree with the per-pixel arithmetic, byte
+for byte` — which feeds the same numbers down both paths and compares all ~3.1
+million output bytes.
+
+One trap found writing that last test, worth keeping: **its fixture must have a
+colour cast.** Uniform-random channels drive the Shades-of-Gray estimate to
+`ir == ig == ib == 1`, and against gains of one every channel table is the
+identity — so a table built from the wrong channel's gain passes. Verified in
+both directions: with uniform noise the mutation is invisible, with a warm cast
+it fails. Skin is warm, so the realistic fixture is also the sensitive one.
+
+### 46. These statistics are order statistics, and the tie band is correctness
+
+`robustCentre`, `focalExcess`, `trimmedMedian` and `percentile` each read two or
+three percentile positions. They were computing a full ordering to answer for a
+handful of indices — measured at **15.74 ms of `regionStats`' 24.52 ms**. They
+now select instead of sorting.
+
+**The three-way partition is not the optimisation, it is the correctness
+condition.** These samples are computed from 8-bit channels, so they carry
+enormous runs of exact duplicates: a 6,568-pixel ROI routinely holds fewer than
+thirty distinct erythema values, because the erythema index is a function of two
+bytes. A two-way partition degrades to O(n²) on runs of equal keys, which is
+exactly and always the input this gets. Collapsing the `v > p` branch into the
+`else` does not make it slightly slower — **the test suite hangs**, which is how
+that mutation was confirmed.
+
+**NaN must be partitioned to the end before anything is selected.**
+`%TypedArray%.sort` places NaN last and every one of these statistics reads a
+percentile INDEX, so where the NaNs sit decides which value an index names.
+Selection compares with `<`, which is false for NaN in both directions, so
+without the explicit partition the NaNs sit wherever they happened to be and
+every percentile shifts.
+
+**The reordering is real and the public entry points must keep copying.**
+`robustCentreOf`, `focalExcessOf` and `selectKth` reorder in place by design —
+`regionStats` hands them its four samples directly, and runs both erythema
+statistics over the same array so the second inherits the first's partial
+ordering. `robustCentre`, `focalExcess`, `trimmedMedian` and `percentile` are
+public and copy first.
+
+**Symptom:** a percentile that is subtly wrong only on regions containing an
+unmeasurable pixel; or a capture that hangs the app instead of measuring it.
+**Pinned by:** `a selection agrees with a full sort, on every shape` and
+`selectKth returns what the sorted array holds at k, for every k`, over
+randomised, all-equal, two-valued, ascending, descending, NaN-bearing,
+all-NaN, infinite and subnormal samples at ten sizes; plus `selection reuses a
+partitioned array without corrupting later answers` and `the public statistics
+do not reorder the caller's sample`.
+
+### 47. `regionStats` holds a SECOND COPY of three published formulas
+
+The per-pixel loop no longer calls `erythemaIndex()`, `melaninIndex()` or
+`rgbToLab()`. It inlines them, so each channel is linearised once instead of
+six times, and so lightness and yellow-blue are taken without allocating a Lab
+triple per pixel or computing the X channel that nothing reads.
+
+The hazard is not that the copy is wrong today. It is that someone corrects the
+erythema sign convention (item 2) or the ITA quadrant handling (item 3) in the
+exported function, the inlined copy keeps the old one, and **half the pipeline
+is fixed** — the observations move, the exported helpers still agree with the
+literature, and nothing points at the discrepancy.
+
+**Symptom:** `analyse()` and a hand-computed check of the same pixels disagree,
+with both looking correct in isolation.
+**Pinned by:** `regionStats' inlined colour maths equals the exported helpers`,
+which rebuilds all four samples using only the exported functions and requires
+every statistic to match exactly. Its fixture crosses the Lab `f()` branch at
+0.008856 and the near-black end of the transfer curve, because a fixture of
+mid-tone skin exercises neither.
+
+### 48. The convolution has three code paths per axis where it had one
+
+`gaussianBlur()` hoists the edge clamp out of the interior, walks rows rather
+than columns on the vertical pass, and takes its scratch and output buffers from
+the caller. Each output pixel still accumulates taps from `-r` to `+r`, in that
+order, into a double initialised to zero — **floating-point addition is not
+associative, so tap order is part of the result, not an implementation
+detail.**
+
+Two constraints that are invisible until they are violated:
+
+- **`dst` must not alias `src`.** The vertical interior accumulates in place.
+  `ridgeField` reuses its input buffer as the per-scale output precisely once it
+  is dead, and the pairing is deliberate.
+- **An off-by-one at a band boundary is not a crash.** It changes `r` columns of
+  one blur level, which reaches the surface as a small change in one zone's
+  ridge number — plausible, unattributable, and caught by nothing that measures
+  the ridge response end to end.
+
+**Pinned by:** `the split convolution is bit-identical to the single-path one`,
+which keeps the original single-path implementation in the test file and
+compares every pixel across 48 size/sigma pairs — including sizes NARROWER than
+the kernel, where the two clamped bands overlap and the interior is empty.
+
+### 49. One ridge field serves both axes, because the axis enters at reduction
+
+`ridgeField()` stores the Hessian ORIENTATION (`ang`), not a weight already
+resolved against one target axis. `ridgeMean(field, scale, target)` applies the
+orientation weight.
+
+That is what removed the second Hessian pyramid: the baseline ridge is always
+taken on the vertical axis (see item 6's neighbourhood), and `rawScalars` used
+to rebuild a whole pyramid per baseline zone to get it. `st`, `rb` and `ang`
+carry no axis, so the second pass was recomputing identical numbers in order to
+apply a different cosine to them — the most expensive operation in the app, run
+twice, for a value a cosine away.
+
+**The default is load-bearing.** `ridgeMean(field, scale)` still reduces at the
+axis the field was built for, which is what the pipeline and every existing test
+call. It uses `??`, not `||`, because `targetAxisRadians(true)` is **0** and a
+falsy check would silently discard an explicitly requested vertical axis.
+
+**Symptom:** every ridge number moving at once, or `ridgeDelta` quietly changing
+meaning for every zone, after a change described as removing duplication.
+**Cause:** folding the orientation weight back into `ridgeField`, or letting the
+baseline reduce at the zone's own axis instead of passing the vertical one
+explicitly.
+**Pinned by:** `a field reduced at an axis matches a field BUILT for that axis`
+— which carries its own negative control, asserting the two axes do NOT give the
+same number, since otherwise the equality would hold for a field that had simply
+stopped discriminating — and `ridgeMean defaults to the axis its field was built
+for`.
 
 
 ### 24. The summary may only repeat what was measured

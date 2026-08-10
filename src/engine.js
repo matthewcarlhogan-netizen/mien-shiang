@@ -13,7 +13,7 @@ import {
   BLUR_BASE_SIGMA,
 } from "./utils/calibrationEngine.js";
 import {
-  orientedGlcm, isotropyWeight, robustCentre, focalExcess,
+  orientedGlcm, isotropyWeight, robustCentreOf, focalExcessOf, scratchCopy,
   ERYTHEMA_TRIM_LO, ERYTHEMA_TRIM_HI,
 } from "./utils/textureAnalyzer.js";
 
@@ -26,7 +26,29 @@ import {
 // gate fire on pale skin instead of red.
 const EPS = 1e-4;
 
+/* ── THE 8-BIT TRANSFER FUNCTION IS A TABLE, NOT AN APPROXIMATION ───────────
+ * srgbToLinear() is called SIX times per masked pixel — twice by
+ * erythemaIndex(), once by melaninIndex(), three times by rgbToLab() — and its
+ * argument is an 8-bit channel, so its whole domain is 256 values. The pow()
+ * inside it was the single most expensive operation in the colour path.
+ *
+ * This is a lookup of a value already computed by the same expression, at the
+ * same precision, so every integer input returns a bit-identical double. It is
+ * NOT a piecewise fit or an interpolation, and it must never become one: the
+ * ITA banding downstream is what decides whether erythema is reported at all,
+ * and an approximation there would move a subject between tone strata.
+ *
+ * Non-integer and out-of-range inputs fall through to the arithmetic, so the
+ * declared domain of the function is unchanged. NaN fails both comparisons and
+ * takes that path, where it stays NaN. */
+const SRGB_LINEAR_LUT = new Float64Array(256);
+for (let v = 0; v < 256; v++) {
+  const x = v / 255;
+  SRGB_LINEAR_LUT[v] = x <= 0.04045 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
+}
+
 export function srgbToLinear(v) {
+  if (v >= 0 && v <= 255 && (v | 0) === v) return SRGB_LINEAR_LUT[v];
   const x = Math.min(Math.max(v / 255, 0), 1);
   return x <= 0.04045 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
 }
@@ -36,13 +58,36 @@ export function srgbToLinear(v) {
  *  each region separately drives them all toward grey and erases exactly the
  *  between-region differences this whole method measures. */
 export function shadesOfGray(data, p = 6) {
+  const len = data.length;
+
+  /* Both loops below are table-driven on the WHOLE FRAME — three pow() and
+   * three divides per pixel, at 768x1024, was over half the measurement cost of
+   * the app. A byte channel has 256 possible values, so both tables hold the
+   * result of the identical expression at the identical precision and every
+   * integer input reads back a bit-identical double. The `byteInput` test is
+   * what keeps that guarantee honest: a caller passing floats (a test, or a
+   * future higher-bit-depth buffer) still gets the arithmetic. */
+  const byteInput = data instanceof Uint8ClampedArray || data instanceof Uint8Array;
+
   let sr = 0, sg = 0, sb = 0, n = 0;
-  for (let i = 0; i < data.length; i += 4) {
-    if (data[i + 3] < 8) continue;
-    sr += Math.pow(data[i], p);
-    sg += Math.pow(data[i + 1], p);
-    sb += Math.pow(data[i + 2], p);
-    n++;
+  if (byteInput) {
+    const pw = new Float64Array(256);
+    for (let v = 0; v < 256; v++) pw[v] = Math.pow(v, p);
+    for (let i = 0; i < len; i += 4) {
+      if (data[i + 3] < 8) continue;
+      sr += pw[data[i]];
+      sg += pw[data[i + 1]];
+      sb += pw[data[i + 2]];
+      n++;
+    }
+  } else {
+    for (let i = 0; i < len; i += 4) {
+      if (data[i + 3] < 8) continue;
+      sr += Math.pow(data[i], p);
+      sg += Math.pow(data[i + 1], p);
+      sb += Math.pow(data[i + 2], p);
+      n++;
+    }
   }
   if (n < 16) return data;
 
@@ -54,12 +99,29 @@ export function shadesOfGray(data, p = 6) {
   ig = Math.max(ig / norm, 1e-6);
   ib = Math.max(ib / norm, 1e-6);
 
-  const out = new Uint8ClampedArray(data.length);
-  for (let i = 0; i < data.length; i += 4) {
-    out[i] = Math.min(255, data[i] / ir);
-    out[i + 1] = Math.min(255, data[i + 1] / ig);
-    out[i + 2] = Math.min(255, data[i + 2] / ib);
-    out[i + 3] = data[i + 3];
+  const out = new Uint8ClampedArray(len);
+  if (byteInput) {
+    // Uint8ClampedArray assignment rounds, and it rounds the same double to the
+    // same byte whether that double arrived from a divide or from a table.
+    const gr = new Float64Array(256), gg = new Float64Array(256), gb = new Float64Array(256);
+    for (let v = 0; v < 256; v++) {
+      gr[v] = Math.min(255, v / ir);
+      gg[v] = Math.min(255, v / ig);
+      gb[v] = Math.min(255, v / ib);
+    }
+    for (let i = 0; i < len; i += 4) {
+      out[i] = gr[data[i]];
+      out[i + 1] = gg[data[i + 1]];
+      out[i + 2] = gb[data[i + 2]];
+      out[i + 3] = data[i + 3];
+    }
+  } else {
+    for (let i = 0; i < len; i += 4) {
+      out[i] = Math.min(255, data[i] / ir);
+      out[i + 1] = Math.min(255, data[i + 1] / ig);
+      out[i + 2] = Math.min(255, data[i + 2] / ib);
+      out[i + 3] = data[i + 3];
+    }
   }
   return out;
 }
@@ -169,13 +231,10 @@ export const UNAVAILABLE = {
  *  in the tails, and an untrimmed mean tracks them instead of the skin. */
 export function trimmedMedian(vals, lo = 10, hi = 90) {
   if (!vals.length) return NaN;
-  const s = Float64Array.from(vals).sort();
-  const a = s[Math.floor((lo / 100) * (s.length - 1))];
-  const b = s[Math.floor((hi / 100) * (s.length - 1))];
-  const core = [];
-  for (const v of s) if (v >= a && v <= b) core.push(v);
-  const c = core.length ? core : Array.from(s);
-  return c[Math.floor(c.length / 2)];
+  // The same statistic as robustCentre() at the wider default window, so it is
+  // the same code. Copies first: this is a public entry point and must not
+  // reorder the caller's sample, which robustCentreOf() does.
+  return robustCentreOf(scratchCopy(vals), lo, hi);
 }
 
 function sev(value, fullScale) {
@@ -207,36 +266,105 @@ export function glcmContrast(gray, mask, w, h) {
   return out.length ? out.reduce((a, b) => a + b, 0) / out.length : NaN;
 }
 
-function gaussianBlur(src, w, h, sigma) {
+/**
+ * Separable Gaussian, edge-clamped.
+ *
+ * ── THIS IS THE SAME ARITHMETIC IN THE SAME ORDER, AND THAT IS THE POINT ────
+ * Three things changed and none of them may change a value. Each output pixel
+ * still accumulates its taps from i = -r to +r, in that order, into a double
+ * initialised to zero — floating-point addition is not associative, so tap
+ * order is part of the result, not an implementation detail.
+ *
+ *  1. The clamp is hoisted out of the interior. `Math.min(w-1, Math.max(0, …))`
+ *     ran on every tap of every pixel to serve the r columns at each edge. The
+ *     interior span computes the same sum without it.
+ *  2. The vertical pass walks rows instead of columns. Reading `tmp[yy*w + x]`
+ *     strides by a row per tap, which misses cache on every access; accumulating
+ *     one output row across taps reads linearly. Per output pixel the taps are
+ *     still summed low-to-high, so the sum is unchanged.
+ *  3. `tmp` and `dst` are supplied by the caller. ridgeField() calls this four
+ *     times per zone and was allocating two zone-sized Float64Arrays each time.
+ *
+ * `dst` MUST NOT alias `src` — the vertical pass accumulates in place.
+ *
+ * EXPORTED for the differential test only. It is the hot path of the most
+ * expensive operation in the app and it now has three code paths per axis where
+ * it had one, so it is checked against a naive reference rather than through
+ * the ridge response, where an edge-column error would be a rounding-sized
+ * change in one number and invisible.
+ */
+export function gaussianBlur(src, w, h, sigma, tmp, dst) {
   const r = Math.max(1, Math.ceil(sigma * 2));
-  const k = [];
+  const k = new Float64Array(2 * r + 1);
   let ks = 0;
   for (let i = -r; i <= r; i++) {
     const v = Math.exp(-(i * i) / (2 * sigma * sigma));
-    k.push(v); ks += v;
+    k[i + r] = v; ks += v;
   }
   for (let i = 0; i < k.length; i++) k[i] /= ks;
 
-  const tmp = new Float64Array(src.length);
-  const dst = new Float64Array(src.length);
-  for (let y = 0; y < h; y++)
-    for (let x = 0; x < w; x++) {
+  // ── horizontal ──
+  const xLo = Math.min(r, w);              // [0, xLo)   clamped left edge
+  const xHi = Math.max(xLo, w - r);        // [xHi, w)   clamped right edge
+  for (let y = 0; y < h; y++) {
+    const row = y * w;
+    for (let x = 0; x < xLo; x++) {
       let a = 0;
       for (let i = -r; i <= r; i++) {
-        const xx = Math.min(w - 1, Math.max(0, x + i));
-        a += src[y * w + xx] * k[i + r];
+        const xx = x + i < 0 ? 0 : (x + i > w - 1 ? w - 1 : x + i);
+        a += src[row + xx] * k[i + r];
       }
-      tmp[y * w + x] = a;
+      tmp[row + x] = a;
     }
-  for (let y = 0; y < h; y++)
+    for (let x = xLo; x < xHi; x++) {
+      let a = 0;
+      const c = row + x;
+      for (let i = -r; i <= r; i++) a += src[c + i] * k[i + r];
+      tmp[c] = a;
+    }
+    for (let x = xHi; x < w; x++) {
+      let a = 0;
+      for (let i = -r; i <= r; i++) {
+        const xx = x + i < 0 ? 0 : (x + i > w - 1 ? w - 1 : x + i);
+        a += src[row + xx] * k[i + r];
+      }
+      tmp[row + x] = a;
+    }
+  }
+
+  // ── vertical ──
+  const yLo = Math.min(r, h);
+  const yHi = Math.max(yLo, h - r);
+  for (let y = 0; y < yLo; y++) {
+    const row = y * w;
     for (let x = 0; x < w; x++) {
       let a = 0;
       for (let i = -r; i <= r; i++) {
-        const yy = Math.min(h - 1, Math.max(0, y + i));
+        const yy = y + i < 0 ? 0 : (y + i > h - 1 ? h - 1 : y + i);
         a += tmp[yy * w + x] * k[i + r];
       }
-      dst[y * w + x] = a;
+      dst[row + x] = a;
     }
+  }
+  for (let y = yLo; y < yHi; y++) {
+    const row = y * w;
+    dst.fill(0, row, row + w);
+    for (let i = -r; i <= r; i++) {
+      const ki = k[i + r], b = row + i * w;
+      for (let x = 0; x < w; x++) dst[row + x] += tmp[b + x] * ki;
+    }
+  }
+  for (let y = yHi; y < h; y++) {
+    const row = y * w;
+    for (let x = 0; x < w; x++) {
+      let a = 0;
+      for (let i = -r; i <= r; i++) {
+        const yy = y + i < 0 ? 0 : (y + i > h - 1 ? h - 1 : y + i);
+        a += tmp[yy * w + x] * k[i + r];
+      }
+      dst[row + x] = a;
+    }
+  }
   return dst;
 }
 
@@ -250,18 +378,33 @@ function gaussianBlur(src, w, h, sigma) {
 export function ridgeField(gray, mask, w, h, opts = {}) {
   const vertical = opts.vertical ?? true;
   const blurSigma = opts.blurSigma ?? BLUR_BASE_SIGMA;
-  const target = targetAxisRadians(vertical);
 
-  const f = Float64Array.from(gray);
-  const base = gaussianBlur(f, w, h, blurSigma);
+  /* Three buffers, not nine. gaussianBlur() is called four times here and used
+   * to allocate its own scratch and output each time; `f` is dead once `base`
+   * exists, so it becomes the per-scale output. */
+  // `new Float64Array(typedArray)` converts in one pass; Float64Array.from()
+  // goes through the iterator protocol and is roughly 2.5x slower on the same
+  // input. Same values either way — gray is 8-bit and every byte is exact.
+  const f = new Float64Array(gray);
+  const scratch = new Float64Array(gray.length);
+  const base = gaussianBlur(f, w, h, blurSigma, scratch, new Float64Array(gray.length));
 
   const st = new Float64Array(gray.length);   // structureness, orientation-UNgated
   const rb = new Float64Array(gray.length);   // blobness
-  const wt = new Float64Array(gray.length);   // orientation weight in [0,1]
+  /* The ORIENTATION, not a weight resolved against one target axis.
+   *
+   * st and rb do not depend on the target axis, and neither does this angle —
+   * only the weight derived from it does. Storing the angle is what lets ONE
+   * field serve both the zone's own axis and the vertical axis the baseline is
+   * always taken on: rawScalars() previously built a second, identical Hessian
+   * pyramid for each baseline zone purely to obtain a different `wt`, which is
+   * the most expensive operation in the app run twice for a value that is a
+   * cosine away. The weight is applied in ridgeMean() instead. */
+  const ang = new Float64Array(gray.length);
   let positives = 0;
 
   for (const sigma of [1.5, 2.5, 3.5]) {
-    const s = gaussianBlur(base, w, h, sigma);
+    const s = gaussianBlur(base, w, h, sigma, scratch, f);
     for (let y = 1; y < h - 1; y++) {
       for (let x = 1; x < w - 1; x++) {
         const i = y * w + x;
@@ -286,25 +429,38 @@ export function ridgeField(gray, mask, w, h, opts = {}) {
         if (st[i] === 0) positives++;
         st[i] = s2;
         rb[i] = Math.abs(l2) / Math.max(Math.abs(l1), 1e-9);
-        wt[i] = orientationWeight(hessianOrientation(Ixx, Iyy, Ixy), target);
+        ang[i] = hessianOrientation(Ixx, Iyy, Ixy);
       }
     }
   }
 
-  return { st, rb, wt, mask, positives, blurSigma, vertical, n: w * h };
+  return { st, rb, ang, mask, positives, blurSigma, vertical, n: w * h };
 }
 
-/** Mean vesselness over a prepared field, at a given normaliser. Cheap. */
-export function ridgeMean(field, scale = RIDGE_STRUCTURE_SCALE) {
-  const { st, rb, wt, mask } = field;
+/**
+ * Mean vesselness over a prepared field, at a given normaliser. Cheap.
+ *
+ * @param {object} field   from ridgeField()
+ * @param {number} [scale] structureness normaliser
+ * @param {number} [target] ridge axis in radians. Defaults to the axis the
+ *   field was built for, so an existing two-argument call is unchanged. Passing
+ *   it explicitly is how one field serves a second axis without a second
+ *   Hessian pass — see the note on `ang` in ridgeField().
+ */
+export function ridgeMean(field, scale = RIDGE_STRUCTURE_SCALE, target) {
+  const { st, rb, ang, mask } = field;
+  const axis = target ?? targetAxisRadians(field.vertical);
   const denom = 2 * scale * scale;
+  const len = st.length;
   let sum = 0, n = 0;
-  for (let i = 0; i < st.length; i++) {
+  for (let i = 0; i < len; i++) {
     if (!mask[i]) continue;
-    if (st[i] > 0) {
-      sum += wt[i] *
-        Math.exp(-(rb[i] * rb[i]) / 0.5) *
-        (1 - Math.exp(-(st[i] * st[i]) / denom));
+    const s = st[i];
+    if (s > 0) {
+      const b = rb[i];
+      sum += orientationWeight(ang[i], axis) *
+        Math.exp(-(b * b) / 0.5) *
+        (1 - Math.exp(-(s * s) / denom));
     }
     n++;
   }
@@ -332,37 +488,71 @@ export function ridgeResponse(gray, mask, w, h, vertical = true, opts = {}) {
 
 /** Per-region stats from already-white-balanced pixels. */
 export function regionStats(rgba, mask, w, h) {
-  const ei = [], mi = [], Ls = [], bs = [];
-  const gray = new Uint8Array(w * h);
-  let n = 0;
+  const px = w * h;
+  const gray = new Uint8Array(px);
 
-  for (let i = 0; i < w * h; i++) {
-    const p = i * 4;
-    gray[i] = (0.299 * rgba[p] + 0.587 * rgba[p + 1] + 0.114 * rgba[p + 2]) | 0;
-    if (!mask[i]) continue;
-    ei.push(erythemaIndex(rgba[p], rgba[p + 1]));
-    mi.push(melaninIndex(rgba[p]));
-    const lab = rgbToLab(rgba[p], rgba[p + 1], rgba[p + 2]);
-    Ls.push(lab[0]); bs.push(lab[2]);
-    n++;
-  }
+  /* Count first, then fill exactly-sized typed arrays. The four samples were
+   * JS arrays grown by push(), which reallocates as a region's worth of pixels
+   * arrives and then has to be copied element-by-element into a Float64Array
+   * by every statistic taken off it. */
+  let n = 0;
+  for (let i = 0; i < px; i++) if (mask[i]) n++;
+  // Counting first also means the refusal happens before any of the work, not
+  // after all of it. Same refusal, same null.
   if (n < 256) return null;
 
+  const ei = new Float64Array(n), mi = new Float64Array(n);
+  const Ls = new Float64Array(n), bs = new Float64Array(n);
+
+  let j = 0;
+  for (let i = 0; i < px; i++) {
+    const p = i * 4;
+    const R8 = rgba[p], G8 = rgba[p + 1], B8 = rgba[p + 2];
+    gray[i] = (0.299 * R8 + 0.587 * G8 + 0.114 * B8) | 0;
+    if (!mask[i]) continue;
+
+    /* Linearise each channel ONCE. erythemaIndex(), melaninIndex() and
+     * rgbToLab() between them called srgbToLinear() six times per pixel for
+     * three distinct values. The expressions below are those functions inlined
+     * verbatim — same operands, same order — not re-derived. */
+    const R = srgbToLinear(R8), G = srgbToLinear(G8), B = srgbToLinear(B8);
+
+    ei[j] = 100 * Math.log10((R + EPS) / (G + EPS));
+    mi[j] = 100 * Math.log10(1 / (R + EPS));
+
+    /* Only L* and b* are ever read, and a* needs the X channel, so X is not
+     * computed. The Y and Z expressions are rgbToLab()'s, unchanged — including
+     * its divide by 1.0, which is exact. */
+    const y0 = (R * 0.2126 + G * 0.7152 + B * 0.0722) / 1.0;
+    const z0 = (R * 0.0193 + G * 0.1192 + B * 0.9505) / 1.08883;
+    const fy = y0 > 0.008856 ? Math.cbrt(y0) : 7.787 * y0 + 16 / 116;
+    const fz = z0 > 0.008856 ? Math.cbrt(z0) : 7.787 * z0 + 16 / 116;
+    Ls[j] = 116 * fy - 16;
+    bs[j] = 200 * (fy - fz);
+    j++;
+  }
+
   const texture = orientedGlcm(gray, mask, w, h);
+
+  /* The four samples are local to this function and nothing reads them again,
+   * so they are handed to the selectors AS the scratch space rather than being
+   * copied first. Both erythema statistics run over the same array on purpose:
+   * the second inherits the partial ordering the first left behind. */
+  const eiCentre = robustCentreOf(ei, ERYTHEMA_TRIM_LO, ERYTHEMA_TRIM_HI);
 
   return {
     // The colour centre uses the 20-80 window. Note what that does and does
     // not buy: the median of a symmetric trim is the median, so this does not
     // recover a localised patch — `focalEi` below is the statistic that sees
     // one. See robustCentre() in textureAnalyzer.js.
-    ei: robustCentre(ei, ERYTHEMA_TRIM_LO, ERYTHEMA_TRIM_HI),
+    ei: eiCentre,
     /** How far the reddest fifth of the region sits above its own middle. A
      *  uniformly ruddy region and a region with one raised patch have similar
      *  medians and very different values here. Measured, not yet graded. */
-    focalEi: focalExcess(ei),
-    mi: trimmedMedian(mi),
-    L: trimmedMedian(Ls),
-    b: trimmedMedian(bs),
+    focalEi: focalExcessOf(ei),
+    mi: robustCentreOf(mi),
+    L: robustCentreOf(Ls),
+    b: robustCentreOf(bs),
     contrast: texture.meanContrast,
     texture,
     gray, n,
@@ -444,15 +634,22 @@ export function rawScalars(regions, opts = {}) {
     baseL.push(r.stats.L);
     baseB.push(r.stats.b);
     if (isFinite(r.stats.contrast)) baseC.push(r.stats.contrast);
-    // The baseline ridge is taken on the VERTICAL axis regardless of the
-    // zone's own axis, which is the reference the deltas below are against.
-    // Reusing the zone's field here instead would silently change what
-    // ridgeDelta means for every zone at once.
-    const blur = fields[key]?.blur ?? calculateBlurSigma(r.stats.n, referenceArea);
+    /* The baseline ridge is taken on the VERTICAL axis regardless of the zone's
+     * own axis, which is the reference the deltas below are against. Reducing
+     * the zone's field at the zone's OWN axis here would silently change what
+     * ridgeDelta means for every zone at once — so the axis is passed
+     * explicitly rather than defaulted.
+     *
+     * The FIELD is shared, and only the field. Phase A already built one for
+     * this zone at this same blur sigma, and st/rb/ang carry no axis, so the
+     * second pyramid this used to build was recomputing identical numbers to
+     * apply a different cosine to them. */
+    const held = fields[key];
+    const blur = held?.blur ?? calculateBlurSigma(r.stats.n, referenceArea);
     baseBlur.push(blur.sigma);
-    const bf = ridgeField(r.stats.gray, r.mask, r.w, r.h,
-                          { vertical: true, blurSigma: blur.sigma });
-    const rr = ridgeMean(bf, ridgeScale);
+    const bf = held?.field ?? ridgeField(r.stats.gray, r.mask, r.w, r.h,
+                                         { vertical: true, blurSigma: blur.sigma });
+    const rr = ridgeMean(bf, ridgeScale, targetAxisRadians(true));
     if (isFinite(rr)) baseR.push(rr);
     basePx += r.stats.n;
   }

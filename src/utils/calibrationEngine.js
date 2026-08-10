@@ -24,25 +24,39 @@
  * size), not correctness of the scale itself.
  */
 
+import { scratchCopy, partitionNaN, selectKth } from "./textureAnalyzer.js";
+
 // ───────────────────────────────────────────────────────────── percentiles ──
 
 /**
- * Linear-interpolated percentile. Sorts a COPY — callers pass raw sample
+ * Linear-interpolated percentile. Works on a COPY — callers pass raw sample
  * arrays and must not have them reordered underneath.
  *
- * Float64Array.prototype.sort is numeric by default; Array.prototype.sort is
- * lexicographic, which would put 10 before 9 and silently corrupt every
- * percentile taken here. Converting first is load-bearing, not tidying.
+ * Float64Array ordering is numeric; Array.prototype.sort is lexicographic,
+ * which would put 10 before 9 and silently corrupt every percentile taken here.
+ * Converting to a Float64Array first is load-bearing, not tidying — and it is
+ * why scratchCopy() below is the right entry point rather than a bare slice.
  */
 export function percentile(vals, p) {
   if (!vals || vals.length === 0) return NaN;
-  const s = Float64Array.from(vals).sort();
+  /* Two order statistics, so two selections rather than a full ordering. This
+   * runs once per image over the pooled structureness sample — up to 20,000
+   * values — and sorting all of them to read two positions was measured at 4%
+   * of the whole ridge path. selectKth() reorders, so it gets a copy. */
+  const s = scratchCopy(vals);
   if (s.length === 1) return s[0];
-  const idx = (p / 100) * (s.length - 1);
+  const n = s.length;
+  const idx = (p / 100) * (n - 1);
   const lo = Math.floor(idx);
   const hi = Math.ceil(idx);
-  if (lo === hi) return s[lo];
-  return s[lo] + (s[hi] - s[lo]) * (idx - lo);
+  /* NaN sorts last, and these indices are defined against that ordering, so an
+   * index at or past the non-NaN count names a NaN just as it would in the
+   * sorted array. */
+  const nn = partitionNaN(s);
+  const at = (k) => (k >= nn ? NaN : selectKth(s, k, nn));
+  if (lo === hi) return at(lo);
+  const a = at(lo), b = at(hi);
+  return a + (b - a) * (idx - lo);
 }
 
 // ──────────────────────────────────────────────────── adaptive ridge scale ──
