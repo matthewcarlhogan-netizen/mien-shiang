@@ -24,7 +24,7 @@ import { openCamera, createLandmarkerGuarded, releaseCapture, GreenLatch, Polygo
 import { readRois } from "../../qise/rois.js";
 import { headPose } from "../../qise/pose.js";
 import { sampleSclera } from "../../qise/sclera.js";
-import { evaluateGates } from "../../qise/gates.js";
+import { evaluateGates, captureGuide } from "../../qise/gates.js";
 import { computeReadingMetrics, lumRatioP90P50 } from "../../qise/metrics.js";
 import { interpretReading, readingConfidence, axesOf } from "../../qise/baseline.js";
 import { openStore } from "../../qise/store.js";
@@ -46,12 +46,40 @@ const consent = createConsent();
 let store = null;
 let scratch = null;
 let activeShareCadence = "week";
+let captureRun = 0;
+let activeReadingTab = "today";
 
 /* ── screens ─────────────────────────────────────────────────────────────── */
 
 function show(id) {
   for (const s of document.querySelectorAll(".screen")) {
     s.dataset.active = String(s.id === id);
+  }
+}
+
+function selectReadingTab(name, { scroll = true } = {}) {
+  const target = document.querySelector(`[data-reading-panel="${name}"]`);
+  if (!target) return;
+  activeReadingTab = name;
+  for (const panel of document.querySelectorAll("[data-reading-panel]")) {
+    panel.hidden = panel !== target;
+  }
+  for (const button of document.querySelectorAll("[data-reading-tab]")) {
+    const selected = button.dataset.readingTab === name;
+    button.setAttribute("aria-selected", String(selected));
+    button.tabIndex = selected ? 0 : -1;
+  }
+  if (scroll) window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function renderCaptureGuide(report = null) {
+  const guide = report ? captureGuide(report) : [
+    { id: "frame", state: "waiting" }, { id: "light", state: "waiting" },
+    { id: "camera", state: "waiting" }, { id: "steady", state: "waiting" },
+  ];
+  for (const item of guide) {
+    const row = document.querySelector(`[data-guide="${item.id}"]`);
+    if (row) row.dataset.state = item.state;
   }
 }
 
@@ -74,14 +102,38 @@ async function buildLandmarker() {
 
 async function runCapture() {
   assertConsentGranted(consent, "the capture screen");
+  const runId = ++captureRun;
+  if (scratch) {
+    releaseCapture(scratch);
+    scratch = null;
+  }
   show("screen-capture");
+  renderCaptureGuide();
+  $("gate-line").textContent = "Starting the camera…";
+  $("ring-fill").setAttribute("stroke-dashoffset", "100");
+  $("capture-help").hidden = true;
 
   const video = $("preview");
   const opened = await openCamera({ consent, mediaDevices: navigator.mediaDevices });
+  if (runId !== captureRun) {
+    releaseCapture({ stream: opened.stream, images: [], landmarks: [], canvas: null });
+    return;
+  }
   video.srcObject = opened.stream;
   await video.play();
 
-  const landmarker = await buildLandmarker();
+  let landmarker;
+  try {
+    landmarker = await buildLandmarker();
+  } catch (error) {
+    releaseCapture({ stream: opened.stream, images: [], landmarks: [], canvas: null });
+    throw error;
+  }
+  if (runId !== captureRun) {
+    if (typeof landmarker.close === "function") landmarker.close();
+    releaseCapture({ stream: opened.stream, images: [], landmarks: [], canvas: null });
+    return;
+  }
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   scratch = { canvas, images: [], landmarks: [], stream: opened.stream };
@@ -90,6 +142,7 @@ async function runCapture() {
   const smoother = new PolygonSmoother();
   const drift = [];
   let previous = null;
+  const startedAt = performance.now();
 
   const history = await store.all();
   const scleraHistory = history.map((r) => r.sclera && r.sclera.rawRatios).filter(Boolean);
@@ -99,7 +152,7 @@ async function runCapture() {
   let lastLandmarks = null, lastSclera = null, lastRois = null, lastMargins = null;
 
   const step = async (nowMs) => {
-    if (!scratch) return;
+    if (!scratch || runId !== captureRun) return;
     canvas.width = video.videoWidth || 1280;
     canvas.height = video.videoHeight || 960;
 
@@ -148,6 +201,8 @@ async function runCapture() {
       const gates = evaluateGates(stats, pts, lastSclera);
 
       $("gate-line").textContent = gates.pass ? "Hold it there…" : gates.failures[0].message;
+      renderCaptureGuide(gates);
+      $("capture-help").hidden = nowMs - startedAt < 10000;
       const held = latch.update(gates.pass, nowMs);
       $("ring-fill").setAttribute("stroke-dashoffset", String(100 - Math.round(held.progress * 100)));
 
@@ -166,6 +221,8 @@ async function runCapture() {
       }
     } else {
       $("gate-line").textContent = "Bring your face into the frame.";
+      renderCaptureGuide();
+      $("capture-help").hidden = nowMs - startedAt < 10000;
     }
 
     requestAnimationFrame(step);
@@ -308,6 +365,9 @@ async function renderReading(reading) {
 
   $("reading-seal").innerHTML = m.sealSvg;
   $("reading-verdict").textContent = m.verdict;
+  $("reading-hook").textContent = m.hook.title;
+  $("reading-reflection").textContent = m.hook.reflection;
+  $("reading-reflection-story").textContent = m.hook.reflection;
 
   $("reading-gauges").innerHTML = m.gauges.map((g) => g.measured
     ? `<div class="gauge"><div class="gauge-label"><span>${esc(g.label)}</span><span class="muted">${esc(g.relativeLabel)}</span></div>
@@ -344,7 +404,10 @@ async function renderReading(reading) {
   $("reading-notices").innerHTML =
     [...notices, ...patterns].map((n) => `<p class="notice">${esc(n)}</p>`).join("");
 
+  activeReadingTab = "today";
+  selectReadingTab(activeReadingTab, { scroll: false });
   show("screen-reading");
+  window.scrollTo({ top: 0 });
 }
 
 function drawSparkline(svg, model) {
@@ -421,6 +484,17 @@ async function boot() {
   }
   store = await openStore();
 
+  const showConsentStep = (step) => {
+    $("consent-step-purpose").hidden = step !== "purpose";
+    $("consent-step-privacy").hidden = step !== "privacy";
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  $("consent-next").addEventListener("click", () => showConsentStep("privacy"));
+  $("consent-back").addEventListener("click", () => showConsentStep("purpose"));
+  for (const button of document.querySelectorAll("[data-reading-tab]")) {
+    button.addEventListener("click", () => selectReadingTab(button.dataset.readingTab));
+  }
+
   $("consent-grant").addEventListener("click", async () => {
     consent.grant();
     try {
@@ -435,6 +509,10 @@ async function boot() {
   });
 
   $("go-capture").addEventListener("click", () => runCapture().catch((e) => console.error(e)));
+  $("restart-capture").addEventListener("click", () => runCapture().catch((e) => {
+    console.error(e);
+    $("gate-line").textContent = "The camera did not restart. Check camera permission and try again.";
+  }));
   $("go-history").addEventListener("click", () => renderHistory().catch((e) => console.error(e)));
   $("back-reading").addEventListener("click", () => show("screen-reading"));
   $("share-today").addEventListener("click", () => shareCurrent("today").catch((e) => {

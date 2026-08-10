@@ -51,11 +51,11 @@ html[data-theme="dark"]{
 html[data-theme="light"]{color-scheme:light}
 body{
   background:var(--ground); color:var(--qise-ink);
-  font-family:var(--display); font-size:16px; line-height:1.55;
+  font-family:var(--display); font-size:17px; line-height:1.58;
   -webkit-font-smoothing:antialiased;
   padding:0 0 env(safe-area-inset-bottom);
 }
-.wrap{max-width:38rem;margin:0 auto;padding:1.25rem 1rem 7rem}
+.wrap{max-width:38rem;margin:0 auto;padding:1.1rem 1rem 5rem}
 h1,h2,h3{margin:0 0 .4rem;font-weight:600;letter-spacing:-.01em}
 h1{font-size:clamp(1.55rem,5vw,2.25rem);line-height:1.12}
 h2{font-size:1.05rem}
@@ -79,7 +79,7 @@ button{
 button[disabled]{opacity:.45;cursor:not-allowed}
 .primary{background:var(--qise-ink);color:var(--qise-action-fg)}
 .danger{border-color:var(--qise-danger);color:var(--qise-danger)}
-.app-head{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:2.25rem;flex-wrap:wrap}
+.app-head{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1.7rem;flex-wrap:wrap}
 .wordmark{font-size:.78rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
 .head-actions{display:flex;align-items:center;gap:.65rem}
 .privacy-mark{display:flex;align-items:center;gap:.35rem;font-size:.76rem;opacity:.66}
@@ -92,13 +92,26 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .actions button{border-radius:10px}
 .section-label{display:flex;justify-content:space-between;gap:1rem;align-items:baseline;margin-top:1.2rem}
 .section-label h2{margin:0}
+.consent-progress{font-family:var(--numeric);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;opacity:.68;margin-bottom:.7rem}
+.consent-step[hidden]{display:none}
+.consent-actions{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-top:1rem}
+.consent-actions .primary,.consent-actions .wide{grid-column:1/-1}
+.consent-actions button{border-radius:10px}
+.welcome-hero{padding:.35rem 0 .5rem}
+.welcome-mark{width:4.5rem;height:4.5rem;display:grid;place-items:center;border:1px solid var(--qise-border);border-radius:48% 52% 44% 56%;font-family:var(--cjk);font-size:2rem;margin:0 0 1.35rem;transform:rotate(-2deg);background:var(--qise-surface)}
+.welcome-hero h1{font-family:var(--passage);font-size:clamp(2.15rem,9vw,3.3rem);font-weight:500;line-height:1.02;letter-spacing:-.035em;margin-bottom:1rem}
+.welcome-lede{font-size:1.02rem;line-height:1.65;max-width:32rem}
+.promise-list{list-style:none;margin:1.35rem 0 1.45rem;padding:0;border-top:1px solid var(--qise-border)}
+.promise-list li{display:flex;gap:.75rem;align-items:flex-start;padding:.78rem 0;border-bottom:1px solid var(--qise-border);font-size:.9rem}
+.promise-list li::before{content:"";width:.55rem;height:.55rem;border-radius:50%;background:var(--qing);margin-top:.43rem;flex:none}
+.privacy-copy p{font-size:.94rem}
 
 .screen{display:none}
 .screen[data-active="true"]{display:block}
 
 /* ── the seal ─────────────────────────────────────────────────────────── */
 .qise-seal{width:100%;height:auto;color:var(--qise-ink);display:block}
-.seal-frame{width:min(60vw,13rem);margin:0 auto 1rem}
+.seal-frame{width:min(44vw,10.5rem);margin:0 auto .8rem}
 
 /* The ink-bleed settling, and the gate ring filling, are the only two moving
    things in the interface, and both stop on request. */
@@ -136,14 +149,41 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .share-status{min-height:1.5em;margin-top:.8rem}
 .reading-intro{text-align:center}
 .reading-intro h1{margin-bottom:.25rem}
+.reading-tabs{position:sticky;top:.5rem;z-index:4;display:grid;grid-template-columns:repeat(3,1fr);gap:.3rem;background:var(--qise-surface);backdrop-filter:blur(14px);padding:.3rem;border:1px solid var(--qise-border);border-radius:14px;margin:0 0 1.15rem}
+.reading-tabs button{border:0;border-radius:10px;padding:.55rem .35rem;font-size:.82rem;min-height:40px;color:inherit}
+.reading-tabs button[aria-selected="true"]{background:var(--qise-selected);box-shadow:0 1px 5px var(--qise-shadow)}
+.reading-panel[hidden]{display:none}
+.reading-hero{text-align:center;padding:.2rem 0 .4rem}
+.reading-hook{font-family:var(--passage);font-size:clamp(1.85rem,7.6vw,2.75rem);font-weight:500;line-height:1.08;letter-spacing:-.025em;margin:.45rem auto .85rem;max-width:28rem}
+.reading-verdict{font-size:.98rem;font-weight:500;max-width:30rem;margin:0 auto 1rem}
+.reflection{border-left:3px solid var(--chi);padding:.15rem 0 .15rem .9rem;margin:1rem 0;font-family:var(--passage);font-size:1.12rem;line-height:1.55}
+.story-passage{font-family:var(--passage);font-size:1.15rem;line-height:1.72;margin:0}
+.pattern-intro{margin-bottom:1rem}
+.reading-actions{margin-top:1rem}
 .capture-frame{overflow:hidden;border:1px solid var(--qise-border);border-radius:18px;background:#0B0A09}
-.capture-frame video{display:block}
+.capture-frame video{display:block;width:100%;height:min(56svh,34rem);object-fit:cover}
+.capture-status{margin:.8rem 0 0}
+.capture-guide{list-style:none;margin:.75rem 0 0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:.45rem}
+.capture-guide li{display:flex;align-items:center;gap:.5rem;min-height:2.5rem;padding:.45rem .55rem;border:1px solid var(--qise-border);border-radius:10px;font-size:.78rem}
+.capture-guide li::before{content:"";width:.58rem;height:.58rem;border:2px solid var(--qise-border);border-radius:50%;flex:none}
+.capture-guide li[data-state="ready"]::before{background:var(--qing);border-color:var(--qing)}
+.capture-guide li[data-state="adjust"]{border-color:var(--huang)}
+.capture-guide li[data-state="adjust"]::before{border-color:var(--huang)}
+.capture-help{margin:.75rem 0 0;padding:.65rem .75rem;border-left:3px solid var(--huang);background:var(--qise-surface);font-size:.82rem}
+.capture-actions{display:flex;justify-content:flex-end;margin-top:.55rem}
+.capture-actions button{font-size:.78rem;min-height:40px;padding:.35rem .7rem;border-color:var(--qise-border)}
 
 /* 360px is the floor. Below the wrapper padding, nothing is allowed to force
    a horizontal scroll. */
 @media (max-width:360px){
   .wrap{padding:1rem .7rem 2.5rem}
   .courts{flex-direction:column}
+  .capture-guide{grid-template-columns:1fr}
+  .welcome-hero h1{font-size:2rem}
+}
+@media (max-width:480px){
+  .app-head{flex-wrap:nowrap;margin-bottom:1.25rem}
+  .privacy-mark{display:none}
 }
 </style>
 </head>
@@ -163,40 +203,47 @@ button[disabled]{opacity:.45;cursor:not-allowed}
      here, and this text makes no claim about the reader. -->
 <section class="screen" id="screen-consent" data-active="true" aria-labelledby="consent-h">
   <div data-copy="disclaimer">
-    <p class="eyebrow">Your face stays here</p>
-    <h1 id="consent-h">Before the scanner opens</h1>
+    <div class="consent-step" id="consent-step-purpose">
+      <p class="consent-progress">1 of 2 · Welcome</p>
+      <div class="welcome-hero">
+        <div class="welcome-mark" aria-hidden="true">相</div>
+        <p class="eyebrow">A private face reading</p>
+        <h1 id="consent-h">See what today’s face is quietly showing.</h1>
+        <p class="welcome-lede">One guided scan turns the colours in your face into a short reflection rooted in Mien Shiang tradition — written to be felt, not decoded.</p>
+      </div>
+      <ul class="promise-list">
+        <li>Your photo stays on this phone and is discarded after the scan.</li>
+        <li>The reading compares you only with your own previous scans.</li>
+        <li>This is entertainment and self-reflection, not a rating or a medical opinion.</li>
+      </ul>
+      <div class="consent-actions"><button class="primary wide" id="consent-next" type="button">Begin my reading</button></div>
+      <p class="muted"><a href="./privacy.html">Read the privacy policy</a></p>
+    </div>
 
-    <p>This app measures the colour of a few areas of the face and describes
-      what a classical Chinese tradition reads into them. It is for
-      entertainment. It is not intended to diagnose, treat or cure anything,
-      and it does not rate you.</p>
-
-    <div class="surface"><p><strong>What happens on this device.</strong> A 478-point map of your
-      face is generated here, on this phone, purely to locate the areas being
-      measured. It is used for the measurement and discarded immediately. It
-      is never uploaded, never stored, and never linked to you. No photograph
-      leaves this device, because no photograph is kept.</p>
-
-    <p><strong>What is kept.</strong> Only the numbers: a handful of colour
-      measurements per reading, so the app can compare today against your own
-      previous readings. No image, no face map. One tap deletes all of it.</p></div>
-
-    <p><strong>What this is not.</strong> The mapping between facial colour
-      and anything else has no scientific basis that would support a health
-      claim, and none is made here. Nothing in this app is a medical opinion
-      or a substitute for one.</p>
-
-    <details class="muted"><summary>Why explicit consent is required</summary><p>Australian Privacy Act: generating that face map counts
-      as collecting sensitive information even though it is discarded
-      milliseconds later, which is why this screen exists before the camera
-      rather than after it. EU AI Act Article 50(3): this app categorises
-      complexion, and this is the disclosure of that.</p></details>
+    <div class="consent-step" id="consent-step-privacy" hidden>
+      <p class="consent-progress">2 of 2 · Privacy</p>
+      <p class="eyebrow">Your face stays here</p>
+      <h1>Your face stays with you.</h1>
+      <div class="surface privacy-copy"><p><strong>During the scan.</strong> A 478-point map of your
+        face is generated here, on this phone, purely to locate the areas being
+        measured. It is used for the measurement and discarded immediately. It
+        is never uploaded, never stored, and never linked to you. No photograph
+        leaves this device, because no photograph is kept.</p>
+      <p><strong>After the scan.</strong> Only the numbers are kept: a handful of colour
+        measurements per reading, so the app can compare today against your own
+        previous readings. No image, no face map. One tap deletes all of it.</p></div>
+      <p>This is an entertainment reading. Facial colour has no scientific basis for a health claim. Nothing here is a medical opinion or a substitute for one.</p>
+      <details class="muted"><summary>Why explicit consent is required</summary><p>Australian Privacy Act: generating that face map counts
+        as collecting sensitive information even though it is discarded
+        milliseconds later, which is why this screen exists before the camera
+        rather than after it. EU AI Act Article 50(3): this app categorises
+        complexion, and this is the disclosure of that.</p></details>
+      <div class="consent-actions">
+        <button id="consent-back" type="button">Back</button>
+        <button class="primary" id="consent-grant" type="button">Agree &amp; open camera</button>
+      </div>
+    </div>
   </div>
-
-  <!-- Unbundled. One decision, on its own, with nothing else attached to it,
-       and no way past this screen without it. -->
-  <p><button class="primary" id="consent-grant">I understand — open the camera</button></p>
-  <p><a href="./privacy.html">Privacy policy</a> · <a href="./index.html">Back</a></p>
 </section>
 
 <!-- ═══ Phase 4 — capture ════════════════════════════════════════════════ -->
@@ -206,30 +253,63 @@ button[disabled]{opacity:.45;cursor:not-allowed}
   <div class="capture-frame"><video id="preview" playsinline muted autoplay aria-label="Camera preview"
          style="width:100%;transform:scaleX(-1)"></video></div>
 
-  <!-- One line at a time: the worst-margin failure, and nothing else. A list
-       of everything wrong is a list nobody reads. -->
-  <p id="gate-line" role="status" aria-live="polite">Starting the camera…</p>
+  <div class="capture-status">
+    <p id="gate-line" role="status" aria-live="polite">Starting the camera…</p>
+    <ul class="capture-guide" id="capture-guide" aria-label="Scan readiness">
+      <li data-guide="frame" data-state="waiting">Face in frame</li>
+      <li data-guide="light" data-state="waiting">Even, neutral light</li>
+      <li data-guide="camera" data-state="waiting">Camera image clear</li>
+      <li data-guide="steady" data-state="waiting">Hold steady</li>
+    </ul>
+  </div>
   <svg class="spark" id="gate-ring" viewBox="0 0 100 6" aria-hidden="true">
     <line x1="0" y1="3" x2="100" y2="3" stroke="var(--qise-track)" stroke-width="4" />
     <line class="ring-fill" id="ring-fill" x1="0" y1="3" x2="100" y2="3"
           stroke="var(--chi)" stroke-width="4" stroke-dasharray="100" stroke-dashoffset="100" />
   </svg>
   <p class="muted">There is no shutter. The reading is taken when the frame is good.</p>
+  <p class="capture-help" id="capture-help" hidden>Still waiting? Face a window or plain white lamp. Do not use flash or a coloured lamp, and keep the whole face inside the frame.</p>
+  <div class="capture-actions"><button id="restart-capture" type="button">Restart camera</button></div>
 </section>
 
 <!-- ═══ Phase 9 — the reading ════════════════════════════════════════════ -->
 <section class="screen" id="screen-reading" aria-labelledby="reading-h">
-  <div class="reading-intro"><p class="eyebrow">Your face reading</p><h1 id="reading-h">Today</h1>
-  <p class="muted">Compared only with your own previous scans.</p></div>
-  <div class="seal-frame" id="reading-seal"></div>
-  <h2 id="reading-verdict"></h2>
-  <div class="surface"><div class="section-label"><h2>Your recent range</h2><span class="muted">No population score</span></div><div id="reading-gauges"></div></div>
-  <div class="section-label"><h2>What the scanner could read</h2><span class="muted">Evidence meter</span></div><div class="courts" id="reading-courts"></div>
-  <div class="surface"><p class="eyebrow">A traditional reading</p><p class="passage" id="reading-passage"></p></div>
-  <div class="chips" id="reading-tags"></div>
-  <svg class="spark" id="reading-spark" viewBox="0 0 300 44" aria-label="Thirty days of lustre"></svg>
-  <div id="reading-notices"></div>
-  <div class="actions">
+  <nav class="reading-tabs" role="tablist" aria-label="Reading views">
+    <button type="button" role="tab" data-reading-tab="today" aria-selected="true">Today</button>
+    <button type="button" role="tab" data-reading-tab="story" aria-selected="false">Story</button>
+    <button type="button" role="tab" data-reading-tab="pattern" aria-selected="false">Pattern</button>
+  </nav>
+
+  <section class="reading-panel" data-reading-panel="today" role="tabpanel">
+    <div class="reading-hero">
+      <div class="seal-frame" id="reading-seal"></div>
+      <p class="eyebrow">Today’s note</p>
+      <h1 class="reading-hook" id="reading-h"><span id="reading-hook"></span></h1>
+      <p class="reading-verdict" id="reading-verdict"></p>
+    </div>
+    <p class="reflection" id="reading-reflection"></p>
+    <p class="muted">Compared only with your own previous scans.</p>
+  </section>
+
+  <section class="reading-panel" data-reading-panel="story" role="tabpanel" hidden>
+    <p class="eyebrow">The tradition’s reading</p>
+    <h1>The story beneath today</h1>
+    <div class="surface"><p class="story-passage" id="reading-passage"></p></div>
+    <p class="reflection" id="reading-reflection-story"></p>
+    <div class="chips" id="reading-tags"></div>
+  </section>
+
+  <section class="reading-panel" data-reading-panel="pattern" role="tabpanel" hidden>
+    <p class="eyebrow">Your own pattern</p>
+    <h1>What changed — and what the scan could see</h1>
+    <p class="muted pattern-intro">These views use only your previous scans. They do not compare you with anyone else.</p>
+    <div class="surface"><div class="section-label"><h2>Your recent range</h2><span class="muted">Personal range</span></div><div id="reading-gauges"></div></div>
+    <div class="section-label"><h2>Areas read clearly</h2><span class="muted">Scan coverage</span></div><div class="courts" id="reading-courts"></div>
+    <svg class="spark" id="reading-spark" viewBox="0 0 300 44" aria-label="Thirty days of lustre"></svg>
+    <div id="reading-notices"></div>
+  </section>
+
+  <div class="actions reading-actions">
     <button class="primary wide" id="share-today">Share today's seal</button>
     <button id="go-history">Your column</button>
     <button id="go-capture">Scan again</button>

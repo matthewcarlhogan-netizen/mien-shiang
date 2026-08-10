@@ -34,6 +34,7 @@ if (redeemPaymentParam(location.search)) {
 
 // Cached last result, used to re-render after an in-session unlock.
 let lastResult = null;
+let activeResultScreen = "overview";
 
 // ----------------------------------------------------------------- consent --
 
@@ -55,6 +56,8 @@ $("file").addEventListener("change", (e) => {
   const f = e.target.files?.[0];
   if (!f) return;
   file = f;
+  document.body.classList.remove("has-results");
+  activeResultScreen = "overview";
 
   // Object URLs are not garbage collected; revoke the previous one.
   if (objectUrl) URL.revokeObjectURL(objectUrl);
@@ -78,7 +81,10 @@ $("go").addEventListener("click", async () => {
     const r = await runAnalysis(file, $("mirror").checked, say);
     render(r);
   } catch (err) {
-    $("out").innerHTML = `<div class="err"><p style="margin:0">${err.message}</p></div>`;
+    $("out").innerHTML = `<div class="err"><p id="analysis-error" style="margin:0"></p>
+      <button id="analysis-retry" class="ghost" type="button">Choose another photo</button></div>`;
+    $("analysis-error").textContent = err?.message || "This photo could not be read.";
+    $("analysis-retry").addEventListener("click", () => $("file").click());
   } finally {
     go.disabled = false;
   }
@@ -110,13 +116,15 @@ function render(r) {
            preserveAspectRatio="xMidYMid meet" aria-hidden="true">${polys}</svg>
     </div>`;
 
-  const parts = [];
+  const overviewParts = [];
+  const readingParts = [];
+  const detailsParts = [];
 
   // The receipt goes first, above everything. There is no ordering conflict
   // with Module B: a referral that halts the reading means `r.reading` is
   // never rendered at all, so a summary and a halt notice cannot both appear.
   if (!result.halted) {
-    parts.push(renderSummary(r.reading, {
+    overviewParts.push(renderSummary(r.reading, {
       caveatHtml: summaryCaveatHtml(),
       actionsHtml: shareControlsHtml(),
     }));
@@ -125,29 +133,29 @@ function render(r) {
   // Module B renders through its own module — its vocabulary lives with its
   // content, not on this Module A surface. All of these return "" when Module
   // B was not composed into the build.
-  parts.push(renderReferrals(result.referrals));
-  parts.push(renderHaltNotice(result.halted));
+  overviewParts.push(renderReferrals(result.referrals));
+  overviewParts.push(renderHaltNotice(result.halted));
   // Stays DEFAULT-VISIBLE, directly under the receipt. The summary states
   // scope; this panel states what could not be measured at all. Neither
   // substitutes for the other.
-  parts.push(renderMeasurementLimits(baseline, notMeasured));
+  overviewParts.push(renderMeasurementLimits(baseline, notMeasured));
 
   // MODULE A — the reading, gated when the user has not yet unlocked.
   // Five Elements (face shape) is always visible; the remaining sections are
   // shown only after sharing or paying.
   if (!result.halted) {
     const locked = !isUnlocked();
-    parts.push(renderReadingGated(r.reading, {
+    readingParts.push(renderReadingGated(r.reading, {
       locked,
       overlayHtml: locked ? gateOverlayHtml(getShareCount()) : "",
       insightsCaveatText: insightsCaveatText(),
     }));
-    parts.push(renderScienceLink());
-    parts.push(renderReportButton());
+    detailsParts.push(renderScienceLink());
+    detailsParts.push(renderReportButton());
   }
 
   for (const rec of result.recommendations) {
-    parts.push(`
+    detailsParts.push(`
       <article class="rec">
         <h3>${rec.name ?? rec.rule}</h3>
         <p>${rec.message}</p>
@@ -160,15 +168,68 @@ function render(r) {
   // MODULE B — separate block, own disclaimer, never inside the reading.
   // Empty string in an entertainment-only build, where these rules were never
   // composed into the set at all.
-  parts.push(renderAdvisories(result.advisories));
+  detailsParts.push(renderAdvisories(result.advisories));
 
-  parts.push(renderGeometry(r.geometry, r.expression, r.delegate));
+  detailsParts.push(renderGeometry(r.geometry, r.expression, r.delegate));
 
-  $("out").innerHTML = parts.join("");
+  $("out").innerHTML = `
+    <div class="result-shell">
+      <div class="result-titlebar">
+        <div><p class="eyebrow">Your reading</p><h2>Scan result</h2></div>
+        <button id="new-scan" class="ghost result-new" type="button">New scan</button>
+      </div>
+      <nav class="result-tabs" role="tablist" aria-label="Reading screens">
+        <button type="button" role="tab" data-result-target="overview">Overview</button>
+        <button type="button" role="tab" data-result-target="reading"${result.halted ? " disabled" : ""}>Reading</button>
+        <button type="button" role="tab" data-result-target="details">Details</button>
+      </nav>
+      <section class="result-panel" data-result-panel="overview" role="tabpanel">${overviewParts.join("")}</section>
+      <section class="result-panel" data-result-panel="reading" role="tabpanel">${readingParts.join("")}</section>
+      <section class="result-panel" data-result-panel="details" role="tabpanel">${detailsParts.join("")}</section>
+    </div>`;
+  document.body.classList.add("has-results");
+  wireResultScreens();
+  window.scrollTo({ top: 0 });
   wireScienceScreen();
   wireReportControl();
   wireShare(r);
   wireShareGate(r);
+}
+
+function wireResultScreens() {
+  const select = (name, { scroll = true } = {}) => {
+    const target = document.querySelector(`[data-result-panel="${name}"]`);
+    if (!target) return;
+    activeResultScreen = name;
+    for (const panel of document.querySelectorAll("[data-result-panel]")) {
+      panel.hidden = panel !== target;
+    }
+    for (const button of document.querySelectorAll("[data-result-target]")) {
+      const selected = button.dataset.resultTarget === name;
+      button.setAttribute("aria-selected", String(selected));
+      button.tabIndex = selected ? 0 : -1;
+    }
+    if (scroll) window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  for (const button of document.querySelectorAll("[data-result-target]")) {
+    button.addEventListener("click", () => select(button.dataset.resultTarget));
+  }
+  for (const chip of document.querySelectorAll(".summary-chip")) {
+    chip.addEventListener("click", (event) => {
+      event.preventDefault();
+      const id = chip.getAttribute("href")?.slice(1);
+      select("reading", { scroll: false });
+      requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth" }));
+    });
+  }
+  $("new-scan")?.addEventListener("click", () => {
+    document.body.classList.remove("has-results");
+    activeResultScreen = "overview";
+    $("out").innerHTML = "";
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+  select(activeResultScreen, { scroll: false });
 }
 
 /**
@@ -306,7 +367,10 @@ function wireShareGate(r) {
 
   shareBtn.addEventListener("click", async () => {
     shareBtn.disabled = true;
-    const original = shareBtn.textContent;
+    const settledLabel = () => {
+      const remaining = Math.max(0, 2 - getShareCount());
+      return `Share with ${remaining} friend${remaining !== 1 ? "s" : ""}`;
+    };
 
     // Extract face shape name if available — tradition-attributed framing only.
     const faceShapeName = r.reading?.fiveElements?.available
@@ -331,7 +395,7 @@ function wireShareGate(r) {
           shareBtn.textContent = `Share with ${rem} friend${rem !== 1 ? "s" : ""}`;
         }
       } else if (result === "cancelled") {
-        shareBtn.textContent = original;
+        shareBtn.textContent = settledLabel();
       } else {
         shareBtn.textContent = "Could not share";
       }
@@ -340,7 +404,9 @@ function wireShareGate(r) {
       console.error("share gate failed:", err);
     } finally {
       shareBtn.disabled = false;
-      setTimeout(() => { if (shareBtn.textContent !== original) shareBtn.textContent = original; }, 3500);
+      setTimeout(() => {
+        if (shareBtn.isConnected) shareBtn.textContent = settledLabel();
+      }, 3500);
     }
   });
 

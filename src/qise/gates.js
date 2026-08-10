@@ -192,6 +192,32 @@ export const GATES = Object.freeze([
   },
 ]);
 
+/** The ten technical gates condensed into four things a person can act on. */
+export const CAPTURE_GUIDE_GROUPS = Object.freeze([
+  { id: "frame", label: "Face in frame", gates: ["pose", "distance", "sclera", "roiValidity"] },
+  { id: "light", label: "Even, neutral light", gates: ["overexposed", "underexposed", "sidelight", "illuminant"] },
+  { id: "camera", label: "Camera image clear", gates: ["filter"] },
+  { id: "steady", label: "Hold steady", gates: ["motion"] },
+]);
+
+export function captureGuide(report) {
+  const margins = report && report.margins ? report.margins : {};
+  const failures = report && Array.isArray(report.failures) ? report.failures : [];
+
+  return CAPTURE_GUIDE_GROUPS.map((group) => {
+    const values = group.gates.map((id) => margins[id]).filter(Number.isFinite);
+    const ready = values.length === group.gates.length && values.every((value) => value >= 0);
+    const activeFailure = failures.find((failure) => group.gates.includes(failure.id));
+    return {
+      id: group.id,
+      label: group.label,
+      ready,
+      state: ready ? "ready" : (values.length ? "adjust" : "waiting"),
+      message: activeFailure ? activeFailure.message : null,
+    };
+  });
+}
+
 /**
  * Run every gate.
  *
