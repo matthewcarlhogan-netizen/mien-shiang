@@ -5,7 +5,7 @@
  * second launch works with no connection at all. */
 // Bumped when the shell list changes: the activate handler deletes every cache
 // whose name is not CACHE, so a stale v1 holding an old SHELL cannot survive.
-const CACHE = "mienshiang-v16";
+const CACHE = "mienshiang-v18";
 const SHELL = [
   "./", "./index.html", "./ui.js", "./analysis.js", "./engine.js",
   // Measurement calibration. Owned by neither module; engine.js imports both,
@@ -22,7 +22,7 @@ const SHELL = [
   // Module A reading + its views.
   "./reading/index.js", "./reading/five-elements.js", "./reading/three-courts.js",
   "./reading/twelve-palaces.js", "./reading/qi-se.js", "./reading/science.js",
-  "./reading/summary.js", "./reading/harmony.js",
+  "./reading/summary.js", "./reading/harmony.js", "./reading/provenance.js",
   "./readingview.js", "./scienceview.js", "./sharecard.js", "./shareGate.js",
   // Both module adapters ship in both flavours. The flag governs BEHAVIOUR,
   // not bytes — see the honest limitation in flags.js. Omitting safety.js here
@@ -35,6 +35,7 @@ const SHELL = [
   // rather than the whole install.
   "./qise.html",
   "./qise/consent.js", "./qise/color.js", "./qise/rois.js", "./qise/sclera.js",
+  "./qise/illumination.js", "./qise/upload.js",
   "./qise/gates.js", "./qise/camera.js", "./qise/metrics.js", "./qise/pose.js",
   "./qise/baseline.js", "./qise/store.js", "./qise/passages.js",
   "./qise/patterns.js",

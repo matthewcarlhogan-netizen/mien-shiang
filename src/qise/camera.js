@@ -37,6 +37,79 @@ export const CAPTURE_CONSTRAINTS = Object.freeze({
   video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 960 } },
 });
 
+export const CAMERA_READY_TIMEOUT_MS = 8000;
+
+/** Turn browser camera errors into a useful next action rather than a dead preview. */
+export function describeCameraError(error) {
+  const name = error?.name || "";
+  if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+    return "Camera access is off. Allow it in this site's settings, or choose a selfie below.";
+  }
+  if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+    return "No front camera was found. Choose a selfie below instead.";
+  }
+  if (name === "NotReadableError" || name === "TrackStartError") {
+    return "Another app may be using the camera. Close it, retry, or choose a selfie below.";
+  }
+  if (name === "OverconstrainedError" || name === "ConstraintNotSatisfiedError") {
+    return "This camera could not use the requested setup. Retry, or choose a selfie below.";
+  }
+  if (name === "SecurityError") {
+    return "The camera needs a secure page. Open the HTTPS link, or choose a selfie below.";
+  }
+  return "The camera did not open. Retry, check this site's camera permission, or choose a selfie below.";
+}
+
+/**
+ * Attach a stream and wait for real frame dimensions before drawing it.
+ * `video.play()` can resolve while Safari still reports a 0x0 frame; drawing
+ * that frame throws inside requestAnimationFrame and used to leave a frozen
+ * preview with the camera light still on.
+ */
+export async function attachCameraPreview(video, stream, {
+  timeoutMs = CAMERA_READY_TIMEOUT_MS,
+  setTimer = setTimeout,
+  clearTimer = clearTimeout,
+} = {}) {
+  if (!video || !stream) throw new TypeError("attachCameraPreview requires a video and stream");
+  video.srcObject = stream;
+  if (typeof video.play === "function") await video.play();
+  if (video.videoWidth > 0 && video.videoHeight > 0) return video;
+
+  await new Promise((resolve, reject) => {
+    let timer = null;
+    const cleanup = () => {
+      if (typeof video.removeEventListener === "function") {
+        video.removeEventListener("loadedmetadata", ready);
+        video.removeEventListener("canplay", ready);
+        video.removeEventListener("error", failed);
+      }
+      if (timer !== null) clearTimer(timer);
+    };
+    const ready = () => {
+      if (!(video.videoWidth > 0 && video.videoHeight > 0)) return;
+      cleanup();
+      resolve();
+    };
+    const failed = () => {
+      cleanup();
+      reject(new Error("The camera preview could not be decoded."));
+    };
+    if (typeof video.addEventListener !== "function") {
+      reject(new Error("The camera preview did not expose frame dimensions."));
+      return;
+    }
+    video.addEventListener("loadedmetadata", ready);
+    video.addEventListener("canplay", ready);
+    video.addEventListener("error", failed);
+    timer = setTimer(() => {
+      cleanup();
+      reject(new Error("Timed out waiting for the first camera frame."));
+    }, timeoutMs);
+  });
+  return video;
+}
+
 /* ── capture mode negotiation ────────────────────────────────────────────── */
 
 const LOCKABLE = ["whiteBalanceMode", "exposureMode"];
@@ -305,7 +378,10 @@ export class GreenLatch {
  * @param {{canvas?:Object, images?:Array, landmarks?:Array, stream?:Object}} scratch
  */
 export function releaseCapture(scratch) {
-  const released = { images: 0, landmarkArrays: 0, canvasCleared: false, tracksStopped: 0 };
+  const released = {
+    images: 0, landmarkArrays: 0, canvasCleared: false, tracksStopped: 0,
+    landmarkerClosed: false, previewCleared: false,
+  };
   if (!scratch) return released;
 
   for (const image of scratch.images || []) {
@@ -329,10 +405,21 @@ export function releaseCapture(scratch) {
       if (typeof t.stop === "function") { t.stop(); released.tracksStopped++; }
     }
   }
+  if (scratch.landmarker && typeof scratch.landmarker.close === "function") {
+    scratch.landmarker.close();
+    released.landmarkerClosed = true;
+  }
+  if (scratch.video && "srcObject" in scratch.video) {
+    if (typeof scratch.video.pause === "function") scratch.video.pause();
+    scratch.video.srcObject = null;
+    released.previewCleared = true;
+  }
 
   scratch.images = null;
   scratch.landmarks = null;
   scratch.canvas = null;
   scratch.stream = null;
+  scratch.landmarker = null;
+  scratch.video = null;
   return released;
 }

@@ -20,10 +20,21 @@
  */
 import { createConsent, assertConsentGranted } from "../../qise/consent.js";
 import { paletteCss } from "./palette.js";
-import { openCamera, createLandmarkerGuarded, releaseCapture, GreenLatch, PolygonSmoother, BURST_FRAMES, trimmedMedianLab, reduceBurst } from "../../qise/camera.js";
+import {
+  openCamera, attachCameraPreview, describeCameraError, createLandmarkerGuarded,
+  releaseCapture, GreenLatch, PolygonSmoother, BURST_FRAMES, trimmedMedianLab, reduceBurst,
+} from "../../qise/camera.js";
+import { createLandmarkerWithFallback } from "../../landmarker.js";
+import {
+  fitSelfieDimensions, validateSelfieDimensions, validateSelfieFile,
+} from "../../qise/upload.js";
 import { readRois } from "../../qise/rois.js";
 import { headPose } from "../../qise/pose.js";
 import { sampleSclera } from "../../qise/sclera.js";
+import {
+  SETTLE_MS, createIlluminationSession, illuminationPhase, meanFaceRgb,
+  recordIlluminationSample, summarizeIllumination, publicIlluminationSummary,
+} from "../../qise/illumination.js";
 import { evaluateGates, captureGuide } from "../../qise/gates.js";
 import { computeReadingMetrics, lumRatioP90P50 } from "../../qise/metrics.js";
 import { interpretReading, readingConfidence, axesOf } from "../../qise/baseline.js";
@@ -48,6 +59,7 @@ let scratch = null;
 let activeShareCadence = "week";
 let captureRun = 0;
 let activeReadingTab = "today";
+let illuminationRequested = false;
 
 /* ── screens ─────────────────────────────────────────────────────────────── */
 
@@ -83,21 +95,45 @@ function renderCaptureGuide(report = null) {
   }
 }
 
+function showIlluminationPhase(phase) {
+  const wash = $("illumination-wash");
+  if (!wash || !phase) return;
+  wash.hidden = false;
+  wash.style.backgroundColor = phase.colour;
+  wash.style.opacity = String(phase.opacity);
+}
+
+function clearIlluminationPhase() {
+  const wash = $("illumination-wash");
+  if (!wash) return;
+  wash.style.opacity = "0";
+  wash.hidden = true;
+}
+
+function illuminationOrderBit() {
+  const value = new Uint8Array(1);
+  crypto.getRandomValues(value);
+  return value[0] & 1;
+}
+
 /* ── the capture loop ────────────────────────────────────────────────────── */
 
-async function buildLandmarker() {
+async function buildLandmarker(runningMode = "VIDEO") {
   // Dynamic, and only ever reached past the consent assertion.
+  assertConsentGranted(consent, "FaceLandmarker");
   const { FaceLandmarker, FilesetResolver } = await import(MEDIAPIPE_BUNDLE);
   const fileset = await FilesetResolver.forVisionTasks(`${MEDIAPIPE_BUNDLE}/wasm`);
-  return createLandmarkerGuarded({
-    consent,
-    factory: (options) => FaceLandmarker.createFromOptions(fileset, options),
-    options: {
-      baseOptions: { modelAssetPath: FACE_MODEL, delegate: "GPU" },
-      runningMode: "VIDEO",
-      numFaces: 1,
-    },
+  const guardedFactory = (_resolvedFileset, options) => createLandmarkerGuarded({
+    consent, options,
+    factory: (guardedOptions) => FaceLandmarker.createFromOptions(fileset, guardedOptions),
   });
+  const built = await createLandmarkerWithFallback(
+    guardedFactory,
+    fileset,
+    { modelAssetPath: FACE_MODEL, runningMode, outputFaceBlendshapes: false },
+    (message) => { if ($("gate-line")) $("gate-line").textContent = message; },
+  );
+  return built.landmarker;
 }
 
 async function runCapture() {
@@ -112,31 +148,40 @@ async function runCapture() {
   $("gate-line").textContent = "Starting the camera…";
   $("ring-fill").setAttribute("stroke-dashoffset", "100");
   $("capture-help").hidden = true;
+  clearIlluminationPhase();
 
   const video = $("preview");
+  const selfiePreview = $("selfie-preview");
+  video.hidden = false;
+  selfiePreview.hidden = true;
+  $("selfie-status").textContent = "";
   const opened = await openCamera({ consent, mediaDevices: navigator.mediaDevices });
   if (runId !== captureRun) {
     releaseCapture({ stream: opened.stream, images: [], landmarks: [], canvas: null });
     return;
   }
-  video.srcObject = opened.stream;
-  await video.play();
 
-  let landmarker;
+  let landmarker = null;
   try {
-    landmarker = await buildLandmarker();
+    await attachCameraPreview(video, opened.stream);
+    landmarker = await buildLandmarker("VIDEO");
   } catch (error) {
-    releaseCapture({ stream: opened.stream, images: [], landmarks: [], canvas: null });
+    releaseCapture({
+      stream: opened.stream, images: [], landmarks: [], canvas: null,
+      landmarker, video,
+    });
     throw error;
   }
   if (runId !== captureRun) {
     if (typeof landmarker.close === "function") landmarker.close();
-    releaseCapture({ stream: opened.stream, images: [], landmarks: [], canvas: null });
+    releaseCapture({ stream: opened.stream, images: [], landmarks: [], canvas: null, video });
     return;
   }
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  scratch = { canvas, images: [], landmarks: [], stream: opened.stream };
+  scratch = {
+    canvas, images: [], landmarks: [], stream: opened.stream, landmarker, video,
+  };
 
   const latch = new GreenLatch();
   const smoother = new PolygonSmoother();
@@ -147,9 +192,35 @@ async function runCapture() {
   const history = await store.all();
   const scleraHistory = history.map((r) => r.sclera && r.sclera.rawRatios).filter(Boolean);
 
+  const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const useIllumination = illuminationRequested && !reducedMotion;
+  let illuminationDone = !useIllumination;
+  let illuminationSession = null;
+  let illuminationSummary = publicIlluminationSummary(null, {
+    requested: illuminationRequested,
+    reason: illuminationRequested && reducedMotion ? "reduced-motion" : null,
+  });
+  let settleUntil = 0;
+
   const burst = {};
   let collecting = 0;
-  let lastLandmarks = null, lastSclera = null, lastRois = null, lastMargins = null;
+  let lastSclera = null, lastRois = null, lastMargins = null;
+
+  const stopAfterLoopError = (error) => {
+    if (runId !== captureRun) return;
+    console.error("qise: live capture stopped", error);
+    captureRun++;
+    if (scratch) releaseCapture(scratch);
+    scratch = null;
+    clearIlluminationPhase();
+    renderCaptureGuide();
+    $("gate-line").textContent = error?.name
+      ? describeCameraError(error)
+      : "The scanner stopped. Retry the camera, or choose a selfie below.";
+  };
+  const scheduleStep = () => requestAnimationFrame((time) => {
+    step(time).catch(stopAfterLoopError);
+  });
 
   const step = async (nowMs) => {
     if (!scratch || runId !== captureRun) return;
@@ -169,6 +240,11 @@ async function runCapture() {
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
     const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    scratch.images = [image];
+    const clearFrame = () => {
+      image.data.fill(0);
+      if (scratch) scratch.images = [];
+    };
     const result = landmarker.detectForVideo(video, nowMs);
     const mesh = result && result.faceLandmarks && result.faceLandmarks[0];
 
@@ -182,14 +258,14 @@ async function runCapture() {
         y: p.y * canvas.height,
         z: typeof p.z === "number" ? p.z * canvas.width : undefined,
       }));
-      lastLandmarks = pts;
-
       if (previous) {
         const d = pts.reduce((s, p, i) => s + Math.hypot(p.x - previous[i].x, p.y - previous[i].y), 0) / pts.length;
         drift.push(d);
         if (drift.length > 5) drift.shift();
+        previous.length = 0;
       }
       previous = pts;
+      scratch.landmarks = [pts];
 
       lastRois = readRois(image, pts, { mirrored: false }, color);
       lastSclera = sampleSclera(image, pts, { mirrored: false }, { samples: scleraHistory });
@@ -203,10 +279,61 @@ async function runCapture() {
       $("gate-line").textContent = gates.pass ? "Hold it there…" : gates.failures[0].message;
       renderCaptureGuide(gates);
       $("capture-help").hidden = nowMs - startedAt < 10000;
+
+      if (illuminationSession) {
+        if (!gates.pass) {
+          illuminationSummary = publicIlluminationSummary(
+            { outcome: "inconclusive", phasesRead: 0 },
+            { requested: true, reason: "frame-moved" });
+          illuminationSession = null;
+          illuminationDone = true;
+          settleUntil = nowMs + SETTLE_MS;
+          clearIlluminationPhase();
+          latch.reset();
+        } else {
+          const active = illuminationPhase(illuminationSession, nowMs);
+          if (active.done) {
+            illuminationSummary = publicIlluminationSummary(
+              summarizeIllumination(illuminationSession), { requested: true });
+            illuminationSession = null;
+            illuminationDone = true;
+            settleUntil = nowMs + SETTLE_MS;
+            clearIlluminationPhase();
+            latch.reset();
+            $("gate-line").textContent = "Screen-light check complete. Hold steady for the reading…";
+          } else {
+            showIlluminationPhase(active.phase);
+            recordIlluminationSample(
+              illuminationSession, active.phase.key, meanFaceRgb(lastRois));
+            $("gate-line").textContent = "Optional screen-light check in progress…";
+            $("ring-fill").setAttribute("stroke-dashoffset",
+              String(100 - Math.round(((active.index + 1) / illuminationSession.sequence.length) * 100)));
+            clearFrame();
+            scheduleStep();
+            return;
+          }
+        }
+      }
+
       const held = latch.update(gates.pass, nowMs);
       $("ring-fill").setAttribute("stroke-dashoffset", String(100 - Math.round(held.progress * 100)));
 
-      if (held.ready) { collecting = BURST_FRAMES; lastMargins = gates.margins; }
+      if (held.ready) {
+        if (useIllumination && !illuminationDone) {
+          illuminationSession = createIlluminationSession(nowMs, illuminationOrderBit());
+          showIlluminationPhase(illuminationSession.sequence[0]);
+          latch.reset();
+          clearFrame();
+          scheduleStep();
+          return;
+        }
+        if (nowMs < settleUntil) {
+          latch.reset();
+        } else {
+          collecting = BURST_FRAMES;
+          lastMargins = gates.margins;
+        }
+      }
 
       if (collecting > 0) {
         for (const [name, roi] of Object.entries(lastRois.rois)) {
@@ -215,7 +342,9 @@ async function runCapture() {
         }
         collecting--;
         if (collecting === 0) {
-          await finish(burst, lastRois, lastSclera, opened, history, lastMargins);
+          clearFrame();
+          await finish(burst, lastRois, lastSclera, opened, history, lastMargins,
+            illuminationSummary);
           return;
         }
       }
@@ -225,9 +354,153 @@ async function runCapture() {
       $("capture-help").hidden = nowMs - startedAt < 10000;
     }
 
-    requestAnimationFrame(step);
+    clearFrame();
+    scheduleStep();
   };
-  requestAnimationFrame(step);
+  scheduleStep();
+}
+
+async function decodeSelfie(file) {
+  if (typeof createImageBitmap === "function") {
+    try {
+      const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+      return {
+        source: bitmap, width: bitmap.width, height: bitmap.height,
+        release: () => bitmap.close(),
+      };
+    } catch { /* Safari formats can still decode through an image element. */ }
+  }
+
+  const url = URL.createObjectURL(file);
+  const image = new Image();
+  image.decoding = "async";
+  try {
+    await new Promise((resolve, reject) => {
+      image.onload = resolve;
+      image.onerror = () => reject(new Error("The selected image could not be decoded."));
+      image.src = url;
+    });
+    return {
+      source: image, width: image.naturalWidth, height: image.naturalHeight,
+      release: () => { image.src = ""; URL.revokeObjectURL(url); },
+    };
+  } catch (error) {
+    URL.revokeObjectURL(url);
+    throw error;
+  }
+}
+
+function discardSelfieScratch() {
+  if (scratch) releaseCapture(scratch);
+  scratch = null;
+  const canvas = $("selfie-preview");
+  canvas.hidden = true;
+}
+
+async function runSelfie(file) {
+  assertConsentGranted(consent, "selfie processing");
+  const fileCheck = validateSelfieFile(file);
+  if (!fileCheck.ok) {
+    $("selfie-status").textContent = fileCheck.message;
+    return;
+  }
+
+  const runId = ++captureRun;
+  if (scratch) releaseCapture(scratch);
+  scratch = null;
+  show("screen-capture");
+  clearIlluminationPhase();
+  renderCaptureGuide();
+  $("capture-help").hidden = true;
+  $("ring-fill").setAttribute("stroke-dashoffset", "100");
+  $("gate-line").textContent = "Checking your selfie on this device…";
+  $("selfie-status").textContent = "Preparing the original photo…";
+
+  const video = $("preview");
+  video.hidden = true;
+  video.srcObject = null;
+  const canvas = $("selfie-preview");
+  canvas.hidden = false;
+
+  let decoded = null;
+  let landmarker = null;
+  try {
+    decoded = await decodeSelfie(file);
+    const dimensionCheck = validateSelfieDimensions(decoded.width, decoded.height);
+    if (!dimensionCheck.ok) throw new Error(dimensionCheck.message);
+    const fitted = fitSelfieDimensions(decoded.width, decoded.height);
+    canvas.width = fitted.width;
+    canvas.height = fitted.height;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) throw new Error("This browser could not prepare the selfie.");
+    ctx.drawImage(decoded.source, 0, 0, fitted.width, fitted.height);
+    decoded.release();
+    decoded = null;
+
+    const image = ctx.getImageData(0, 0, fitted.width, fitted.height);
+    scratch = {
+      canvas, images: [image], landmarks: [], stream: null, landmarker: null, video: null,
+    };
+    landmarker = await buildLandmarker("IMAGE");
+    scratch.landmarker = landmarker;
+    if (runId !== captureRun) {
+      discardSelfieScratch();
+      return;
+    }
+
+    const result = landmarker.detect(canvas);
+    const mesh = result?.faceLandmarks?.[0];
+    if (!mesh) {
+      $("gate-line").textContent = "Choose a selfie with one full, front-facing face.";
+      $("selfie-status").textContent = "No clear face was found. The selected photo was discarded.";
+      discardSelfieScratch();
+      return;
+    }
+
+    const pts = mesh.map((point) => ({
+      x: point.x * canvas.width,
+      y: point.y * canvas.height,
+      z: typeof point.z === "number" ? point.z * canvas.width : undefined,
+    }));
+    scratch.landmarks = [pts];
+    const history = await store.all();
+    const scleraHistory = history.map((reading) => reading.sclera?.rawRatios).filter(Boolean);
+    const rois = readRois(image, pts, { mirrored: false }, color);
+    const sclera = sampleSclera(image, pts, { mirrored: false }, { samples: scleraHistory });
+    const gates = evaluateGates(frameStats(image, rois, canvas.width, [], headPose(pts)), pts, sclera);
+    renderCaptureGuide(gates);
+    if (!gates.pass) {
+      $("gate-line").textContent = gates.failures[0].message;
+      $("selfie-status").textContent = "Choose another selfie using the shot guide. This photo was discarded.";
+      discardSelfieScratch();
+      return;
+    }
+
+    const burst = {};
+    for (const [name, roi] of Object.entries(rois.rois)) {
+      if (!roi.pixels.length) continue;
+      const sample = trimmedMedianLab(roi.pixels, color);
+      burst[name] = Array.from({ length: BURST_FRAMES }, () => ({ ...sample }));
+    }
+    $("ring-fill").setAttribute("stroke-dashoffset", "0");
+    $("gate-line").textContent = "Selfie ready. Writing your reading…";
+    $("selfie-status").textContent = "The selected photo will now be discarded.";
+    const illumination = publicIlluminationSummary(null, {
+      requested: illuminationRequested,
+      reason: illuminationRequested ? "selfie-upload" : null,
+    });
+    await finish(
+      burst, rois, sclera, { captureMode: "upload" }, history, gates.margins, illumination,
+    );
+  } catch (error) {
+    decoded?.release?.();
+    if (runId === captureRun) {
+      console.error("qise: selfie processing failed", error);
+      discardSelfieScratch();
+      $("gate-line").textContent = "Choose another clear, front-facing selfie.";
+      $("selfie-status").textContent = `${error?.message || "The selected image could not be read."} The photo was discarded.`;
+    }
+  }
 }
 
 /** Frame statistics the gates need, gathered once per frame. */
@@ -279,8 +552,14 @@ function frameStats(image, rois, frameWidth, drift, pose) {
 
 /* ── finishing a reading ─────────────────────────────────────────────────── */
 
-async function finish(burst, rois, sclera, opened, history, gateMargins) {
-  const { lab: rawLab, frameJitter } = reduceBurst(burst);
+async function finish(burst, rois, sclera, opened, history, gateMargins, illumination) {
+  const reduced = reduceBurst(burst);
+  const rawLab = reduced.lab;
+  // A still image has no temporal samples. Do not report duplicated analysis
+  // rows as measured zero jitter; null says that stability was not observed.
+  const frameJitter = opened.captureMode === "upload"
+    ? { ...reduced.frameJitter, overall: null }
+    : reduced.frameJitter;
 
   const correctedLab = {};
   for (const [name, lab] of Object.entries(rawLab)) {
@@ -314,6 +593,7 @@ async function finish(burst, rois, sclera, opened, history, gateMargins) {
     deviceFingerprintHash: await fingerprintHash(),
     captureMode: opened.captureMode,
     consentVersion: consent.read() && consent.read().version,
+    illumination,
     // The margins from the frame that opened the burst. gates.js normalises
     // them precisely so a capture that scraped through at +0.02 can later be
     // told apart from one that sailed through, and storing null here would
@@ -496,6 +776,7 @@ async function boot() {
   }
 
   $("consent-grant").addEventListener("click", async () => {
+    illuminationRequested = Boolean($("illumination-opt-in")?.checked);
     consent.grant();
     try {
       await runCapture();
@@ -503,15 +784,34 @@ async function boot() {
       // Not swallowed. A camera that never opens must say so rather than
       // leaving the user on a screen that does nothing.
       console.error("qise: capture failed", err);
-      $("gate-line").textContent = "The camera did not open. Check the site's camera permission and try again.";
+      $("gate-line").textContent = describeCameraError(err);
       show("screen-capture");
     }
   });
 
-  $("go-capture").addEventListener("click", () => runCapture().catch((e) => console.error(e)));
+  $("selfie-upload").addEventListener("click", () => {
+    captureRun++;
+    if (scratch) releaseCapture(scratch);
+    scratch = null;
+    $("preview").hidden = true;
+    $("gate-line").textContent = "Choose an original selfie from this device.";
+  });
+  $("selfie-upload").addEventListener("change", (event) => {
+    const input = event.currentTarget;
+    const [file] = input.files || [];
+    runSelfie(file).catch((error) => {
+      console.error(error);
+      $("selfie-status").textContent = "That selfie could not be read. Choose another original photo.";
+    }).finally(() => { input.value = ""; });
+  });
+  $("go-capture").addEventListener("click", () => runCapture().catch((error) => {
+    console.error(error);
+    $("gate-line").textContent = describeCameraError(error);
+    show("screen-capture");
+  }));
   $("restart-capture").addEventListener("click", () => runCapture().catch((e) => {
     console.error(e);
-    $("gate-line").textContent = "The camera did not restart. Check camera permission and try again.";
+    $("gate-line").textContent = describeCameraError(e);
   }));
   $("go-history").addEventListener("click", () => renderHistory().catch((e) => console.error(e)));
   $("back-reading").addEventListener("click", () => show("screen-reading"));

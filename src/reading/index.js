@@ -27,6 +27,7 @@ import { readThreeCourts } from "./three-courts.js";
 import { readTwelvePalaces } from "./twelve-palaces.js";
 import { readQiSe } from "./qi-se.js";
 import { readHarmony } from "./harmony.js";
+import { READING_PROVENANCE_IDS } from "./provenance.js";
 
 /**
  * @param {object} geometry    geometryReport() output
@@ -36,6 +37,7 @@ import { readHarmony } from "./harmony.js";
 export function composeReading(geometry, complexion, raw) {
   return {
     module: "A",
+    provenanceIds: READING_PROVENANCE_IDS,
     fiveElements: geometry ? readFiveElements(geometry) : null,
     threeCourts: geometry ? readThreeCourts(geometry) : null,
     twelvePalaces: raw ? readTwelvePalaces(raw) : null,
@@ -45,3 +47,4 @@ export function composeReading(geometry, complexion, raw) {
 }
 
 export { readFiveElements, readThreeCourts, readTwelvePalaces, readQiSe, readHarmony };
+export { READING_PROVENANCE_IDS } from "./provenance.js";

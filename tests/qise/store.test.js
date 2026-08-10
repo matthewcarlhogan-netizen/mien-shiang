@@ -30,7 +30,11 @@ const hazardousReading = () => ({
   tags: ["poor sleep"],
   deviceFingerprintHash: "sha256:abcd",
   captureMode: "auto",
-  consentVersion: "qise-consent-v1",
+  consentVersion: "qise-consent-v2",
+  illumination: {
+    version: "screen-light-v1", requested: true, outcome: "responsive",
+    phasesRead: 2, reason: null, scores: { blue: 0.1, green: 0.2 },
+  },
   gateMargins: { pose: 0.8, motion: 0.4 },
   sclera: { gains: { r: 1, g: 1, b: 1 }, rawRatios: { r: 1, g: 1, b: 1 }, personalDelta: null, confidence: "ok", pixelCount: 400 },
   roiValidity: { tian: true, quan_l: true },
@@ -91,7 +95,12 @@ test("what IS kept is enough to recompute a trend", () => {
   assert.deepEqual(r.axes, { a: 14, b: 12, L: 62, C: 18, periorbitalL: 55 });
   assert.deepEqual(r.tags, ["poor sleep"]);
   assert.equal(r.captureMode, "auto");
-  assert.equal(r.consentVersion, "qise-consent-v1");
+  assert.equal(r.consentVersion, "qise-consent-v2");
+  assert.deepEqual(r.illumination, {
+    version: "screen-light-v1", requested: true, outcome: "responsive",
+    phasesRead: 2, reason: null,
+  });
+  assert.equal(JSON.stringify(r.illumination).includes("scores"), false);
   assert.ok(r.gateMargins && r.sclera && r.roiValidity);
   // `sclera.pixelCount` is deliberately absent: it matches /pixel/i, and the
   // brief's persist list never asked for it. Dropping the field is the right

@@ -100,6 +100,16 @@ export function toRecord(reading) {
     captureMode: r.captureMode ?? null,
     consentVersion: r.consentVersion ?? null,
 
+    // Categorical experiment metadata only. Raw reflected channel responses
+    // are removed before this boundary by publicIlluminationSummary().
+    illumination: r.illumination ? {
+      version: r.illumination.version ?? null,
+      requested: Boolean(r.illumination.requested),
+      outcome: r.illumination.outcome ?? "skipped",
+      phasesRead: Number.isInteger(r.illumination.phasesRead) ? r.illumination.phasesRead : 0,
+      reason: r.illumination.reason ?? null,
+    } : null,
+
     gateMargins: scalarMap(r.gateMargins),
 
     sclera: r.sclera ? {

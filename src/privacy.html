@@ -55,27 +55,34 @@ footer{border-top:1px solid var(--rule);margin-top:2.5rem;padding-top:1rem;
 
   <div class="key">
     <p><strong>The short version.</strong> Your photo is analysed on your device
-    and then discarded. It is never uploaded, never stored, and never linked to
-    you or to anything else. There is no account, no analytics, and no
-    advertising. We cannot see your face, because it never reaches us.</p>
+    and then discarded. It is never uploaded or stored. The Qi Se tracker can
+    keep derived reading values in this browser for your private history; they
+    never reach us and can be deleted in one tap. There is no account, no
+    analytics, and no advertising. We cannot see your face or your readings.</p>
   </div>
 
   <h2>What the app collects</h2>
 
   <h3>Camera and photos</h3>
   <p>When you take or choose a photo, it is drawn onto a canvas inside the app,
-  measured, and discarded. The image and the facial measurements taken from it
-  (a set of coordinates describing the position of features, plus colour and
-  texture values) exist only in the device's memory, for the length of one
-  reading.</p>
-  <p><strong>None of it is transmitted anywhere. None of it is written to
-  storage. None of it is retained after the reading closes.</strong> There is
-  deliberately no upload endpoint in the app, and an automated check runs on
-  every build asserting that no network request can carry any value derived
-  from your photo.</p>
+  measured, and discarded. The image, its pixels and the temporary face map
+  exist only in the device's memory for the length of one reading.</p>
+  <p><strong>None of the image, pixels or face map is transmitted or written to
+  storage.</strong> The Qi Se tracker keeps only a small set of derived colour
+  measurements and categorical capture-quality fields in this browser, so it
+  can compare today with your own previous readings. You can export or delete
+  those local readings at any time. There is deliberately no upload endpoint,
+  and an automated check runs on every build asserting that no network request
+  can carry any value derived from your photo.</p>
+  <p>If you separately choose the optional screen-light experiment, the display
+  slowly moves through neutral, blue and green light before the reading. Raw
+  colour responses are discarded immediately. Only whether the check ran and
+  whether its response was usable is kept with the local reading; it never
+  identifies you and never blocks the reading.</p>
   <p>Camera access is requested only when you first use it, after a consent
   screen that explains all of this. You can decline, and you can revoke the
-  permission at any time in your device settings.</p>
+  permission at any time in your device settings. The screen-light experiment
+  is off by default and has its own unchecked choice.</p>
 
   <h3>Crash reports</h3>
   <div class="notyet">
@@ -125,7 +132,8 @@ footer{border-top:1px solid var(--rule);margin-top:2.5rem;padding-top:1rem;
   <strong>explicit consent</strong>, obtained on the consent screen before the
   camera is first used. You may withdraw consent at any time by revoking camera
   permission or deleting the app; withdrawal does not affect a reading already
-  shown to you, because that reading exists only on your screen.</p>
+  shown to you. Locally saved Qi Se readings can be deleted with the in-app
+  “Withdraw consent and delete everything” action.</p>
   <p>In practice there is very little for us to act on: we hold no personal
   data about you, so an access request will be answered truthfully with
   "we hold nothing about you". You may still make one, and we will respond.</p>
@@ -138,26 +146,28 @@ footer{border-top:1px solid var(--rule);margin-top:2.5rem;padding-top:1rem;
   Personal Information" link to provide — that is the reason for its absence,
   not an oversight. Facial geometry is treated as sensitive personal
   information; it is processed solely to provide the reading you asked for, on
-  your own device, and is not retained.</p>
+  your own device, and the geometry itself is not retained.</p>
 
   <h3>If you are in Australia (Privacy Act 1988)</h3>
-  <p>Facial measurements are biometric information, which is
-  <strong>sensitive information</strong> under the Australian Privacy
-  Principles and attracts a higher standard of protection. Consent is obtained
-  before collection, on the consent screen, and collection is limited to what
-  the reading requires.</p>
+  <p>The Privacy Act definition of <strong>sensitive information</strong>
+  specifically includes biometric templates and biometric information used for
+  automated verification or identification. This app does neither. It
+  nevertheless treats the temporary face map conservatively: consent is
+  obtained before processing, the map is destroyed after measurement, and the
+  app keeps only the minimum derived values needed for the private history.</p>
   <p>There is <strong>no cross-border disclosure of biometric information</strong>,
-  because that information never leaves your device in the first place. You may
-  request access to, or correction of, personal information we hold; as above,
-  we hold none.</p>
+  because that information never leaves your device in the first place. Local
+  derived readings remain under your control in this browser and are not
+  accessible to us.</p>
 
   <h3>Illinois residents (BIPA)</h3>
   <p>This section is provided as disclosure, not as a claim of exemption.</p>
   <p>All facial analysis in this app happens on your own device. No biometric
   identifier or biometric information is transmitted to us or to any third
-  party. Nothing is retained after a reading is displayed: there is no
-  database, no storage layer, and no file written. Nothing is linked to your
-  identity, because the app has no accounts and collects no identifiers. We
+  party. Images and face maps are destroyed after measurement. The Qi Se
+  tracker may retain derived reading values in your browser's local database,
+  but they are not accessible to us and can be deleted in the app. Nothing is
+  linked to your identity, because the app has no accounts and collects no identifiers. We
   do not sell, lease, trade or otherwise profit from biometric information.</p>
 
   <h2>Children</h2>

@@ -121,6 +121,7 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 @media (prefers-reduced-motion: reduce){
   .qise-seal [data-dot]{animation:none}
   .ring-fill{transition:none}
+  .illumination-wash{transition:none}
   *{scroll-behavior:auto}
 }
 .qise-seal[data-reduced-motion="true"] [data-dot]{animation:none}
@@ -160,8 +161,13 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .story-passage{font-family:var(--passage);font-size:1.15rem;line-height:1.72;margin:0}
 .pattern-intro{margin-bottom:1rem}
 .reading-actions{margin-top:1rem}
-.capture-frame{overflow:hidden;border:1px solid var(--qise-border);border-radius:18px;background:#0B0A09}
-.capture-frame video{display:block;width:100%;height:min(56svh,34rem);object-fit:cover}
+.capture-frame{position:relative;overflow:hidden;border:1px solid var(--qise-border);border-radius:18px;background:#0B0A09}
+.capture-frame video,.capture-frame canvas{display:block;width:100%;height:min(56svh,34rem);object-fit:cover}
+.capture-frame [hidden]{display:none}
+.illumination-wash{position:absolute;inset:0;z-index:2;pointer-events:none;opacity:0;transition:background-color .22s linear,opacity .22s linear}
+.illumination-choice{margin-top:1rem}
+.illumination-choice label{display:flex;align-items:flex-start;gap:.7rem;font-size:.88rem;line-height:1.5}
+.illumination-choice input{width:1.1rem;height:1.1rem;margin-top:.2rem;flex:none;accent-color:var(--qing)}
 .capture-status{margin:.8rem 0 0}
 .capture-guide{list-style:none;margin:.75rem 0 0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:.45rem}
 .capture-guide li{display:flex;align-items:center;gap:.5rem;min-height:2.5rem;padding:.45rem .55rem;border:1px solid var(--qise-border);border-radius:10px;font-size:.78rem}
@@ -172,6 +178,14 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .capture-help{margin:.75rem 0 0;padding:.65rem .75rem;border-left:3px solid var(--huang);background:var(--qise-surface);font-size:.82rem}
 .capture-actions{display:flex;justify-content:flex-end;margin-top:.55rem}
 .capture-actions button{font-size:.78rem;min-height:40px;padding:.35rem .7rem;border-color:var(--qise-border)}
+.upload-panel{margin-top:1rem}
+.upload-panel h2{font-size:1.05rem;margin-bottom:.35rem}
+.selfie-tips{margin:.65rem 0 .9rem;padding-left:1.2rem;font-size:.84rem}
+.selfie-tips li{margin:.25rem 0}
+.file-button{display:flex;align-items:center;justify-content:center;min-height:48px;padding:.65rem 1rem;border-radius:10px;background:var(--qise-ink);color:var(--qise-action-fg);cursor:pointer;text-align:center}
+.file-button:focus-within{outline:3px solid var(--chi);outline-offset:2px}
+.visually-hidden-input{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.selfie-status{min-height:1.5em;margin:.55rem 0 0}
 
 /* 360px is the floor. Below the wrapper padding, nothing is allowed to force
    a horizontal scroll. */
@@ -224,20 +238,21 @@ button[disabled]{opacity:.45;cursor:not-allowed}
       <p class="consent-progress">2 of 2 · Privacy</p>
       <p class="eyebrow">Your face stays here</p>
       <h1>Your face stays with you.</h1>
-      <div class="surface privacy-copy"><p><strong>During the scan.</strong> A 478-point map of your
-        face is generated here, on this phone, purely to locate the areas being
-        measured. It is used for the measurement and discarded immediately. It
-        is never uploaded, never stored, and never linked to you. No photograph
-        leaves this device, because no photograph is kept.</p>
-      <p><strong>After the scan.</strong> Only the numbers are kept: a handful of colour
-        measurements per reading, so the app can compare today against your own
-        previous readings. No image, no face map. One tap deletes all of it.</p></div>
-      <p>This is an entertainment reading. Facial colour has no scientific basis for a health claim. Nothing here is a medical opinion or a substitute for one.</p>
-      <details class="muted"><summary>Why explicit consent is required</summary><p>Australian Privacy Act: generating that face map counts
-        as collecting sensitive information even though it is discarded
-        milliseconds later, which is why this screen exists before the camera
-        rather than after it. EU AI Act Article 50(3): this app categorises
-        complexion, and this is the disclosure of that.</p></details>
+      <div class="surface privacy-copy"><p><strong>During the scan.</strong> Your camera image or chosen selfie and a
+        temporary 478-point face map are processed only on this device to find
+        the areas being measured. Neither leaves the device: never uploaded, never stored.
+        Both are discarded after the reading.</p>
+      <p><strong>After the scan.</strong> Only small colour measurements and the reading stay
+        on this device, so future scans can be compared with your own history.
+        Delete everything at any time.</p></div>
+      <p>For entertainment and self-reflection only — not a medical or identity check.</p>
+      <details class="muted"><summary>Why explicit consent is required</summary><p>The app temporarily generates a face map and new colour observations from your camera or chosen selfie. Even though the map is discarded immediately and nothing leaves this device, you should understand and choose that processing before it begins. The optional screen-light experiment is a separate choice below.</p></details>
+      <div class="surface illumination-choice">
+        <label for="illumination-opt-in">
+          <input id="illumination-opt-in" type="checkbox">
+          <span><strong>Optional screen-light experiment.</strong> The screen can slowly show neutral, blue and green while scanning. It checks only whether the camera sees an expected change; it never identifies you, never blocks the reading and stores no response data. Leave this off if changing light causes discomfort.</span>
+        </label>
+      </div>
       <div class="consent-actions">
         <button id="consent-back" type="button">Back</button>
         <button class="primary" id="consent-grant" type="button">Agree &amp; open camera</button>
@@ -251,7 +266,10 @@ button[disabled]{opacity:.45;cursor:not-allowed}
   <p class="eyebrow">Face scan</p>
   <h1 id="capture-h">Hold steady</h1>
   <div class="capture-frame"><video id="preview" playsinline muted autoplay aria-label="Camera preview"
-         style="width:100%;transform:scaleX(-1)"></video></div>
+         style="width:100%;transform:scaleX(-1)"></video>
+    <canvas id="selfie-preview" hidden aria-label="Selected selfie preview"></canvas>
+    <div class="illumination-wash" id="illumination-wash" hidden aria-hidden="true"></div>
+  </div>
 
   <div class="capture-status">
     <p id="gate-line" role="status" aria-live="polite">Starting the camera…</p>
@@ -270,6 +288,22 @@ button[disabled]{opacity:.45;cursor:not-allowed}
   <p class="muted">There is no shutter. The reading is taken when the frame is good.</p>
   <p class="capture-help" id="capture-help" hidden>Still waiting? Face a window or plain white lamp. Do not use flash or a coloured lamp, and keep the whole face inside the frame.</p>
   <div class="capture-actions"><button id="restart-capture" type="button">Restart camera</button></div>
+  <section class="surface upload-panel" aria-labelledby="selfie-upload-h">
+    <p class="eyebrow">Camera fallback</p>
+    <h2 id="selfie-upload-h">Or choose a clear selfie</h2>
+    <p class="muted">The photo is checked and measured only on this device, then discarded.</p>
+    <ul class="selfie-tips">
+      <li>Face the camera straight on, at eye level, with your whole face visible.</li>
+      <li>Use soft daylight or a plain white light in front of you — not behind you.</li>
+      <li>Remove tinted glasses, hats and anything covering the eyes or cheeks.</li>
+      <li>Choose an original, unedited photo with no beauty filter or portrait blur.</li>
+    </ul>
+    <label class="file-button" for="selfie-upload">
+      Choose a selfie
+      <input class="visually-hidden-input" id="selfie-upload" type="file" accept="image/*">
+    </label>
+    <p class="muted selfie-status" id="selfie-status" role="status" aria-live="polite"></p>
+  </section>
 </section>
 
 <!-- ═══ Phase 9 — the reading ════════════════════════════════════════════ -->

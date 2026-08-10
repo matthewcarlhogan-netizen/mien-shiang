@@ -14,6 +14,7 @@ import assert from "node:assert/strict";
 import {
   openCamera, negotiateCaptureMode, createLandmarkerGuarded, PolygonSmoother,
   trimmedMedianLab, reduceBurst, iqr, releaseCapture, GreenLatch,
+  attachCameraPreview, describeCameraError,
   BURST_FRAMES, GATES_GREEN_MS, SMOOTHING_FRAMES, CAPTURE_CONSTRAINTS,
 } from "../../src/qise/camera.js";
 import { createConsent, memoryStorage, ConsentRequiredError } from "../../src/qise/consent.js";
@@ -78,6 +79,23 @@ test("with consent, the documented constraints are what is requested", async () 
   await openCamera({ consent: granted(), mediaDevices: md });
   assert.deepEqual(md.calls[0], CAPTURE_CONSTRAINTS);
   assert.deepEqual(CAPTURE_CONSTRAINTS.video.facingMode, "user");
+});
+
+test("the preview waits for real dimensions instead of drawing a 0x0 Safari frame", async () => {
+  const stream = {};
+  const video = {
+    videoWidth: 1280, videoHeight: 960, srcObject: null,
+    play: async () => {},
+  };
+  assert.equal(await attachCameraPreview(video, stream), video);
+  assert.equal(video.srcObject, stream);
+});
+
+test("camera failures always offer a useful retry or selfie path", () => {
+  assert.match(describeCameraError({ name: "NotAllowedError" }), /choose a selfie/i);
+  assert.match(describeCameraError({ name: "NotFoundError" }), /No front camera/i);
+  assert.match(describeCameraError({ name: "NotReadableError" }), /Another app/i);
+  assert.match(describeCameraError(new Error("unknown")), /Retry/i);
 });
 
 /* ────────────────────────────────────────────── the three capture modes ── */
@@ -292,6 +310,8 @@ test("teardown ZEROES the pixels rather than only dropping the reference", () =>
 
   const released = releaseCapture({
     images: [image], landmarks: [landmarks], canvas, stream: md.stream,
+    landmarker: { close: () => { md.landmarkerClosed = true; } },
+    video: { srcObject: md.stream, pause: () => { md.previewPaused = true; } },
   });
 
   assert.ok(image.data.every((v) => v === 0), "pixel data survived teardown");
@@ -299,7 +319,12 @@ test("teardown ZEROES the pixels rather than only dropping the reference", () =>
   assert.equal(canvas.width, 0);
   assert.equal(canvas.height, 0);
   assert.equal(md.track.stopped, true, "the camera light is still on");
-  assert.deepEqual(released, { images: 1, landmarkArrays: 1, canvasCleared: true, tracksStopped: 1 });
+  assert.equal(md.landmarkerClosed, true);
+  assert.equal(md.previewPaused, true);
+  assert.deepEqual(released, {
+    images: 1, landmarkArrays: 1, canvasCleared: true, tracksStopped: 1,
+    landmarkerClosed: true, previewCleared: true,
+  });
 });
 
 test("teardown is safe on a partly-built or already-released scratch", () => {

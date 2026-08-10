@@ -43,12 +43,12 @@ export async function createLandmarkerWithFallback(
 
       const landmarker = await createFromOptions(fileset, {
         baseOptions: { modelAssetPath: model.modelAssetPath, delegate },
-        runningMode: "IMAGE",
+        runningMode: model.runningMode || "IMAGE",
         numFaces: 1,
         // 52 blendshape coefficients. Used for EXPRESSION and ASYMMETRY only —
         // expression is a state at the moment of capture, never a personality
         // signal. See src/expression.js.
-        outputFaceBlendshapes: true,
+        outputFaceBlendshapes: model.outputFaceBlendshapes ?? true,
       });
 
       attempts.push({ delegate, ok: true });
