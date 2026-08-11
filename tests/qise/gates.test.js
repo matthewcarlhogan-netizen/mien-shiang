@@ -72,7 +72,8 @@ test("unavoidable side light gets an explicit reduced-confidence escape hatch", 
     cheekMedianL: { left: 82, right: 48 },
     landmarkDriftPx: MOTION_MAX_PX * 4,
   });
-  assert.equal(canUseCurrentLight(moving, LIGHT_OVERRIDE_DELAY_MS), true);
+  assert.equal(canUseCurrentLight(moving, LIGHT_OVERRIDE_DELAY_MS), true,
+    "normal hand movement must not make the escape hatch flicker away");
 
   const accepted = evaluateGates(
     { ...cleanStats(), cheekMedianL: { left: 82, right: 48 } }, PTS, cleanSclera(),

@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 
 import {
   integratedReadingFromScalars, projectIntegratedReading, measureIntegratedReading,
+  assertCompletePalaceMeasurement,
 } from "../../src/qise/integrated.js";
 import { extractRegions } from "../../src/region-extractor.js";
 import { canonicalFace } from "../fixtures/canonical-face.js";
@@ -30,6 +31,10 @@ function face() {
 function raw() {
   const keys = [
     "glabella", "center_forehead", "nose_bridge", "nose_apex",
+    "eyebrow_right", "eyebrow_left", "upper_eyelid_right", "upper_eyelid_left",
+    "outer_eye_right", "outer_eye_left", "temple_right", "temple_left",
+    "fortune_forehead_right", "fortune_forehead_left",
+    "parent_forehead_right", "parent_forehead_left",
     "periorbital_left", "periorbital_right", "cheek_left", "cheek_right", "chin",
   ];
   return {
@@ -57,7 +62,7 @@ test("the accepted map becomes a complete, privacy-safe integrated reading", () 
   assert.equal(reading.fiveElements.available, true);
   assert.equal(reading.fiveElements.element, "earth");
   assert.equal(reading.threeCourts.available, true);
-  assert.equal(reading.twelvePalaces.measuredCount, 6);
+  assert.equal(reading.twelvePalaces.measuredCount, 12);
   assert.ok(reading.harmony.components.length >= 3);
   assert.ok(Object.keys(reading.provenanceIds).length > 0);
   assert.deepEqual(findForbiddenKeys(reading), []);
@@ -88,9 +93,23 @@ test("the screen model makes one synthesis from colour, geometry and palaces", (
   assert.equal(model.available, true);
   assert.match(model.headline, /赤 today, over 土 Earth/);
   assert.match(model.synthesis, /changing colour layer/i);
-  assert.equal(model.palaces.measuredCount, 6);
-  assert.equal(model.palaces.supportedCount, 6);
+  assert.equal(model.palaces.measuredCount, 12);
+  assert.equal(model.palaces.supportedCount, 12);
+  assert.equal(model.palaces.all.length, 12);
+  assert.equal(model.palaces.all.filter((palace) => !palace.measured).length, 0);
   assert.ok(model.harmony.label.includes("named canons"));
+});
+
+test("the accepted-frame boundary refuses an incomplete twelve-palace result with a targeted retry", () => {
+  const incompleteRaw = raw();
+  delete incompleteRaw.zones.temple_left;
+  const reading = integratedReadingFromScalars(face(), incompleteRaw);
+  assert.throws(
+    () => assertCompletePalaceMeasurement(reading.twelvePalaces),
+    (error) => error.code === "INCOMPLETE_PALACE_MEASUREMENT"
+      && error.missingPalaces.includes("Travel Palace")
+      && /forehead, temples, eyes and chin/i.test(error.message),
+  );
 });
 
 test("the accepted frame reaches integration before capture teardown erases it", () => {

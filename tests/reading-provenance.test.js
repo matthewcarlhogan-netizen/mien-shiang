@@ -27,8 +27,8 @@ test("the registry does not claim unfinished rights or cultural review are compl
 });
 
 test("known coverage gaps are an explicit expansion queue", () => {
-  assert.ok(EXPANSION_AREAS.length >= 8);
-  assert.ok(EXPANSION_AREAS.some((area) => area.id === "palaces-remaining"));
+  assert.ok(EXPANSION_AREAS.length >= 5);
+  assert.equal(EXPANSION_AREAS.some((area) => area.id === "palaces-remaining"), false);
   assert.equal(new Set(EXPANSION_AREAS.map((area) => area.id)).size, EXPANSION_AREAS.length);
   for (const area of EXPANSION_AREAS) {
     assert.ok(area.label && area.status);

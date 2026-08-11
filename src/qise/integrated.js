@@ -10,6 +10,29 @@ import { extractRegions, eraseExtractedRegions } from "../region-extractor.js";
 
 const scalar = (value) => (Number.isFinite(value) ? value : null);
 
+export class IncompletePalaceMeasurementError extends Error {
+  constructor(missingPalaces) {
+    const missing = Array.isArray(missingPalaces) ? missingPalaces : [];
+    super(
+      `All 12 palace regions need a clear view. Retry with your forehead, temples, eyes and chin fully visible${
+        missing.length ? ` (missing: ${missing.join(", ")})` : ""
+      }.`,
+    );
+    this.name = "IncompletePalaceMeasurementError";
+    this.code = "INCOMPLETE_PALACE_MEASUREMENT";
+    this.missingPalaces = missing;
+  }
+}
+
+export function assertCompletePalaceMeasurement(palaceReading) {
+  if (palaceReading?.measuredCount === palaceReading?.totalCount
+      && palaceReading?.totalCount === 12) return;
+  const missing = (palaceReading?.palaces || [])
+    .filter((palace) => !palace.measured)
+    .map((palace) => palace.name);
+  throw new IncompletePalaceMeasurementError(missing);
+}
+
 const projectFiveElements = (value) => value ? {
   available: value.available === true,
   why: value.why ?? null,
@@ -131,7 +154,9 @@ export function measureIntegratedReading(image, points, documentRef = document, 
     ({ regions } = extract(
       balanced, image.width, image.height, points, documentRef,
     ));
-    return projectIntegratedReading(composeReading(geometry, null, rawScalars(regions)));
+    const reading = projectIntegratedReading(composeReading(geometry, null, rawScalars(regions)));
+    assertCompletePalaceMeasurement(reading?.twelvePalaces);
+    return reading;
   } finally {
     balanced?.fill?.(0);
     eraseExtractedRegions(regions);

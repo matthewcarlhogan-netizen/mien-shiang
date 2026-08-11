@@ -59,9 +59,15 @@ export const CONTENT_PROVENANCE = Object.freeze({
     family: "three-courts", sourceIds: ["mianxiang-unspecified"],
     measurementCoverage: { courts: 3, hairlineMeasured: false },
   }),
+  // Retained only so readings already stored on a user's device keep a
+  // resolvable provenance ID after the complete twelve-region upgrade.
   "twelve-palaces-v1": profile({
     family: "twelve-palaces", sourceIds: ["mianxiang-unspecified"],
     measurementCoverage: { listed: 12, sampled: 6 },
+  }),
+  "twelve-palaces-v2": profile({
+    family: "twelve-palaces", sourceIds: ["mianxiang-unspecified"],
+    measurementCoverage: { listed: 12, sampled: 12, bilateralRegionsRequired: true },
   }),
   "qi-se-reading-v1": profile({
     family: "qi-se", sourceIds: ["mianxiang-unspecified", "suwen-ch17-unverified"],
@@ -81,9 +87,6 @@ export const CONTENT_PROVENANCE = Object.freeze({
 
 /** Missing breadth is a visible roadmap, not prose pretending to be complete. */
 export const EXPANSION_AREAS = Object.freeze([
-  { id: "palaces-remaining", label: "Six currently unsampled Palaces", status: "measurement-required" },
-  { id: "brows", label: "Brows", status: "source-and-measurement-required" },
-  { id: "eyes", label: "Eyes and lids", status: "source-and-measurement-required" },
   { id: "ears", label: "Ears", status: "source-and-measurement-required" },
   { id: "nose", label: "Nose structure", status: "source-and-measurement-required" },
   { id: "mouth", label: "Mouth and philtrum", status: "source-and-measurement-required" },
@@ -129,7 +132,7 @@ export function auditContentProvenance() {
 export const READING_PROVENANCE_IDS = Object.freeze({
   fiveElements: "five-elements-v1",
   threeCourts: "three-courts-v1",
-  twelvePalaces: "twelve-palaces-v1",
+  twelvePalaces: "twelve-palaces-v2",
   qiSe: "qi-se-reading-v1",
   harmony: "harmony-v1",
 });

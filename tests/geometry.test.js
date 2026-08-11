@@ -15,6 +15,7 @@ import {
   LM, geometryReport, faceMetrics, classifyFaceShape, thirds, fifths, fwhr,
   frontality, normaliseRoll, shapeRatios, SHAPE_THRESHOLDS,
 } from "../src/geometry.js";
+import { canonicalFace } from "./fixtures/canonical-face.js";
 
 /**
  * Build a 478-point set with the landmarks this layer reads placed
@@ -69,6 +70,16 @@ test("faceMetrics recovers the widths the face was built with", () => {
   assert.equal(Math.round(m.bizygomaticWidth), 100);
   assert.equal(Math.round(m.bigonialWidth), 90);
   assert.equal(Math.round(m.frontotemporalWidth), 80);
+});
+
+test("geometry report calculates scale-independent face ratios from real landmarks", () => {
+  const report = geometryReport(canonicalFace());
+  assert.ok(report.measurementRatios.interPupillaryDistance > 0);
+  assert.ok(report.measurementRatios.noseToChinLength > 0);
+  assert.ok(report.measurementRatios.interPupillaryToFaceWidth > 0);
+  assert.ok(report.measurementRatios.noseToChinToFaceLength > 0);
+  assert.ok(report.measurementRatios.faceWidthToHeight > 0);
+  assert.ok(report.fwhr.value > 0);
 });
 
 test("thirds sum to the whole and declare the trichion limitation", () => {

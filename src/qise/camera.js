@@ -39,7 +39,11 @@ export const CAPTURE_CONSTRAINTS = Object.freeze({
 
 export const CAMERA_READY_TIMEOUT_MS = 8000;
 
-/** Ask supported mobile cameras to keep autofocus alive. */
+/**
+ * Ask mobile browsers to keep autofocus alive without touching exposure or
+ * white balance. Capability detection is mandatory: unsupported advanced
+ * constraints are commonly stripped without an error.
+ */
 export async function ensureContinuousFocus(track) {
   if (!track || typeof track.applyConstraints !== "function") {
     return { supported: false, requested: null, applied: false, error: null };
@@ -66,7 +70,11 @@ export async function ensureContinuousFocus(track) {
   }
 }
 
-/** Trigger a fresh focus scan without touching exposure or white balance. */
+/**
+ * Trigger a fresh focus scan after the sharpness gate has stayed soft. Phones
+ * that expose only continuous focus simply receive the idempotent continuous
+ * request; fixed-focus cameras are left untouched.
+ */
 export async function requestCameraRefocus(track, { settleMs = 450, wait = sleep } = {}) {
   if (!track || typeof track.applyConstraints !== "function") {
     return { supported: false, requested: null, restoredContinuous: false, error: null };

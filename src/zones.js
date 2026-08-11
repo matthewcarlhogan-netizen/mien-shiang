@@ -32,6 +32,56 @@ export const ROIS = {
     label: "Central forehead", side: "midline",
     idx: [10, 21, 54, 67, 251, 284, 297], pad: 0.16,
   },
+  eyebrow_right: {
+    label: "Eyebrow (your right)", side: "right",
+    idx: [46, 53, 52, 65, 55, 70, 63, 105, 66, 107], pad: 0.10,
+  },
+  eyebrow_left: {
+    label: "Eyebrow (your left)", side: "left",
+    idx: [276, 283, 282, 295, 285, 300, 293, 334, 296, 336], pad: 0.10,
+  },
+  upper_eyelid_right: {
+    label: "Upper eyelid (your right)", side: "right",
+    // Eye arc plus the underside of the brow makes a skin patch rather than a
+    // sub-8px line, while staying clear of the pupil and lower lid.
+    idx: [33, 246, 161, 160, 159, 158, 157, 173, 133, 55, 65, 52, 53, 46], pad: -0.06,
+  },
+  upper_eyelid_left: {
+    label: "Upper eyelid (your left)", side: "left",
+    idx: [263, 466, 388, 387, 386, 385, 384, 398, 362, 285, 295, 282, 283, 276], pad: -0.06,
+  },
+  outer_eye_right: {
+    label: "Outer eye corner (your right)", side: "right",
+    idx: [33, 246, 130, 247, 30, 29, 27, 28], pad: 0.08,
+  },
+  outer_eye_left: {
+    label: "Outer eye corner (your left)", side: "left",
+    idx: [263, 466, 359, 467, 260, 259, 257, 258], pad: 0.08,
+  },
+  temple_right: {
+    label: "Temple (your right)", side: "right",
+    idx: [127, 34, 139, 71, 68, 104, 69, 108], pad: -0.04,
+  },
+  temple_left: {
+    label: "Temple (your left)", side: "left",
+    idx: [356, 264, 368, 301, 298, 333, 299, 337], pad: -0.04,
+  },
+  fortune_forehead_right: {
+    label: "Upper side forehead (your right)", side: "right",
+    idx: [109, 67, 103, 54, 21, 68, 104, 69], pad: -0.05,
+  },
+  fortune_forehead_left: {
+    label: "Upper side forehead (your left)", side: "left",
+    idx: [338, 297, 332, 284, 251, 298, 333, 299], pad: -0.05,
+  },
+  parent_forehead_right: {
+    label: "Upper forehead (your right)", side: "right",
+    idx: [10, 151, 109, 67, 103, 54, 21], pad: -0.04,
+  },
+  parent_forehead_left: {
+    label: "Upper forehead (your left)", side: "left",
+    idx: [10, 151, 338, 297, 332, 284, 251], pad: -0.04,
+  },
   periorbital_right: {
     label: "Under eye (your right)", side: "right",
     idx: [33, 133, 7, 144, 145, 153, 154, 155, 246], pad: 0.22,

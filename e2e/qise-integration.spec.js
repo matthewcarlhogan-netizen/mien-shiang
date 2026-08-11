@@ -69,9 +69,10 @@ test("the accepted-frame boundary runs in a real browser canvas", async ({ page 
 
   expect(result.element).toBeTruthy();
   expect(result.courts).toBe(true);
-  expect(result.palaces).toBe(6);
+  expect(result.palaces).toBe(12);
   expect(result.harmonyParts).toBeGreaterThanOrEqual(3);
   expect(result.elapsedMs).toBeGreaterThan(0);
+  expect(result.elapsedMs).toBeLessThan(2000);
 });
 
 test("browser failure paths explicitly zero temporary accepted-frame data", async ({ page }) => {

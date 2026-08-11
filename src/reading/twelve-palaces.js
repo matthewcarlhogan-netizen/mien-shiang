@@ -1,16 +1,18 @@
 /*
  * MODULE A — the Twelve Palaces (十二宮).
  *
- * ── HALF OF THESE PALACES ARE NOT MEASURED, AND IT SAYS SO ─────────────────
- * Six of the twelve sit on features this build samples (the Seal Hall, the
- * nose tip and bridge, under the eyes, the central forehead, the chin). The
- * other six sit on the brows, eyelids, temples and outer eye corners, which
- * are not sampled zones. Those are listed with their traditional meaning and
- * marked plainly as not read from this photo.
+ * ── COMPLETE, DETERMINISTIC LANDMARK MAPPING ────────────────────────────
+ * Every palace is attached to one or two named MediaPipe landmark regions.
+ * Bilateral palaces combine their left and right pigment deltas with a mean;
+ * midline palaces use their single region. The same accepted frame therefore
+ * always produces the same twelve readings: there is no random assignment,
+ * manual unlock, pagination, or face-shape branch that can hide a palace.
  *
- * Inventing a reading for an unmeasured palace would be the same error as
- * emitting a severity for something the engine cannot see: it would let the
- * interface imply an examination that did not happen.
+ * All twelve are reachable for every accepted face shape because the mapping
+ * is anatomical rather than classificatory. Face shape affects the separate
+ * Five Elements reading; it never decides whether a palace exists. If even one
+ * required region is unavailable, the capture boundary asks for a clearer,
+ * front-facing retry instead of inventing a value.
  *
  * ── ON 疾厄宮 ──────────────────────────────────────────────────────────────
  * The eighth palace is named for illness and adversity, and is usually
@@ -38,21 +40,21 @@ export const PALACES = [
   },
   {
     key: "siblings", hanzi: "兄弟宮", name: "Siblings Palace",
-    location: "the eyebrows", zone: null,
+    location: "the eyebrows", zones: ["eyebrow_right", "eyebrow_left"],
     reading:
       "In Mian Xiang the brows are the Siblings Palace, read as the company a person keeps and the people " +
       "they count as their own, whether or not they were born to them.",
   },
   {
     key: "property", hanzi: "田宅宮", name: "Property Palace",
-    location: "the upper eyelids", zone: null,
+    location: "the upper eyelids", zones: ["upper_eyelid_right", "upper_eyelid_left"],
     reading:
       "Classical Chinese face reading gives the upper eyelids the Property Palace, read as home and what a " +
       "person builds to stay in rather than to pass through.",
   },
   {
     key: "children", hanzi: "男女宮", name: "Children Palace",
-    location: "beneath the eyes", zone: "periorbital_left",
+    location: "beneath the eyes", zones: ["periorbital_right", "periorbital_left"],
     reading:
       "In Mian Xiang the area beneath the eyes is the Children Palace, read as what a person tends and " +
       "brings on — the texts extend it to work and ideas raised as carefully as offspring.",
@@ -66,7 +68,7 @@ export const PALACES = [
   },
   {
     key: "partner", hanzi: "妻妾宮", name: "Partner Palace",
-    location: "the outer corners of the eyes", zone: null,
+    location: "the outer corners of the eyes", zones: ["outer_eye_right", "outer_eye_left"],
     reading:
       "Classical Chinese face reading places the Partner Palace at the outer eye corners, and reads it as " +
       "closeness and the weather of a person's nearest relationships.",
@@ -83,7 +85,7 @@ export const PALACES = [
   },
   {
     key: "travel", hanzi: "遷移宮", name: "Travel Palace",
-    location: "the temples and the sides of the forehead", zone: null,
+    location: "the temples and the sides of the forehead", zones: ["temple_right", "temple_left"],
     reading:
       "In Mian Xiang the temples are the Travel Palace, read as movement and change of place, and as how " +
       "well a person does away from what they know.",
@@ -97,14 +99,16 @@ export const PALACES = [
   },
   {
     key: "fortune", hanzi: "福德宮", name: "Fortune Palace",
-    location: "the upper sides of the forehead", zone: null,
+    location: "the upper sides of the forehead",
+    zones: ["fortune_forehead_right", "fortune_forehead_left"],
     reading:
       "In Mian Xiang the upper forehead is the Fortune Palace, read as ease of mind and the quiet kind of " +
       "good luck the texts rate more highly than the loud kind.",
   },
   {
     key: "parents", hanzi: "父母宮", name: "Parents Palace",
-    location: "the upper forehead, left and right", zone: null,
+    location: "the upper forehead, left and right",
+    zones: ["parent_forehead_right", "parent_forehead_left"],
     reading:
       "Classical Chinese face reading reads the upper forehead as the Parents Palace — inheritance in the " +
       "broad sense, meaning what was handed on rather than what was earned.",
@@ -138,10 +142,22 @@ export const SOURCES_DIFFER =
 /** Shadow/clarity thresholds on the zone's pigment difference from baseline. */
 export const PALACE_TONE_DELTA = 1.5;
 
-function toneFor(zoneScalars) {
-  if (!zoneScalars || !Number.isFinite(zoneScalars.deltaMi)) return null;
-  if (zoneScalars.deltaMi > PALACE_TONE_DELTA) return "shadowed";
-  if (zoneScalars.deltaMi < -PALACE_TONE_DELTA) return "clear";
+function zoneKeysFor(palace) {
+  if (Array.isArray(palace.zones)) return palace.zones;
+  return palace.zone ? [palace.zone] : [];
+}
+
+function aggregateDeltaMi(zoneScalars) {
+  if (!zoneScalars.length || zoneScalars.some((zone) => !Number.isFinite(zone?.deltaMi))) {
+    return null;
+  }
+  return zoneScalars.reduce((sum, zone) => sum + zone.deltaMi, 0) / zoneScalars.length;
+}
+
+function toneFor(deltaMi) {
+  if (!Number.isFinite(deltaMi)) return null;
+  if (deltaMi > PALACE_TONE_DELTA) return "shadowed";
+  if (deltaMi < -PALACE_TONE_DELTA) return "clear";
   return "even";
 }
 
@@ -153,9 +169,12 @@ export function readTwelvePalaces(raw) {
   const zones = raw?.zones ?? {};
 
   const palaces = PALACES.map((p) => {
-    const supported = Boolean(p.zone);
-    const measured = Boolean(supported && zones[p.zone]);
-    const tone = measured ? toneFor(zones[p.zone]) : null;
+    const zoneKeys = zoneKeysFor(p);
+    const samples = zoneKeys.map((key) => zones[key]);
+    const supported = zoneKeys.length > 0;
+    const deltaMi = supported && samples.every(Boolean) ? aggregateDeltaMi(samples) : null;
+    const measured = supported && Number.isFinite(deltaMi);
+    const tone = measured ? toneFor(deltaMi) : null;
     return {
       ...p,
       supported,
@@ -165,10 +184,7 @@ export function readTwelvePalaces(raw) {
       /** Stated for every unmeasured palace, every time. */
       notMeasuredNote: measured
         ? null
-        : (supported
-          ? "This supported palace could not be measured clearly enough in this photo, so no reading is guessed for it."
-          : "This palace sits on a part of the face this reading doesn't sample, so its meaning is given " +
-            "here but nothing has been read from your photo for it."),
+        : "This palace could not be measured clearly enough in this photo, so no reading is guessed for it.",
     };
   });
 
