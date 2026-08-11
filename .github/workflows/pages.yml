@@ -49,7 +49,6 @@ jobs:
         uses: actions/upload-pages-artifact@v4
         with:
           path: dist
-          include-hidden-files: true
 
   deploy:
     environment:
@@ -83,7 +82,8 @@ jobs:
           [ "$ok" = "1" ] || { echo "::error::live Qi Se page did not become ready"; exit 1; }
           curl -fsS "${PAGE_URL}manifest.webmanifest?verify=${EXPECTED_SHA}" -o /tmp/manifest.webmanifest
           node -e "const fs=require('node:fs');const m=JSON.parse(fs.readFileSync('/tmp/manifest.webmanifest','utf8'));if(m.start_url!=='./qise.html')process.exit(1)"
-          curl -fsS "${PAGE_URL}qise/consent.js?verify=${EXPECTED_SHA}" | grep -q 'qise-consent-v3'
+          curl -fsS "${PAGE_URL}qise/consent.js?verify=${EXPECTED_SHA}" -o /tmp/consent.js
+          grep -q 'qise-consent-v3' /tmp/consent.js
           curl -fsS "${PAGE_URL}qise/integrated.js?verify=${EXPECTED_SHA}" -o /dev/null
           curl -fsS "${PAGE_URL}region-extractor.js?verify=${EXPECTED_SHA}" -o /dev/null
           echo "Live scanner: ${PAGE_URL}qise.html @ ${EXPECTED_SHA}"
