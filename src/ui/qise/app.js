@@ -9,16 +9,16 @@
  * is the part no test in this repository can reach.
  *
  * ── WHY MEDIAPIPE IS A DYNAMIC IMPORT ──────────────────────────────────────
- * `src/analysis.js` imports the MediaPipe bundle from a CDN at MODULE scope,
- * which is why nothing can load it under `node --test` and why it shipped a
- * hard syntax error behind 155 green tests (CLAUDE.md item 18a). Importing it
- * inside a function instead keeps this file's module graph clean, so
+ * The pinned MediaPipe bundle is self-hosted in the build artefact. Importing
+ * it inside a function keeps this file's module graph clean, so
  * `node --check` and the named-export resolution test both reach it.
  *
- * It also means the CDN is not touched until after consent, which is the
+ * It also means inference code is not loaded until after consent, which is the
  * behaviour the Phase 0 assertion is there to guarantee.
  */
-import { createConsent, assertConsentGranted } from "../../qise/consent.js";
+import {
+  createConsent, assertConsentGranted, consentBootTarget,
+} from "../../qise/consent.js";
 import { paletteCss } from "./palette.js";
 import {
   openCamera, attachCameraPreview, describeCameraError, createLandmarkerGuarded,
@@ -51,9 +51,11 @@ import { compositionOf } from "../../qise/composition.js";
 import { measureIntegratedReading } from "../../qise/integrated.js";
 import * as color from "../../qise/color.js";
 
-const MEDIAPIPE_BUNDLE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18";
-const FACE_MODEL =
-  "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+const MEDIAPIPE_BUNDLE = new URL("../../vendor/mediapipe/vision_bundle.mjs", import.meta.url).href;
+const MEDIAPIPE_WASM = new URL("../../vendor/mediapipe/wasm", import.meta.url).href;
+const FACE_MODEL = new URL(
+  "../../vendor/mediapipe/models/face_landmarker.task", import.meta.url,
+).href;
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
@@ -128,7 +130,7 @@ async function buildLandmarker(runningMode = "VIDEO") {
   // Dynamic, and only ever reached past the consent assertion.
   assertConsentGranted(consent, "FaceLandmarker");
   const { FaceLandmarker, FilesetResolver } = await import(MEDIAPIPE_BUNDLE);
-  const fileset = await FilesetResolver.forVisionTasks(`${MEDIAPIPE_BUNDLE}/wasm`);
+  const fileset = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM);
   const guardedFactory = (_resolvedFileset, options) => createLandmarkerGuarded({
     consent, options,
     factory: (guardedOptions) => FaceLandmarker.createFromOptions(fileset, guardedOptions),
@@ -658,7 +660,6 @@ async function finish(burst, rois, sclera, opened, history, gateMargins, illumin
     composition: compositionOf({ metrics, compass: interpreted.compass }),
     integrated,
     tags: [],
-    deviceFingerprintHash: await fingerprintHash(),
     captureMode: opened.captureMode,
     captureTier,
     readingState: interpreted.state,
@@ -697,14 +698,6 @@ function correctLab(lab, gains) {
   const g = (-0.9692660 * X + 1.8760108 * Y + 0.0415560 * Z) / 100;
   const bl = (0.0556434 * X - 0.2040259 * Y + 1.0572252 * Z) / 100;
   return color.labFromLinear({ r: r * gains.r, g: g * gains.g, b: bl * gains.b });
-}
-
-async function fingerprintHash() {
-  const raw = [navigator.userAgent, screen.width, screen.height, devicePixelRatio].join("|");
-  const bytes = new TextEncoder().encode(raw);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return "sha256:" + [...new Uint8Array(digest)].slice(0, 8)
-    .map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 /* ── rendering ───────────────────────────────────────────────────────────── */
@@ -1026,12 +1019,10 @@ async function boot() {
     location.reload();
   });
 
-  if (consent.isGranted()) show("screen-reading");
-  else show("screen-consent");
-
   const last = (await store.all()).slice(-1)[0];
-  if (last) await renderReading(last);
-  else if (consent.isGranted()) show("screen-capture");
+  const destination = consentBootTarget(consent.isGranted(), Boolean(last));
+  if (destination === "screen-reading") await renderReading(last);
+  else show(destination);
 }
 
 boot().catch((err) => {

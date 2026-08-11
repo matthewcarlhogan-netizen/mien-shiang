@@ -1,5 +1,8 @@
 node_modules/
 dist/
+saved_models/
+test-results/
+playwright-report/
 
 # Bubblewrap / Android build output. The keystore especially must never be
 # committed — losing it means you cannot ship updates under the same identity,

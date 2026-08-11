@@ -12,8 +12,15 @@ import assert from "node:assert/strict";
 
 import {
   createConsent, memoryStorage, assertConsentGranted, ConsentRequiredError,
-  CONSENT_VERSION, CONSENT_STORAGE_KEY,
+  CONSENT_VERSION, CONSENT_STORAGE_KEY, consentBootTarget,
 } from "../../src/qise/consent.js";
+
+test("a saved reading never bypasses current consent at boot", () => {
+  assert.equal(consentBootTarget(false, true), "screen-consent");
+  assert.equal(consentBootTarget(false, false), "screen-consent");
+  assert.equal(consentBootTarget(true, true), "screen-reading");
+  assert.equal(consentBootTarget(true, false), "screen-capture");
+});
 
 test("nothing is granted until it is granted", () => {
   const c = createConsent(memoryStorage());

@@ -120,16 +120,20 @@ export function integratedReadingFromScalars(points, raw = null) {
 }
 
 /** Measure an accepted frame once; no frame, map, mask or sample is returned. */
-export function measureIntegratedReading(image, points, documentRef = document) {
+export function measureIntegratedReading(image, points, documentRef = document, deps = {}) {
   const geometry = geometryReport(points);
-  const balanced = shadesOfGray(image.data);
-  const { regions } = extractRegions(
-    balanced, image.width, image.height, points, documentRef,
-  );
+  let balanced = null;
+  let regions = null;
   try {
+    const balance = deps.shadesOfGray || shadesOfGray;
+    const extract = deps.extractRegions || extractRegions;
+    balanced = balance(image.data);
+    ({ regions } = extract(
+      balanced, image.width, image.height, points, documentRef,
+    ));
     return projectIntegratedReading(composeReading(geometry, null, rawScalars(regions)));
   } finally {
-    balanced.fill(0);
+    balanced?.fill?.(0);
     eraseExtractedRegions(regions);
   }
 }

@@ -57,6 +57,12 @@ export function memoryStorage(seed = null) {
   };
 }
 
+/** The only legal initial destination; a saved reading never outranks consent. */
+export function consentBootTarget(consentGranted, hasReading) {
+  if (consentGranted !== true) return "screen-consent";
+  return hasReading ? "screen-reading" : "screen-capture";
+}
+
 function defaultStorage() {
   try {
     if (typeof localStorage !== "undefined" && localStorage) return localStorage;

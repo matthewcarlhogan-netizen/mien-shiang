@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "updated": "2026-08-11",
+  "launchStatus": "blocked",
+  "families": {
+    "five-elements-v1": { "status": "pending", "evidence": {} },
+    "three-courts-v1": { "status": "pending", "evidence": {} },
+    "twelve-palaces-v1": { "status": "pending", "evidence": {} },
+    "qi-se-reading-v1": { "status": "pending", "evidence": {} },
+    "harmony-v1": { "status": "pending", "evidence": {} },
+    "qise-passages-v1": { "status": "pending", "evidence": {} }
+  }
+}

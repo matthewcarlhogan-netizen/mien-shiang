@@ -110,12 +110,20 @@ test("what IS kept is enough to recompute a trend", () => {
   assert.equal(r.confidence, 0.9);
 });
 
-test("the device fingerprint is stored HASHED, never raw", () => {
-  // The only question ever asked of it is "same device as last time". A hash
-  // answers that without storing an identifier correlatable against anything.
+test("device fingerprints and their hashes are never stored", () => {
   const r = toRecord({ ...hazardousReading(), deviceFingerprint: "Pixel 8 / Chrome 141 / 1080x2400" });
   assert.equal(r.deviceFingerprint, undefined);
-  assert.equal(r.deviceFingerprintHash, "sha256:abcd");
+  assert.equal(r.deviceFingerprintHash, undefined);
+});
+
+test("legacy fingerprint hashes are removed from reads and exports", async () => {
+  const idb = fakeIndexedDB();
+  idb.data.set(hazardousReading().timestampIso, hazardousReading());
+  const store = await openStore(idb);
+  const [reading] = await store.all();
+  assert.equal(reading.deviceFingerprintHash, undefined);
+  const exported = await store.exportAll();
+  assert.equal(exported.readings[0].deviceFingerprintHash, undefined);
 });
 
 test("arrays and nested objects are copied, so a later mutation cannot rewrite history", () => {

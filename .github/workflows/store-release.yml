@@ -1,0 +1,30 @@
+name: Store release candidate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Require commercial, device and store evidence
+        run: npm run release:check
+      - name: Build source-identifiable candidate
+        run: npm run build
+        env:
+          BUILD_COMMIT: ${{ github.sha }}
+      - run: npm test
+      - run: npm run lint:bundle
+      - uses: actions/upload-artifact@v4
+        with:
+          name: store-candidate-${{ github.sha }}
+          path: dist

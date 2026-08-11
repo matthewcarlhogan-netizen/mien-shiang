@@ -12,7 +12,10 @@ import { fileURLToPath } from "node:url";
 // forward slashes and percent-encoding, which join() then rewrites to
 // "\C:\...". That never startsWith(ROOT), so the traversal guard below
 // rejected every request with 403 and the whole app was unservable.
-const ROOT = fileURLToPath(new URL("../src/", import.meta.url));
+const ROOT = fileURLToPath(new URL(
+  process.argv.includes("--dist") ? "../dist/" : "../src/",
+  import.meta.url,
+));
 
 // The trailing separator on ROOT is load-bearing: it is what stops the
 // startsWith() guard below from admitting a sibling directory such as
@@ -29,7 +32,8 @@ const PORT = process.env.PORT || 5173;
 const TYPES = {
   ".html": "text/html", ".js": "text/javascript", ".css": "text/css",
   ".json": "application/json", ".webmanifest": "application/manifest+json",
-  ".png": "image/png", ".svg": "image/svg+xml",
+  ".png": "image/png", ".svg": "image/svg+xml", ".mjs": "text/javascript",
+  ".wasm": "application/wasm", ".task": "application/octet-stream",
 };
 
 createServer(async (req, res) => {

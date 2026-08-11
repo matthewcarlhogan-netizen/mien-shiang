@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "updated": "2026-08-11",
+  "realDevicePerformance": {
+    "status": "pending",
+    "requiredProfiles": ["low-end-android", "samsung-midrange", "oppo-midrange"],
+    "evidence": []
+  },
+  "stores": {
+    "google-play": { "status": "pending", "evidence": [] },
+    "samsung-galaxy-store": { "status": "pending", "evidence": [] },
+    "oppo-software-store": { "status": "pending", "evidence": [] },
+    "apple-app-store": { "status": "pending", "evidence": [] }
+  }
+}

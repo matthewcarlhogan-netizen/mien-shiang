@@ -42,8 +42,6 @@ const DIST = join(REPO, "dist");
  * integration exists.
  */
 export const EGRESS_ALLOWLIST = [
-  { pattern: /^https:\/\/cdn\.jsdelivr\.net\/npm\/@mediapipe\//, why: "MediaPipe WASM runtime" },
-  { pattern: /^https:\/\/storage\.googleapis\.com\/mediapipe-models\//, why: "MediaPipe face_landmarker model" },
   /*
    * Lemon Squeezy hosted checkout — the ONLY payment destination.
    *

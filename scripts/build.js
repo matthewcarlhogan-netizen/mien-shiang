@@ -27,14 +27,76 @@
  * Get-Content/Set-Content round-trip double-encodes every non-ASCII character
  * and has already corrupted two files in this repo (CLAUDE.md item 18b).
  */
-import { readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync, statSync, copyFileSync }
+import {
+  existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync,
+  statSync, copyFileSync,
+}
   from "node:fs";
+import { createHash } from "node:crypto";
 import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SRC = join(REPO, "src");
 const DIST = join(REPO, "dist");
+const MODEL_CACHE = join(REPO, "saved_models", "face_landmarker.task");
+const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+const MODEL_SHA256 = "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff";
+
+const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+
+async function ensureFaceModel() {
+  if (existsSync(MODEL_CACHE)) {
+    const cached = readFileSync(MODEL_CACHE);
+    if (sha256(cached) === MODEL_SHA256) return cached;
+    rmSync(MODEL_CACHE, { force: true });
+  }
+  const response = await fetch(MODEL_URL);
+  if (!response.ok) throw new Error(`build: MediaPipe model download failed (${response.status})`);
+  const model = Buffer.from(await response.arrayBuffer());
+  const actual = sha256(model);
+  if (actual !== MODEL_SHA256) throw new Error(`build: MediaPipe model hash mismatch (${actual})`);
+  mkdirSync(dirname(MODEL_CACHE), { recursive: true });
+  writeFileSync(MODEL_CACHE, model);
+  return model;
+}
+
+async function vendorMediaPipe() {
+  const packageRoot = join(REPO, "node_modules", "@mediapipe", "tasks-vision");
+  const vendorRoot = join(DIST, "vendor", "mediapipe");
+  const files = [
+    "vision_bundle.mjs",
+    "wasm/vision_wasm_internal.js",
+    "wasm/vision_wasm_internal.wasm",
+    "wasm/vision_wasm_nosimd_internal.js",
+    "wasm/vision_wasm_nosimd_internal.wasm",
+  ];
+  for (const rel of files) {
+    const source = join(packageRoot, rel);
+    if (!existsSync(source)) throw new Error(`build: missing pinned MediaPipe asset ${rel}`);
+    const destination = join(vendorRoot, rel);
+    mkdirSync(dirname(destination), { recursive: true });
+    copyFileSync(source, destination);
+  }
+  const model = await ensureFaceModel();
+  const modelDestination = join(vendorRoot, "models", "face_landmarker.task");
+  mkdirSync(dirname(modelDestination), { recursive: true });
+  writeFileSync(modelDestination, model);
+
+  const pkg = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
+  const assets = [...files, "models/face_landmarker.task"].map((rel) => ({
+    path: rel,
+    sha256: sha256(readFileSync(join(vendorRoot, rel))),
+  }));
+  writeFileSync(join(vendorRoot, "manifest.json"), JSON.stringify({
+    package: pkg.name,
+    version: pkg.version,
+    license: pkg.license,
+    modelSource: "google-ai-edge/mediapipe-models:face_landmarker/float16/1",
+    assets,
+  }, null, 2) + "\n", "utf8");
+  return assets.length;
+}
 
 /** Read the flag without importing (the build must not execute app code). */
 function readFlavour() {
@@ -93,8 +155,13 @@ export function renderMeasurementLimits(baseline, notMeasured) {
 }
 `;
 
-function build() {
+async function build() {
   const flavour = readFlavour();
+  const commitSha = process.env.BUILD_COMMIT || process.env.GITHUB_SHA || "local";
+
+  if (process.env.CI && !/^[0-9a-f]{40}$/i.test(commitSha)) {
+    throw new Error("build: CI requires BUILD_COMMIT or GITHUB_SHA to be a full commit SHA");
+  }
 
   rmSync(DIST, { recursive: true, force: true });
   mkdirSync(DIST, { recursive: true });
@@ -116,18 +183,28 @@ function build() {
     stubbed.push("adapters/safety.js", "rules-b.js", "modulebview.js");
   }
 
+  const vendoredAssets = await vendorMediaPipe();
+
   // Recorded in the artefact so a store submission can be checked against what
   // was actually shipped rather than against what the flag said at the time.
   // Name and version come from package.json rather than being retyped, so the
   // About screen cannot drift from the released version.
   const pkg = JSON.parse(readFileSync(join(REPO, "package.json"), "utf8"));
+  const rightsManifest = JSON.parse(readFileSync(
+    join(REPO, "docs", "commercial-rights-manifest.json"), "utf8",
+  ));
+  const commercialContentCleared = rightsManifest.launchStatus === "cleared"
+    && Object.values(rightsManifest.families || {}).every((family) => family.status === "cleared");
 
   writeFileSync(join(DIST, "build-info.json"), JSON.stringify({
     name: pkg.name,
     version: pkg.version,
+    commitSha,
     flavour: flavour.name,
     moduleBShipped: flavour.moduleB,
     stubbedModules: stubbed,
+    mediaPipe: { version: "0.10.18", sameOrigin: true, assets: vendoredAssets },
+    commercialContentCleared,
   }, null, 2) + "\n", "utf8");
 
   console.log(`Built dist/ — flavour: ${flavour.name}`);
@@ -135,6 +212,7 @@ function build() {
   console.log(stubbed.length
     ? `  ${stubbed.length} Module B module(s) stubbed out: ${stubbed.join(", ")}`
     : "  Module B shipped (wellness flavour)");
+  console.log(`  ${vendoredAssets} pinned MediaPipe assets copied for same-origin delivery`);
 
   if (copied === 0) {
     console.error("FAIL: build produced 0 files.");
@@ -142,4 +220,4 @@ function build() {
   }
 }
 
-build();
+await build();

@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - codex/qise-scanner-share-flow
   workflow_dispatch:
 
 permissions:
@@ -36,6 +35,8 @@ jobs:
         run: npm test
 
       - name: Build
+        env:
+          BUILD_COMMIT: ${{ github.sha }}
         run: npm run build
 
       - name: Audit deployable artefact
@@ -65,10 +66,13 @@ jobs:
         shell: bash
         env:
           PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+          EXPECTED_SHA: ${{ github.sha }}
         run: |
           ok=0
           for attempt in $(seq 1 24); do
             if curl -fsS "${PAGE_URL}qise.html" -o /tmp/qise.html \
+              && curl -fsS "${PAGE_URL}build-info.json" -o /tmp/build-info.json \
+              && EXPECTED_SHA="$EXPECTED_SHA" node -e "const fs=require('node:fs');const b=JSON.parse(fs.readFileSync('/tmp/build-info.json','utf8'));if(b.commitSha!==process.env.EXPECTED_SHA)process.exit(1)" \
               && grep -q '<title>Qi Se tracker</title>' /tmp/qise.html; then
               ok=1
               break
@@ -78,4 +82,7 @@ jobs:
           [ "$ok" = "1" ] || { echo "::error::live Qi Se page did not become ready"; exit 1; }
           curl -fsS "${PAGE_URL}manifest.webmanifest" -o /tmp/manifest.webmanifest
           node -e "const fs=require('node:fs');const m=JSON.parse(fs.readFileSync('/tmp/manifest.webmanifest','utf8'));if(m.start_url!=='./qise.html')process.exit(1)"
-          echo "Live scanner: ${PAGE_URL}qise.html"
+          curl -fsS "${PAGE_URL}qise/consent.js" | grep -q 'qise-consent-v3'
+          curl -fsS "${PAGE_URL}qise/integrated.js" -o /dev/null
+          curl -fsS "${PAGE_URL}region-extractor.js" -o /dev/null
+          echo "Live scanner: ${PAGE_URL}qise.html @ ${EXPECTED_SHA}"

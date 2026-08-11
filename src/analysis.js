@@ -7,10 +7,6 @@
  * an identity is biometric data, and the safest way to hold it is not to.
  */
 
-import {
-  FaceLandmarker, FilesetResolver,
-} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs";
-
 import { analyse, rawScalars, shadesOfGray, UNAVAILABLE } from "./engine.js";
 import { runRules } from "./rules.js";
 import { readComplexion } from "./adapters/entertainment.js";
@@ -22,9 +18,9 @@ import { geometryReport } from "./geometry.js";
 import { expressionState } from "./expression.js";
 import { extractRegions } from "./region-extractor.js";
 
-const WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm";
-const MODEL =
-  "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+const BUNDLE = new URL("./vendor/mediapipe/vision_bundle.mjs", import.meta.url).href;
+const WASM = new URL("./vendor/mediapipe/wasm", import.meta.url).href;
+const MODEL = new URL("./vendor/mediapipe/models/face_landmarker.task", import.meta.url).href;
 
 const MAX_DIM = 1024;              // downscale big phone photos before analysis
 const EXPECTED_LANDMARKS = 478;    // 468 mesh + 10 iris
@@ -37,6 +33,7 @@ let activeDelegate = null;   // "GPU" | "CPU" — surfaced in the debug view
 async function getLandmarker(onProgress) {
   if (landmarker) return landmarker;
   onProgress?.("Loading face model (first run only, ~5 MB)…");
+  const { FaceLandmarker, FilesetResolver } = await import(BUNDLE);
   const fileset = await FilesetResolver.forVisionTasks(WASM);
 
   // GPU first, CPU if that fails. The fallback logic lives in landmarker.js

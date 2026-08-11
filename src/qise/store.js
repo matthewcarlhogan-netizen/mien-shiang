@@ -24,7 +24,7 @@
 import { projectIntegratedReading } from "./integrated.js";
 
 export const DB_NAME = "qise";
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
 export const STORE_READINGS = "qise_readings";
 
 /**
@@ -94,11 +94,6 @@ export function toRecord(reading) {
 
     tags: Array.isArray(r.tags) ? r.tags.filter((t) => typeof t === "string") : [],
 
-    // A HASH of the device fingerprint, not the fingerprint. The only question
-    // ever asked of it is "is this the same device as last time", and a hash
-    // answers that without storing an identifier that could be correlated
-    // against anything else.
-    deviceFingerprintHash: r.deviceFingerprintHash ?? null,
     captureMode: r.captureMode ?? null,
     captureTier: r.captureTier ?? null,
     readingState: r.readingState ?? null,
@@ -206,6 +201,19 @@ export async function openStore(indexedDBFactory) {
     const db = req.result;
     if (!db.objectStoreNames.contains(STORE_READINGS)) {
       db.createObjectStore(STORE_READINGS, { keyPath: "timestampIso" });
+      return;
+    }
+
+    // Version 2 removes the unused device fingerprint from version 1 rows.
+    const upgradeStore = req.transaction?.objectStore(STORE_READINGS);
+    const cursorRequest = upgradeStore?.openCursor?.();
+    if (cursorRequest) {
+      cursorRequest.onsuccess = () => {
+        const cursor = cursorRequest.result;
+        if (!cursor) return;
+        cursor.update(toRecord(cursor.value));
+        cursor.continue();
+      };
     }
   };
   const db = await request(req);
@@ -234,7 +242,8 @@ export async function openStore(indexedDBFactory) {
     /** Oldest first, which is the order every consumer here wants. */
     async all() {
       const rows = await request(tx("readonly").getAll());
-      return (rows || []).sort((a, b) => String(a.timestampIso).localeCompare(String(b.timestampIso)));
+      return (rows || []).map(toRecord)
+        .sort((a, b) => String(a.timestampIso).localeCompare(String(b.timestampIso)));
     },
 
     async exportAll() {

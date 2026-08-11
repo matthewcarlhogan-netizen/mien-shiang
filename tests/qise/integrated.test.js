@@ -3,8 +3,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 import {
-  integratedReadingFromScalars, projectIntegratedReading,
+  integratedReadingFromScalars, projectIntegratedReading, measureIntegratedReading,
 } from "../../src/qise/integrated.js";
+import { extractRegions } from "../../src/region-extractor.js";
+import { canonicalFace } from "../fixtures/canonical-face.js";
 import { findForbiddenKeys, toRecord } from "../../src/qise/store.js";
 import { integratedReadingModel } from "../../src/ui/qise/screens.js";
 import { LM } from "../../src/geometry.js";
@@ -101,4 +103,47 @@ test("the accepted frame reaches integration before capture teardown erases it",
     "the accepted frame was erased before its structural reading ran");
   assert.match(completion, /lastCaptureTier, image, pts/,
     "the accepted frame and map do not reach the integration boundary");
+});
+
+test("a failed integrated extraction still erases its balanced frame", () => {
+  const balanced = new Uint8ClampedArray([7, 8, 9, 255]);
+  assert.throws(() => measureIntegratedReading(
+    { data: new Uint8ClampedArray(4), width: 1, height: 1 },
+    face(), null,
+    {
+      shadesOfGray: () => balanced,
+      extractRegions: () => { throw new Error("synthetic extraction failure"); },
+    },
+  ), /synthetic extraction failure/);
+  assert.deepEqual([...balanced], [0, 0, 0, 0]);
+});
+
+test("a failed region statistic erases the temporary pixels and mask", () => {
+  let capturedPixels = null;
+  let capturedMask = null;
+  const documentRef = {
+    createElement: () => {
+      const canvas = { width: 0, height: 0 };
+      canvas.getContext = () => ({
+        beginPath() {}, lineTo() {}, moveTo() {}, closePath() {}, fill() {},
+        getImageData: () => ({
+          data: new Uint8ClampedArray(canvas.width * canvas.height * 4).fill(255),
+        }),
+        set fillStyle(_value) {},
+      });
+      return canvas;
+    },
+  };
+  assert.throws(() => extractRegions(
+    new Uint8ClampedArray(768 * 1024 * 4).fill(120),
+    768, 1024, canonicalFace(), documentRef,
+    { regionStats: (pixels, mask) => {
+      capturedPixels = pixels;
+      capturedMask = mask;
+      throw new Error("synthetic statistics failure");
+    } },
+  ), /synthetic statistics failure/);
+  assert.ok(capturedPixels && capturedMask, "the failure path was not exercised");
+  assert.equal(capturedPixels.every((value) => value === 0), true);
+  assert.equal(capturedMask.every((value) => value === 0), true);
 });

@@ -5,9 +5,19 @@
   "type": "module",
   "description": "On-device Mian Xiang face reading. Entertainment. Not a medical device.",
   "scripts": {
-    "start": "node scripts/serve.js",
+    "start": "npm run build && node scripts/serve.js --dist",
     "test": "node scripts/run-tests.js",
+    "test:browser": "playwright test --grep-invert @benchmark",
+    "benchmark:low-end": "playwright test --grep @benchmark",
+    "audit:release": "node scripts/check-release.js",
+    "release:check": "node scripts/check-release.js --require-ready",
     "build": "node scripts/build.js",
     "lint:bundle": "node scripts/lint-bundle.js"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "0.10.18"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1"
   }
 }

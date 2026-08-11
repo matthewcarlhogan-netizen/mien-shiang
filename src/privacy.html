@@ -117,11 +117,11 @@ footer{border-top:1px solid var(--rule);margin-top:2.5rem;padding-top:1rem;
     <li>No third-party data sharing whatsoever in this build.</li>
     <li>No sale of personal information, ever.</li>
   </ul>
-  <p>The app does download two files from the internet on first use: the
-  MediaPipe face-measurement library and its model file, from Google's and
-  jsDelivr's public content networks. These are ordinary downloads of static
-  files. They send nothing about you, and after the first load the app works
-  entirely offline.</p>
+  <p>The MediaPipe face-measurement runtime and model are pinned parts of this
+  app and load only from the same website as the scanner. The scanner makes no
+  runtime request to a MediaPipe or model content network. These static files
+  receive nothing about you, and after they are cached the app works entirely
+  offline.</p>
 
   <h2>Your rights</h2>
 

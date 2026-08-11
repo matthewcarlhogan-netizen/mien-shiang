@@ -72,10 +72,7 @@ self.addEventListener("fetch", (e) => {
   // Mirrors the egress allowlist in scripts/lint-bundle.js. Google Fonts is
   // deliberately absent — the webfont import was removed, and re-adding a host
   // here without adding it to the allowlist will fail the bundle lint.
-  const cacheable =
-    url.startsWith(self.location.origin) ||
-    url.includes("cdn.jsdelivr.net/npm/@mediapipe/") ||
-    url.includes("storage.googleapis.com/mediapipe-models");
+  const cacheable = url.startsWith(self.location.origin);
   if (!cacheable) return;
 
   e.respondWith(

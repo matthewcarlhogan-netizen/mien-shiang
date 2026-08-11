@@ -11,8 +11,8 @@
  * network call would actually be added — an analytics beacon goes next to a
  * button handler, not next to a colour-space conversion — so a guard that
  * exempts the view layer is a guard aimed away from the risk. Both trees are
- * scanned, and the one legitimate remote dependency is asserted by allow-list
- * rather than by exemption.
+ * scanned. Inference dependencies are self-hosted, so there is no runtime host
+ * exemption to hide behind.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -71,18 +71,11 @@ test("the guard would fire if someone added one", () => {
   assert.doesNotMatch("const prefetched = cache.get(k)", NETWORK);
 });
 
-test("the only remote destination in the whole feature is MediaPipe", () => {
-  // Declared by allow-list, not by exemption. Both hosts are already on the
-  // egress allowlist in scripts/lint-bundle.js; the model is a GET of a static
-  // file and neither host receives anything.
-  const ALLOWED = [
-    /^https:\/\/cdn\.jsdelivr\.net\/npm\/@mediapipe\//,
-    /^https:\/\/storage\.googleapis\.com\/mediapipe-models\//,
-  ];
+test("the feature contains no remote runtime destination", () => {
   const offenders = [];
   for (const f of files) {
     for (const m of readFileSync(f, "utf8").matchAll(/https?:\/\/[^\s"'`)<>]+/g)) {
-      if (!ALLOWED.some((p) => p.test(m[0]))) offenders.push(`${rel(f)}: ${m[0]}`);
+      offenders.push(`${rel(f)}: ${m[0]}`);
     }
   }
   assert.deepEqual(offenders, [], "unexpected remote destination:\n  " + offenders.join("\n  "));

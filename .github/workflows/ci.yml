@@ -194,3 +194,20 @@ jobs:
           code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PORT}/definitely-not-here.txt")"
           [ "$code" = "404" ] || { echo "::error::expected 404 for a missing file, got $code"; exit 1; }
           echo "all smoke checks passed"
+
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+        env:
+          BUILD_COMMIT: ${{ github.sha }}
+      - run: npm run audit:release
+      - run: npm run test:browser
+      - run: npm run benchmark:low-end
