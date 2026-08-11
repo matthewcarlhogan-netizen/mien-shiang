@@ -226,7 +226,7 @@ test("the trim never empties a small region", () => {
 });
 
 test("a burst collapses to the median, and the IQR becomes frameJitter", () => {
-  assert.equal(BURST_FRAMES, 15);
+  assert.equal(BURST_FRAMES, 9);
   const steady = Array.from({ length: 15 }, () => ({ L: 60, a: 12, b: 10 }));
   const noisy = Array.from({ length: 15 }, (_, i) => ({ L: 60 + (i % 5) - 2, a: 12, b: 10 }));
 
@@ -265,15 +265,15 @@ test("iqr is interpolated, so it is stable at burst-sized n", () => {
   assert.equal(iqr([]), null);
 });
 
-/* ───────────────────────────────────────────────────── the 900ms latch ── */
+/* ───────────────────────────────────────────────────── the 650ms latch ── */
 
-test("the burst fires only after the gates have been green for 900ms", () => {
-  assert.equal(GATES_GREEN_MS, 900);
+test("the burst fires only after the gates have been green for 650ms", () => {
+  assert.equal(GATES_GREEN_MS, 650);
   const latch = new GreenLatch();
   assert.equal(latch.update(true, 0).ready, false);
   assert.equal(latch.update(true, 500).ready, false);
-  assert.equal(latch.update(true, 899).ready, false);
-  assert.equal(latch.update(true, 900).ready, true);
+  assert.equal(latch.update(true, 649).ready, false);
+  assert.equal(latch.update(true, 650).ready, true);
   // Exactly once. A second ready would start a second burst mid-burst.
   assert.equal(latch.update(true, 1500).ready, false);
 });
@@ -281,17 +281,17 @@ test("the burst fires only after the gates have been green for 900ms", () => {
 test("one bad frame resets the clock, because the point is SUSTAINED stillness", () => {
   const latch = new GreenLatch();
   latch.update(true, 0);
-  latch.update(true, 850);
-  assert.equal(latch.update(false, 860).ready, false);
-  assert.equal(latch.update(true, 870).heldMs, 0, "the hold must restart, not resume");
-  assert.equal(latch.update(true, 1600).ready, false, "still 130ms short of a fresh 900");
-  assert.equal(latch.update(true, 1770).ready, true);
+  latch.update(true, 600);
+  assert.equal(latch.update(false, 610).ready, false);
+  assert.equal(latch.update(true, 620).heldMs, 0, "the hold must restart, not resume");
+  assert.equal(latch.update(true, 1269).ready, false, "still 1ms short of a fresh 650");
+  assert.equal(latch.update(true, 1270).ready, true);
 });
 
 test("the latch reports progress, so the ring can fill instead of snapping", () => {
   const latch = new GreenLatch();
   latch.update(true, 0);
-  assert.ok(Math.abs(latch.update(true, 450).progress - 0.5) < 1e-9);
+  assert.ok(Math.abs(latch.update(true, 325).progress - 0.5) < 1e-9);
   assert.equal(latch.update(true, 5000).progress, 1);
   assert.equal(latch.update(false, 5001).progress, 0);
 });

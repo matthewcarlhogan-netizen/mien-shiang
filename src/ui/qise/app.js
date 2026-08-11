@@ -36,6 +36,7 @@ import {
   recordIlluminationSample, summarizeIllumination, publicIlluminationSummary,
 } from "../../qise/illumination.js";
 import { evaluateGates, captureGuide } from "../../qise/gates.js";
+import { frameStats } from "../../qise/framestats.js";
 import { computeReadingMetrics, lumRatioP90P50 } from "../../qise/metrics.js";
 import { interpretReading, readingConfidence, axesOf } from "../../qise/baseline.js";
 import { openStore } from "../../qise/store.js";
@@ -43,6 +44,7 @@ import { readingScreenModel, historyColumnModel } from "./screens.js";
 import { SHARE_CADENCES, shareReadings } from "./share.js";
 import { createThemeController } from "./theme.js";
 import { findPatterns, describePattern } from "../../qise/patterns.js";
+import { compositionOf } from "../../qise/composition.js";
 import * as color from "../../qise/color.js";
 
 const MEDIAPIPE_BUNDLE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18";
@@ -204,7 +206,7 @@ async function runCapture() {
 
   const burst = {};
   let collecting = 0;
-  let lastSclera = null, lastRois = null, lastMargins = null;
+  let lastSclera = null, lastRois = null, lastMargins = null, lastCaptureTier = "clean";
 
   const stopAfterLoopError = (error) => {
     if (runId !== captureRun) return;
@@ -274,11 +276,15 @@ async function runCapture() {
         Object.entries(lastRois.rois).map(([k, v]) => [k, v.polygons.map((p) => p.hull)])));
 
       const stats = frameStats(image, lastRois, canvas.width, drift, headPose(pts));
-      const gates = evaluateGates(stats, pts, lastSclera);
+      const gates = evaluateGates(stats, pts, lastSclera, { elapsedMs: nowMs - startedAt });
 
-      $("gate-line").textContent = gates.pass ? "Hold it there…" : gates.failures[0].message;
+      $("gate-line").textContent = gates.pass
+        ? (gates.captureTier === "assisted"
+          ? "Good — balancing this light on your device…"
+          : "Hold it there…")
+        : gates.failures[0].message;
       renderCaptureGuide(gates);
-      $("capture-help").hidden = nowMs - startedAt < 10000;
+      $("capture-help").hidden = nowMs - startedAt < 6000;
 
       if (illuminationSession) {
         if (!gates.pass) {
@@ -332,6 +338,7 @@ async function runCapture() {
         } else {
           collecting = BURST_FRAMES;
           lastMargins = gates.margins;
+          lastCaptureTier = gates.captureTier;
         }
       }
 
@@ -344,14 +351,14 @@ async function runCapture() {
         if (collecting === 0) {
           clearFrame();
           await finish(burst, lastRois, lastSclera, opened, history, lastMargins,
-            illuminationSummary);
+            illuminationSummary, lastCaptureTier);
           return;
         }
       }
     } else {
       $("gate-line").textContent = "Bring your face into the frame.";
       renderCaptureGuide();
-      $("capture-help").hidden = nowMs - startedAt < 10000;
+      $("capture-help").hidden = nowMs - startedAt < 6000;
     }
 
     clearFrame();
@@ -467,7 +474,10 @@ async function runSelfie(file) {
     const scleraHistory = history.map((reading) => reading.sclera?.rawRatios).filter(Boolean);
     const rois = readRois(image, pts, { mirrored: false }, color);
     const sclera = sampleSclera(image, pts, { mirrored: false }, { samples: scleraHistory });
-    const gates = evaluateGates(frameStats(image, rois, canvas.width, [], headPose(pts)), pts, sclera);
+    const gates = evaluateGates(
+      frameStats(image, rois, canvas.width, [], headPose(pts)), pts, sclera,
+      { elapsedMs: Number.POSITIVE_INFINITY },
+    );
     renderCaptureGuide(gates);
     if (!gates.pass) {
       $("gate-line").textContent = gates.failures[0].message;
@@ -491,6 +501,7 @@ async function runSelfie(file) {
     });
     await finish(
       burst, rois, sclera, { captureMode: "upload" }, history, gates.margins, illumination,
+      gates.captureTier,
     );
   } catch (error) {
     decoded?.release?.();
@@ -503,56 +514,9 @@ async function runSelfie(file) {
   }
 }
 
-/** Frame statistics the gates need, gathered once per frame. */
-function frameStats(image, rois, frameWidth, drift, pose) {
-  let total = 0, hot = 0, cold = 0, lap = 0, lapN = 0;
-  const cheekL = [], cheekR = [];
-
-  for (const [name, roi] of Object.entries(rois.rois)) {
-    for (const p of roi.pixels) {
-      total++;
-      const y = 0.299 * p.r + 0.587 * p.g + 0.114 * p.b;
-      if (y >= 250) hot++;
-      if (y <= 12) cold++;
-      if (name === "quan_l") cheekL.push(color.labFromSrgb8(p.r, p.g, p.b).L);
-      if (name === "quan_r") cheekR.push(color.labFromSrgb8(p.r, p.g, p.b).L);
-    }
-  }
-
-  // Laplacian variance over one region, as a beauty-filter detector.
-  const roi = rois.rois.quan_l;
-  if (roi && roi.pixels.length > 32) {
-    const ls = roi.pixels.map((p) => color.labFromSrgb8(p.r, p.g, p.b).L);
-    const mean = ls.reduce((a, b) => a + b, 0) / ls.length;
-    lap = ls.reduce((s, v) => s + (v - mean) ** 2, 0) / ls.length;
-    lapN = ls.length;
-  }
-
-  const med = (xs) => {
-    if (!xs.length) return null;
-    const s = [...xs].sort((a, b) => a - b);
-    return s[s.length >> 1];
-  };
-
-  return {
-    frameWidth,
-    // Real pose, from the landmarks. Feeding a literal here is what made the
-    // pose gate dead code: it reported itself passing on every frame and
-    // contributed a constant to the ring. See src/qise/pose.js.
-    pose,
-    skinPixelCount: total,
-    skinPixelsAtOrAbove250: hot,
-    skinPixelsAtOrBelow12: cold,
-    cheekMedianL: { left: med(cheekL), right: med(cheekR) },
-    landmarkDriftPx: drift.length ? drift.reduce((a, b) => a + b, 0) / drift.length : 0,
-    laplacianVariance: lapN ? lap : null,
-    validRoiCount: rois.validCount,
-  };
-}
-
 /* ── finishing a reading ─────────────────────────────────────────────────── */
 
-async function finish(burst, rois, sclera, opened, history, gateMargins, illumination) {
+async function finish(burst, rois, sclera, opened, history, gateMargins, illumination, captureTier = "clean") {
   const reduced = reduceBurst(burst);
   const rawLab = reduced.lab;
   // A still image has no temporal samples. Do not report duplicated analysis
@@ -579,6 +543,7 @@ async function finish(burst, rois, sclera, opened, history, gateMargins, illumin
     scleraConfidenceValue: sclera.confidenceValue,
     validFraction: rois.validFraction,
     frameJitter: frameJitter.overall,
+    captureTier,
   });
 
   const interpreted = interpretReading(metrics.corrected, history, { confidence });
@@ -589,9 +554,13 @@ async function finish(burst, rois, sclera, opened, history, gateMargins, illumin
     axes: axesOf(metrics.corrected),
     deltas: interpreted.deltas,
     compass: interpreted.compass,
+    composition: compositionOf({ metrics, compass: interpreted.compass }),
     tags: [],
     deviceFingerprintHash: await fingerprintHash(),
     captureMode: opened.captureMode,
+    captureTier,
+    readingState: interpreted.state,
+    baselineProgress: Math.min(4, history.filter((item) => item && item.valid !== false).length + 1),
     consentVersion: consent.read() && consent.read().version,
     illumination,
     // The margins from the frame that opened the burst. gates.js normalises
@@ -638,6 +607,17 @@ async function fingerprintHash() {
 
 /* ── rendering ───────────────────────────────────────────────────────────── */
 
+function compositionMarkup(composition, { compact = false } = {}) {
+  const bar = `<div class="${compact ? "history-mini-bar" : "composition-bar"}" aria-label="Five-colour composition">${composition.items.map((item) =>
+    `<span class="composition-segment" style="width:${item.value.toFixed(1)}%;background:${item.colour}" title="${esc(item.cjk)} ${esc(item.name)} ${item.value.toFixed(1)}%"></span>`).join("")}</div>`;
+  if (compact) return bar;
+  const featured = [composition.lead, composition.support].map((key, index) => {
+    const item = composition.items.find((entry) => entry.key === key);
+    return `<div class="composition-note"><strong><span class="cjk">${esc(item.cjk)}</span> ${esc(item.name)}</strong><span>${index ? "supporting" : "leading"} ${esc(item.note)} · ${item.value.toFixed(0)}%</span></div>`;
+  }).join("");
+  return `${bar}<div class="composition-lead">${featured}</div>`;
+}
+
 async function renderReading(reading) {
   const history = await store.all();
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -648,6 +628,27 @@ async function renderReading(reading) {
   $("reading-hook").textContent = m.hook.title;
   $("reading-reflection").textContent = m.hook.reflection;
   $("reading-reflection-story").textContent = m.hook.reflection;
+  $("reading-stage").textContent = m.calibration.active
+    ? `Anchor ${m.calibration.current} of ${m.calibration.required}`
+    : "Personal shift";
+  $("composition-basis").textContent = m.composition.basis === "personal-shift"
+    ? "vs your pattern"
+    : "today’s capture";
+  $("reading-composition").innerHTML = compositionMarkup(m.composition);
+  $("story-eyebrow").textContent = m.calibration.active ? "How it becomes yours" : "The tradition’s reading";
+  $("story-heading").textContent = m.calibration.active ? "Why the first mark matters" : "The story beneath today";
+
+  const progress = $("pattern-progress");
+  progress.hidden = !m.calibration.active;
+  progress.innerHTML = m.calibration.active
+    ? `<p class="eyebrow">Building your baseline</p><h2 id="pattern-progress-h">${esc(m.calibration.title)}</h2>
+       <p class="muted">${m.calibration.remaining === 1 ? "One more comparable scan" : `${m.calibration.remaining} more comparable scans`} will unlock your first personal change reading.</p>
+       <div class="pattern-dots" aria-label="${m.calibration.current} of 4 anchor readings">${Array.from({ length: 4 }, (_, index) =>
+         `<span class="pattern-dot" data-filled="${index < m.calibration.current}"></span>`).join("")}</div>
+       <div class="pattern-count num">${m.calibration.current} / 4 anchors</div>`
+    : "";
+  $("pattern-range").hidden = m.calibration.active;
+  $("reading-spark").hidden = m.calibration.active;
 
   $("reading-gauges").innerHTML = m.gauges.map((g) => g.measured
     ? `<div class="gauge"><div class="gauge-label"><span>${esc(g.label)}</span><span class="muted">${esc(g.relativeLabel)}</span></div>
@@ -679,6 +680,9 @@ async function renderReading(reading) {
   }
   if (m.sparkline.basisChanged) {
     notices.push("The line breaks where the set of readable areas changed — the two stretches are not on the same footing.");
+  }
+  if (reading.captureTier === "assisted") {
+    notices.push("This scan used the room-light tolerance. It stays in the column, with a small confidence reduction.");
   }
   const patterns = findPatterns(history).slice(0, 3).map(describePattern);
   $("reading-notices").innerHTML =
@@ -718,17 +722,27 @@ function drawSparkline(svg, model) {
 
 async function renderHistory() {
   const limit = SHARE_CADENCES[activeShareCadence].days;
-  const col = historyColumnModel(await store.all(), { limit });
+  const history = await store.all();
+  const col = historyColumnModel(history, { limit });
   $("history-column").innerHTML = col.rows.map((r) =>
-    `<figure>${r.svg}<figcaption>${esc(r.date)}</figcaption></figure>`).join("")
+    `<figure><button type="button" class="history-card" data-reading-timestamp="${esc(r.timestampIso)}" aria-label="Open reading from ${esc(r.date)}">
+       ${r.svg}<div class="history-copy"><span class="history-date">${esc(r.date)}</span><h2>${esc(r.hook)}</h2>
+       ${compositionMarkup(r.composition, { compact: true })}<span class="muted">${r.composition.basis === "personal-shift" ? "Personal shift" : "Baseline anchor"}</span></div>
+     </button></figure>`).join("")
     || `<p class="muted">Nothing recorded yet.</p>`;
+  for (const button of document.querySelectorAll("[data-reading-timestamp]")) {
+    button.addEventListener("click", () => {
+      const selected = history.find((item) => item.timestampIso === button.dataset.readingTimestamp);
+      if (selected) renderReading(selected).catch((error) => console.error(error));
+    });
+  }
   for (const button of document.querySelectorAll("[data-cadence]")) {
     const selected = button.dataset.cadence === activeShareCadence;
     button.setAttribute("aria-pressed", String(selected));
   }
   $("share-column").textContent = activeShareCadence === "today"
-    ? "Share today's seal"
-    : `Share ${SHARE_CADENCES[activeShareCadence].label.toLowerCase()}`;
+    ? "Share my colour seal"
+    : (col.n === 1 ? "Share my colour column" : `Share ${col.n}-reading column`);
   show("screen-history");
 }
 

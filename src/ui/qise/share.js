@@ -1,14 +1,14 @@
 /*
  * A share card is an OUTPUT of the scanner, never another biometric record.
  *
- * Only the deterministic seal, the already-bounded reading label and dates
- * cross this boundary. No image, raw metric, landmark, device fingerprint or
- * confidence scalar is copied into the model. That makes the thing people
- * share recognisably theirs without turning a social post into face data.
+ * Only the deterministic seal, bounded five-colour percentages, reading label
+ * and dates cross this boundary. No image, raw metric, landmark, device
+ * fingerprint or confidence scalar is copied into the model.
  */
 import { GROUND, PALETTE } from "./palette.js";
 import { sealModel } from "./seal.js";
 import { isLowConfidence } from "../../qise/baseline.js";
+import { compositionOf } from "../../qise/composition.js";
 
 export const SHARE_CADENCES = Object.freeze({
   today: Object.freeze({ days: 1, label: "Today", title: "Your Qi Se today" }),
@@ -32,6 +32,7 @@ const ascendantOf = (reading) => {
 };
 
 const readingLine = (reading) => {
+  if (!reading?.compass) return "Today’s five-colour impression";
   const ascendant = ascendantOf(reading);
   if (ascendant === "ping") return "Your reading is level — 平.";
   const band = reading.compass && reading.compass.band;
@@ -78,8 +79,11 @@ export function shareCardModel(history, cadence = "today") {
   }));
 
   const title = key === "today" && newest ? readingLine(newest) : definition.title;
+  const composition = newest ? compositionOf(newest) : null;
   const summary = key === "today" && newest
-    ? `A face scan made on ${dateLabel(newest.timestampIso)}.`
+    ? (newest.compass
+      ? `A private face scan made on ${dateLabel(newest.timestampIso)}.`
+      : `${composition.lead} leads, with ${composition.support} alongside — the first marks in a personal colour column.`)
     : columnSummary(readings);
 
   return {
@@ -89,6 +93,12 @@ export function shareCardModel(history, cadence = "today") {
     summary,
     count: readings.length,
     seals,
+    composition,
+    caption: key === "today" && newest
+      ? (newest.compass
+        ? "A private reflection on what shifted today."
+        : "One mark. Three more to reveal what changes.")
+      : "A private column, built one reading at a time.",
     privacyLine: "Made on-device · no face photo shared · compared only with your own scans",
     footer: "Mien Shiang · cultural entertainment, not a health assessment",
   };
@@ -149,6 +159,22 @@ function drawSeal(ctx, seal, x, y, size) {
   ctx.restore();
 }
 
+function drawComposition(ctx, composition, x, y, width) {
+  if (!composition) return y;
+  const height = 24;
+  let cursor = x;
+  for (const [key, value] of Object.entries(composition.segments)) {
+    const segmentWidth = width * (value / 100);
+    ctx.fillStyle = PALETTE[key].hex;
+    ctx.fillRect(cursor, y, segmentWidth + 1, height);
+    cursor += segmentWidth;
+  }
+  ctx.fillStyle = "rgba(27,25,23,.68)";
+  ctx.font = "24px system-ui, sans-serif";
+  ctx.fillText(`${composition.lead} leads · ${composition.support} supports`, x, y + 62);
+  return y + 76;
+}
+
 function wrapText(ctx, text, x, y, maxWidth, lineHeight, maxLines = 4) {
   const words = String(text).split(/\s+/);
   const lines = [];
@@ -194,16 +220,27 @@ export function renderShareCanvas(model, documentRef = document) {
   ctx.font = "32px system-ui, sans-serif";
   const afterSummary = wrapText(ctx, model.summary, 96, afterTitle + 22, 888, 46, 3);
 
-  const availableHeight = 1050 - afterSummary;
+  const afterComposition = model.cadence === "today"
+    ? drawComposition(ctx, model.composition, 96, afterSummary + 20, 888)
+    : afterSummary;
+  const availableHeight = 1050 - afterComposition;
   const count = Math.max(1, model.seals.length);
   const columns = count === 1 ? 1 : (count <= 7 ? Math.min(count, 4) : 5);
   const rows = Math.ceil(count / columns);
   const gap = 22;
-  const sealSize = Math.min(340, (888 - gap * (columns - 1)) / columns,
+  const maxSealSize = count === 1 ? 460 : 340;
+  const sealSize = Math.min(maxSealSize, (888 - gap * (columns - 1)) / columns,
     (availableHeight - gap * Math.max(0, rows - 1)) / rows);
   const gridWidth = columns * sealSize + (columns - 1) * gap;
   const gridX = 96 + (888 - gridWidth) / 2;
-  const gridY = afterSummary + 48;
+  const gridY = afterComposition + 40;
+
+  if (model.seals.length === 1) {
+    ctx.fillStyle = `${PALETTE[model.composition?.lead || "chi"].hex}18`;
+    ctx.beginPath();
+    ctx.arc(540, gridY + sealSize / 2, sealSize * 0.72, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   model.seals.forEach((entry, i) => {
     const col = i % columns;
@@ -215,6 +252,14 @@ export function renderShareCanvas(model, documentRef = document) {
     ctx.font = "36px system-ui, sans-serif";
     ctx.fillStyle = "rgba(27,25,23,.62)";
     ctx.fillText("Complete a face scan to make your first seal.", 96, gridY + 100);
+  }
+
+  if (model.count) {
+    ctx.fillStyle = PALETTE.hei.hex;
+    ctx.font = "500 34px Georgia, serif";
+    ctx.textAlign = "center";
+    ctx.fillText(model.caption, 540, 1090);
+    ctx.textAlign = "left";
   }
 
   ctx.fillStyle = "rgba(27,25,23,.72)";

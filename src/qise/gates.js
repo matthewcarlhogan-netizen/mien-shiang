@@ -39,6 +39,22 @@ export const SIDELIGHT_MAX_DELTA_L = 6;
 export const MOTION_MAX_PX = 6;
 export const FILTER_MIN_LAPLACIAN_VARIANCE = 8;
 
+/**
+ * After this long, small camera/room-light imperfections may be accepted.
+ * Geometry, readable regions, open eyes and beauty-filter checks stay hard.
+ */
+export const CAPTURE_GRACE_MS = 3500;
+
+export const ASSISTED_LIMITS = Object.freeze({
+  overexposed: 0.06,
+  underexposed: 0.06,
+  sidelight: 9,
+  illuminant: 0.35,
+  motion: 9,
+});
+
+export const ASSISTABLE_GATES = Object.freeze(Object.keys(ASSISTED_LIMITS));
+
 /** Outer eye corners. See the note in evaluateGates on which span this is. */
 export const OUTER_CANTHI = Object.freeze([33, 263]);
 
@@ -203,15 +219,18 @@ export const CAPTURE_GUIDE_GROUPS = Object.freeze([
 export function captureGuide(report) {
   const margins = report && report.margins ? report.margins : {};
   const failures = report && Array.isArray(report.failures) ? report.failures : [];
+  const tolerated = new Set((report && report.tolerated || []).map((failure) => failure.id));
 
   return CAPTURE_GUIDE_GROUPS.map((group) => {
     const values = group.gates.map((id) => margins[id]).filter(Number.isFinite);
-    const ready = values.length === group.gates.length && values.every((value) => value >= 0);
+    const ready = values.length === group.gates.length
+      && group.gates.every((id) => margins[id] >= 0 || tolerated.has(id));
     const activeFailure = failures.find((failure) => group.gates.includes(failure.id));
     return {
       id: group.id,
       label: group.label,
       ready,
+      assisted: group.gates.some((id) => tolerated.has(id)),
       state: ready ? "ready" : (values.length ? "adjust" : "waiting"),
       message: activeFailure ? activeFailure.message : null,
     };
@@ -226,7 +245,7 @@ export function captureGuide(report) {
  * @param {Object} scleraResult from sampleSclera
  * @returns {{pass:boolean, failures:Array, margins:Object, worst:Object|null}}
  */
-export function evaluateGates(frameStats, landmarks, scleraResult) {
+export function evaluateGates(frameStats, landmarks, scleraResult, options = {}) {
   const stats = frameStats || {};
   const failures = [];
   const margins = {};
@@ -256,5 +275,31 @@ export function evaluateGates(frameStats, landmarks, scleraResult) {
   failures.sort((a, b) => a.margin - b.margin);
   const worst = results.reduce((w, r) => (w === null || r.margin < w.margin ? r : w), null);
 
-  return { pass: failures.length === 0, failures, margins, worst };
+  const elapsedMs = typeof options.elapsedMs === "number" && !Number.isNaN(options.elapsedMs)
+    ? options.elapsedMs
+    : 0;
+  const graceReached = elapsedMs >= CAPTURE_GRACE_MS;
+  const tolerated = graceReached ? failures.filter((failure) => {
+    const assistedLimit = ASSISTED_LIMITS[failure.id];
+    if (!Number.isFinite(assistedLimit) || failure.unevaluated) return false;
+    return failure.id === "underexposed" || failure.id === "overexposed"
+      || failure.id === "sidelight" || failure.id === "illuminant"
+      || failure.id === "motion"
+      ? failure.value <= assistedLimit
+      : false;
+  }) : [];
+  const toleratedIds = new Set(tolerated.map((failure) => failure.id));
+  const unresolved = failures.filter((failure) => !toleratedIds.has(failure.id));
+  const strictPass = failures.length === 0;
+  const assistedPass = !strictPass && graceReached && unresolved.length === 0;
+
+  return {
+    pass: strictPass || assistedPass,
+    strictPass,
+    captureTier: strictPass ? "clean" : (assistedPass ? "assisted" : "waiting"),
+    failures: assistedPass ? [] : failures,
+    tolerated,
+    margins,
+    worst,
+  };
 }

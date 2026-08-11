@@ -15,6 +15,7 @@ import {
   POSE_YAW_MAX, POSE_PITCH_MAX, POSE_ROLL_MAX, DISTANCE_MIN_FRACTION,
   EXPOSURE_MAX_FRACTION, SIDELIGHT_MAX_DELTA_L, MOTION_MAX_PX,
   FILTER_MIN_LAPLACIAN_VARIANCE, OUTER_CANTHI,
+  CAPTURE_GRACE_MS, ASSISTED_LIMITS,
 } from "../../src/qise/gates.js";
 import { SCLERA_MIN_PIXELS } from "../../src/qise/sclera.js";
 import { MIN_VALID_ROIS } from "../../src/qise/rois.js";
@@ -68,6 +69,50 @@ test("a clean frame passes every gate", () => {
   for (const [id, m] of Object.entries(r.margins)) {
     assert.ok(m >= 0, `${id} margin ${m} is negative on a clean frame`);
   }
+});
+
+test("marginal room light becomes assisted after a short grace period", () => {
+  const before = evaluateGates(
+    { ...cleanStats(), skinPixelsAtOrAbove250: 4000 }, PTS, cleanSclera(),
+    { elapsedMs: CAPTURE_GRACE_MS - 1 },
+  );
+  assert.equal(before.pass, false);
+  assert.equal(before.captureTier, "waiting");
+
+  const after = evaluateGates(
+    { ...cleanStats(), skinPixelsAtOrAbove250: 4000 }, PTS, cleanSclera(),
+    { elapsedMs: CAPTURE_GRACE_MS },
+  );
+  assert.equal(after.pass, true);
+  assert.equal(after.strictPass, false);
+  assert.equal(after.captureTier, "assisted");
+  assert.deepEqual(after.tolerated.map((failure) => failure.id), ["overexposed"]);
+  assert.ok(ASSISTED_LIMITS.overexposed > EXPOSURE_MAX_FRACTION);
+  assert.equal(captureGuide(after).find((item) => item.id === "light").ready, true);
+});
+
+test("grace never relaxes pose, readable-region or beauty-filter gates", () => {
+  for (const patch of [
+    { pose: { yaw: 0, pitch: 0, roll: POSE_ROLL_MAX + 1 } },
+    { validRoiCount: MIN_VALID_ROIS - 1 },
+    { laplacianVariance: FILTER_MIN_LAPLACIAN_VARIANCE - 1 },
+  ]) {
+    const result = evaluateGates(
+      { ...cleanStats(), ...patch }, PTS, cleanSclera(),
+      { elapsedMs: Number.POSITIVE_INFINITY },
+    );
+    assert.equal(result.pass, false);
+    assert.equal(result.captureTier, "waiting");
+  }
+});
+
+test("severely clipped light remains blocked after grace", () => {
+  const result = evaluateGates(
+    { ...cleanStats(), skinPixelsAtOrBelow12: 8000 }, PTS, cleanSclera(),
+    { elapsedMs: Number.POSITIVE_INFINITY },
+  );
+  assert.equal(result.pass, false);
+  assert.ok(result.failures.some((failure) => failure.id === "underexposed"));
 });
 
 /* ────────────────────────────────────────────────────── one test per gate ── */

@@ -23,6 +23,7 @@
  * one the five-colour scheme was written in.
  */
 import { PALETTE, COLOUR_ORDER } from "./palette.js";
+import { compositionOf } from "../../qise/composition.js";
 
 export const SEAL_SIZE = 100;
 export const SEAL_MARGIN = 8;
@@ -76,7 +77,18 @@ export function sealModel(reading, opts = {}) {
   const seedText = (reading && reading.timestampIso) || "no-timestamp";
   const rnd = mulberry32(hashSeed(seedText));
 
-  const compass = (reading && reading.compass) || { ascendant: "ping", magnitude: 0, components: {} };
+  const readingComposition = compositionOf(reading);
+  const hasCompass = Boolean(reading?.compass)
+    && (reading.compass.ascendant === "ping" || (reading.compass.components
+      && Object.values(reading.compass.components).some((value) => Number.isFinite(value) && value > 0)));
+  const compass = hasCompass
+    ? reading.compass
+    : {
+      ascendant: readingComposition.lead,
+      magnitude: Math.max(...Object.values(readingComposition.segments)) / 25,
+      components: Object.fromEntries(Object.entries(readingComposition.segments)
+        .map(([key, value]) => [key, value / 25])),
+    };
   const components = compass.components || {};
   const hollow = Boolean(opts.lowConfidence);
 
@@ -143,6 +155,7 @@ export function sealModel(reading, opts = {}) {
     size: SEAL_SIZE,
     seed: seedText,
     ascendant: compass.ascendant || "ping",
+    basis: hasCompass ? "personal-shift" : "capture-impression",
     hollow,
     border,
     axes,

@@ -262,7 +262,9 @@ export const JITTER_HALF_POINT = 1.5;
  * to near-zero, and one bad input must not be averaged away by two good ones.
  * The worst link is the honest summary.
  */
-export function readingConfidence({ scleraConfidenceValue, validFraction, frameJitter }) {
+export const ASSISTED_CAPTURE_CONFIDENCE = 0.78;
+
+export function readingConfidence({ scleraConfidenceValue, validFraction, frameJitter, captureTier }) {
   const jitterTerm = typeof frameJitter === "number"
     ? JITTER_HALF_POINT / (JITTER_HALF_POINT + Math.max(0, frameJitter))
     : 1;
@@ -270,6 +272,7 @@ export function readingConfidence({ scleraConfidenceValue, validFraction, frameJ
     typeof scleraConfidenceValue === "number" ? scleraConfidenceValue : 1,
     typeof validFraction === "number" ? validFraction : 1,
     jitterTerm,
+    captureTier === "assisted" ? ASSISTED_CAPTURE_CONFIDENCE : 1,
   ];
   return Math.max(0, Math.min(1, Math.min(...parts)));
 }

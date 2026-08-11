@@ -266,6 +266,18 @@ test("confidence is the MINIMUM of the three, not their product or their mean", 
   assert.ok(Math.abs(threeMediocre - 0.7) < 1e-9, `a product would give ~0.34, got ${threeMediocre}`);
 });
 
+test("an assisted capture stays usable but cannot claim clean-capture confidence", () => {
+  const clean = readingConfidence({
+    scleraConfidenceValue: 1, validFraction: 1, frameJitter: 0, captureTier: "clean",
+  });
+  const assisted = readingConfidence({
+    scleraConfidenceValue: 1, validFraction: 1, frameJitter: 0, captureTier: "assisted",
+  });
+  assert.equal(clean, 1);
+  assert.equal(assisted, 0.78);
+  assert.ok(assisted > LOW_CONFIDENCE);
+});
+
 test("jitter degrades confidence monotonically and never below zero", () => {
   const at = (j) => readingConfidence({ scleraConfidenceValue: 1, validFraction: 1, frameJitter: j });
   assert.ok(at(0) > at(1) && at(1) > at(5) && at(5) > at(50));

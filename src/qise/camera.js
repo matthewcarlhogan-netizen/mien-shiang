@@ -21,11 +21,11 @@
  */
 import { assertConsentGranted } from "./consent.js";
 
-/** Frames in a burst. Median across them is what removes sensor noise. */
-export const BURST_FRAMES = 15;
+/** Nine frames keep a real median while shortening the post-lock capture. */
+export const BURST_FRAMES = 9;
 
 /** All gates must hold for this long before the burst starts. */
-export const GATES_GREEN_MS = 900;
+export const GATES_GREEN_MS = 650;
 
 /** Trailing frames the ROI polygon vertices are averaged over. */
 export const SMOOTHING_FRAMES = 20;
@@ -330,7 +330,7 @@ export function reduceBurst(perFrame) {
   return { lab, frameJitter: { byRoi: jitterByRoi, overall: median(magnitudes) } };
 }
 
-/* ── the green-for-900ms latch ───────────────────────────────────────────── */
+/* ── the sustained-green latch ───────────────────────────────────────────── */
 
 /**
  * All gates green continuously for GATES_GREEN_MS, then fire once.

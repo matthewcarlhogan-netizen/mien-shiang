@@ -98,6 +98,9 @@ export function toRecord(reading) {
     // against anything else.
     deviceFingerprintHash: r.deviceFingerprintHash ?? null,
     captureMode: r.captureMode ?? null,
+    captureTier: r.captureTier ?? null,
+    readingState: r.readingState ?? null,
+    baselineProgress: Number.isInteger(r.baselineProgress) ? r.baselineProgress : null,
     consentVersion: r.consentVersion ?? null,
 
     // Categorical experiment metadata only. Raw reflected channel responses
@@ -108,6 +111,12 @@ export function toRecord(reading) {
       outcome: r.illumination.outcome ?? "skipped",
       phasesRead: Number.isInteger(r.illumination.phasesRead) ? r.illumination.phasesRead : 0,
       reason: r.illumination.reason ?? null,
+    } : null,
+    composition: r.composition ? {
+      basis: r.composition.basis ?? null,
+      lead: r.composition.lead ?? null,
+      support: r.composition.support ?? null,
+      segments: scalarMap(r.composition.segments, COMPASS_COMPONENTS),
     } : null,
 
     gateMargins: scalarMap(r.gateMargins),

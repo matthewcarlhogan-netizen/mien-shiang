@@ -10,6 +10,15 @@ import { PALETTE, COLOUR_ORDER } from "./palette.js";
 import { sealModel, sealSvg } from "./seal.js";
 import { passageFor } from "../../qise/passages.js";
 import { isLowConfidence } from "../../qise/baseline.js";
+import { compositionOf, COMPOSITION_COLOURS } from "../../qise/composition.js";
+
+export const COMPOSITION_LABELS = Object.freeze({
+  chi: Object.freeze({ cjk: "赤", name: "chi", note: "warm note" }),
+  huang: Object.freeze({ cjk: "黃", name: "huang", note: "earth note" }),
+  qing: Object.freeze({ cjk: "青", name: "qing", note: "cool note" }),
+  bai: Object.freeze({ cjk: "白", name: "bai", note: "light note" }),
+  hei: Object.freeze({ cjk: "黑", name: "hei", note: "deep note" }),
+});
 
 /** The reading screen, top to bottom. Asserted as a list, not as a layout. */
 export const READING_SCREEN_ORDER = Object.freeze([
@@ -177,6 +186,48 @@ export function hookFor(compass) {
   return READING_HOOKS[ascendant];
 }
 
+export function compositionStrip(reading) {
+  const composition = compositionOf(reading);
+  return {
+    ...composition,
+    items: COMPOSITION_COLOURS.map((key) => ({
+      key,
+      value: composition.segments[key],
+      ...COMPOSITION_LABELS[key],
+      colour: PALETTE[key].hex,
+    })),
+    leadLabel: COMPOSITION_LABELS[composition.lead],
+    supportLabel: COMPOSITION_LABELS[composition.support],
+  };
+}
+
+export function calibrationModel(reading, history) {
+  const stored = Number.isInteger(reading?.baselineProgress) ? reading.baselineProgress : null;
+  const atReading = (history || []).filter((item) => item?.valid !== false
+    && (!reading?.timestampIso || String(item.timestampIso) <= String(reading.timestampIso))).length;
+  const current = Math.max(1, Math.min(4, stored || atReading));
+  const remaining = Math.max(0, 4 - current);
+  const headings = [
+    "Your pattern starts with one mark.",
+    "The outline is taking shape.",
+    "One more anchor scan will reveal change.",
+    "Your personal pattern is ready.",
+  ];
+  return {
+    active: !reading?.compass,
+    current,
+    required: 4,
+    remaining,
+    progress: current / 4,
+    title: headings[current - 1],
+    verdict: remaining
+      ? `Today is anchor ${current} of 4 — a real reading, before personal comparison begins.`
+      : "Your personal comparison is ready.",
+    reflection: "What would be worth noticing if this pattern shifted?",
+    story: "In Mian Xiang, facial colour was regarded as changing appearance rather than a fixed trait. This first impression records what the camera could see today; similar light on later scans helps separate a pattern from the room.",
+  };
+}
+
 /**
  * The whole reading screen as data.
  *
@@ -194,6 +245,10 @@ export function readingScreenModel(reading, history, options = {}) {
   };
 
   const seal = sealModel(reading, { lowConfidence: low });
+  const calibration = calibrationModel(reading, history);
+  const hook = calibration.active
+    ? { title: calibration.title, reflection: calibration.reflection }
+    : hookFor(compass);
 
   return {
     order: READING_SCREEN_ORDER,
@@ -201,14 +256,18 @@ export function readingScreenModel(reading, history, options = {}) {
     lowConfidence: low,
     seal,
     sealSvg: sealSvg(seal, { reducedMotion: options.reducedMotion === true }),
-    verdict: verdictFor(compass),
-    hook: hookFor(compass),
+    verdict: calibration.active ? calibration.verdict : verdictFor(compass),
+    hook,
+    calibration,
+    composition: compositionStrip(reading),
     gauges: [
       gaugeModel(history, metricOf(reading, "ming"), "ming", "明 lustre"),
       gaugeModel(history, metricOf(reading, "run"), "run", "潤 moisture"),
     ],
     courts: courtsStrip(reading.roiValidity),
-    passage: passageFor(compass, z, reading.timestampIso),
+    passage: calibration.active
+      ? { text: calibration.story, source: "Mian Xiang context", calibration: true }
+      : passageFor(compass, z, reading.timestampIso),
     tags: Array.isArray(reading.tags) ? [...reading.tags] : [],
     sparkline: sparklineModel(history, "ming"),
   };
@@ -224,12 +283,15 @@ export function historyColumnModel(history, { limit = 30 } = {}) {
   const rows = (history || []).slice(-limit).reverse().map((r) => {
     const low = typeof r.confidence === "number" ? isLowConfidence(r.confidence) : false;
     const model = sealModel(r, { lowConfidence: low });
+    const composition = compositionStrip(r);
     return {
       timestampIso: r.timestampIso,
       date: String(r.timestampIso || "").slice(0, 10),
       ascendant: (r.compass && r.compass.ascendant) || "ping",
       lowConfidence: low,
       seal: model,
+      composition,
+      hook: r.compass ? hookFor(r.compass).title : calibrationModel(r, history).title,
       svg: sealSvg(model, { title: `Reading for ${String(r.timestampIso || "").slice(0, 10)}` }),
     };
   });
