@@ -380,7 +380,7 @@ export class GreenLatch {
 export function releaseCapture(scratch) {
   const released = {
     images: 0, landmarkArrays: 0, canvasCleared: false, tracksStopped: 0,
-    landmarkerClosed: false, previewCleared: false,
+    landmarkerClosed: false, previewCleared: false, wakeLockReleased: false,
   };
   if (!scratch) return released;
 
@@ -414,6 +414,17 @@ export function releaseCapture(scratch) {
     scratch.video.srcObject = null;
     released.previewCleared = true;
   }
+  // The screen goes back to the OS idle timer here rather than at each call
+  // site, because there are four ways out of a capture — the burst completing,
+  // the loop error handler, a re-entrant runCapture(), and withdrawal — and a
+  // lock released on only some of them leaves the phone awake indefinitely.
+  // Deliberately NOT awaited: this function is synchronous by contract, and
+  // release() resolves rather than rejecting (it logs its own failures), so
+  // there is no rejection to strand.
+  if (scratch.wakeLock && typeof scratch.wakeLock.release === "function") {
+    scratch.wakeLock.release();
+    released.wakeLockReleased = true;
+  }
 
   scratch.images = null;
   scratch.landmarks = null;
@@ -421,5 +432,6 @@ export function releaseCapture(scratch) {
   scratch.stream = null;
   scratch.landmarker = null;
   scratch.video = null;
+  scratch.wakeLock = null;
   return released;
 }

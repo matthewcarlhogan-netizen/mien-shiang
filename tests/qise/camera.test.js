@@ -324,6 +324,9 @@ test("teardown ZEROES the pixels rather than only dropping the reference", () =>
   assert.deepEqual(released, {
     images: 1, landmarkArrays: 1, canvasCleared: true, tracksStopped: 1,
     landmarkerClosed: true, previewCleared: true,
+    // False because this scratch never took one, not because teardown skipped
+    // it — the paired assertion is in "releaseCapture hands the screen back".
+    wakeLockReleased: false,
   });
 });
 
@@ -333,4 +336,29 @@ test("teardown is safe on a partly-built or already-released scratch", () => {
   const s = { images: [null], landmarks: [null], canvas: null };
   assert.doesNotThrow(() => releaseCapture(s));
   assert.doesNotThrow(() => releaseCapture(s));
+});
+
+test("releaseCapture hands the screen back to the OS idle timer", () => {
+  // There are four ways out of a capture — the burst completing, the loop
+  // error handler, a re-entrant runCapture() and withdrawal — and a lock
+  // released on only some of them leaves the phone awake indefinitely. Doing
+  // it here rather than at each call site is what makes that unrepresentable.
+  let releases = 0;
+  const scratch = {
+    canvas: { width: 8, height: 8 },
+    images: [], landmarks: [],
+    wakeLock: { release() { releases++; return Promise.resolve(true); } },
+  };
+
+  const released = releaseCapture(scratch);
+  assert.equal(releases, 1);
+  assert.equal(released.wakeLockReleased, true);
+  assert.equal(scratch.wakeLock, null, "a held reference outlives the capture that owned it");
+});
+
+test("releaseCapture still works when no wake lock was ever taken", () => {
+  // The API is absent on plenty of hosts, and teardown must not depend on it.
+  const released = releaseCapture({ canvas: { width: 4, height: 4 }, images: [], landmarks: [] });
+  assert.equal(released.wakeLockReleased, false);
+  assert.equal(released.canvasCleared, true);
 });
