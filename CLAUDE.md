@@ -467,8 +467,17 @@ cache, which does not contain the new module.
 release that works perfectly on a fresh install.
 **Cause:** new entry in `SHELL`, unchanged `CACHE` name.
 
-Currently `mienshiang-v6` (bumped when `reading/summary.js` and
-`sharecard.js` were added).
+Currently `mienshiang-v19` (bumped when `qise/wakelock.js` was added).
+
+**The version is coupled to `index.html`, which is easy to miss.** The entry
+redirect is `location.replace("./qise.html?v=<n>")`, and `<n>` must equal the
+`CACHE` generation: the query is what makes a returning user bypass the stale
+shell exactly once. Bumping `CACHE` alone leaves the old page being served from
+the old cache, which is the same white-screen symptom the bump was meant to
+prevent. Pinned by `the shared project URL opens the scanner, with an explicit
+classic escape hatch` in `tests/mobile-journey.test.js`, which compares the two
+numbers and fails on a mismatch — it caught exactly this while `wakelock.js`
+was being added.
 
 ### 16. The module boundary sits BELOW labelling, not at it
 
@@ -1306,6 +1315,87 @@ Two companions, both load-bearing, neither sufficient alone:
 Every downstream value is a CIELAB delta against the subject's own baseline, so a
 brightness multiplier on the captured pixels silently corrupts every reading ever
 compared with it.
+
+### 51. A teardown written inside one branch is missing from the other
+
+`ui/qise/app.js` runs the screen-light sequence inside `if (mesh)`. The
+abandon-and-clear teardown was written inline in that block, so it covered the
+gate-failure path and simply did not exist on the face-lost path — which is the
+`else` of the very same `if`, a few lines below.
+
+The consequence is not a stalled state machine, it is a dark screen. The wash
+is `position:absolute; inset:0` over the preview, and mid-sequence it is blue
+`#426B7A` or green `#4A7267` at 0.62 opacity. A lost face left it painted, with
+`illuminationSession` still non-null, so the preview went dark and stayed dark
+while the copy underneath read *"Bring your face into the frame."* — the one
+instruction a darkened preview makes hardest to follow.
+
+**Symptom:** the camera opens, the preview flashes bright and then goes dim and
+stays dim. It reads as an exposure or a brightness fault and is neither; the
+video element is fine and the pixels underneath are fine.
+**Cause:** teardown written at a call site inside one branch of a conditional,
+when the condition has two branches that both need it.
+**Pinned by:** `a LOST FACE abandons the session, not only a failed gate` and
+`no face beats a failed gate, because there is nothing left to sample`.
+
+The decision now lives in `illuminationInterruption()` in `qise/illumination.js`
+rather than as two `if`s in the loop, for the reason everything else in that
+tree is a pure function elsewhere: `app.js` is the file no test can import
+(item 44), so a rule kept there is a rule nothing checks.
+
+**Order inside it is load-bearing.** No-face is tested BEFORE gates, because
+`meanFaceRgb()` samples the face regions — without a mesh the remaining phases
+record nothing whatever the gates say, so reporting `frame-moved` would name a
+cause that was never measured. And an abandoned session reports
+`phasesRead: 0`, not the count it had reached: a partial sequence has no
+neutral to compare against, so the phases that *were* read cannot support a
+response in either direction.
+
+### 52. The screen is a light source, so the wake lock is a measurement control
+
+There is no shutter. The reading is taken when the frame is good, so the user
+holds a pose through `GATES_GREEN_MS` and then a fifteen-frame burst, touching
+nothing — which is precisely what the OS idle timer waits for. The screen dims,
+and on most phones dims to black, in the middle of the only interaction the app
+has.
+
+**This is not a comfort fix.** The screen is a light source pointed at the face
+— that is the entire premise of the optional check in `illumination.js` — so a
+screen that dims part-way through a burst moves the illuminant between frames of
+a single reading, and every value downstream is a CIELAB difference against the
+subject's own baseline. `reduceBurst()` would see it as frame jitter and degrade
+confidence, which is the honest response to a corrupted burst, but the better
+answer is for the illuminant not to move.
+
+`qise/wakelock.js` takes `navigator.wakeLock` and the document as ARGUMENTS,
+for the same reason `createLandmarkerWithFallback()` takes its factory (item
+14): the paths that matter are the ones a developer machine never takes — the
+host with no wake lock API, and the host that REFUSES the request.
+
+Four things that look like detail and are not:
+
+- **`unsupported` and `failed` are different states.** One is a platform fact,
+  the other is a policy or battery condition on this device. Collapsing them is
+  item 23's `zoneNotExtracted`/`colourNotMeasurable` mistake in another costume.
+- **`visibilitychange` is mandatory, not a refinement.** The platform drops a
+  screen lock whenever the document stops being visible and does NOT restore it.
+  Requesting once at the start of capture holds nothing after the first glance
+  at a notification, and that is the path nobody exercises while checking that
+  the feature works.
+- **Release is idempotent, and lives in `releaseCapture()`.** There are four
+  ways out of a capture — the burst completing, the loop error handler, a
+  re-entrant `runCapture()`, and withdrawal. A lock released on only some of
+  them leaves the phone awake indefinitely; a throw from a second release
+  strands the camera it was called to shut down.
+- **It is never a precondition.** A capture must run identically where the API
+  is absent. The lock is an improvement, and `acquire()` is deliberately not
+  awaited.
+
+**Pinned by:** `tests/qise/wakelock.test.js`, including
+`a REFUSED lock is reported as failed, not as unsupported` and `the lock is
+re-acquired when the tab becomes visible again`, plus `releaseCapture hands the
+screen back to the OS idle timer` in the camera suite.
+
 
 ### 24. The summary may only repeat what was measured
 
