@@ -201,6 +201,67 @@ export function compositionStrip(reading) {
   };
 }
 
+/**
+ * Join the moving five-colour layer to the structural reading made from the
+ * same accepted frame. The model keeps each tradition's caveats intact.
+ */
+export function integratedReadingModel(reading) {
+  const source = reading?.integrated;
+  const element = source?.fiveElements;
+  const courts = source?.threeCourts;
+  const palaceSource = source?.twelvePalaces;
+  const harmony = source?.harmony;
+  if (!source || !element?.available || !courts?.available) {
+    return {
+      available: false,
+      note: element?.note || "This scan did not resolve enough frontal geometry for the structural reading.",
+    };
+  }
+
+  const composition = compositionStrip(reading);
+  const lead = composition.leadLabel;
+  const courtLabel = courts.balanced
+    ? "Three Courts in near-equal measure"
+    : `${courts.court?.hanzi || ""} ${courts.court?.name || courts.dominant}`.trim();
+  const measuredPalaces = (palaceSource?.palaces || []).filter((palace) => palace.measured);
+  const harmonyComponents = (harmony?.components || []).map((component) => ({
+    ...component,
+    percent: Number.isFinite(component.value) ? Math.round(component.value * 100) : null,
+  }));
+
+  return {
+    available: true,
+    headline: `${lead.cjk} today, over ${element.hanzi} ${element.name}`,
+    synthesis:
+      `The changing colour layer leads with ${lead.name}; the accepted face map reads as `
+      + `${element.name} structure in the Mian Xiang Five Elements tradition.`,
+    frameLine: `${element.shape} geometry · ${courtLabel}`,
+    element,
+    courts: {
+      ...courts,
+      label: courtLabel,
+      percentages: Object.fromEntries(Object.entries(courts.fractions || {}).map(
+        ([key, value]) => [key, Number.isFinite(value) ? Math.round(value * 100) : null],
+      )),
+    },
+    palaces: {
+      measured: measuredPalaces,
+      measuredCount: palaceSource?.measuredCount || 0,
+      supportedCount: palaceSource?.supportedCount || 0,
+      totalCount: palaceSource?.totalCount || 12,
+      sourcesDiffer: palaceSource?.sourcesDiffer || null,
+    },
+    harmony: harmony ? {
+      ...harmony,
+      label: Number.isFinite(harmony.value)
+        ? `${harmony.value}% alignment with the named canons`
+        : "Canon comparison unavailable",
+      components: harmonyComponents,
+    } : null,
+    provenanceIds: Object.values(source.provenanceIds || {}),
+  };
+}
+
 export function calibrationModel(reading, history) {
   const stored = Number.isInteger(reading?.baselineProgress) ? reading.baselineProgress : null;
   const atReading = (history || []).filter((item) => item?.valid !== false
@@ -260,6 +321,7 @@ export function readingScreenModel(reading, history, options = {}) {
     hook,
     calibration,
     composition: compositionStrip(reading),
+    integrated: integratedReadingModel(reading),
     gauges: [
       gaugeModel(history, metricOf(reading, "ming"), "ming", "明 lustre"),
       gaugeModel(history, metricOf(reading, "run"), "run", "潤 moisture"),

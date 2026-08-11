@@ -5,7 +5,7 @@
  * second launch works with no connection at all. */
 // Bumped when the shell list changes: the activate handler deletes every cache
 // whose name is not CACHE, so a stale v1 holding an old SHELL cannot survive.
-const CACHE = "mienshiang-v19";
+const CACHE = "mienshiang-v20";
 const SHELL = [
   "./", "./index.html", "./ui.js", "./analysis.js", "./engine.js",
   // Measurement calibration. Owned by neither module; engine.js imports both,
@@ -13,7 +13,7 @@ const SHELL = [
   "./utils/calibrationEngine.js", "./utils/textureAnalyzer.js",
   // Module A insights narrative, imported by readingview.js.
   "./utils/insights.js",
-  "./geometry.js", "./landmarker.js", "./expression.js",
+  "./geometry.js", "./landmarker.js", "./expression.js", "./region-extractor.js",
   "./debugview.js", "./flags.js", "./zones.js", "./roi.js",
   "./modulebview.js", "./report.js", "./about.js",
   "./privacy.html", "./terms.html", "./.well-known/assetlinks.json",
@@ -39,7 +39,7 @@ const SHELL = [
   "./qise/wakelock.js",
   "./qise/gates.js", "./qise/camera.js", "./qise/metrics.js", "./qise/pose.js",
   "./qise/baseline.js", "./qise/store.js", "./qise/passages.js",
-  "./qise/patterns.js", "./qise/composition.js",
+  "./qise/patterns.js", "./qise/composition.js", "./qise/integrated.js",
   "./ui/qise/palette.js", "./ui/qise/seal.js", "./ui/qise/screens.js",
   "./ui/qise/share.js", "./ui/qise/theme.js", "./ui/qise/app.js",
   "./manifest.webmanifest", "./icon-192.png", "./icon-512.png",

@@ -21,6 +21,8 @@
  * through a database mock is a guarantee about the mock.
  */
 
+import { projectIntegratedReading } from "./integrated.js";
+
 export const DB_NAME = "qise";
 export const DB_VERSION = 1;
 export const STORE_READINGS = "qise_readings";
@@ -118,6 +120,11 @@ export function toRecord(reading) {
       support: r.composition.support ?? null,
       segments: scalarMap(r.composition.segments, COMPASS_COMPONENTS),
     } : null,
+
+    // Structural and palace observations have already crossed the biometric
+    // boundary. Project them again here so storage remains a positive list
+    // even if a future caller attaches temporary measurement data.
+    integrated: projectIntegratedReading(r.integrated),
 
     gateMargins: scalarMap(r.gateMargins),
 

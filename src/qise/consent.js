@@ -31,7 +31,7 @@
  */
 
 /** Bump on any material change to processing. A mismatch re-prompts. */
-export const CONSENT_VERSION = "qise-consent-v2";
+export const CONSENT_VERSION = "qise-consent-v3";
 
 export const CONSENT_STORAGE_KEY = "qise.consent";
 

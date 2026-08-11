@@ -11,8 +11,7 @@ import {
   FaceLandmarker, FilesetResolver,
 } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs";
 
-import { analyse, rawScalars, shadesOfGray, regionStats, UNAVAILABLE } from "./engine.js";
-import { ROIS } from "./zones.js";
+import { analyse, rawScalars, shadesOfGray, UNAVAILABLE } from "./engine.js";
 import { runRules } from "./rules.js";
 import { readComplexion } from "./adapters/entertainment.js";
 import { evaluateSafety } from "./adapters/safety.js";
@@ -21,7 +20,7 @@ import { BUILD_FLAVOUR } from "./flags.js";
 import { createLandmarkerWithFallback } from "./landmarker.js";
 import { geometryReport } from "./geometry.js";
 import { expressionState } from "./expression.js";
-import { roiFootprint } from "./roi.js";
+import { extractRegions } from "./region-extractor.js";
 
 const WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm";
 const MODEL =
@@ -72,63 +71,6 @@ function drawToCanvas(bitmap, unmirror) {
   if (unmirror) { ctx.translate(w, 0); ctx.scale(-1, 1); }
   ctx.drawImage(bitmap, 0, 0, w, h);
   return c;
-}
-
-/**
- * Extract every region from the ALREADY WHITE-BALANCED full frame.
- *
- * Colour constancy is applied once to the whole frame upstream. Never
- * re-balance a crop: normalising each region separately drives them all toward
- * grey and erases the between-region differences the whole method measures.
- */
-function extractRegions(balanced, w, h, pts) {
-  const regions = {};
-  // A dropped zone is REPORTED, never merely skipped. Silently losing one is
-  // indistinguishable downstream from an honest refusal to measure, and that
-  // ambiguity is what hid the dead malar gate — see roi.js.
-  const dropped = {};
-
-  for (const [key, def] of Object.entries(ROIS)) {
-    const fp = roiFootprint(def, pts, w, h);
-    if (fp.dropped) {
-      dropped[key] = { reason: fp.dropped, rw: fp.rw, rh: fp.rh };
-      continue;
-    }
-    const { hull, x0, y0, rw, rh } = fp;
-
-    // Rasterise the hull to a mask so background and hair pixels don't
-    // contaminate the colour statistics.
-    const mc = document.createElement("canvas");
-    mc.width = rw; mc.height = rh;
-    const mctx = mc.getContext("2d", { willReadFrequently: true });
-    mctx.beginPath();
-    hull.forEach((q, i) =>
-      i ? mctx.lineTo(q.x - x0, q.y - y0) : mctx.moveTo(q.x - x0, q.y - y0));
-    mctx.closePath();
-    mctx.fillStyle = "#fff";
-    mctx.fill();
-    const maskData = mctx.getImageData(0, 0, rw, rh).data;
-
-    const mask = new Uint8Array(rw * rh);
-    const rgba = new Uint8ClampedArray(rw * rh * 4);
-    for (let y = 0; y < rh; y++) {
-      for (let x = 0; x < rw; x++) {
-        const i = y * rw + x;
-        mask[i] = maskData[i * 4 + 3] > 128 ? 1 : 0;
-        const src = ((y + y0) * w + (x + x0)) * 4;
-        rgba[i * 4] = balanced[src];
-        rgba[i * 4 + 1] = balanced[src + 1];
-        rgba[i * 4 + 2] = balanced[src + 2];
-        rgba[i * 4 + 3] = 255;
-      }
-    }
-
-    regions[key] = {
-      ...def, key, hull, w: rw, h: rh, mask,
-      stats: regionStats(rgba, mask, rw, rh),
-    };
-  }
-  return { regions, dropped };
 }
 
 // ---------------------------------------------------------------- pipeline --

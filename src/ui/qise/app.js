@@ -48,6 +48,7 @@ import { SHARE_CADENCES, shareReadings } from "./share.js";
 import { createThemeController } from "./theme.js";
 import { findPatterns, describePattern } from "../../qise/patterns.js";
 import { compositionOf } from "../../qise/composition.js";
+import { measureIntegratedReading } from "../../qise/integrated.js";
 import * as color from "../../qise/color.js";
 
 const MEDIAPIPE_BUNDLE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18";
@@ -422,14 +423,13 @@ async function runCapture() {
         }
         collecting--;
         if (collecting === 0) {
-          clearFrame();
           // The NEGOTIATED mode, not the one openCamera returned — that is
           // "pending" now, and if exposure was handed back part-way through
           // the hold this reading was taken under "auto". The record has to
           // say which, because captureMode is what tells a later baseline that
           // the class of capture changed.
           await finish(burst, lastRois, lastSclera, { ...opened, captureMode },
-            history, lastMargins, illuminationSummary, lastCaptureTier);
+            history, lastMargins, illuminationSummary, lastCaptureTier, image, pts);
           return;
         }
       }
@@ -589,7 +589,7 @@ async function runSelfie(file) {
     });
     await finish(
       burst, rois, sclera, { captureMode: "upload" }, history, gates.margins, illumination,
-      gates.captureTier,
+      gates.captureTier, image, pts,
     );
   } catch (error) {
     decoded?.release?.();
@@ -604,7 +604,8 @@ async function runSelfie(file) {
 
 /* ── finishing a reading ─────────────────────────────────────────────────── */
 
-async function finish(burst, rois, sclera, opened, history, gateMargins, illumination, captureTier = "clean") {
+async function finish(burst, rois, sclera, opened, history, gateMargins, illumination,
+  captureTier = "clean", acceptedImage = null, acceptedPoints = null) {
   const reduced = reduceBurst(burst);
   const rawLab = reduced.lab;
   // A still image has no temporal samples. Do not report duplicated analysis
@@ -636,6 +637,18 @@ async function finish(burst, rois, sclera, opened, history, gateMargins, illumin
 
   const interpreted = interpretReading(metrics.corrected, history, { confidence });
 
+  let integrated = null;
+  if (acceptedImage && acceptedPoints) {
+    $("gate-line").textContent = "Joining today’s colour with your facial structure…";
+    try {
+      integrated = measureIntegratedReading(acceptedImage, acceptedPoints);
+    } catch (error) {
+      // The longitudinal colour reading remains complete if this optional
+      // structural module cannot resolve. Never keep the frame around to retry.
+      console.warn("qise: integrated reading unavailable", error);
+    }
+  }
+
   const reading = {
     timestampIso: new Date().toISOString(),
     metrics,
@@ -643,6 +656,7 @@ async function finish(burst, rois, sclera, opened, history, gateMargins, illumin
     deltas: interpreted.deltas,
     compass: interpreted.compass,
     composition: compositionOf({ metrics, compass: interpreted.compass }),
+    integrated,
     tags: [],
     deviceFingerprintHash: await fingerprintHash(),
     captureMode: opened.captureMode,
@@ -706,6 +720,65 @@ function compositionMarkup(composition, { compact = false } = {}) {
   return `${bar}<div class="composition-lead">${featured}</div>`;
 }
 
+function integratedTodayMarkup(model) {
+  if (!model?.available) return "";
+  return `<p class="eyebrow">Colour + structure</p>
+    <h2 id="integrated-h">${esc(model.headline)}</h2>
+    <p>${esc(model.synthesis)}</p>
+    <div class="integrated-mark">
+      <div class="integrated-glyph" aria-hidden="true">${esc(model.element.hanzi)}</div>
+      <div><strong>${esc(model.element.name)} frame</strong>
+      <div class="integrated-frame">${esc(model.frameLine)}</div></div>
+    </div>`;
+}
+
+function integratedStoryMarkup(model) {
+  if (!model?.available) return model?.note
+    ? `<section class="structure-section"><p class="muted">${esc(model.note)}</p></section>`
+    : "";
+
+  const courtNames = { upper: "Upper", middle: "Middle", lower: "Lower" };
+  const courtBars = Object.entries(model.courts.percentages).map(([key, value]) =>
+    `<div class="court-bar"><span>${esc(courtNames[key])}</span>
+      <span class="court-track"><span class="court-fill" style="width:${value || 0}%"></span></span>
+      <span class="num">${value ?? "—"}%</span></div>`).join("");
+  const palaces = model.palaces.measured.map((palace) =>
+    `<article class="palace-card"><strong>${esc(palace.hanzi)} ${esc(palace.name)}</strong>
+      <span class="muted">${esc(palace.location)}</span><br>
+      <span class="palace-tone">${esc(palace.tone)}</span>
+      <p>${esc(palace.toneGloss)}</p></article>`).join("");
+  const harmonyParts = (model.harmony?.components || []).map((component) =>
+    `<span class="harmony-part">${esc(component.key)}${component.percent === null ? "" : ` · ${component.percent}%`}</span>`).join("");
+
+  return `<section class="structure-section">
+      <p class="eyebrow">Five Elements · 五行</p>
+      <h2>${esc(model.element.hanzi)} ${esc(model.element.name)} · ${esc(model.element.shape)} geometry</h2>
+      <p class="structure-reading">${esc(model.element.reading)}</p>
+      <details class="source-note"><summary>Where sources differ</summary><p>${esc(model.element.sourcesDiffer)}</p></details>
+    </section>
+    <section class="structure-section">
+      <p class="eyebrow">Three Courts · 三停</p>
+      <h2>${esc(model.courts.label)}</h2>
+      <div class="court-bars">${courtBars}</div>
+      <p class="structure-reading">${esc(model.courts.reading)}</p>
+      <p class="source-note">${esc(model.courts.measurementCaveat)}</p>
+    </section>
+    <section class="structure-section">
+      <p class="eyebrow">Twelve Palaces · 十二宮</p>
+      <h2>${model.palaces.measuredCount} of ${model.palaces.supportedCount} supported palace locations read</h2>
+      <p class="muted">Only locations sampled clearly from this photo are shown. The other palace meanings are never guessed.</p>
+      <div class="palace-grid">${palaces}</div>
+      <details class="source-note"><summary>Placement note</summary><p>${esc(model.palaces.sourcesDiffer)}</p></details>
+    </section>
+    ${model.harmony ? `<section class="structure-section">
+      <p class="eyebrow">Named proportion canons</p>
+      <h2>${esc(model.harmony.label)}</h2>
+      <p class="muted">This compares measured proportions with named historical conventions. It is not a rating of a face.</p>
+      <div class="harmony-parts">${harmonyParts}</div>
+      <details class="source-note"><summary>Why the sources do not form one system</summary><p>${esc(model.harmony.sourcesDiffer)}</p></details>
+    </section>` : ""}`;
+}
+
 async function renderReading(reading) {
   const history = await store.all();
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -723,6 +796,10 @@ async function renderReading(reading) {
     ? "vs your pattern"
     : "today’s capture";
   $("reading-composition").innerHTML = compositionMarkup(m.composition);
+  const integratedCard = $("reading-integrated");
+  integratedCard.hidden = !m.integrated.available;
+  integratedCard.innerHTML = integratedTodayMarkup(m.integrated);
+  $("reading-structure-story").innerHTML = integratedStoryMarkup(m.integrated);
   $("story-eyebrow").textContent = m.calibration.active ? "How it becomes yours" : "The tradition’s reading";
   $("story-heading").textContent = m.calibration.active ? "Why the first mark matters" : "The story beneath today";
 

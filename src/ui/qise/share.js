@@ -55,6 +55,16 @@ function columnSummary(readings) {
   return `Across these ${readings.length} scans, ${showing} appears most often (${count}).`;
 }
 
+function structuralShareLine(reading) {
+  const element = reading?.integrated?.fiveElements;
+  const palaces = reading?.integrated?.twelvePalaces;
+  if (!element?.available) return null;
+  const palaceLine = palaces?.supportedCount
+    ? ` · ${palaces.measuredCount}/${palaces.supportedCount} supported palaces read`
+    : "";
+  return `${element.hanzi} ${element.name} structure · ${element.shape} geometry${palaceLine}`;
+}
+
 /**
  * The closed, privacy-minimised model shared by canvas rendering and tests.
  */
@@ -94,6 +104,7 @@ export function shareCardModel(history, cadence = "today") {
     count: readings.length,
     seals,
     composition,
+    structureLine: newest ? structuralShareLine(newest) : null,
     caption: key === "today" && newest
       ? (newest.compass
         ? "A private reflection on what shifted today."
@@ -220,9 +231,20 @@ export function renderShareCanvas(model, documentRef = document) {
   ctx.font = "32px system-ui, sans-serif";
   const afterSummary = wrapText(ctx, model.summary, 96, afterTitle + 22, 888, 46, 3);
 
+  let afterStructure = afterSummary;
+  if (model.structureLine) {
+    ctx.fillStyle = `${PALETTE.chi.hex}16`;
+    roundedRect(ctx, 96, afterSummary + 18, 888, 68, 16);
+    ctx.fill();
+    ctx.fillStyle = PALETTE.hei.hex;
+    ctx.font = "500 26px system-ui, sans-serif";
+    ctx.fillText(model.structureLine, 120, afterSummary + 61);
+    afterStructure = afterSummary + 92;
+  }
+
   const afterComposition = model.cadence === "today"
-    ? drawComposition(ctx, model.composition, 96, afterSummary + 20, 888)
-    : afterSummary;
+    ? drawComposition(ctx, model.composition, 96, afterStructure + 20, 888)
+    : afterStructure;
   const availableHeight = 1050 - afterComposition;
   const count = Math.max(1, model.seals.length);
   const columns = count === 1 ? 1 : (count <= 7 ? Math.min(count, 4) : 5);

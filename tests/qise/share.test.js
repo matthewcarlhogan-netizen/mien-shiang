@@ -70,3 +70,13 @@ test("an empty or unknown share request is safe and useful", () => {
   assert.equal(empty.summary, "No readings are recorded yet.");
   assert.equal(shareCardModel(history(3), "unknown").cadence, "today");
 });
+
+test("today's share card carries the joined structural reading without raw geometry", () => {
+  const integrated = {
+    fiveElements: { available: true, hanzi: "土", name: "Earth", shape: "square" },
+    twelvePalaces: { measuredCount: 5, supportedCount: 6 },
+  };
+  const model = shareCardModel([reading(9, "chi", { integrated })], "today");
+  assert.equal(model.structureLine, "土 Earth structure · square geometry · 5/6 supported palaces read");
+  assert.doesNotMatch(JSON.stringify(model), /landmark|coordinate|embedding/i);
+});

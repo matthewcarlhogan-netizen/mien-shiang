@@ -172,6 +172,26 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .reflection{position:relative;border:0;padding:1.15rem 1.15rem 1.15rem 2.1rem;margin:1rem 0;background:color-mix(in srgb,var(--chi) 8%,var(--qise-surface));border-radius:20px;font-family:var(--passage);font-size:1.12rem;line-height:1.55}
 .reflection::before{content:"“";position:absolute;left:.72rem;top:.35rem;color:var(--chi);font-size:2.4rem;line-height:1}
 .story-passage{font-family:var(--passage);font-size:1.04rem;line-height:1.72;margin:0}
+.integrated-card{margin:1rem 0;padding:1.15rem;border:1px solid color-mix(in srgb,var(--chi) 38%,var(--qise-border));border-radius:22px;background:linear-gradient(145deg,color-mix(in srgb,var(--chi) 10%,var(--qise-surface)),var(--qise-surface) 60%)}
+.integrated-card h2{font-family:var(--passage);font-size:1.55rem;line-height:1.12;margin:.2rem 0 .55rem}
+.integrated-mark{display:grid;grid-template-columns:auto 1fr;gap:.9rem;align-items:center;margin-top:.9rem}
+.integrated-glyph{display:grid;place-items:center;width:3.5rem;height:3.5rem;border:1px solid var(--qise-border);border-radius:50%;font-family:var(--passage);font-size:1.7rem;color:var(--chi)}
+.integrated-frame{font-family:var(--numeric);font-size:.74rem;opacity:.7}
+.structural-story{display:grid;gap:1rem;margin-top:1rem}
+.structure-section{padding:1.05rem;border:1px solid var(--qise-border);border-radius:20px;background:var(--qise-surface)}
+.structure-section h2{font-family:var(--passage);font-size:1.35rem;margin:.18rem 0 .55rem}
+.structure-reading{font-family:var(--passage);font-size:1rem;line-height:1.62}
+.court-bars{display:grid;gap:.45rem;margin:.85rem 0}
+.court-bar{display:grid;grid-template-columns:4.8rem 1fr 2.5rem;gap:.55rem;align-items:center;font-size:.75rem}
+.court-track{height:.55rem;border-radius:999px;background:var(--qise-track);overflow:hidden}
+.court-fill{display:block;height:100%;background:var(--huang);border-radius:inherit}
+.palace-grid{display:grid;grid-template-columns:1fr 1fr;gap:.65rem;margin-top:.8rem}
+.palace-card{padding:.8rem;border:1px solid var(--qise-border);border-radius:14px}
+.palace-card strong{display:block;font-family:var(--passage);font-size:1rem}
+.palace-tone{display:inline-block;margin:.3rem 0;padding:.16rem .45rem;border-radius:999px;background:var(--qise-track);font-size:.68rem;text-transform:uppercase;letter-spacing:.06em}
+.source-note{font-size:.72rem;line-height:1.5;opacity:.66;margin-top:.7rem}
+.harmony-parts{display:flex;flex-wrap:wrap;gap:.45rem;margin-top:.7rem}
+.harmony-part{padding:.3rem .55rem;border:1px solid var(--qise-border);border-radius:999px;font-size:.72rem}
 .reading-privacy{text-align:center;margin-top:.9rem}
 .composition-card{padding:1.15rem;margin:1rem 0;border:1px solid var(--qise-border);border-radius:24px;background:var(--qise-surface)}
 .composition-head{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;margin-bottom:.9rem}
@@ -233,6 +253,7 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 @media (max-width:480px){
   .app-head{flex-wrap:nowrap;margin-bottom:1.25rem}
   .privacy-mark{display:none}
+  .palace-grid{grid-template-columns:1fr}
 }
 </style>
 </head>
@@ -275,13 +296,15 @@ button[disabled]{opacity:.45;cursor:not-allowed}
       <h1>Your face stays with you.</h1>
       <div class="surface privacy-copy"><p><strong>During the scan.</strong> Your camera image or chosen selfie and a
         temporary 478-point face map are processed only on this device to find
-        the areas being measured. Neither leaves the device: never uploaded, never stored.
+        the areas being measured and calculate facial proportions. Neither leaves the device:
+        never uploaded, never stored.
         Both are discarded after the reading.</p>
-      <p><strong>After the scan.</strong> Only small colour measurements and the reading stay
-        on this device, so future scans can be compared with your own history.
+      <p><strong>After the scan.</strong> Only small colour measurements, derived proportion
+        readings and the written reading stay on this device, so future scans can be
+        compared with your own history.
         Delete everything at any time.</p></div>
       <p>For entertainment and self-reflection only — not a medical or identity check.</p>
-      <details class="muted"><summary>Why explicit consent is required</summary><p>The app temporarily generates a face map and new colour observations from your camera or chosen selfie. Even though the map is discarded immediately and nothing leaves this device, you should understand and choose that processing before it begins. The optional screen-light experiment is a separate choice below.</p></details>
+      <details class="muted"><summary>Why explicit consent is required</summary><p>The app temporarily generates a face map, facial-proportion observations and new colour observations from your camera or chosen selfie. The map is discarded immediately; only the derived reading stays in this browser and nothing reaches us. You should understand and choose that processing before it begins. The optional screen-light experiment is a separate choice below.</p></details>
       <div class="surface illumination-choice">
         <label for="illumination-opt-in">
           <input id="illumination-opt-in" type="checkbox">
@@ -366,6 +389,7 @@ button[disabled]{opacity:.45;cursor:not-allowed}
       </div>
       <div id="reading-composition"></div>
     </section>
+    <section class="integrated-card" id="reading-integrated" aria-labelledby="integrated-h" hidden></section>
     <p class="reflection" id="reading-reflection"></p>
     <p class="muted reading-privacy">Made on this device. The face photo is discarded.</p>
   </section>
@@ -374,6 +398,7 @@ button[disabled]{opacity:.45;cursor:not-allowed}
     <p class="eyebrow" id="story-eyebrow">The tradition’s reading</p>
     <h1 id="story-heading">The story beneath today</h1>
     <div class="surface"><p class="story-passage" id="reading-passage"></p></div>
+    <div class="structural-story" id="reading-structure-story"></div>
     <p class="reflection" id="reading-reflection-story"></p>
     <div class="chips" id="reading-tags"></div>
   </section>
