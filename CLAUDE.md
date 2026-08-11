@@ -18,10 +18,11 @@ change the product's regulatory status, not just its tone.
 
 ```bash
 npm start        # dev server on http://localhost:5173 (honours PORT)
-npm test         # 564 tests, node:test, no dependencies
+npm test         # 612 tests, node:test, no dependencies
 npm run build    # dist/ — copy of src/, Module B stubbed in the entertainment flavour
 npm run lint:bundle   # compliance guards, run against dist/ not src/
 node scripts/qise-bakeoff.mjs --self-test   # Phase 5b decision table
+node scripts/engine-bench.mjs out.txt       # engine timings + measurement fingerprint
 ```
 
 There is a build step now, and still no npm dependencies. It was added in
@@ -34,12 +35,23 @@ stubs when the flag is off.
 
 `package-lock.json` exists only so `npm ci` works in CI; it locks nothing.
 
-564 across twenty-nine files. If you see 44, the traversal suite is not being
+612 across forty-nine files. If you see 44, the traversal suite is not being
 discovered; if you see 312, the `tests/qise/` tree is not.
 
-**All 564 pass.** The long-standing `copy-guard` failure on
+**All 612 pass.** The long-standing `copy-guard` failure on
 `TCM-202-DAMP-HEAT.recommend[1]` is resolved — that line moved to Module B in
 the Phase 2 split (see item 19). If a test fails, it is a real defect.
+
+`scripts/engine-bench.mjs` is the measurement engine's stopwatch, and it prints
+a FINGERPRINT alongside the timings — every scalar the pipeline produces, at 17
+significant digits, over the twelve real ROIs. The engine's optimisations are
+all bit-exact by construction (items 45–49), so the workflow for anything that
+touches `engine.js`, `textureAnalyzer.js` or `calibrationEngine.js` is: write a
+fingerprint before, write one after, and require the diff to be EMPTY. A
+difference of any size means an optimisation changed the arithmetic. The script
+refuses to run if its fixture stops emitting at least three observations, or if
+any severity pegs at the clamp — a clamped severity cannot see a change in the
+constant that produced it, which is a hole this fixture already had once.
 
 The Qi Se longitudinal tracker (`src/qise/`, `src/ui/qise/`, `src/qise.html`) is
 a second feature with its own entry point, its own module tree and its own six
@@ -112,8 +124,10 @@ scripts/
   serve.js      local dev server ONLY — never deployed
   run-tests.js  test discovery; exits 1 on zero files found
   qise-bakeoff.mjs  Phase 5b: decides raw vs sclera-corrected by measurement
+  engine-bench.mjs  engine timings + the bit-exactness fingerprint (items 45-49)
 tests/
   engine.test.js          colorimetry, detectors, self-reference
+  measurement-invariance.test.js  every fast path against the slow one it replaced
   calibration.test.js     adaptive scale, per-zone scales, blur, crosstalk, gating
   texture.test.js         oriented GLCM, normalisation, robust statistics
   harmony.test.js         canon matching, dropped components, no-verdict guard
@@ -453,8 +467,17 @@ cache, which does not contain the new module.
 release that works perfectly on a fresh install.
 **Cause:** new entry in `SHELL`, unchanged `CACHE` name.
 
-Currently `mienshiang-v6` (bumped when `reading/summary.js` and
-`sharecard.js` were added).
+Currently `mienshiang-v19` (bumped when `qise/wakelock.js` was added).
+
+**The version is coupled to `index.html`, which is easy to miss.** The entry
+redirect is `location.replace("./qise.html?v=<n>")`, and `<n>` must equal the
+`CACHE` generation: the query is what makes a returning user bypass the stale
+shell exactly once. Bumping `CACHE` alone leaves the old page being served from
+the old cache, which is the same white-screen symptom the bump was meant to
+prevent. Pinned by `the shared project URL opens the scanner, with an explicit
+classic escape hatch` in `tests/mobile-journey.test.js`, which compares the two
+numbers and fails on a mismatch — it caught exactly this while `wakelock.js`
+was being added.
 
 ### 16. The module boundary sits BELOW labelling, not at it
 
@@ -1040,6 +1063,397 @@ their own image.
 **Not regression-tested** — it lives in `ui/qise/app.js`, which nothing can
 import. The defence is that the file stays thin enough to read, which is the
 standing reason everything else in that tree is a pure function elsewhere.
+
+---
+
+## The engine is optimised, and every optimisation is bit-exact
+
+Items 45–49 all come from one change and share one rule, so it is stated once
+here rather than five times below.
+
+The measurement engine was made about **4.4x faster** — 265.41 ms to 58.85 ms
+for a whole-face pass over the twelve real ROIs at 768x1024, measured with
+`scripts/engine-bench.mjs` on the same machine, in the same session, against
+the same synthetic capture. The breakdown, HEAD versus now:
+
+| stage | before | after |
+|---|---|---|
+| `shadesOfGray`, whole frame | 136.84 ms | 12.90 ms |
+| `regionStats`, twelve zones | 73.59 ms | 15.92 ms |
+| `rawScalars`, ridge pyramid | 54.98 ms | 30.04 ms |
+| **total** | **265.41 ms** | **58.85 ms** |
+
+**Not one measured value changed.** All 211 scalars the pipeline produces are
+identical at 17 significant digits, verified by running the same benchmark
+script against a `git worktree` of HEAD and diffing. That is the whole
+constraint: a faster engine that measures something slightly different is not a
+faster engine, it is a regression with a good stopwatch. Nothing here is an
+approximation, a fitted curve, a lower precision, or a reordered floating-point
+sum. Every one is the same arithmetic on the same operands.
+
+**So the workflow for touching any of this is fixed.** Fingerprint before,
+fingerprint after, require an empty diff. `tests/measurement-invariance.test.js`
+pins each fast path against the slow one it replaced, in the same run — the
+tables against the expressions they tabulate, the selection against a full sort,
+the split convolution against the single-path one. Those are `Object.is`
+assertions, not tolerance assertions, on purpose. **If one of them starts
+needing an epsilon, the change underneath it is not the change that was
+reviewed.** Do not add the epsilon.
+
+Two things were deliberately NOT done, and should stay not done:
+
+- **Cascading the Gaussian pyramid.** Blurring 1.5 then 2.0 to reach 2.5 is
+  algebraically the same and numerically is not — truncated discrete kernels do
+  not compose exactly. It would save maybe a third of the blur and it would
+  move every ridge number by a little, which is the one thing this engine's
+  history says never to do quietly.
+- **Pairing symmetric kernel taps.** `(src[c-i] + src[c+i]) * k` halves the
+  multiplies and is not `src[c-i]*k + src[c+i]*k` in floating point.
+
+The largest remaining cost is `gaussianBlur` at 46% of the ridge path. The exact
+win still on the table is restricting the convolution to the mask's dilated
+support — the hulls fill about 66% of their bounding boxes — and it was left
+alone because the bookkeeping at the band edges is fiddly and an off-by-one
+there is a plausible-looking wrong number rather than a crash.
+
+### 45. A lookup table here is the arithmetic, never an approximation
+
+Two hot paths are table-driven, and both tabulate a function of an 8-bit
+channel — a domain of exactly 256 values.
+
+`srgbToLinear()` was called **six times per masked pixel** (twice by
+`erythemaIndex`, once by `melaninIndex`, three times by `rgbToLab`) and has a
+`pow()` in it. `shadesOfGray()` did three `pow()` and three divides for every
+pixel of the whole frame, which alone was over half the measurement cost of the
+app. Both now read tables holding the result of the identical expression at the
+identical precision.
+
+**The tables must stay exhaustive-and-exact, not fitted.** A piecewise fit or an
+interpolation would be smaller and faster and would also move subjects between
+ITA tone strata, and the tone stratum is what decides whether erythema is
+reported at all (see the dark-skin limit). An approximation there is a
+compliance change wearing a performance costume.
+
+**Non-integer and out-of-range inputs must keep falling through to the
+arithmetic.** The guard is `v >= 0 && v <= 255 && (v | 0) === v`; NaN fails both
+comparisons and takes the slow path, where it stays NaN. `shadesOfGray` makes
+the same distinction once per call, on the buffer type, so a float buffer or a
+plain Array still gets the real curve.
+
+**Symptom:** cool-toned or deep-toned subjects shifting a band, and the erythema
+gates changing sensitivity, after a change described as caching.
+**Cause:** rounding an input into the table, or replacing the table with a fit.
+**Pinned by:** `the sRGB table is the arithmetic, at every one of its 256
+inputs`, `a non-integer or out-of-range channel still takes the arithmetic
+path`, and `the white-balance tables agree with the per-pixel arithmetic, byte
+for byte` — which feeds the same numbers down both paths and compares all ~3.1
+million output bytes.
+
+One trap found writing that last test, worth keeping: **its fixture must have a
+colour cast.** Uniform-random channels drive the Shades-of-Gray estimate to
+`ir == ig == ib == 1`, and against gains of one every channel table is the
+identity — so a table built from the wrong channel's gain passes. Verified in
+both directions: with uniform noise the mutation is invisible, with a warm cast
+it fails. Skin is warm, so the realistic fixture is also the sensitive one.
+
+### 46. These statistics are order statistics, and the tie band is correctness
+
+`robustCentre`, `focalExcess`, `trimmedMedian` and `percentile` each read two or
+three percentile positions. They were computing a full ordering to answer for a
+handful of indices — measured at **15.74 ms of `regionStats`' 24.52 ms**. They
+now select instead of sorting.
+
+**The three-way partition is not the optimisation, it is the correctness
+condition.** These samples are computed from 8-bit channels, so they carry
+enormous runs of exact duplicates: a 6,568-pixel ROI routinely holds fewer than
+thirty distinct erythema values, because the erythema index is a function of two
+bytes. A two-way partition degrades to O(n²) on runs of equal keys, which is
+exactly and always the input this gets. Collapsing the `v > p` branch into the
+`else` does not make it slightly slower — **the test suite hangs**, which is how
+that mutation was confirmed.
+
+**NaN must be partitioned to the end before anything is selected.**
+`%TypedArray%.sort` places NaN last and every one of these statistics reads a
+percentile INDEX, so where the NaNs sit decides which value an index names.
+Selection compares with `<`, which is false for NaN in both directions, so
+without the explicit partition the NaNs sit wherever they happened to be and
+every percentile shifts.
+
+**The reordering is real and the public entry points must keep copying.**
+`robustCentreOf`, `focalExcessOf` and `selectKth` reorder in place by design —
+`regionStats` hands them its four samples directly, and runs both erythema
+statistics over the same array so the second inherits the first's partial
+ordering. `robustCentre`, `focalExcess`, `trimmedMedian` and `percentile` are
+public and copy first.
+
+**Symptom:** a percentile that is subtly wrong only on regions containing an
+unmeasurable pixel; or a capture that hangs the app instead of measuring it.
+**Pinned by:** `a selection agrees with a full sort, on every shape` and
+`selectKth returns what the sorted array holds at k, for every k`, over
+randomised, all-equal, two-valued, ascending, descending, NaN-bearing,
+all-NaN, infinite and subnormal samples at ten sizes; plus `selection reuses a
+partitioned array without corrupting later answers` and `the public statistics
+do not reorder the caller's sample`.
+
+### 47. `regionStats` holds a SECOND COPY of three published formulas
+
+The per-pixel loop no longer calls `erythemaIndex()`, `melaninIndex()` or
+`rgbToLab()`. It inlines them, so each channel is linearised once instead of
+six times, and so lightness and yellow-blue are taken without allocating a Lab
+triple per pixel or computing the X channel that nothing reads.
+
+The hazard is not that the copy is wrong today. It is that someone corrects the
+erythema sign convention (item 2) or the ITA quadrant handling (item 3) in the
+exported function, the inlined copy keeps the old one, and **half the pipeline
+is fixed** — the observations move, the exported helpers still agree with the
+literature, and nothing points at the discrepancy.
+
+**Symptom:** `analyse()` and a hand-computed check of the same pixels disagree,
+with both looking correct in isolation.
+**Pinned by:** `regionStats' inlined colour maths equals the exported helpers`,
+which rebuilds all four samples using only the exported functions and requires
+every statistic to match exactly. Its fixture crosses the Lab `f()` branch at
+0.008856 and the near-black end of the transfer curve, because a fixture of
+mid-tone skin exercises neither.
+
+### 48. The convolution has three code paths per axis where it had one
+
+`gaussianBlur()` hoists the edge clamp out of the interior, walks rows rather
+than columns on the vertical pass, and takes its scratch and output buffers from
+the caller. Each output pixel still accumulates taps from `-r` to `+r`, in that
+order, into a double initialised to zero — **floating-point addition is not
+associative, so tap order is part of the result, not an implementation
+detail.**
+
+Two constraints that are invisible until they are violated:
+
+- **`dst` must not alias `src`.** The vertical interior accumulates in place.
+  `ridgeField` reuses its input buffer as the per-scale output precisely once it
+  is dead, and the pairing is deliberate.
+- **An off-by-one at a band boundary is not a crash.** It changes `r` columns of
+  one blur level, which reaches the surface as a small change in one zone's
+  ridge number — plausible, unattributable, and caught by nothing that measures
+  the ridge response end to end.
+
+**Pinned by:** `the split convolution is bit-identical to the single-path one`,
+which keeps the original single-path implementation in the test file and
+compares every pixel across 48 size/sigma pairs — including sizes NARROWER than
+the kernel, where the two clamped bands overlap and the interior is empty.
+
+### 49. One ridge field serves both axes, because the axis enters at reduction
+
+`ridgeField()` stores the Hessian ORIENTATION (`ang`), not a weight already
+resolved against one target axis. `ridgeMean(field, scale, target)` applies the
+orientation weight.
+
+That is what removed the second Hessian pyramid: the baseline ridge is always
+taken on the vertical axis (see item 6's neighbourhood), and `rawScalars` used
+to rebuild a whole pyramid per baseline zone to get it. `st`, `rb` and `ang`
+carry no axis, so the second pass was recomputing identical numbers in order to
+apply a different cosine to them — the most expensive operation in the app, run
+twice, for a value a cosine away.
+
+**The default is load-bearing.** `ridgeMean(field, scale)` still reduces at the
+axis the field was built for, which is what the pipeline and every existing test
+call. It uses `??`, not `||`, because `targetAxisRadians(true)` is **0** and a
+falsy check would silently discard an explicitly requested vertical axis.
+
+**Symptom:** every ridge number moving at once, or `ridgeDelta` quietly changing
+meaning for every zone, after a change described as removing duplication.
+**Cause:** folding the orientation weight back into `ridgeField`, or letting the
+baseline reduce at the zone's own axis instead of passing the vertical one
+explicitly.
+**Pinned by:** `a field reduced at an axis matches a field BUILT for that axis`
+— which carries its own negative control, asserting the two axes do NOT give the
+same number, since otherwise the equality would hold for a field that had simply
+stopped discriminating — and `ridgeMean defaults to the axis its field was built
+for`.
+
+### 50. `video.play()` resolving is not a frame, and a dead rAF loop looks like a dim camera
+
+`attachCameraPreview()` attaches the stream and then WAITS for
+`videoWidth > 0 && videoHeight > 0`, via `loadedmetadata`/`canplay` with an
+8 s timeout, before the capture loop is allowed to draw. The obvious
+`video.srcObject = stream; await video.play();` is not sufficient: `play()`
+resolves when playback begins, which on some hosts is before the first decoded
+frame exists, so the element still reports 0x0.
+
+Drawing that frame throws inside `requestAnimationFrame`. Two properties turn
+one exception into a permanently broken screen:
+
+- **`step` is `async`, so a throw becomes a rejected promise, and rAF ignores
+  return values.** There is no error to see unless somebody attached a handler.
+- **The re-schedule is the LAST statement in the body.** Throwing anywhere above
+  it means `requestAnimationFrame(step)` never runs, so the loop stops for good
+  after a single bad frame.
+
+**Symptom:** the camera light comes on, the preview shows briefly and then sits
+frozen on a dark frame while the gate line never updates and the ring never
+fills. It reads as "the camera went dim", which points the investigation at
+exposure, white balance or screen brightness — none of which are involved.
+**Cause:** treating a resolved `play()` as evidence of a decodable frame, and a
+rAF body whose only re-schedule sits below code that can throw.
+**Pinned by:** `the preview waits for real dimensions instead of drawing a 0x0
+Safari frame` in `tests/qise/camera.test.js`, which is reachable only because
+`attachCameraPreview` takes the video, the stream and its timer functions as
+ARGUMENTS — the same reason `createLandmarkerWithFallback()` takes its factory
+(item 14). The loop that consumes it lives in `ui/qise/app.js`, which nothing
+can import, so the guard has to live down here where a test can reach it.
+
+Two companions, both load-bearing, neither sufficient alone:
+
+- `scheduleStep()` wraps the body as `step(time).catch(stopAfterLoopError)`, so
+  a throw reports itself and tears the capture down deliberately instead of
+  leaving a live camera behind a dead loop. **Do not "simplify" this back to a
+  bare `requestAnimationFrame(step)`** — that is the defect verbatim.
+- A `runId`/`captureRun` token guards re-entry, so a second `runCapture()` cannot
+  leave two loops driving one landmarker. `detectForVideo` requires strictly
+  increasing timestamps, and two loops interleaving rAF timestamps is how you get
+  a regression it will throw on.
+
+**This is not an exposure bug and must not be "fixed" by brightening the frame.**
+Every downstream value is a CIELAB delta against the subject's own baseline, so a
+brightness multiplier on the captured pixels silently corrupts every reading ever
+compared with it.
+
+### 51. A teardown written inside one branch is missing from the other
+
+`ui/qise/app.js` runs the screen-light sequence inside `if (mesh)`. The
+abandon-and-clear teardown was written inline in that block, so it covered the
+gate-failure path and simply did not exist on the face-lost path — which is the
+`else` of the very same `if`, a few lines below.
+
+The consequence is not a stalled state machine, it is a dark screen. The wash
+is `position:absolute; inset:0` over the preview, and mid-sequence it is blue
+`#426B7A` or green `#4A7267` at 0.62 opacity. A lost face left it painted, with
+`illuminationSession` still non-null, so the preview went dark and stayed dark
+while the copy underneath read *"Bring your face into the frame."* — the one
+instruction a darkened preview makes hardest to follow.
+
+**Symptom:** the camera opens, the preview flashes bright and then goes dim and
+stays dim. It reads as an exposure or a brightness fault and is neither; the
+video element is fine and the pixels underneath are fine.
+**Cause:** teardown written at a call site inside one branch of a conditional,
+when the condition has two branches that both need it.
+**Pinned by:** `a LOST FACE abandons the session, not only a failed gate` and
+`no face beats a failed gate, because there is nothing left to sample`.
+
+The decision now lives in `illuminationInterruption()` in `qise/illumination.js`
+rather than as two `if`s in the loop, for the reason everything else in that
+tree is a pure function elsewhere: `app.js` is the file no test can import
+(item 44), so a rule kept there is a rule nothing checks.
+
+**Order inside it is load-bearing.** No-face is tested BEFORE gates, because
+`meanFaceRgb()` samples the face regions — without a mesh the remaining phases
+record nothing whatever the gates say, so reporting `frame-moved` would name a
+cause that was never measured. And an abandoned session reports
+`phasesRead: 0`, not the count it had reached: a partial sequence has no
+neutral to compare against, so the phases that *were* read cannot support a
+response in either direction.
+
+### 52. The screen is a light source, so the wake lock is a measurement control
+
+There is no shutter. The reading is taken when the frame is good, so the user
+holds a pose through `GATES_GREEN_MS` and then a fifteen-frame burst, touching
+nothing — which is precisely what the OS idle timer waits for. The screen dims,
+and on most phones dims to black, in the middle of the only interaction the app
+has.
+
+**This is not a comfort fix.** The screen is a light source pointed at the face
+— that is the entire premise of the optional check in `illumination.js` — so a
+screen that dims part-way through a burst moves the illuminant between frames of
+a single reading, and every value downstream is a CIELAB difference against the
+subject's own baseline. `reduceBurst()` would see it as frame jitter and degrade
+confidence, which is the honest response to a corrupted burst, but the better
+answer is for the illuminant not to move.
+
+`qise/wakelock.js` takes `navigator.wakeLock` and the document as ARGUMENTS,
+for the same reason `createLandmarkerWithFallback()` takes its factory (item
+14): the paths that matter are the ones a developer machine never takes — the
+host with no wake lock API, and the host that REFUSES the request.
+
+Four things that look like detail and are not:
+
+- **`unsupported` and `failed` are different states.** One is a platform fact,
+  the other is a policy or battery condition on this device. Collapsing them is
+  item 23's `zoneNotExtracted`/`colourNotMeasurable` mistake in another costume.
+- **`visibilitychange` is mandatory, not a refinement.** The platform drops a
+  screen lock whenever the document stops being visible and does NOT restore it.
+  Requesting once at the start of capture holds nothing after the first glance
+  at a notification, and that is the path nobody exercises while checking that
+  the feature works.
+- **Release is idempotent, and lives in `releaseCapture()`.** There are four
+  ways out of a capture — the burst completing, the loop error handler, a
+  re-entrant `runCapture()`, and withdrawal. A lock released on only some of
+  them leaves the phone awake indefinitely; a throw from a second release
+  strands the camera it was called to shut down.
+- **It is never a precondition.** A capture must run identically where the API
+  is absent. The lock is an improvement, and `acquire()` is deliberately not
+  awaited.
+
+**Pinned by:** `tests/qise/wakelock.test.js`, including
+`a REFUSED lock is reported as failed, not as unsupported` and `the lock is
+re-acquired when the tab becomes visible again`, plus `releaseCapture hands the
+screen back to the OS idle timer` in the camera suite.
+
+
+### 53. `exposureMode: "manual"` freezes; it does not choose
+
+This is the one that actually produced the reported "camera flashes on, then
+goes dim", and it is not any of items 50 or 51.
+
+`openCamera()` called `negotiateCaptureMode()` on the line *after*
+`getUserMedia` resolved, and the preview was not attached until afterwards. So
+the lock was applied before a single frame had been shown and before
+auto-exposure had run at all.
+
+**`exposureMode: "manual"` with no `exposureTime` beside it does not select an
+exposure. It pins whatever the sensor currently has.** On Android the sensor
+opens near its default and AE ramps up over roughly half a second to two
+seconds, so locking at t=0 pins the capture to the dark opening value — for the
+whole session.
+
+**Symptom:** the preview is live and correctly showing a face, and the frame is
+genuinely, measurably dark. The `underexposed` gate fires every frame
+(`skinPixelsAtOrBelow12 / skinPixelCount` over `EXPOSURE_MAX_FRACTION`), so the
+UI reads *"Too dark — find more light."* — and adding light changes nothing,
+because the sensor is no longer listening.
+**Distinguishing it from items 50 and 51:** those two darken the *preview* —
+one by killing the render loop, one by leaving a CSS wash painted. Neither
+touches the pixel buffer, so in both of those the darkness gate does NOT fire.
+**If the gate is complaining, the pixels really are dark and the cause is the
+sensor, not the view.** That single observation separates all three.
+**Pinned by:** `openCamera does NOT lock exposure before the first frame
+exists` and `settleAndNegotiate waits BEFORE reading what the camera settled
+on`.
+
+Three parts to the fix, and the third is the one most likely to be dropped as
+redundant:
+
+- **`negotiate: false` on the live path.** `openCamera()` returns
+  `captureMode: "pending"` and locks nothing. The default stays `true` so the
+  one-shot negotiation keeps a direct test.
+- **`settleAndNegotiate()` waits `EXPOSURE_WARMUP_MS` first**, with `wait`
+  injected so a test exercises the ordering rather than spending the time. The
+  warm-up runs while the preview is already on screen, and `captureSettled`
+  gates the LATCH rather than the gates, so the user still gets live feedback
+  but cannot complete a hold that ends in a burst lit differently frame to
+  frame.
+- **`releaseCaptureMode()` hands exposure back.** A lock correct when taken is
+  wrong the moment the subject turns towards a window. Without a way back, the
+  gate instructs the user to add light while the app has disabled the only
+  thing that could act on it. It fires once, on a persistent under- or
+  over-exposure failure — flipping repeatedly would itself be a moving
+  illuminant.
+
+**The reading records the NEGOTIATED mode, not the requested one.** `finish()`
+is handed `{ ...opened, captureMode }`, so a capture that ended up back on
+`auto` says `auto`. That is what tells a later baseline the class of capture
+changed, and item 18's rule applies: do not compare across it.
+
+**Locking is still right.** A burst measured under a moving AE is a burst
+measured under two illuminants. The defect was never that the lock existed, it
+was when it was taken.
 
 
 ### 24. The summary may only repeat what was measured

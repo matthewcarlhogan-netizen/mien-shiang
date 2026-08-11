@@ -62,10 +62,10 @@ user data is in transit.
 
 ### Do you provide a way for users to request that their data be deleted?
 
-**Yes — and there is nothing to delete.** No user data is retained anywhere:
-no server, no database, no local persistence of images or landmarks. Deleting
-the app removes the only thing stored, which is a single consent flag in
-`localStorage`.
+**Yes.** No image or landmark map is retained and nothing is stored on a
+server. The Qi Se tracker stores a small derived reading record in the user's
+browser. “Withdraw consent and delete everything” clears those records and the
+consent record together; uninstalling or clearing site data also removes them.
 
 A contact address for requests is published in the privacy policy
 (`privacy@[yourdomain].com`, 30-day response commitment), because the right to
@@ -185,18 +185,14 @@ Two points a reviewer may raise:
 
 ### Illinois BIPA
 
-All facial analysis happens on the user's own device. No biometric identifier or
-biometric information is transmitted to us or to any third party, and none is
-retained after a reading is displayed — there is no database, no storage layer
-and no file written. Nothing is linked to identity, because the app has no
-accounts, no sign-in and no persistent identifiers. Nothing is sold, leased,
-traded or otherwise profited from. Written notice and consent are obtained
-before the camera is first used, on a blocking screen that states what is
-captured, that it never leaves the device, and that nothing is stored. This is
-recorded as disclosure, not as a claim of exemption; the combination of
-on-device processing, zero retention and zero identity linkage is what keeps the
-product outside the exposure BIPA creates, and it must be preserved
-deliberately rather than by accident.
+All facial analysis happens on the user's own device. No image, face map or
+biometric identifier is transmitted to us or to any third party, and images and
+maps are destroyed after measurement. The Qi Se tracker retains only allow-
+listed derived values in the user's local browser database. Those values are
+not linked to identity, because the app has no accounts or sign-in, and they can
+be deleted in the app. Nothing is sold, leased, traded or otherwise profited
+from. Written notice and consent are obtained before the camera is first used.
+This is recorded as disclosure, not as a claim of exemption.
 
 ### California CCPA/CPRA
 
@@ -227,15 +223,14 @@ contact address.
 
 ### Australian Privacy Act 1988 (APPs)
 
-Facial measurements are biometric information and therefore **sensitive
-information** under the APPs, attracting the higher standard in APP 3.3:
-collection requires consent and must be reasonably necessary. Consent is
-obtained on the consent screen before collection, and collection is limited to
-what the reading requires. APP 8 (cross-border disclosure) is not engaged,
-because the information never leaves the device. APP 11 (security and
-destruction) is satisfied structurally: the data exists only in memory for the
-duration of one reading. APP 12 and 13 (access and correction) are honoured via
-the published contact address. Note that exclusion from medical-device
+The Privacy Act definition of **sensitive information** includes biometric
+templates and biometric information used for automated biometric verification
+or identification. This product does neither, but treats the temporary face map
+conservatively: consent precedes processing, collection is minimised, the map
+exists only in memory, and persisted derived readings are allow-listed and
+user-deletable. No cross-border disclosure occurs because neither the map nor
+the readings leave the device. This is a privacy-by-design posture, not a claim
+that local execution automatically satisfies every APP obligation. Note that exclusion from medical-device
 regulation is not exemption from the Australian Consumer Law — the reading is
 presented as tradition, and objective efficacy claims are avoided precisely
 because the organ-to-region correspondences have no competent and reliable

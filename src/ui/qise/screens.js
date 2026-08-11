@@ -48,7 +48,10 @@ const metricOf = (r, key) => {
 export function gaugeModel(history, todayValue, key, label) {
   const values = (history || []).map((r) => metricOf(r, key)).filter((v) => v !== null).slice(-30);
   if (values.length < 4 || typeof todayValue !== "number") {
-    return { key, label, measured: false, today: todayValue ?? null, n: values.length };
+    return {
+      key, label, measured: false, today: todayValue ?? null, n: values.length,
+      relativeLabel: "Building your personal range",
+    };
   }
 
   const low = quantile(values, 0.25);
@@ -64,6 +67,9 @@ export function gaugeModel(history, todayValue, key, label) {
     band: { from: at(low), to: at(high), low, high },
     mark: at(todayValue),
     outside: todayValue > high ? "above" : (todayValue < low ? "below" : null),
+    relativeLabel: todayValue > high
+      ? "Above your recent range"
+      : (todayValue < low ? "Below your recent range" : "Within your recent range"),
   };
 }
 
@@ -120,14 +126,55 @@ export function sparklineModel(history, key = "ming", days = 30) {
   };
 }
 
-/** One-sentence verdict. Names the colour, never the reader. */
+/** One sentence addressed to the reader, without turning it into a trait. */
 export function verdictFor(compass) {
   const ascendant = (compass && compass.ascendant) || "ping";
-  if (ascendant === "ping") return "Level today — 平.";
+  if (ascendant === "ping") return "Today, your reading is level — 平.";
   const colour = PALETTE[ascendant];
-  if (!colour) return "Level today — 平.";
+  if (!colour) return "Today, your reading is level — 平.";
   const band = compass.band ? `${compass.band} ` : "";
-  return `A ${band}showing of ${ascendant} — ${colour.simile.split(",")[0]}.`;
+  return `Today, your reading shows ${band}${ascendant} — ${colour.simile.split(",")[0]}.`;
+}
+
+/**
+ * A short editorial lead and a reflection prompt for each compass point.
+ *
+ * These are deliberately about the reading, not a claim about the reader.
+ * The longer sourced passage still carries the traditional interpretation;
+ * this layer gives the result a human entry point before the technical detail.
+ */
+export const READING_HOOKS = Object.freeze({
+  chi: Object.freeze({
+    title: "Something warmer is asking for attention.",
+    reflection: "What deserves your energy — and what is only demanding it?",
+  }),
+  huang: Object.freeze({
+    title: "A steadier note is coming through.",
+    reflection: "Where could a slower choice create more room?",
+  }),
+  qing: Object.freeze({
+    title: "The reading is asking for less noise.",
+    reflection: "What can become simpler before the next step?",
+  }),
+  bai: Object.freeze({
+    title: "Clarity is the note beneath this reading.",
+    reflection: "What could you clear away to hear yourself better?",
+  }),
+  hei: Object.freeze({
+    title: "A deeper, quieter note is present.",
+    reflection: "What is worth protecting your energy for?",
+  }),
+  ping: Object.freeze({
+    title: "Nothing needs to shout today.",
+    reflection: "Where could steady be enough, without becoming stuck?",
+  }),
+});
+
+export function hookFor(compass) {
+  const ascendant = compass && READING_HOOKS[compass.ascendant]
+    ? compass.ascendant
+    : "ping";
+  return READING_HOOKS[ascendant];
 }
 
 /**
@@ -155,6 +202,7 @@ export function readingScreenModel(reading, history, options = {}) {
     seal,
     sealSvg: sealSvg(seal, { reducedMotion: options.reducedMotion === true }),
     verdict: verdictFor(compass),
+    hook: hookFor(compass),
     gauges: [
       gaugeModel(history, metricOf(reading, "ming"), "ming", "明 lustre"),
       gaugeModel(history, metricOf(reading, "run"), "run", "潤 moisture"),

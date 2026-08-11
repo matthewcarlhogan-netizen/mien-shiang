@@ -229,6 +229,7 @@ export function passageFor(compass, z, seed) {
   const tail = course[seededIndex(`${seed}|course`, course.length)];
 
   return {
+    provenanceId: "qise-passages-v1",
     ascendant,
     band: bandKey,
     course: courseKey(z && z.ming, z && z.run),

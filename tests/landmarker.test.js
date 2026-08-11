@@ -96,3 +96,13 @@ test("progress is reported for the fallback so a slow CPU run is explained", asy
 test("delegate order is GPU then CPU", () => {
   assert.deepEqual(DELEGATE_ORDER, ["GPU", "CPU"]);
 });
+
+test("the same tested fallback can configure the live scanner", async () => {
+  const factory = fakeFactory(["GPU"]);
+  const result = await createLandmarkerWithFallback(factory, {}, {
+    ...MODEL, runningMode: "VIDEO", outputFaceBlendshapes: false,
+  });
+  assert.equal(result.delegate, "CPU");
+  assert.ok(factory.calls.every((call) => call.runningMode === "VIDEO"));
+  assert.ok(factory.calls.every((call) => call.outputFaceBlendshapes === false));
+});

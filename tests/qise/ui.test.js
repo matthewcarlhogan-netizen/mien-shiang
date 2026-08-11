@@ -18,7 +18,7 @@ import {
 } from "../../src/ui/qise/seal.js";
 import {
   readingScreenModel, historyColumnModel, gaugeModel, courtsStrip,
-  sparklineModel, verdictFor, READING_SCREEN_ORDER, THREE_COURTS,
+  sparklineModel, verdictFor, hookFor, READING_HOOKS, READING_SCREEN_ORDER, THREE_COURTS,
 } from "../../src/ui/qise/screens.js";
 import { LOW_CONFIDENCE } from "../../src/qise/baseline.js";
 
@@ -275,14 +275,26 @@ test("the reading screen is in the order the brief specifies", () => {
   }
 });
 
-test("the verdict is one sentence, names the colour, and never the reader", () => {
+test("the verdict speaks to the reader but makes no claim about their traits", () => {
   const v = verdictFor({ ascendant: "chi", band: "clear" });
   assert.equal(v.split(".").filter((s) => s.trim()).length, 1);
   assert.match(v, /chi/);
-  assert.doesNotMatch(v, /\byou\b/i);
-  assert.equal(verdictFor({ ascendant: "ping" }), "Level today — 平.");
-  assert.equal(verdictFor(null), "Level today — 平.");
-  assert.equal(verdictFor({ ascendant: "nonsense" }), "Level today — 平.");
+  assert.match(v, /your reading/i);
+  assert.doesNotMatch(v, /personality|health|future|will happen/i);
+  assert.equal(verdictFor({ ascendant: "ping" }), "Today, your reading is level — 平.");
+  assert.equal(verdictFor(null), "Today, your reading is level — 平.");
+  assert.equal(verdictFor({ ascendant: "nonsense" }), "Today, your reading is level — 平.");
+});
+
+test("every compass point has a concise hook and reflection prompt", () => {
+  assert.deepEqual(Object.keys(READING_HOOKS).sort(), ["bai", "chi", "hei", "huang", "ping", "qing"]);
+  for (const [ascendant, hook] of Object.entries(READING_HOOKS)) {
+    assert.equal(hookFor({ ascendant }), hook);
+    assert.match(hook.title, /\.$/);
+    assert.match(hook.reflection, /\?$/);
+  }
+  assert.equal(hookFor(null), READING_HOOKS.ping);
+  assert.equal(hookFor({ ascendant: "unknown" }), READING_HOOKS.ping);
 });
 
 test("a low-confidence reading is hollow all the way through the model", () => {

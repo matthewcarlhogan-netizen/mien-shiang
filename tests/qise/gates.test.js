@@ -11,7 +11,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  evaluateGates, GATES, interocularPx,
+  evaluateGates, captureGuide, GATES, interocularPx,
   POSE_YAW_MAX, POSE_PITCH_MAX, POSE_ROLL_MAX, DISTANCE_MIN_FRACTION,
   EXPOSURE_MAX_FRACTION, SIDELIGHT_MAX_DELTA_L, MOTION_MAX_PX,
   FILTER_MIN_LAPLACIAN_VARIANCE, OUTER_CANTHI,
@@ -43,6 +43,17 @@ const cleanSclera = () => ({
 
 const run = (statsPatch = {}, scleraPatch = {}) =>
   evaluateGates({ ...cleanStats(), ...statsPatch }, PTS, { ...cleanSclera(), ...scleraPatch });
+
+test("the capture guide condenses all ten gates without weakening them", () => {
+  const clean = captureGuide(run());
+  assert.deepEqual(clean.map((item) => item.id), ["frame", "light", "camera", "steady"]);
+  assert.ok(clean.every((item) => item.ready));
+
+  const dark = captureGuide(run({ skinPixelsAtOrBelow12: 5000 }));
+  assert.equal(dark.find((item) => item.id === "light").state, "adjust");
+  assert.match(dark.find((item) => item.id === "light").message, /light/i);
+  assert.ok(dark.filter((item) => item.id !== "light").every((item) => item.ready));
+});
 
 const failed = (result, id) => result.failures.some((f) => f.id === id);
 

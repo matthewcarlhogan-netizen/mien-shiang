@@ -7,6 +7,16 @@
 <title>Mien Shiang</title>
 <link rel="manifest" href="./manifest.webmanifest" />
 <link rel="apple-touch-icon" href="./icon-192.png" />
+<script>
+// The shared project URL is the product entry point. Keep the instrument-style
+// prototype reachable for regression work without making phone users find the
+// scanner link at the bottom of that page.
+if (!new URLSearchParams(location.search).has("classic")) {
+  // Match the current shell generation so an older worker cannot serve the
+  // previous scanner once before refreshing it in the background.
+  location.replace("./qise.html?v=19");
+}
+</script>
 <style>
 /* Atlas plate + instrument readout. The product's only real claim is that it
    shows its working, so it's built to look like something that does. Cinnabar
@@ -57,6 +67,18 @@ header h1 em{font-style:normal;color:var(--cinnabar)}
 header p{color:var(--ink-60);margin:.75rem 0 0;font-size:.95rem}
 
 main{padding:0 1rem 3rem}
+.has-results>header,.has-results main>.plate,.has-results>footer{display:none}
+.has-results main{padding-top:1rem}
+.result-shell{max-width:46rem;margin:0 auto}
+.result-titlebar{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin:.25rem 0 1rem}
+.result-titlebar h2{font-size:1.45rem;margin-top:.2rem}
+.result-new{width:auto;margin:0;padding:.55rem .8rem;font-size:.85rem}
+.result-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:.35rem;background:var(--card);padding:.3rem;border:1px solid var(--rule);border-radius:10px;margin:0 0 1rem}
+.result-tabs button{margin:0;padding:.6rem .4rem;border:0;background:transparent;color:var(--ink-60);font-size:.85rem;border-radius:7px}
+.result-tabs button[aria-selected="true"]{background:var(--card-hi);color:var(--ink);box-shadow:0 1px 4px rgba(0,0,0,.2)}
+.result-tabs button:disabled{opacity:.35}
+.result-panel[hidden]{display:none}
+.result-panel>.summary-card{margin-top:0}
 button{font-family:var(--display);font-size:1rem;font-weight:500;
   border:1px solid var(--cinnabar);background:var(--cinnabar);
   color:#fff;padding:.85em 1.4em;border-radius:6px;
@@ -308,7 +330,7 @@ footer a{color:var(--ink-60)}
 
 /* Share-gate frosted overlay */
 .reading-gate-wrap{position:relative;overflow:hidden;border-radius:8px;
-  margin-top:1rem}
+  margin-top:1rem;height:min(65svh,36rem)}
 .reading-gate-blur{filter:blur(4px);opacity:.35;user-select:none;
   pointer-events:none;padding:.5rem}
 .reading-gate-overlay{position:absolute;inset:0;display:flex;

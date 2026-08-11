@@ -11,7 +11,7 @@
  *   - a construct that is not `available` produces a NOT-READ chip and is
  *     absent from the headline. It is never defaulted, interpolated or guessed.
  *   - the coverage line states scope in the same numbers the sections use
- *     (5 of 12 palaces, 2 of 3 colour signals), so the summary cannot round a
+ *     (5 of 6 supported palaces, 2 of 3 colour signals), so the summary cannot round a
  *     partial basis up into a whole one.
  *   - the emphasis sentence is built ONLY from constructs that were read, and
  *     is attributed to the tradition rather than asserted of the reader.
@@ -61,6 +61,7 @@ export function buildSummary(reading) {
   const tc = reading?.threeCourts;
   const q = reading?.qiSe;
   const tp = reading?.twelvePalaces;
+  const supportedPalaces = tp ? (tp.supportedCount ?? tp.totalCount) : 0;
 
   // ── headline ────────────────────────────────────────────────────────────
   // Only constructs that were actually read. Order is most-structural first;
@@ -78,7 +79,9 @@ export function buildSummary(reading) {
   // Scope, stated in the same numbers the detailed sections use. Partial
   // coverage is a fact about the photo, not a failure to hide.
   const coverage = [];
-  if (tp) coverage.push(`${tp.measuredCount} of ${tp.totalCount} palaces read`);
+  if (tp) coverage.push(tp.measuredCount === supportedPalaces
+    ? `all ${supportedPalaces} supported palaces read`
+    : `${tp.measuredCount} of ${supportedPalaces} supported palaces read`);
   if (q?.available) {
     const used = q.signalsUsed?.length ?? 0;
     const total = used + (q.signalsMissing?.length ?? 0);
@@ -104,7 +107,10 @@ export function buildSummary(reading) {
     // result, so this chip carries the count rather than a not-read state.
     tp
       ? { key: "twelvePalaces", label: "Twelve Palaces 十二宮", href: `#${SECTION_IDS.twelvePalaces}`,
-          value: `${tp.measuredCount} of ${tp.totalCount} read`, available: true, partial: tp.measuredCount < tp.totalCount }
+          value: tp.measuredCount === supportedPalaces
+            ? `Complete · ${supportedPalaces} supported`
+            : `${tp.measuredCount} of ${supportedPalaces} supported`,
+          available: true, partial: tp.measuredCount < supportedPalaces }
       : chip("twelvePalaces", "Twelve Palaces 十二宮", null),
   ];
 

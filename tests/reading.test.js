@@ -111,6 +111,7 @@ test("near-equal courts read as balanced rather than picking a winner", () => {
 test("all twelve palaces are present and the unmeasured ones say so", () => {
   const r = readTwelvePalaces(makeRaw());
   assert.equal(r.totalCount, 12);
+  assert.equal(r.supportedCount, 6);
   assert.equal(r.palaces.length, 12);
 
   const unmeasured = r.palaces.filter((p) => !p.measured);

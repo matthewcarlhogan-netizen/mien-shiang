@@ -153,24 +153,29 @@ export function readTwelvePalaces(raw) {
   const zones = raw?.zones ?? {};
 
   const palaces = PALACES.map((p) => {
-    const measured = Boolean(p.zone && zones[p.zone]);
+    const supported = Boolean(p.zone);
+    const measured = Boolean(supported && zones[p.zone]);
     const tone = measured ? toneFor(zones[p.zone]) : null;
     return {
       ...p,
+      supported,
       measured,
       tone,
       toneGloss: tone ? TONE_GLOSS[tone] : null,
       /** Stated for every unmeasured palace, every time. */
       notMeasuredNote: measured
         ? null
-        : "This palace sits on a part of the face this reading doesn't sample, so its meaning is given " +
-          "here but nothing has been read from your photo for it.",
+        : (supported
+          ? "This supported palace could not be measured clearly enough in this photo, so no reading is guessed for it."
+          : "This palace sits on a part of the face this reading doesn't sample, so its meaning is given " +
+            "here but nothing has been read from your photo for it."),
     };
   });
 
   return {
     palaces,
     measuredCount: palaces.filter((p) => p.measured).length,
+    supportedCount: palaces.filter((p) => p.supported).length,
     totalCount: palaces.length,
     sourcesDiffer: SOURCES_DIFFER,
   };

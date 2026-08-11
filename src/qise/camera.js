@@ -37,9 +37,149 @@ export const CAPTURE_CONSTRAINTS = Object.freeze({
   video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 960 } },
 });
 
+export const CAMERA_READY_TIMEOUT_MS = 8000;
+
+/** Turn browser camera errors into a useful next action rather than a dead preview. */
+export function describeCameraError(error) {
+  const name = error?.name || "";
+  if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+    return "Camera access is off. Allow it in this site's settings, or choose a selfie below.";
+  }
+  if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+    return "No front camera was found. Choose a selfie below instead.";
+  }
+  if (name === "NotReadableError" || name === "TrackStartError") {
+    return "Another app may be using the camera. Close it, retry, or choose a selfie below.";
+  }
+  if (name === "OverconstrainedError" || name === "ConstraintNotSatisfiedError") {
+    return "This camera could not use the requested setup. Retry, or choose a selfie below.";
+  }
+  if (name === "SecurityError") {
+    return "The camera needs a secure page. Open the HTTPS link, or choose a selfie below.";
+  }
+  return "The camera did not open. Retry, check this site's camera permission, or choose a selfie below.";
+}
+
+/**
+ * Attach a stream and wait for real frame dimensions before drawing it.
+ * `video.play()` can resolve while Safari still reports a 0x0 frame; drawing
+ * that frame throws inside requestAnimationFrame and used to leave a frozen
+ * preview with the camera light still on.
+ */
+export async function attachCameraPreview(video, stream, {
+  timeoutMs = CAMERA_READY_TIMEOUT_MS,
+  setTimer = setTimeout,
+  clearTimer = clearTimeout,
+} = {}) {
+  if (!video || !stream) throw new TypeError("attachCameraPreview requires a video and stream");
+  video.srcObject = stream;
+  if (typeof video.play === "function") await video.play();
+  if (video.videoWidth > 0 && video.videoHeight > 0) return video;
+
+  await new Promise((resolve, reject) => {
+    let timer = null;
+    const cleanup = () => {
+      if (typeof video.removeEventListener === "function") {
+        video.removeEventListener("loadedmetadata", ready);
+        video.removeEventListener("canplay", ready);
+        video.removeEventListener("error", failed);
+      }
+      if (timer !== null) clearTimer(timer);
+    };
+    const ready = () => {
+      if (!(video.videoWidth > 0 && video.videoHeight > 0)) return;
+      cleanup();
+      resolve();
+    };
+    const failed = () => {
+      cleanup();
+      reject(new Error("The camera preview could not be decoded."));
+    };
+    if (typeof video.addEventListener !== "function") {
+      reject(new Error("The camera preview did not expose frame dimensions."));
+      return;
+    }
+    video.addEventListener("loadedmetadata", ready);
+    video.addEventListener("canplay", ready);
+    video.addEventListener("error", failed);
+    timer = setTimer(() => {
+      cleanup();
+      reject(new Error("Timed out waiting for the first camera frame."));
+    }, timeoutMs);
+  });
+  return video;
+}
+
 /* ── capture mode negotiation ────────────────────────────────────────────── */
 
 const LOCKABLE = ["whiteBalanceMode", "exposureMode"];
+
+/**
+ * How long auto-exposure and auto-white-balance get before anything is locked.
+ *
+ * ── WHY A LOCK WITHOUT THIS IS WORSE THAN NO LOCK ──────────────────────────
+ * `exposureMode: "manual"` with no `exposureTime` alongside it does not choose
+ * an exposure. It FREEZES whatever the sensor happens to be at. Applied the
+ * instant `getUserMedia` resolves — before a single frame has been shown, and
+ * before AE has run at all — it pins the capture to the sensor's opening
+ * value, which on Android is dark because AE ramps up over roughly half a
+ * second to two seconds.
+ *
+ * The result is a camera that visibly comes on and then stays dark for as long
+ * as the user is willing to hold it there, with the underexposed gate firing
+ * on every frame and the advice "find more light" unable to help, because a
+ * locked exposure cannot respond to more light. That was the shipped
+ * behaviour: `openCamera()` called `negotiateCaptureMode()` on the line after
+ * `getUserMedia`, and the preview was not attached until afterwards.
+ *
+ * Locking is still worth doing — a burst measured under a moving AE is a burst
+ * measured under two different illuminants. It just has to happen at a
+ * converged exposure, which means after frames are flowing, not before.
+ */
+export const EXPOSURE_WARMUP_MS = 1500;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Let the camera settle, then lock what it settled on.
+ *
+ * `wait` is injected for the same reason every other browser object here is:
+ * a test must not spend a real second and a half, and the warm-up is the whole
+ * point of the function, so a version that skipped it under test would be
+ * testing nothing.
+ */
+export async function settleAndNegotiate(track, { warmUpMs = EXPOSURE_WARMUP_MS, wait = sleep } = {}) {
+  if (warmUpMs > 0) await wait(warmUpMs);
+  return negotiateCaptureMode(track);
+}
+
+/**
+ * Hand exposure and white balance back to the camera's own routine.
+ *
+ * Needed because a lock can be correct when taken and wrong a moment later —
+ * the subject turns towards a window, or a light is switched off. Without a
+ * way back, the underexposed gate tells the user to find more light while the
+ * only thing that could act on more light is switched off. An instruction the
+ * app has made impossible to follow is worse than no instruction.
+ */
+export async function releaseCaptureMode(track) {
+  if (!track || typeof track.applyConstraints !== "function") {
+    return { captureMode: "auto", reverted: false, error: null };
+  }
+  try {
+    await track.applyConstraints({
+      advanced: [{ exposureMode: "continuous", whiteBalanceMode: "continuous" }],
+    });
+    return { captureMode: "auto", reverted: true, error: null };
+  } catch (e) {
+    // Not swallowed. If the revert fails the capture is stuck at a bad
+    // exposure, and that is worth seeing in a console rather than presenting
+    // as a user who cannot find a well-lit room.
+    const error = String(e && e.message ? e.message : e);
+    console.warn("qise/camera: could not hand exposure back to the camera:", error);
+    return { captureMode: "auto", reverted: false, error };
+  }
+}
 
 /**
  * Try to lock white balance and exposure, then find out what actually stuck.
@@ -88,7 +228,9 @@ export async function negotiateCaptureMode(track) {
  * returning a status: a boolean can be ignored by a caller that forgot to
  * check it, and the whole point is that there is no path around it.
  */
-export async function openCamera({ consent, mediaDevices, constraints = CAPTURE_CONSTRAINTS }) {
+export async function openCamera({
+  consent, mediaDevices, constraints = CAPTURE_CONSTRAINTS, negotiate = true,
+}) {
   assertConsentGranted(consent, "getUserMedia");
 
   if (!mediaDevices || typeof mediaDevices.getUserMedia !== "function") {
@@ -97,8 +239,16 @@ export async function openCamera({ consent, mediaDevices, constraints = CAPTURE_
 
   const stream = await mediaDevices.getUserMedia(constraints);
   const [track] = stream.getVideoTracks();
-  const negotiated = await negotiateCaptureMode(track);
 
+  // `negotiate: false` is what the live capture path uses. Locking here is
+  // locking before the first frame exists — see EXPOSURE_WARMUP_MS. The
+  // default stays true so a caller that genuinely wants the old one-shot
+  // behaviour still has it, and so the negotiation keeps a direct test.
+  if (!negotiate) {
+    return { stream, track, captureMode: "pending", requested: [], locked: [], capabilities: null, error: null };
+  }
+
+  const negotiated = await negotiateCaptureMode(track);
   return { stream, track, ...negotiated };
 }
 
@@ -305,7 +455,10 @@ export class GreenLatch {
  * @param {{canvas?:Object, images?:Array, landmarks?:Array, stream?:Object}} scratch
  */
 export function releaseCapture(scratch) {
-  const released = { images: 0, landmarkArrays: 0, canvasCleared: false, tracksStopped: 0 };
+  const released = {
+    images: 0, landmarkArrays: 0, canvasCleared: false, tracksStopped: 0,
+    landmarkerClosed: false, previewCleared: false, wakeLockReleased: false,
+  };
   if (!scratch) return released;
 
   for (const image of scratch.images || []) {
@@ -329,10 +482,33 @@ export function releaseCapture(scratch) {
       if (typeof t.stop === "function") { t.stop(); released.tracksStopped++; }
     }
   }
+  if (scratch.landmarker && typeof scratch.landmarker.close === "function") {
+    scratch.landmarker.close();
+    released.landmarkerClosed = true;
+  }
+  if (scratch.video && "srcObject" in scratch.video) {
+    if (typeof scratch.video.pause === "function") scratch.video.pause();
+    scratch.video.srcObject = null;
+    released.previewCleared = true;
+  }
+  // The screen goes back to the OS idle timer here rather than at each call
+  // site, because there are four ways out of a capture — the burst completing,
+  // the loop error handler, a re-entrant runCapture(), and withdrawal — and a
+  // lock released on only some of them leaves the phone awake indefinitely.
+  // Deliberately NOT awaited: this function is synchronous by contract, and
+  // release() resolves rather than rejecting (it logs its own failures), so
+  // there is no rejection to strand.
+  if (scratch.wakeLock && typeof scratch.wakeLock.release === "function") {
+    scratch.wakeLock.release();
+    released.wakeLockReleased = true;
+  }
 
   scratch.images = null;
   scratch.landmarks = null;
   scratch.canvas = null;
   scratch.stream = null;
+  scratch.landmarker = null;
+  scratch.video = null;
+  scratch.wakeLock = null;
   return released;
 }

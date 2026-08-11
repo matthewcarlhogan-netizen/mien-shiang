@@ -14,6 +14,8 @@ import assert from "node:assert/strict";
 import {
   openCamera, negotiateCaptureMode, createLandmarkerGuarded, PolygonSmoother,
   trimmedMedianLab, reduceBurst, iqr, releaseCapture, GreenLatch,
+  attachCameraPreview, describeCameraError,
+  settleAndNegotiate, releaseCaptureMode, EXPOSURE_WARMUP_MS,
   BURST_FRAMES, GATES_GREEN_MS, SMOOTHING_FRAMES, CAPTURE_CONSTRAINTS,
 } from "../../src/qise/camera.js";
 import { createConsent, memoryStorage, ConsentRequiredError } from "../../src/qise/consent.js";
@@ -78,6 +80,23 @@ test("with consent, the documented constraints are what is requested", async () 
   await openCamera({ consent: granted(), mediaDevices: md });
   assert.deepEqual(md.calls[0], CAPTURE_CONSTRAINTS);
   assert.deepEqual(CAPTURE_CONSTRAINTS.video.facingMode, "user");
+});
+
+test("the preview waits for real dimensions instead of drawing a 0x0 Safari frame", async () => {
+  const stream = {};
+  const video = {
+    videoWidth: 1280, videoHeight: 960, srcObject: null,
+    play: async () => {},
+  };
+  assert.equal(await attachCameraPreview(video, stream), video);
+  assert.equal(video.srcObject, stream);
+});
+
+test("camera failures always offer a useful retry or selfie path", () => {
+  assert.match(describeCameraError({ name: "NotAllowedError" }), /choose a selfie/i);
+  assert.match(describeCameraError({ name: "NotFoundError" }), /No front camera/i);
+  assert.match(describeCameraError({ name: "NotReadableError" }), /Another app/i);
+  assert.match(describeCameraError(new Error("unknown")), /Retry/i);
 });
 
 /* ────────────────────────────────────────────── the three capture modes ── */
@@ -292,6 +311,8 @@ test("teardown ZEROES the pixels rather than only dropping the reference", () =>
 
   const released = releaseCapture({
     images: [image], landmarks: [landmarks], canvas, stream: md.stream,
+    landmarker: { close: () => { md.landmarkerClosed = true; } },
+    video: { srcObject: md.stream, pause: () => { md.previewPaused = true; } },
   });
 
   assert.ok(image.data.every((v) => v === 0), "pixel data survived teardown");
@@ -299,7 +320,15 @@ test("teardown ZEROES the pixels rather than only dropping the reference", () =>
   assert.equal(canvas.width, 0);
   assert.equal(canvas.height, 0);
   assert.equal(md.track.stopped, true, "the camera light is still on");
-  assert.deepEqual(released, { images: 1, landmarkArrays: 1, canvasCleared: true, tracksStopped: 1 });
+  assert.equal(md.landmarkerClosed, true);
+  assert.equal(md.previewPaused, true);
+  assert.deepEqual(released, {
+    images: 1, landmarkArrays: 1, canvasCleared: true, tracksStopped: 1,
+    landmarkerClosed: true, previewCleared: true,
+    // False because this scratch never took one, not because teardown skipped
+    // it — the paired assertion is in "releaseCapture hands the screen back".
+    wakeLockReleased: false,
+  });
 });
 
 test("teardown is safe on a partly-built or already-released scratch", () => {
@@ -308,4 +337,115 @@ test("teardown is safe on a partly-built or already-released scratch", () => {
   const s = { images: [null], landmarks: [null], canvas: null };
   assert.doesNotThrow(() => releaseCapture(s));
   assert.doesNotThrow(() => releaseCapture(s));
+});
+
+test("releaseCapture hands the screen back to the OS idle timer", () => {
+  // There are four ways out of a capture — the burst completing, the loop
+  // error handler, a re-entrant runCapture() and withdrawal — and a lock
+  // released on only some of them leaves the phone awake indefinitely. Doing
+  // it here rather than at each call site is what makes that unrepresentable.
+  let releases = 0;
+  const scratch = {
+    canvas: { width: 8, height: 8 },
+    images: [], landmarks: [],
+    wakeLock: { release() { releases++; return Promise.resolve(true); } },
+  };
+
+  const released = releaseCapture(scratch);
+  assert.equal(releases, 1);
+  assert.equal(released.wakeLockReleased, true);
+  assert.equal(scratch.wakeLock, null, "a held reference outlives the capture that owned it");
+});
+
+test("releaseCapture still works when no wake lock was ever taken", () => {
+  // The API is absent on plenty of hosts, and teardown must not depend on it.
+  const released = releaseCapture({ canvas: { width: 4, height: 4 }, images: [], landmarks: [] });
+  assert.equal(released.wakeLockReleased, false);
+  assert.equal(released.canvasCleared, true);
+});
+
+/* ── exposure warm-up ────────────────────────────────────────────────────── */
+
+const lockable = () => fakeMediaDevices({
+  capabilities: { whiteBalanceMode: ["continuous", "manual"], exposureMode: ["continuous", "manual"] },
+  actuallyApplies: ["whiteBalanceMode", "exposureMode"],
+});
+
+test("openCamera does NOT lock exposure before the first frame exists", async () => {
+  // The shipped defect. negotiateCaptureMode ran on the line after
+  // getUserMedia, and `exposureMode: "manual"` does not CHOOSE an exposure —
+  // it freezes whatever the sensor is at. Applied before AE had run and before
+  // the preview was even attached, it pinned the capture to the sensor's
+  // opening value, which on Android is dark. The camera visibly came on and
+  // then stayed dark, with the underexposed gate firing on every frame and
+  // "find more light" unable to help, because a locked sensor cannot respond
+  // to more light.
+  const md = lockable();
+
+  const opened = await openCamera({ consent: granted(), mediaDevices: md, negotiate: false });
+
+  assert.equal(opened.captureMode, "pending", "a mode was decided before any frame was seen");
+  assert.equal(md.calls.length, 1, "only getUserMedia should have been called");
+  assert.deepEqual(md.calls[0], CAPTURE_CONSTRAINTS, "the one call was the constraints, not a lock");
+  assert.ok(opened.stream && opened.track, "the caller still gets what it needs to settle later");
+});
+
+test("settleAndNegotiate waits BEFORE reading what the camera settled on", async () => {
+  const md = lockable();
+  const seen = [];
+  const wait = async (ms) => {
+    seen.push(ms);
+    assert.equal(md.calls.length, 0, "the lock was taken before the warm-up finished");
+  };
+
+  const negotiated = await settleAndNegotiate(md.track, { warmUpMs: 1500, wait });
+
+  assert.deepEqual(seen, [1500], "the warm-up did not run");
+  assert.equal(md.calls.length, 1, "nothing was locked after the warm-up");
+  assert.equal(negotiated.captureMode, "locked");
+});
+
+test("the default warm-up is long enough for AE to have moved at all", async () => {
+  // Not a magic number to preserve, but a floor: sub-second windows do not
+  // cover the convergence this exists for.
+  assert.ok(EXPOSURE_WARMUP_MS >= 1000, "a warm-up shorter than AE convergence is not a warm-up");
+});
+
+test("a zero warm-up still negotiates, so the window is tunable and not load-bearing", async () => {
+  const md = lockable();
+  let waited = false;
+  const r = await settleAndNegotiate(md.track, { warmUpMs: 0, wait: async () => { waited = true; } });
+  assert.equal(waited, false);
+  assert.equal(r.captureMode, "locked");
+});
+
+test("exposure can be handed BACK, or 'find more light' is advice the app disabled", async () => {
+  // A lock correct when taken can be wrong a moment later — the subject turns
+  // towards a window, or a lamp goes off. Without a way back the underexposed
+  // gate instructs the user to add light while the only thing that could act
+  // on it is switched off.
+  const md = lockable();
+  await negotiateCaptureMode(md.track);
+
+  const reverted = await releaseCaptureMode(md.track);
+
+  assert.equal(reverted.reverted, true);
+  assert.equal(reverted.captureMode, "auto");
+  const last = md.calls[md.calls.length - 1];
+  assert.equal(last.advanced[0].exposureMode, "continuous");
+  assert.equal(last.advanced[0].whiteBalanceMode, "continuous");
+  assert.equal(md.track.getSettings().exposureMode, "continuous", "the revert was not read back");
+});
+
+test("handing exposure back reports failure instead of pretending it worked", async () => {
+  const r = await releaseCaptureMode({
+    applyConstraints: async () => { throw new Error("not supported"); },
+  });
+  assert.equal(r.reverted, false, "a rejected revert must not be reported as done");
+  assert.equal(r.error, "not supported");
+
+  // A host with no applyConstraints at all is not an error, just nothing to do.
+  const bare = await releaseCaptureMode({});
+  assert.equal(bare.reverted, false);
+  assert.equal(bare.error, null);
 });

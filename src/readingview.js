@@ -146,7 +146,7 @@ function renderQiSe(q, openDiffer) {
 }
 
 /**
- * Why seven palaces go unread. Stated once, as scope rather than as failure.
+ * Why six palaces are contextual only. Stated once, as scope rather than failure.
  *
  * Deliberately plain about the cause: those palaces sit on features a single
  * front-on still does not isolate as separate areas. That is a property of the
@@ -154,8 +154,8 @@ function renderQiSe(q, openDiffer) {
  */
 export const PALACE_SCOPE_NOTE =
   "A single front-on photo doesn't isolate the brows, eyelids, temples and outer eye corners as " +
-  "separate areas to read, so the palaces that sit on them are listed with their traditional " +
-  "meaning and left unread rather than guessed at.";
+  "separate areas to read. This scanner supports six palaces; the other six are listed with their " +
+  "traditional meaning and left unmeasured rather than guessed at.";
 
 function renderPalaces(tp, openDiffer) {
   if (!tp) return "";
@@ -172,21 +172,25 @@ function renderPalaces(tp, openDiffer) {
     </details>`;
 
   const read = tp.palaces.filter((p) => p.measured);
-  const unread = tp.palaces.filter((p) => !p.measured);
+  const missed = tp.palaces.filter((p) => p.supported && !p.measured);
+  const contextual = tp.palaces.filter((p) => !p.supported);
+  const supportedCount = tp.supportedCount ?? tp.totalCount;
+  const complete = tp.measuredCount === supportedCount;
 
-  // Two labelled groups rather than one list of greyed-out failures. The seven
-  // are out of frame for a still photo, which is a statement about scope; the
-  // old presentation read as seven things that went wrong.
+  // Separate capture misses from areas this product never claims to sample.
   const group = (label, items) => items.length
     ? `<h4 class="palace-group">${esc(label)} (${items.length})</h4>
        ${items.map(row).join("")}`
     : "";
 
   return section("Twelve Palaces 十二宮",
-    `${tp.measuredCount} of ${tp.totalCount} read from this photo`,
+    complete
+      ? `Complete scan · all ${supportedCount} supported palaces read`
+      : `Partial scan · ${tp.measuredCount} of ${supportedCount} supported palaces read`,
     `${lede("The twelve palaces map areas of the face to areas of a life.")}
      ${group("Read from this photo", read)}
-     ${group("Not read from this photo", unread)}
+     ${group("Supported, but not clear in this photo", missed)}
+     ${group("Listed for context — not sampled", contextual)}
      <p class="muted small palace-scope">${esc(PALACE_SCOPE_NOTE)}</p>
      ${sourcesNote(tp.sourcesDiffer, { expanded: openDiffer() })}`,
     SECTION_IDS.twelvePalaces);
