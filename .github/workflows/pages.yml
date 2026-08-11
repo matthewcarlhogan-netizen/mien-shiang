@@ -69,9 +69,10 @@ jobs:
           EXPECTED_SHA: ${{ github.sha }}
         run: |
           ok=0
-          for attempt in $(seq 1 24); do
-            if curl -fsS "${PAGE_URL}qise.html" -o /tmp/qise.html \
-              && curl -fsS "${PAGE_URL}build-info.json" -o /tmp/build-info.json \
+          for attempt in $(seq 1 36); do
+            verify="${EXPECTED_SHA}-${attempt}"
+            if curl -fsS "${PAGE_URL}qise.html?verify=${verify}" -o /tmp/qise.html \
+              && curl -fsS "${PAGE_URL}build-info.json?verify=${verify}" -o /tmp/build-info.json \
               && EXPECTED_SHA="$EXPECTED_SHA" node -e "const fs=require('node:fs');const b=JSON.parse(fs.readFileSync('/tmp/build-info.json','utf8'));if(b.commitSha!==process.env.EXPECTED_SHA)process.exit(1)" \
               && grep -q '<title>Qi Se tracker</title>' /tmp/qise.html; then
               ok=1
@@ -80,9 +81,9 @@ jobs:
             sleep 5
           done
           [ "$ok" = "1" ] || { echo "::error::live Qi Se page did not become ready"; exit 1; }
-          curl -fsS "${PAGE_URL}manifest.webmanifest" -o /tmp/manifest.webmanifest
+          curl -fsS "${PAGE_URL}manifest.webmanifest?verify=${EXPECTED_SHA}" -o /tmp/manifest.webmanifest
           node -e "const fs=require('node:fs');const m=JSON.parse(fs.readFileSync('/tmp/manifest.webmanifest','utf8'));if(m.start_url!=='./qise.html')process.exit(1)"
-          curl -fsS "${PAGE_URL}qise/consent.js" | grep -q 'qise-consent-v3'
-          curl -fsS "${PAGE_URL}qise/integrated.js" -o /dev/null
-          curl -fsS "${PAGE_URL}region-extractor.js" -o /dev/null
+          curl -fsS "${PAGE_URL}qise/consent.js?verify=${EXPECTED_SHA}" | grep -q 'qise-consent-v3'
+          curl -fsS "${PAGE_URL}qise/integrated.js?verify=${EXPECTED_SHA}" -o /dev/null
+          curl -fsS "${PAGE_URL}region-extractor.js?verify=${EXPECTED_SHA}" -o /dev/null
           echo "Live scanner: ${PAGE_URL}qise.html @ ${EXPECTED_SHA}"
