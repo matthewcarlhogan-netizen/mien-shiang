@@ -37,6 +37,10 @@ function makeFace({ length = 115, cheekW = 100, jawW = 95, foreheadW = 90, cx = 
 
 function makeRaw({ regime = "full", deltaEi = 0, deltaMi = 0 } = {}) {
   const keys = ["glabella", "center_forehead", "nose_bridge", "nose_apex",
+    "eyebrow_right", "eyebrow_left", "upper_eyelid_right", "upper_eyelid_left",
+    "outer_eye_right", "outer_eye_left", "temple_right", "temple_left",
+    "fortune_forehead_right", "fortune_forehead_left",
+    "parent_forehead_right", "parent_forehead_left",
     "periorbital_left", "periorbital_right", "cheek_left", "cheek_right", "chin"];
   const zones = {};
   for (const k of keys) {
@@ -108,22 +112,37 @@ test("near-equal courts read as balanced rather than picking a winner", () => {
 
 // ───────────────────────────────────────────────────────── Twelve Palaces ───
 
-test("all twelve palaces are present and the unmeasured ones say so", () => {
+test("all twelve palaces have real region mappings and are measured", () => {
   const r = readTwelvePalaces(makeRaw());
   assert.equal(r.totalCount, 12);
-  assert.equal(r.supportedCount, 6);
+  assert.equal(r.supportedCount, 12);
+  assert.equal(r.measuredCount, 12);
   assert.equal(r.palaces.length, 12);
-
-  const unmeasured = r.palaces.filter((p) => !p.measured);
-  assert.ok(unmeasured.length > 0, "precondition: some palaces are not sampled");
-  for (const p of unmeasured) {
-    assert.equal(p.tone, null, `${p.key}: an unmeasured palace must carry no reading of the photo`);
-    assert.match(p.notMeasuredNote, /doesn't sample/i);
-  }
-  for (const p of r.palaces.filter((x) => x.measured)) {
+  assert.equal(PALACES.every((palace) => palace.zone || palace.zones?.length), true);
+  for (const p of r.palaces) {
+    assert.equal(p.measured, true, `${p.key}: must be measured`);
     assert.ok(["clear", "even", "shadowed"].includes(p.tone));
     assert.ok(p.toneGloss.length > 0);
   }
+});
+
+test("a missing bilateral sample refuses that palace instead of averaging one side", () => {
+  const raw = makeRaw();
+  delete raw.zones.temple_left;
+  const r = readTwelvePalaces(raw);
+  const travel = r.palaces.find((palace) => palace.key === "travel");
+  assert.equal(r.measuredCount, 11);
+  assert.equal(travel.measured, false);
+  assert.equal(travel.tone, null);
+  assert.match(travel.notMeasuredNote, /could not be measured/i);
+});
+
+test("bilateral palace tones deterministically combine both sides", () => {
+  const raw = makeRaw();
+  raw.zones.eyebrow_right.deltaMi = 5;
+  raw.zones.eyebrow_left.deltaMi = -1;
+  const siblings = readTwelvePalaces(raw).palaces.find((palace) => palace.key === "siblings");
+  assert.equal(siblings.tone, "shadowed");
 });
 
 test("the illness palace is rendered as trials, and the narrowing is declared", () => {

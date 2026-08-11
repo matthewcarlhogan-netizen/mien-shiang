@@ -125,8 +125,7 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .qise-seal{width:100%;height:auto;color:var(--qise-ink);display:block}
 .seal-frame{width:min(52vw,13rem);margin:0 auto .8rem;filter:drop-shadow(0 18px 24px color-mix(in srgb,var(--qise-shadow) 70%,transparent))}
 
-/* The ink-bleed settling, and the gate ring filling, are the only two moving
-   things in the interface, and both stop on request. */
+/* Motion is ornamental and every creative enhancement stops on request. */
 @keyframes qise-settle{from{opacity:.45;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
 .qise-seal [data-dot]{animation:qise-settle .5s ease-out both;transform-origin:center}
 .ring-fill{transition:stroke-dashoffset .25s linear}
@@ -134,6 +133,7 @@ button[disabled]{opacity:.45;cursor:not-allowed}
   .qise-seal [data-dot]{animation:none}
   .ring-fill{transition:none}
   .illumination-wash{transition:none}
+  .reading-hero::before,.reading-aura::before,.reading-aura::after,.palace-stars span,.palace-card,.palace-burst i,.exposure-halo[data-state="perfect"] .halo-track,.exposure-halo[data-state="perfect"] .halo-progress{animation:none}
   *{scroll-behavior:auto}
 }
 .qise-seal[data-reduced-motion="true"] [data-dot]{animation:none}
@@ -171,9 +171,30 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .reading-tabs button{border:0;border-radius:999px;padding:.55rem .35rem;font-size:.82rem;min-height:40px;color:inherit}
 .reading-tabs button[aria-selected="true"]{background:var(--qise-selected);box-shadow:0 1px 5px var(--qise-shadow)}
 .reading-panel[hidden]{display:none}
-.reading-hero{position:relative;text-align:center;padding:1.2rem 1rem 1.4rem;margin-bottom:1rem;border:1px solid var(--qise-border);border-radius:28px;background:linear-gradient(145deg,color-mix(in srgb,var(--qise-surface) 92%,transparent),color-mix(in srgb,var(--ground) 86%,transparent));overflow:hidden}
-.reading-hero::before{content:"";position:absolute;width:14rem;height:14rem;left:50%;top:1.2rem;transform:translateX(-50%);border-radius:50%;background:radial-gradient(circle,color-mix(in srgb,var(--chi) 20%,transparent),transparent 70%);filter:blur(8px);pointer-events:none}
+.reading-hero{position:relative;text-align:center;padding:1.2rem 1rem 1.4rem;margin-bottom:1rem;border:1px solid color-mix(in srgb,var(--chi) 32%,var(--qise-border));border-radius:30px;background:linear-gradient(155deg,color-mix(in srgb,var(--chi) 11%,var(--qise-surface)),color-mix(in srgb,var(--ground) 88%,transparent) 52%,color-mix(in srgb,var(--qing) 12%,var(--qise-surface)));overflow:hidden;box-shadow:0 24px 70px color-mix(in srgb,var(--qise-shadow) 80%,transparent)}
+.reading-hero::before{content:"";position:absolute;width:18rem;height:18rem;left:50%;top:1rem;transform:translateX(-50%);border-radius:50%;background:conic-gradient(from 30deg,color-mix(in srgb,var(--chi) 25%,transparent),color-mix(in srgb,var(--huang) 18%,transparent),color-mix(in srgb,var(--qing) 18%,transparent),transparent 65%,color-mix(in srgb,var(--chi) 25%,transparent));filter:blur(18px);pointer-events:none;animation:ritual-turn 18s linear infinite}
 .reading-hero>*{position:relative}
+.reading-aura{position:relative;width:min(58vw,15rem);margin:0 auto .6rem}
+.reading-aura::before,.reading-aura::after{content:"";position:absolute;border:1px solid color-mix(in srgb,var(--chi) 38%,transparent);border-radius:50%;inset:7%;animation:ritual-breathe 3.6s ease-in-out infinite;pointer-events:none}
+.reading-aura::after{inset:-1%;border-color:color-mix(in srgb,var(--huang) 28%,transparent);animation-delay:-1.8s}
+.reading-aura .seal-frame{width:100%;margin:0}
+.today-next{display:grid;grid-template-columns:1fr auto;gap:.8rem;align-items:center;text-align:left;margin:1.1rem 0 0;padding:.85rem;border:1px solid color-mix(in srgb,var(--huang) 45%,var(--qise-border));border-radius:18px;background:color-mix(in srgb,var(--ground) 72%,transparent);backdrop-filter:blur(12px)}
+.today-next p{margin:0;font-size:.82rem;line-height:1.45}
+.today-next button{border:0;background:var(--qise-ink);color:var(--qise-action-fg);font-size:.78rem;white-space:nowrap}
+.today-ritual{position:relative;padding:1.15rem;margin:1rem 0;border:1px solid var(--qise-border);border-radius:24px;background:linear-gradient(120deg,color-mix(in srgb,var(--huang) 12%,var(--qise-surface)),var(--qise-surface));overflow:hidden}
+.today-ritual::after{content:"今日";position:absolute;right:-.25rem;bottom:-1.8rem;font-family:var(--cjk);font-size:6rem;line-height:1;opacity:.045;pointer-events:none}
+.today-ritual h2{font-family:var(--passage);font-size:1.45rem}
+.today-ritual p{max-width:30rem}
+.today-shortcuts{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-top:.9rem}
+.today-shortcuts button{border-radius:14px;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:.5rem}
+.today-shortcuts button::after{content:"→";color:var(--chi)}
+.palace-orbit{display:flex;align-items:center;gap:.65rem;margin:.9rem 0 0;padding-top:.8rem;border-top:1px solid var(--qise-border)}
+.palace-stars{display:grid;grid-template-columns:repeat(6,.42rem);gap:.32rem}
+.palace-stars span{width:.42rem;height:.42rem;border-radius:50%;background:var(--chi);box-shadow:0 0 10px color-mix(in srgb,var(--chi) 75%,transparent);animation:star-wake 2.4s ease-in-out infinite;animation-delay:calc(var(--star) * -120ms)}
+.palace-orbit strong{font-size:.78rem;letter-spacing:.04em}
+@keyframes ritual-turn{to{transform:translateX(-50%) rotate(360deg)}}
+@keyframes ritual-breathe{50%{transform:scale(1.045);opacity:.45}}
+@keyframes star-wake{50%{transform:scale(.6);opacity:.4}}
 .reading-stage{display:inline-flex;border:1px solid var(--qise-border);border-radius:999px;padding:.25rem .65rem;margin:0 0 .75rem;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;opacity:.76}
 .reading-hook{font-family:var(--passage);font-size:clamp(2rem,7.8vw,3.15rem);font-weight:500;line-height:1.03;letter-spacing:-.035em;margin:.45rem auto .85rem;max-width:30rem}
 .reading-verdict{font-size:.94rem;font-weight:500;line-height:1.5;max-width:30rem;margin:0 auto}
@@ -193,10 +214,31 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .court-bar{display:grid;grid-template-columns:4.8rem 1fr 2.5rem;gap:.55rem;align-items:center;font-size:.75rem}
 .court-track{height:.55rem;border-radius:999px;background:var(--qise-track);overflow:hidden}
 .court-fill{display:block;height:100%;background:var(--huang);border-radius:inherit}
-.palace-grid{display:grid;grid-template-columns:1fr 1fr;gap:.65rem;margin-top:.8rem}
-.palace-card{padding:.8rem;border:1px solid var(--qise-border);border-radius:14px}
-.palace-card strong{display:block;font-family:var(--passage);font-size:1rem}
+.palace-collection{position:relative;overflow:hidden;scroll-margin-top:5rem;background:linear-gradient(145deg,color-mix(in srgb,var(--chi) 7%,var(--qise-surface)),var(--qise-surface) 42%,color-mix(in srgb,var(--qing) 8%,var(--qise-surface)))}
+.palace-heading{display:grid;grid-template-columns:1fr auto;gap:1rem;align-items:center}
+.palace-count{display:flex;align-items:baseline;gap:.15rem;color:var(--chi)}
+.palace-count strong{font-family:var(--numeric);font-size:2.4rem;line-height:1}
+.palace-count span{font-size:.75rem}
+.palace-grid{display:grid;grid-template-columns:1fr 1fr;gap:.65rem;margin-top:1rem}
+.palace-card{position:relative;border:1px solid color-mix(in srgb,var(--palace-accent) 32%,var(--qise-border));border-radius:18px;background:linear-gradient(135deg,color-mix(in srgb,var(--palace-accent) 8%,var(--qise-surface)),var(--qise-surface));overflow:hidden;animation:palace-arrive .5s cubic-bezier(.2,.75,.2,1) both;animation-delay:calc(var(--palace-index) * 55ms)}
+.palace-card::before{content:"";position:absolute;width:5rem;height:5rem;right:-2rem;top:-2.5rem;border-radius:50%;background:var(--palace-accent);filter:blur(24px);opacity:.12;pointer-events:none}
+.palace-enter{position:relative;width:100%;display:grid;grid-template-columns:auto 1fr auto;gap:.65rem;align-items:center;text-align:left;border:0;border-radius:0;padding:.8rem;color:inherit}
+.palace-number{font-size:.64rem;color:var(--palace-accent);letter-spacing:.08em}
+.palace-title strong{display:block;font-family:var(--passage);font-size:1rem;line-height:1.2}
+.palace-title .muted{display:block;font-size:.7rem;margin-top:.15rem}
+.palace-arrow{color:var(--palace-accent);transition:transform .25s ease}
+.palace-card[data-open="true"] .palace-arrow{transform:rotate(90deg)}
+.palace-reveal{padding:0 .8rem .8rem;animation:palace-reveal .3s ease-out both}
+.palace-reveal p{font-size:.8rem;line-height:1.55;margin:.5rem 0 0}
 .palace-tone{display:inline-block;margin:.3rem 0;padding:.16rem .45rem;border-radius:999px;background:var(--qise-track);font-size:.68rem;text-transform:uppercase;letter-spacing:.06em}
+.palace-tone[data-contextual="true"]{border:1px solid var(--qise-border);background:transparent}
+.palace-delight{width:100%;margin-top:.8rem;border-color:color-mix(in srgb,var(--chi) 48%,var(--qise-border));border-radius:14px;background:color-mix(in srgb,var(--chi) 9%,transparent)}
+.palace-burst{position:absolute;left:50%;top:2rem;z-index:4;pointer-events:none}
+.palace-burst i{position:absolute;color:var(--palace-accent);font-style:normal;animation:palace-particle .7s ease-out both}
+.palace-burst i:nth-child(1){--burst-x:-4rem;--burst-y:-1rem}.palace-burst i:nth-child(2){--burst-x:-2rem;--burst-y:-2.8rem}.palace-burst i:nth-child(3){--burst-x:0;--burst-y:-3.5rem}.palace-burst i:nth-child(4){--burst-x:2rem;--burst-y:-2.7rem}.palace-burst i:nth-child(5){--burst-x:4rem;--burst-y:-.8rem}.palace-burst i:nth-child(6){--burst-x:1rem;--burst-y:1.8rem}
+@keyframes palace-arrive{from{opacity:0;transform:translateY(12px) scale(.98)}}
+@keyframes palace-reveal{from{opacity:0;transform:translateY(-5px)}}
+@keyframes palace-particle{from{opacity:1;transform:translate(0,0) scale(.65)}to{opacity:0;transform:translate(var(--burst-x),var(--burst-y)) scale(1.35)}}
 .source-note{font-size:.72rem;line-height:1.5;opacity:.66;margin-top:.7rem}
 .harmony-parts{display:flex;flex-wrap:wrap;gap:.45rem;margin-top:.7rem}
 .harmony-part{padding:.3rem .55rem;border:1px solid var(--qise-border);border-radius:999px;font-size:.72rem}
@@ -291,6 +333,8 @@ html[data-screen-flash="true"] .capture-badge span{background:#FFFDF5;box-shadow
   .privacy-mark{display:none}
   .capture-frame video,.capture-frame canvas{height:min(46svh,28rem)}
   .palace-grid{grid-template-columns:1fr}
+  .today-next{grid-template-columns:1fr}
+  .today-next button{width:100%}
 }
 </style>
 </head>
@@ -437,11 +481,33 @@ html[data-screen-flash="true"] .capture-badge span{background:#FFFDF5;box-shadow
   <section class="reading-panel" data-reading-panel="today" role="tabpanel">
     <div class="reading-hero">
       <p class="reading-stage" id="reading-stage">First impression</p>
-      <div class="seal-frame" id="reading-seal"></div>
+      <div class="reading-aura"><div class="seal-frame" id="reading-seal"></div></div>
       <p class="eyebrow">Today’s note</p>
       <h1 class="reading-hook" id="reading-h"><span id="reading-hook"></span></h1>
       <p class="reading-verdict" id="reading-verdict"></p>
+      <div class="today-next">
+        <p><strong>Your reading is ready.</strong><br>Enter the complete twelve-palace map and choose the symbol that holds your attention.</p>
+        <button type="button" id="today-palaces">Enter 12 palaces</button>
+      </div>
     </div>
+    <!-- Creative enhancement: the landing screen now offers one immediate
+         ritual and two explicit next actions instead of a stack of reports. -->
+    <section class="today-ritual" aria-labelledby="today-ritual-h">
+      <p class="eyebrow">Today’s 60-second ritual</p>
+      <h2 id="today-ritual-h">Choose one thing worth carrying forward.</h2>
+      <p class="muted">Read your note once. Name the word that catches. Leave the rest here.</p>
+      <div class="palace-orbit" aria-label="All twelve palaces available">
+        <div class="palace-stars" aria-hidden="true">
+          <span style="--star:0"></span><span style="--star:1"></span><span style="--star:2"></span><span style="--star:3"></span><span style="--star:4"></span><span style="--star:5"></span>
+          <span style="--star:6"></span><span style="--star:7"></span><span style="--star:8"></span><span style="--star:9"></span><span style="--star:10"></span><span style="--star:11"></span>
+        </div>
+        <strong>12 of 12 palaces revealed</strong>
+      </div>
+      <div class="today-shortcuts">
+        <button type="button" id="today-pattern">See what changed</button>
+        <button type="button" id="today-delight">Share this moment</button>
+      </div>
+    </section>
     <section class="composition-card" aria-labelledby="composition-h">
       <div class="composition-head">
         <div><p class="eyebrow">Five-colour impression</p><h2 id="composition-h">Today’s palette</h2></div>

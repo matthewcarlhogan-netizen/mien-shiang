@@ -28,6 +28,34 @@ const median = (values) => {
     : (sorted[middle - 1] + sorted[middle]) / 2;
 };
 
+const luminanceOf = (pixel) => 0.299 * pixel.r + 0.587 * pixel.g + 0.114 * pixel.b;
+
+/**
+ * Spatial four-neighbour Laplacian variance, a real focus/softening signal.
+ * The previous implementation measured ordinary cheek brightness variance;
+ * an evenly lit sharp cheek could therefore fail while a blurry shadow edge
+ * passed. Coordinates come from `sampleRoiPixels` and are never retained.
+ */
+export function spatialLaplacianVariance(pixels, { minSamples = 32 } = {}) {
+  const located = (pixels || []).filter((pixel) => Number.isInteger(pixel.x)
+    && Number.isInteger(pixel.y));
+  if (located.length < minSamples) return null;
+
+  const field = new Map(located.map((pixel) => [`${pixel.x}:${pixel.y}`, luminanceOf(pixel)]));
+  const responses = [];
+  for (const pixel of located) {
+    const left = field.get(`${pixel.x - 1}:${pixel.y}`);
+    const right = field.get(`${pixel.x + 1}:${pixel.y}`);
+    const up = field.get(`${pixel.x}:${pixel.y - 1}`);
+    const down = field.get(`${pixel.x}:${pixel.y + 1}`);
+    if (![left, right, up, down].every(Number.isFinite)) continue;
+    responses.push(4 * luminanceOf(pixel) - left - right - up - down);
+  }
+  if (responses.length < minSamples) return null;
+  const mean = responses.reduce((sum, value) => sum + value, 0) / responses.length;
+  return responses.reduce((sum, value) => sum + (value - mean) ** 2, 0) / responses.length;
+}
+
 /** Gather the values used by the capture gates in one pass over the ROIs. */
 export function frameStats(image, rois, frameWidth, drift, pose) {
   void image; // The pixels are already reduced into `rois`; never retain them.
@@ -41,7 +69,7 @@ export function frameStats(image, rois, frameWidth, drift, pose) {
   for (const [name, roi] of Object.entries(rois?.rois || {})) {
     for (const pixel of roi.pixels || []) {
       total++;
-      const luminance = 0.299 * pixel.r + 0.587 * pixel.g + 0.114 * pixel.b;
+      const luminance = luminanceOf(pixel);
       if (luminance >= 250) hot++;
       if (luminance <= 12) cold++;
       if (name === "quan_l") cheekL.push(color.labFromSrgb8(pixel.r, pixel.g, pixel.b).L);
@@ -49,15 +77,11 @@ export function frameStats(image, rois, frameWidth, drift, pose) {
     }
   }
 
-  // Variance over the cheek samples is the existing conservative smoothing
-  // backstop. It is deliberately not histogram-equalised: doing so would make
-  // a beauty filter look like texture that the camera never captured.
-  const cheek = rois?.rois?.quan_l;
-  if (cheek && cheek.pixels && cheek.pixels.length > 32) {
-    const values = cheek.pixels.map((pixel) => color.labFromSrgb8(pixel.r, pixel.g, pixel.b).L);
-    const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
-    laplacianVariance = values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / values.length;
-  }
+  // Use both cheeks so a shadow, beard edge or temporary landmark wobble on
+  // one side cannot decide focus for the whole camera frame.
+  const sharpness = ["quan_l", "quan_r"].map((name) =>
+    spatialLaplacianVariance(rois?.rois?.[name]?.pixels)).filter(Number.isFinite);
+  laplacianVariance = median(sharpness);
 
   return {
     frameWidth,

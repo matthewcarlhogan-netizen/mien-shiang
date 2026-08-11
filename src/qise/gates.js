@@ -190,11 +190,10 @@ export const GATES = Object.freeze([
   },
   {
     id: "filter",
-    message: "Turn off beauty filters — they change the colour.",
-    // A smoothing filter removes high-frequency detail, so the Laplacian
-    // variance of skin collapses. It is not a perfect detector and is not
-    // meant to be; it catches the aggressive default-on filters that would
-    // otherwise silently rewrite the measurement.
+    message: "Camera looks soft. Hold still and clean the lens.",
+    // Defocus and smoothing filters both remove spatial high-frequency detail,
+    // so the real four-neighbour Laplacian variance collapses. The UI names
+    // both actionable causes instead of accusing every soft frame of filtering.
     evaluate: ({ laplacianVariance }) => {
       if (typeof laplacianVariance !== "number") return null;
       return { value: laplacianVariance, limit: FILTER_MIN_LAPLACIAN_VARIANCE, margin: marginAbove(laplacianVariance, FILTER_MIN_LAPLACIAN_VARIANCE) };
@@ -291,6 +290,8 @@ export function canUseCurrentLight(report, elapsedMs = 0) {
   const hasOverridableLight = failures.some((failure) => allowed.has(failure.id) && !failure.unevaluated);
   return elapsedMs >= LIGHT_OVERRIDE_DELAY_MS
     && hasOverridableLight
+    // Motion is still enforced after the choice; it must not make the choice
+    // flicker away while a thumb is moving towards the button.
     && failures.every((failure) =>
       (allowed.has(failure.id) || failure.id === "motion") && !failure.unevaluated);
 }

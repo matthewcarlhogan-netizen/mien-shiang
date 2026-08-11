@@ -51,6 +51,7 @@ import { SHARE_CADENCES, shareReadings } from "./share.js";
 import {
   createExposureHalo, haloStateFromCapture, shouldUseScreenFlash,
 } from "./exposure-halo.js";
+import { bindPalaceExperience } from "./palace-experience.js";
 import { createThemeController } from "./theme.js";
 import { findPatterns, describePattern } from "../../qise/patterns.js";
 import { compositionOf } from "../../qise/composition.js";
@@ -80,6 +81,7 @@ let screenLightDismissed = false;
 let lightOverrideRequested = false;
 let screenFlashThemeColour = null;
 let exposureHalo = null;
+let releasePalaceExperience = () => {};
 
 /* ── screens ─────────────────────────────────────────────────────────────── */
 
@@ -165,7 +167,12 @@ function setScreenLight(enabled, { syncHalo = true } = {}) {
     screenFlashThemeColour = null;
   }
   if (fill) fill.hidden = !next;
-  if (syncHalo && exposureHalo) exposureHalo.setLevel(next ? 1 : 0);
+  if (syncHalo && exposureHalo) {
+    // Programmatic activation must drive the same full-strength CSS values as
+    // direct input. The old emit:false path exposed a nearly invisible 18%
+    // halo, which was not enough light to shorten a mobile-camera exposure.
+    exposureHalo.setLevel(next ? 1 : 0);
+  }
   if (button) {
     button.setAttribute("aria-pressed", String(next));
     button.textContent = next ? "Screen flash on — tap to turn off" : "Turn on screen flash";
@@ -350,9 +357,15 @@ async function runCapture() {
     scratch = null;
     clearIlluminationPhase();
     renderCaptureGuide();
-    $("gate-line").textContent = error?.name
-      ? describeCameraError(error)
-      : "The scanner stopped. Retry the camera, or choose a selfie below.";
+    if (error?.code === "INCOMPLETE_PALACE_MEASUREMENT") {
+      $("gate-line").textContent =
+        "All 12 palaces need a clear, front-facing view. Keep your forehead, temples, eyes and chin inside the halo, then retry.";
+      $("capture-help").hidden = false;
+    } else {
+      $("gate-line").textContent = error?.name
+        ? describeCameraError(error)
+        : "The scanner stopped. Retry the camera, or choose a selfie below.";
+    }
   };
   const scheduleStep = () => requestAnimationFrame((time) => {
     step(time).catch(stopAfterLoopError);
@@ -440,6 +453,9 @@ async function runCapture() {
       $("use-current-light").hidden = lightOverrideRequested || !currentLightAvailable;
       $("use-current-light").dataset.emphasis = String(currentLightAvailable);
 
+      // Match the native front-camera behaviour: once darkness, uneven light,
+      // or softness persists, turn the whole screen into a neutral flash. It
+      // stays on through the hold and burst; a manual dismissal is respected.
       if (shouldUseScreenFlash({
         issuePresent: flashIssue,
         issueForMs: flashIssueSince === null ? 0 : nowMs - flashIssueSince,
@@ -781,7 +797,7 @@ async function runSelfie(file) {
       burst[name] = Array.from({ length: BURST_FRAMES }, () => ({ ...sample }));
     }
     $("ring-fill").setAttribute("stroke-dashoffset", "0");
-    $("gate-line").textContent = "Selfie ready. Writing your reading…";
+    $("gate-line").textContent = "Analyzing geometry… Mapping all 12 palaces.";
     $("selfie-status").textContent = "The selected photo will now be discarded.";
     const illumination = publicIlluminationSummary(null, {
       requested: illuminationRequested,
@@ -839,14 +855,9 @@ async function finish(burst, rois, sclera, opened, history, gateMargins, illumin
 
   let integrated = null;
   if (acceptedImage && acceptedPoints) {
-    $("gate-line").textContent = "Joining today’s colour with your facial structure…";
-    try {
-      integrated = measureIntegratedReading(acceptedImage, acceptedPoints);
-    } catch (error) {
-      // The longitudinal colour reading remains complete if this optional
-      // structural module cannot resolve. Never keep the frame around to retry.
-      console.warn("qise: integrated reading unavailable", error);
-    }
+    $("gate-line").textContent = "Analyzing geometry… Mapping all 12 palaces.";
+    integrated = measureIntegratedReading(acceptedImage, acceptedPoints);
+    $("gate-line").textContent = "12 palaces unlocked. Opening your reading…";
   }
 
   const reading = {
@@ -933,11 +944,28 @@ function integratedStoryMarkup(model) {
     `<div class="court-bar"><span>${esc(courtNames[key])}</span>
       <span class="court-track"><span class="court-fill" style="width:${value || 0}%"></span></span>
       <span class="num">${value ?? "—"}%</span></div>`).join("");
-  const palaces = model.palaces.measured.map((palace) =>
-    `<article class="palace-card"><strong>${esc(palace.hanzi)} ${esc(palace.name)}</strong>
-      <span class="muted">${esc(palace.location)}</span><br>
-      <span class="palace-tone">${esc(palace.tone)}</span>
-      <p>${esc(palace.toneGloss)}</p></article>`).join("");
+  const palaceAccents = ["chi", "huang", "qing", "bai", "hei"];
+  const palaceList = model.palaces.all || model.palaces.measured;
+  const allMeasured = model.palaces.measuredCount === model.palaces.totalCount;
+  const palaces = palaceList.map((palace, index) => {
+    const revealId = `palace-reveal-${esc(palace.key)}`;
+    const status = palace.measured ? `${palace.tone} · read today` : "traditional context";
+    const reading = palace.measured ? palace.toneGloss : palace.reading;
+    return `<article class="palace-card" data-open="false" data-palace="${esc(palace.key)}"
+        style="--palace-index:${index};--palace-accent:var(--${palaceAccents[index % palaceAccents.length]})">
+      <button class="palace-enter" type="button" aria-expanded="false" aria-controls="${revealId}">
+        <span class="palace-number num">${String(index + 1).padStart(2, "0")}</span>
+        <span class="palace-title"><strong>${esc(palace.hanzi)} ${esc(palace.name)}</strong>
+          <span class="muted">${esc(palace.location)}</span></span>
+        <span class="palace-arrow" aria-hidden="true">↗</span>
+      </button>
+      <div class="palace-reveal" id="${revealId}" hidden>
+        <span class="palace-tone" data-contextual="${!palace.measured}">${esc(status)}</span>
+        <p>${esc(reading)}</p>
+        ${palace.measured ? "" : `<p class="source-note">${esc(palace.notMeasuredNote)}</p>`}
+      </div>
+    </article>`;
+  }).join("");
   const harmonyParts = (model.harmony?.components || []).map((component) =>
     `<span class="harmony-part">${esc(component.key)}${component.percent === null ? "" : ` · ${component.percent}%`}</span>`).join("");
 
@@ -954,11 +982,15 @@ function integratedStoryMarkup(model) {
       <p class="structure-reading">${esc(model.courts.reading)}</p>
       <p class="source-note">${esc(model.courts.measurementCaveat)}</p>
     </section>
-    <section class="structure-section">
+    <section class="structure-section palace-collection" id="palace-collection">
       <p class="eyebrow">Twelve Palaces · 十二宮</p>
-      <h2>${model.palaces.measuredCount} of ${model.palaces.supportedCount} supported palace locations read</h2>
-      <p class="muted">Only locations sampled clearly from this photo are shown. The other palace meanings are never guessed.</p>
+      <div class="palace-heading"><div><h2>All 12 palaces are open</h2>
+      <p class="muted">${allMeasured
+    ? "12 of 12 measured from this scan. Tap a palace to enter."
+    : `${model.palaces.measuredCount} read from this older scan · ${model.palaces.totalCount - model.palaces.measuredCount} preserved as traditional context.`}</p></div>
+      <div class="palace-count" aria-label="12 of 12 palaces revealed"><strong>12</strong><span>/ 12</span></div></div>
       <div class="palace-grid">${palaces}</div>
+      <button class="palace-delight" type="button" data-delight="palaces">This speaks to me · Share the moment</button>
       <details class="source-note"><summary>Placement note</summary><p>${esc(model.palaces.sourcesDiffer)}</p></details>
     </section>
     ${model.harmony ? `<section class="structure-section">
@@ -991,6 +1023,14 @@ async function renderReading(reading) {
   integratedCard.hidden = !m.integrated.available;
   integratedCard.innerHTML = integratedTodayMarkup(m.integrated);
   $("reading-structure-story").innerHTML = integratedStoryMarkup(m.integrated);
+  releasePalaceExperience();
+  releasePalaceExperience = bindPalaceExperience($("reading-structure-story"), {
+    reducedMotion: reduced,
+    onDelight: () => shareCurrent("today").catch((error) => {
+      console.error(error);
+      $("share-status").textContent = "The moment could not be prepared. Your reading is unchanged.";
+    }),
+  });
   $("story-eyebrow").textContent = m.calibration.active ? "How it becomes yours" : "The tradition’s reading";
   $("story-heading").textContent = m.calibration.active ? "Why the first mark matters" : "The story beneath today";
 
@@ -1134,6 +1174,8 @@ async function boot() {
       const frame = $("capture-frame");
       frame.style.setProperty("--halo-screen-strength", (0.18 + level * 0.72).toFixed(3));
       frame.style.setProperty("--manual-preview-brightness", (1 + level * 0.32).toFixed(3));
+      // The gesture controls screen illumination immediately. Sensor exposure
+      // remains governed by the validated capture gates, avoiding driver lag.
       setScreenLight(level > 0.015, { syncHalo: false });
     },
   });
@@ -1170,6 +1212,15 @@ async function boot() {
   for (const button of document.querySelectorAll("[data-reading-tab]")) {
     button.addEventListener("click", () => selectReadingTab(button.dataset.readingTab));
   }
+  $("today-palaces").addEventListener("click", () => {
+    selectReadingTab("story", { scroll: false });
+    requestAnimationFrame(() => $("palace-collection")?.scrollIntoView({ behavior: "smooth" }));
+  });
+  $("today-pattern").addEventListener("click", () => selectReadingTab("pattern"));
+  $("today-delight").addEventListener("click", () => shareCurrent("today").catch((error) => {
+    console.error(error);
+    $("share-status").textContent = "The moment could not be prepared. Your reading is unchanged.";
+  }));
 
   $("consent-grant").addEventListener("click", async () => {
     illuminationRequested = Boolean($("illumination-opt-in")?.checked);
@@ -1223,7 +1274,7 @@ async function boot() {
   $("refocus-camera").addEventListener("click", () => {
     const [track] = scratch?.stream?.getVideoTracks?.() || [];
     if (!track) return;
-    setCapturePrompt("Refocusing", "Hold still for a moment…");
+    $("gate-line").textContent = "Refocusing — hold still for a moment…";
     requestCameraRefocus(track).catch((error) => {
       console.warn("qise: manual refocus failed", error);
     });

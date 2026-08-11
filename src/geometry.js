@@ -67,6 +67,8 @@ export const LM = {
    *  FACE_LANDMARKS_LEFT_EYE it runs 466-388-387-386-385-384-398, so 386 is. */
   UPPER_LID_A: 159,
   UPPER_LID_B: 386,
+  IRIS_CENTRE_A: 468,
+  IRIS_CENTRE_B: 473,
 
   /** Mouth corners. Read off the perioral ROI in zones.js, whose upper-lip
    *  ring runs 61-185-40-39-37-0-267-269-270-409-291 — so 61 and 291 are its
@@ -140,6 +142,25 @@ export function faceMetrics(pts) {
     bizygomaticWidth: dist(P(LM.ZYGION_A), P(LM.ZYGION_B)),
     bigonialWidth: dist(P(LM.GONION_A), P(LM.GONION_B)),
     frontotemporalWidth: dist(P(LM.FRONTOTEMPORAL_A), P(LM.FRONTOTEMPORAL_B)),
+  };
+}
+
+/**
+ * Scale-independent geometry used by the real-time measurement service.
+ * Pixel distances are retained only for this in-memory report; the ratios are
+ * invariant to camera resolution and neither the points nor distances cross
+ * the positive storage allow-list in qise/integrated.js.
+ */
+export function measurementRatios(pts, metrics = faceMetrics(pts)) {
+  const interPupillaryDistance = dist(pts[LM.IRIS_CENTRE_A], pts[LM.IRIS_CENTRE_B]);
+  const noseToChinLength = dist(pts[LM.SUBNASALE], pts[LM.MENTON]);
+  const divide = (numerator, denominator) => denominator > 0 ? numerator / denominator : NaN;
+  return {
+    interPupillaryDistance,
+    noseToChinLength,
+    interPupillaryToFaceWidth: divide(interPupillaryDistance, metrics.bizygomaticWidth),
+    noseToChinToFaceLength: divide(noseToChinLength, metrics.faceLength),
+    faceWidthToHeight: divide(metrics.bizygomaticWidth, metrics.faceLength),
   };
 }
 
@@ -606,6 +627,7 @@ export function geometryReport(rawPts) {
     rollDegrees,
     pose,
     metrics,
+    measurementRatios: measurementRatios(pts, metrics),
     thirds: courts,
     fifths: five,
     fwhr: fwhr(pts),

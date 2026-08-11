@@ -223,7 +223,8 @@ export function integratedReadingModel(reading) {
   const courtLabel = courts.balanced
     ? "Three Courts in near-equal measure"
     : `${courts.court?.hanzi || ""} ${courts.court?.name || courts.dominant}`.trim();
-  const measuredPalaces = (palaceSource?.palaces || []).filter((palace) => palace.measured);
+  const allPalaces = palaceSource?.palaces || [];
+  const measuredPalaces = allPalaces.filter((palace) => palace.measured);
   const harmonyComponents = (harmony?.components || []).map((component) => ({
     ...component,
     percent: Number.isFinite(component.value) ? Math.round(component.value * 100) : null,
@@ -245,6 +246,9 @@ export function integratedReadingModel(reading) {
       )),
     },
     palaces: {
+      // All twelve stay visible. `measured` remains as a compatibility view
+      // for old locally stored readings made before twelve-region capture.
+      all: allPalaces,
       measured: measuredPalaces,
       measuredCount: palaceSource?.measuredCount || 0,
       supportedCount: palaceSource?.supportedCount || 0,
