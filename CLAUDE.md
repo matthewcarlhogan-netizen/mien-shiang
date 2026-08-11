@@ -467,7 +467,7 @@ cache, which does not contain the new module.
 release that works perfectly on a fresh install.
 **Cause:** new entry in `SHELL`, unchanged `CACHE` name.
 
-Currently `mienshiang-v19` (bumped when `qise/wakelock.js` was added).
+Currently `mienshiang-v20` (bumped when the exposure lock was removed).
 
 **The version is coupled to `index.html`, which is easy to miss.** The entry
 redirect is `location.replace("./qise.html?v=<n>")`, and `<n>` must equal the
@@ -1454,6 +1454,31 @@ changed, and item 18's rule applies: do not compare across it.
 **Locking is still right.** A burst measured under a moving AE is a burst
 measured under two illuminants. The defect was never that the lock existed, it
 was when it was taken.
+
+**AND THEN THE WARM-UP WAS NOT ENOUGH.** With the warm-up in front of it the
+preview converged and looked correct for a second or two — and went black the
+instant the lock landed, on a real handset, with `underexposed` firing on the
+pixel buffer afterwards. `exposureMode: "manual"` carries no exposure VALUE
+(the spec pairs it with `exposureTime`), so with nothing supplied the device is
+free to drop to its default or minimum instead of holding what AE just found.
+Warming up fixed *when* the lock happened and could never fix *what it does*.
+`releaseCaptureMode()` did not rescue it either: returning from manual to
+continuous is not reliably honoured once a device has entered manual.
+
+So **`LOCKABLE` is `["whiteBalanceMode"]` and exposure is never locked.** The
+measurement is a CIELAB difference between regions of the SAME frame against
+the subject's own peripheral baseline, and that self-reference cancels a global
+exposure shift exactly as it cancels the melanin term. What it does not cancel
+is a chromaticity shift — which is what locking white balance prevents, so the
+half of the lock carrying the measurement is the half that stays. The burst is
+fifteen sub-second frames after a 900 ms sustained hold, so AE has long settled;
+residual drift is what `frameJitter` reports as reduced confidence.
+
+**If you reinstate an exposure lock it must supply an explicit `exposureTime`
+read back from `getSettings()` after convergence, and must verify the frame did
+not collapse afterwards.** A bare mode flip is the defect. Pinned by `EXPOSURE
+is never switched to manual, whatever the device advertises`, which asserts on
+every `applyConstraints` payload rather than on the resulting mode.
 
 
 ### 24. The summary may only repeat what was measured

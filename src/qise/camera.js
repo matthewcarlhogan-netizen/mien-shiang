@@ -112,7 +112,46 @@ export async function attachCameraPreview(video, stream, {
 
 /* ── capture mode negotiation ────────────────────────────────────────────── */
 
-const LOCKABLE = ["whiteBalanceMode", "exposureMode"];
+/*
+ * WHITE BALANCE ONLY. EXPOSURE IS DELIBERATELY NOT LOCKED — DO NOT ADD IT BACK.
+ *
+ * ── THE DEVICE EVIDENCE ────────────────────────────────────────────────────
+ * `exposureMode: "manual"` was in this list. With the warm-up in front of it
+ * (EXPOSURE_WARMUP_MS) the preview converged correctly and looked right for a
+ * second or two — and then went black the instant the lock was applied, on a
+ * real Android handset, with the `underexposed` gate firing on the pixel
+ * buffer afterwards.
+ *
+ * The reason is that `exposureMode: "manual"` carries no exposure VALUE. The
+ * spec pairs it with `exposureTime`, and with no value supplied the device is
+ * free to drop to its default or minimum exposure rather than hold the one AE
+ * had just converged on. That is what this handset does. Warming up first
+ * fixed *when* the lock happened and could never fix *what the lock does*.
+ *
+ * `releaseCaptureMode()` is still wired up as a safety net and still did not
+ * rescue it: returning from manual to continuous is not reliably honoured
+ * once a device has entered manual. So the only dependable answer is not to
+ * enter it.
+ *
+ * ── WHY LOSING THE EXPOSURE LOCK COSTS ALMOST NOTHING ──────────────────────
+ * The measurement is a CIELAB difference between regions of the SAME frame,
+ * against the subject's own peripheral baseline. That self-reference is what
+ * cancels the melanin term and most of the illumination term at once, and it
+ * cancels a global exposure shift along with them. What it does NOT cancel is
+ * a chromaticity shift, which is exactly what locking WHITE BALANCE prevents —
+ * so the half of the lock that carries the measurement is the half that stays.
+ *
+ * The burst is fifteen frames, well under a second, taken after a 900 ms
+ * sustained-green hold, so AE has long since settled by the time it runs. Any
+ * residual drift is what `frameJitter` measures and reports as reduced
+ * confidence, which is the honest treatment rather than a hidden one.
+ *
+ * If you ever reinstate an exposure lock, it must supply an explicit
+ * `exposureTime` read back from `getSettings()` after convergence, and it must
+ * verify the frame did not collapse afterwards. A bare mode flip is what this
+ * comment exists to prevent.
+ */
+const LOCKABLE = ["whiteBalanceMode"];
 
 /**
  * How long auto-exposure and auto-white-balance get before anything is locked.
