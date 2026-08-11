@@ -54,6 +54,8 @@ export const ASSISTED_LIMITS = Object.freeze({
 });
 
 export const ASSISTABLE_GATES = Object.freeze(Object.keys(ASSISTED_LIMITS));
+export const LIGHT_OVERRIDE_DELAY_MS = 5000;
+export const OVERRIDABLE_LIGHT_GATES = Object.freeze(["sidelight", "illuminant"]);
 
 /** Outer eye corners. See the note in evaluateGates on which span this is. */
 export const OUTER_CANTHI = Object.freeze([33, 263]);
@@ -210,11 +212,88 @@ export const GATES = Object.freeze([
 
 /** The ten technical gates condensed into four things a person can act on. */
 export const CAPTURE_GUIDE_GROUPS = Object.freeze([
-  { id: "frame", label: "Face in frame", gates: ["pose", "distance", "sclera", "roiValidity"] },
-  { id: "light", label: "Even, neutral light", gates: ["overexposed", "underexposed", "sidelight", "illuminant"] },
-  { id: "camera", label: "Camera image clear", gates: ["filter"] },
-  { id: "steady", label: "Hold steady", gates: ["motion"] },
+  { id: "frame", label: "Face", gates: ["pose", "distance", "sclera", "roiValidity"] },
+  { id: "light", label: "Light", gates: ["overexposed", "underexposed", "sidelight", "illuminant"] },
+  { id: "camera", label: "Clear", gates: ["filter"] },
+  { id: "steady", label: "Still", gates: ["motion"] },
 ]);
+
+const CAPTURE_INSTRUCTIONS = Object.freeze({
+  pose: {
+    title: "Look straight at the camera",
+    detail: "Keep your head level and look into the lens.",
+  },
+  distance: {
+    title: "Move a little closer",
+    detail: "Let your face comfortably fill the oval.",
+  },
+  overexposed: {
+    title: "Step out of direct light",
+    detail: "Move back from the window or lamp until bright patches disappear.",
+  },
+  underexposed: {
+    title: "Add light in front of you",
+    detail: "Put a window or white lamp behind the phone, or use the screen light below.",
+  },
+  sidelight: {
+    title: "Put the light behind your phone",
+    detail: "Keep looking forward. Move the phone towards the light until both cheeks look even.",
+  },
+  illuminant: {
+    title: "Switch to plain white light",
+    detail: "Turn off coloured lamps and use daylight or a white lamp behind the phone.",
+  },
+  sclera: {
+    title: "Open your eyes naturally",
+    detail: "Look into the lens and keep both eyes fully visible.",
+  },
+  motion: {
+    title: "Hold still for one second",
+    detail: "Almost ready. Keep the phone and your head steady.",
+  },
+  filter: {
+    title: "Sharpen the picture",
+    detail: "Wipe the lens, remove portrait blur, then hold the phone steady.",
+  },
+  roiValidity: {
+    title: "Show your whole face",
+    detail: "Keep your forehead, temples, eyes and chin inside the oval.",
+  },
+});
+
+/** One plain next action, instead of making a person diagnose ten gates. */
+export function captureInstruction(report) {
+  if (!report) {
+    return { id: "starting", title: "Opening the camera", detail: "Bring your face into the oval." };
+  }
+  const failure = report.failures && report.failures[0];
+  if (!failure) {
+    return {
+      id: "ready",
+      title: "That's it — hold still",
+      detail: "Keep looking at the lens. The photo takes itself.",
+    };
+  }
+  return { id: failure.id, ...(CAPTURE_INSTRUCTIONS[failure.id] || {
+    title: failure.message,
+    detail: "Follow the guide in the camera preview.",
+  }) };
+}
+
+/**
+ * An explicit escape hatch for rooms with unavoidable side/coloured light.
+ * Clipped exposure, missing measurements, blur, pose and framing remain hard
+ * stops; accepting those would manufacture confidence rather than reduce it.
+ */
+export function canUseCurrentLight(report, elapsedMs = 0) {
+  const failures = report && Array.isArray(report.failures) ? report.failures : [];
+  const allowed = new Set(OVERRIDABLE_LIGHT_GATES);
+  const hasOverridableLight = failures.some((failure) => allowed.has(failure.id) && !failure.unevaluated);
+  return elapsedMs >= LIGHT_OVERRIDE_DELAY_MS
+    && hasOverridableLight
+    && failures.every((failure) =>
+      (allowed.has(failure.id) || failure.id === "motion") && !failure.unevaluated);
+}
 
 export function captureGuide(report) {
   const margins = report && report.margins ? report.margins : {};
@@ -288,6 +367,15 @@ export function evaluateGates(frameStats, landmarks, scleraResult, options = {})
       ? failure.value <= assistedLimit
       : false;
   }) : [];
+  if (options.acceptUnevenLight) {
+    const alreadyTolerated = new Set(tolerated.map((failure) => failure.id));
+    for (const failure of failures) {
+      if (OVERRIDABLE_LIGHT_GATES.includes(failure.id)
+          && !failure.unevaluated && !alreadyTolerated.has(failure.id)) {
+        tolerated.push(failure);
+      }
+    }
+  }
   const toleratedIds = new Set(tolerated.map((failure) => failure.id));
   const unresolved = failures.filter((failure) => !toleratedIds.has(failure.id));
   const strictPass = failures.length === 0;

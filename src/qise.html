@@ -52,6 +52,11 @@ html[data-theme="dark"]{
   --qise-link:#8BB5AD;--qise-danger:#E17A6C;
 }
 html[data-theme="light"]{color-scheme:light}
+html[data-screen-flash="true"]{
+  color-scheme:light;--ground:#FFFDF5;--qise-ink:#171411;--qise-action-fg:#FFFDF5;
+  --qise-surface:#F4EFE4;--qise-border:rgba(27,25,23,.2);--qise-track:rgba(27,25,23,.12);
+  --qise-band:rgba(27,25,23,.24);--qise-selected:#FFF;--qise-shadow:rgba(27,25,23,.15);
+}
 body{
   background:
     radial-gradient(circle at 15% 4%, color-mix(in srgb,var(--chi) 12%,transparent) 0,transparent 28rem),
@@ -60,6 +65,7 @@ body{
   font-family:var(--display); font-size:17px; line-height:1.58;
   -webkit-font-smoothing:antialiased;
   padding:0 0 env(safe-area-inset-bottom);
+  transition:background-color .18s ease,color .18s ease;
 }
 .wrap{max-width:42rem;margin:0 auto;padding:1.1rem 1rem 5rem}
 h1,h2,h3{margin:0 0 .4rem;font-weight:600;letter-spacing:-.01em}
@@ -214,15 +220,26 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .pattern-count{font-size:.78rem;opacity:.72}
 .pattern-intro{margin-bottom:1rem}
 .reading-actions{margin-top:1rem}
-.capture-frame{position:relative;overflow:hidden;border:1px solid var(--qise-border);border-radius:18px;background:#0B0A09}
+.capture-frame{--halo-screen-strength:.18;--manual-preview-brightness:1;position:relative;overflow:hidden;border:1px solid var(--qise-border);border-radius:26px;background:#0B0A09;box-shadow:0 22px 60px rgba(0,0,0,.24)}
 .capture-frame video,.capture-frame canvas{display:block;width:100%;height:min(56svh,34rem);object-fit:cover}
-.capture-frame video{transition:filter .24s ease}
+.capture-frame video{filter:brightness(var(--manual-preview-brightness));transition:filter .12s linear}
 .capture-frame[data-preview-lift="true"] video{filter:brightness(2.15) contrast(.88) saturate(.9)}
 .capture-frame [hidden]{display:none}
-.face-guide{position:absolute;z-index:3;left:50%;top:50%;width:min(66%,18rem);height:76%;transform:translate(-50%,-50%);border:2px solid rgba(255,255,255,.9);border-radius:48% 48% 44% 44%;box-shadow:0 0 0 999px rgba(0,0,0,.12),0 0 18px rgba(0,0,0,.7),inset 0 0 30px rgba(255,255,255,.08);pointer-events:none}
-.capture-badge{position:absolute;z-index:4;left:.75rem;top:.75rem;display:flex;align-items:center;gap:.4rem;padding:.28rem .58rem;border-radius:999px;background:rgba(10,10,10,.58);color:#fff;font-size:.68rem;letter-spacing:.05em;text-transform:uppercase;backdrop-filter:blur(8px)}
+.face-guide{position:absolute;z-index:3;left:50%;top:50%;width:min(66%,18rem);height:76%;transform:translate(-50%,-50%);border:1px solid rgba(255,255,255,.2);border-radius:48% 48% 44% 44%;box-shadow:0 0 0 999px rgba(0,0,0,.12),inset 0 0 30px rgba(255,255,255,.08);pointer-events:none}
+.capture-badge{position:absolute;z-index:6;left:.75rem;top:.75rem;display:flex;align-items:center;gap:.4rem;padding:.28rem .58rem;border-radius:999px;background:rgba(10,10,10,.58);color:#fff;font-size:.68rem;letter-spacing:.05em;text-transform:uppercase;backdrop-filter:blur(8px);pointer-events:none}
 .capture-badge span{width:.46rem;height:.46rem;border-radius:50%;background:#8BB5AD;box-shadow:0 0 0 3px rgba(139,181,173,.2)}
-.exposure-fill{position:absolute;inset:0;z-index:1;pointer-events:none;background:radial-gradient(ellipse 46% 58% at 50% 48%,rgba(255,255,255,0) 0 58%,rgba(255,255,255,.88) 100%)}
+.exposure-fill{position:absolute;inset:0;z-index:1;pointer-events:none;background:radial-gradient(ellipse 39% 53% at 50% 49%,rgba(255,255,255,0) 0 52%,rgba(255,252,242,calc(var(--halo-screen-strength) * .72)) 69%,rgba(255,252,242,var(--halo-screen-strength)) 100%)}
+html[data-screen-flash="true"] .capture-frame{border-color:#FFFDF5;box-shadow:0 0 0 5px #FFFDF5,0 0 72px rgba(255,250,232,.8)}
+html[data-screen-flash="true"] .capture-badge span{background:#FFFDF5;box-shadow:0 0 0 4px rgba(255,253,245,.28)}
+.exposure-halo{position:absolute;z-index:5;inset:0;color:rgba(255,255,255,.82);pointer-events:none}
+.exposure-halo svg{width:100%;height:100%;display:block;overflow:visible;pointer-events:none}
+.halo-track,.halo-progress{fill:none;vector-effect:non-scaling-stroke}
+.halo-track{stroke:currentColor;stroke-width:2;opacity:.45}
+.halo-progress{stroke:var(--huang);stroke-width:4;stroke-linecap:round;stroke-dasharray:100;stroke-dashoffset:100;filter:drop-shadow(0 0 5px color-mix(in srgb,var(--huang) 70%,transparent));transition:stroke .2s ease,stroke-dashoffset .16s linear}
+.exposure-halo[data-state="adjust"]{color:var(--huang)}
+.exposure-halo[data-state="perfect"]{color:var(--qing)}
+.exposure-halo[data-state="perfect"] .halo-track,.exposure-halo[data-state="perfect"] .halo-progress{stroke:var(--qing);filter:drop-shadow(0 0 10px color-mix(in srgb,var(--qing) 85%,transparent));animation:halo-perfect 1.25s ease-in-out infinite}
+@keyframes halo-perfect{50%{opacity:.58;stroke-width:6}}
 .capture-expectation{text-align:center;margin-top:.55rem}
 .illumination-wash{position:absolute;inset:0;z-index:2;pointer-events:none;opacity:0;transition:background-color .22s linear,opacity .22s linear}
 .illumination-choice{margin-top:1rem}
@@ -231,16 +248,28 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .illumination-choice input{width:1.1rem;height:1.1rem;margin-top:.2rem;flex:none;accent-color:var(--qing)}
 .illumination-choice-status{margin:.65rem 0 0 1.8rem;font-size:.76rem;opacity:.76}
 .illumination-state{display:inline-flex;margin:0 0 .5rem;padding:.28rem .55rem;border:1px solid var(--qing);border-radius:999px;color:var(--qing);font-size:.7rem;letter-spacing:.04em}
-.capture-status{margin:.8rem 0 0}
-.capture-guide{list-style:none;margin:.75rem 0 0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:.45rem}
-.capture-guide li{display:flex;align-items:center;gap:.5rem;min-height:2.5rem;padding:.45rem .55rem;border:1px solid var(--qise-border);border-radius:10px;font-size:.78rem}
-.capture-guide li::before{content:"";width:.58rem;height:.58rem;border:2px solid var(--qise-border);border-radius:50%;flex:none}
-.capture-guide li[data-state="ready"]::before{background:var(--qing);border-color:var(--qing)}
-.capture-guide li[data-state="adjust"]{border-color:var(--huang)}
-.capture-guide li[data-state="adjust"]::before{border-color:var(--huang)}
-.capture-help{margin:.75rem 0 0;padding:.65rem .75rem;border-left:3px solid var(--huang);background:var(--qise-surface);font-size:.82rem}
-.capture-actions{display:flex;justify-content:flex-end;gap:.5rem;flex-wrap:wrap;margin-top:.55rem}
-.capture-actions button{font-size:.78rem;min-height:40px;padding:.35rem .7rem;border-color:var(--qise-border)}
+.illumination-state[hidden]{display:none}
+.capture-status{margin:.85rem 0 0}
+.capture-progress-head{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:.45rem;font-size:.72rem;letter-spacing:.04em}
+.capture-progress-head strong{font-weight:600}.capture-progress-head span{opacity:.66}
+.capture-guide{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,1fr);gap:.3rem}
+.capture-guide li{display:grid;justify-items:center;gap:.25rem;padding:.15rem 0;color:color-mix(in srgb,var(--qise-ink) 58%,transparent);font-size:.68rem}
+.capture-guide li::before{content:"";width:.62rem;height:.62rem;border:2px solid var(--qise-border);border-radius:50%}
+.capture-guide li[data-state="ready"]{color:var(--qise-ink)}
+.capture-guide li[data-state="ready"]::before{background:var(--qing);border-color:var(--qing);box-shadow:0 0 0 3px color-mix(in srgb,var(--qing) 15%,transparent)}
+.capture-guide li[data-state="adjust"]{color:var(--huang);font-weight:600}
+.capture-guide li[data-state="adjust"]::before{border-color:var(--huang);box-shadow:0 0 0 3px color-mix(in srgb,var(--huang) 15%,transparent)}
+.capture-coach{margin:.7rem 0 0;padding:1rem;border:1px solid color-mix(in srgb,var(--huang) 50%,var(--qise-border));border-radius:18px;background:linear-gradient(135deg,color-mix(in srgb,var(--huang) 10%,var(--qise-surface)),var(--qise-surface));box-shadow:0 12px 30px color-mix(in srgb,var(--qise-shadow) 50%,transparent)}
+.capture-coach[data-state="ready"]{border-color:color-mix(in srgb,var(--qing) 65%,var(--qise-border));background:linear-gradient(135deg,color-mix(in srgb,var(--qing) 13%,var(--qise-surface)),var(--qise-surface))}
+.capture-coach .eyebrow{margin-bottom:.2rem;color:inherit;opacity:.62}
+.capture-coach h2{font-family:var(--passage);font-size:1.22rem;line-height:1.25;margin:0}
+.capture-coach-detail{margin:.35rem 0 0;font-size:.82rem;line-height:1.5;opacity:.76}
+.capture-help{margin:.65rem 0 0;font-size:.76rem;opacity:.7}
+.capture-actions{display:grid;grid-template-columns:1fr 1fr;gap:.45rem;margin-top:.8rem}
+.capture-actions button{font-size:.78rem;min-height:44px;padding:.45rem .7rem;border-color:var(--qise-border);border-radius:12px}
+.capture-actions button[data-emphasis="true"]{grid-column:1/-1;background:var(--qise-ink);border-color:var(--qise-ink);color:var(--qise-action-fg)}
+.capture-secondary-actions{display:flex;justify-content:center;margin-top:.55rem}
+.capture-secondary-actions button{min-height:36px;padding:.25rem .55rem;border:0;text-decoration:underline;text-underline-offset:.18em;font-size:.72rem;opacity:.72}
 .upload-panel{margin-top:1rem}
 .upload-panel h2{font-size:1.05rem;margin-bottom:.35rem}
 .selfie-tips{margin:.65rem 0 .9rem;padding-left:1.2rem;font-size:.84rem}
@@ -255,12 +284,12 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 @media (max-width:360px){
   .wrap{padding:1rem .7rem 2.5rem}
   .courts{flex-direction:column}
-  .capture-guide{grid-template-columns:1fr}
   .welcome-hero h1{font-size:2rem}
 }
 @media (max-width:480px){
   .app-head{flex-wrap:nowrap;margin-bottom:1.25rem}
   .privacy-mark{display:none}
+  .capture-frame video,.capture-frame canvas{height:min(46svh,28rem)}
   .palace-grid{grid-template-columns:1fr}
 }
 </style>
@@ -337,19 +366,37 @@ button[disabled]{opacity:.45;cursor:not-allowed}
     <canvas id="selfie-preview" hidden aria-label="Selected selfie preview"></canvas>
     <div class="exposure-fill" id="exposure-fill" hidden aria-hidden="true"></div>
     <div class="face-guide" aria-hidden="true"></div>
+    <div class="exposure-halo" id="exposure-halo" data-state="seeking" data-dragging="false"
+         aria-hidden="true">
+      <svg viewBox="0 0 360 500" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+        <ellipse class="halo-track" cx="180" cy="250" rx="116" ry="190" pathLength="100"></ellipse>
+        <ellipse class="halo-progress" data-halo-progress cx="180" cy="250" rx="116" ry="190"
+                 pathLength="100"></ellipse>
+      </svg>
+    </div>
     <div class="capture-badge" aria-hidden="true"><span></span> Auto capture</div>
     <div class="illumination-wash" id="illumination-wash" hidden aria-hidden="true"></div>
   </div>
 
   <div class="capture-status">
     <p class="illumination-state" id="illumination-state" hidden></p>
-    <p id="gate-line" role="status" aria-live="polite">Starting the camera…</p>
+    <div class="capture-progress-head"><strong>Photo check</strong><span id="capture-ready-count">0 of 4 ready</span></div>
     <ul class="capture-guide" id="capture-guide" aria-label="Scan readiness">
-      <li data-guide="frame" data-state="waiting">Face in frame</li>
-      <li data-guide="light" data-state="waiting">Even, neutral light</li>
-      <li data-guide="camera" data-state="waiting">Camera image clear</li>
-      <li data-guide="steady" data-state="waiting">Hold steady</li>
+      <li data-guide="frame" data-state="waiting">Face</li>
+      <li data-guide="light" data-state="waiting">Light</li>
+      <li data-guide="camera" data-state="waiting">Clear</li>
+      <li data-guide="steady" data-state="waiting">Still</li>
     </ul>
+    <section class="capture-coach" id="capture-coach" data-state="adjust" role="status" aria-live="polite" aria-atomic="true">
+      <p class="eyebrow">Do this now</p>
+      <h2 id="gate-line">Opening the camera</h2>
+      <p class="capture-coach-detail" id="gate-detail">Bring your face into the oval.</p>
+      <div class="capture-actions">
+        <button id="screen-light" type="button" aria-pressed="false" hidden>Turn on screen flash</button>
+        <button id="use-current-light" type="button" hidden>Use this light anyway</button>
+        <button id="refocus-camera" type="button" hidden>Refocus camera</button>
+      </div>
+    </section>
   </div>
   <svg class="spark" id="gate-ring" viewBox="0 0 100 6" aria-hidden="true">
     <line x1="0" y1="3" x2="100" y2="3" stroke="var(--qise-track)" stroke-width="4" />
@@ -357,9 +404,8 @@ button[disabled]{opacity:.45;cursor:not-allowed}
           stroke="var(--chi)" stroke-width="4" stroke-dasharray="100" stroke-dashoffset="100" />
   </svg>
   <p class="muted capture-expectation">No shutter needed. Once the guide turns ready, capture takes about one second.</p>
-  <p class="capture-help" id="capture-help" hidden>Still waiting? Face a window or plain white lamp. Do not use flash or a coloured lamp, and keep the whole face inside the frame.</p>
-  <div class="capture-actions">
-    <button id="screen-light" type="button" aria-pressed="false" hidden>Use screen as light</button>
+  <p class="capture-help" id="capture-help" hidden>The scan will not wait on light forever. Once your face and camera are ready, you can continue with uneven room light at reduced confidence.</p>
+  <div class="capture-secondary-actions">
     <button id="restart-capture" type="button">Restart camera</button>
   </div>
   <section class="surface upload-panel" aria-labelledby="selfie-upload-h">

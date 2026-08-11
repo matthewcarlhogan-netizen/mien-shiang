@@ -11,11 +11,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  evaluateGates, captureGuide, GATES, interocularPx,
+  evaluateGates, captureGuide, captureInstruction, canUseCurrentLight, GATES, interocularPx,
   POSE_YAW_MAX, POSE_PITCH_MAX, POSE_ROLL_MAX, DISTANCE_MIN_FRACTION,
   EXPOSURE_MAX_FRACTION, SIDELIGHT_MAX_DELTA_L, MOTION_MAX_PX,
   FILTER_MIN_LAPLACIAN_VARIANCE, OUTER_CANTHI,
-  CAPTURE_GRACE_MS, ASSISTED_LIMITS,
+  CAPTURE_GRACE_MS, ASSISTED_LIMITS, LIGHT_OVERRIDE_DELAY_MS,
 } from "../../src/qise/gates.js";
 import { SCLERA_MIN_PIXELS } from "../../src/qise/sclera.js";
 import { MIN_VALID_ROIS } from "../../src/qise/rois.js";
@@ -54,6 +54,44 @@ test("the capture guide condenses all ten gates without weakening them", () => {
   assert.equal(dark.find((item) => item.id === "light").state, "adjust");
   assert.match(dark.find((item) => item.id === "light").message, /light/i);
   assert.ok(dark.filter((item) => item.id !== "light").every((item) => item.ready));
+});
+
+test("the capture coach turns uneven light into one concrete physical action", () => {
+  const report = run({ cheekMedianL: { left: 78, right: 52 } });
+  const instruction = captureInstruction(report);
+  assert.equal(instruction.id, "sidelight");
+  assert.match(instruction.title, /behind your phone/i);
+  assert.match(instruction.detail, /move the phone/i);
+});
+
+test("unavoidable side light gets an explicit reduced-confidence escape hatch", () => {
+  const report = run({ cheekMedianL: { left: 82, right: 48 } });
+  assert.equal(canUseCurrentLight(report, LIGHT_OVERRIDE_DELAY_MS - 1), false);
+  assert.equal(canUseCurrentLight(report, LIGHT_OVERRIDE_DELAY_MS), true);
+  const moving = run({
+    cheekMedianL: { left: 82, right: 48 },
+    landmarkDriftPx: MOTION_MAX_PX * 4,
+  });
+  assert.equal(canUseCurrentLight(moving, LIGHT_OVERRIDE_DELAY_MS), true);
+
+  const accepted = evaluateGates(
+    { ...cleanStats(), cheekMedianL: { left: 82, right: 48 } }, PTS, cleanSclera(),
+    { elapsedMs: LIGHT_OVERRIDE_DELAY_MS, acceptUnevenLight: true },
+  );
+  assert.equal(accepted.pass, true);
+  assert.equal(accepted.captureTier, "assisted");
+  assert.deepEqual(accepted.tolerated.map((failure) => failure.id), ["sidelight"]);
+});
+
+test("the light escape hatch never accepts clipping, blur, pose, or missing inputs", () => {
+  for (const report of [
+    run({ skinPixelsAtOrBelow12: 8000 }),
+    run({ laplacianVariance: 1 }),
+    run({ pose: { yaw: 40, pitch: 0, roll: 0 } }),
+    evaluateGates({}, null, null),
+  ]) {
+    assert.equal(canUseCurrentLight(report, Number.POSITIVE_INFINITY), false);
+  }
 });
 
 const failed = (result, id) => result.failures.some((f) => f.id === id);

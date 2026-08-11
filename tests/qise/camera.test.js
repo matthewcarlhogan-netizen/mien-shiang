@@ -17,6 +17,7 @@ import {
   attachCameraPreview, describeCameraError,
   settleAndNegotiate, releaseCaptureMode, canNegotiateCaptureMode,
   exposureAssistState, EXPOSURE_WARMUP_MS, DARK_ASSIST_DELAY_MS,
+  ensureContinuousFocus, requestCameraRefocus,
   BURST_FRAMES, GATES_GREEN_MS, SMOOTHING_FRAMES, CAPTURE_CONSTRAINTS,
 } from "../../src/qise/camera.js";
 import { createConsent, memoryStorage, ConsentRequiredError } from "../../src/qise/consent.js";
@@ -410,6 +411,43 @@ test("the default warm-up is long enough for AE to have moved at all", async () 
   // Not a magic number to preserve, but a floor: sub-second windows do not
   // cover the convergence this exists for.
   assert.ok(EXPOSURE_WARMUP_MS >= 1000, "a warm-up shorter than AE convergence is not a warm-up");
+});
+
+test("continuous autofocus is requested independently and verified", async () => {
+  const md = fakeMediaDevices({
+    capabilities: { focusMode: ["continuous", "single-shot"] },
+    actuallyApplies: ["focusMode"],
+  });
+  const result = await ensureContinuousFocus(md.track);
+  assert.equal(result.supported, true);
+  assert.equal(result.applied, true);
+  assert.equal(md.track.getSettings().focusMode, "continuous");
+  assert.deepEqual(md.calls[0], { advanced: [{ focusMode: "continuous" }] });
+});
+
+test("a refocus scan returns the camera to continuous focus", async () => {
+  const md = fakeMediaDevices({
+    capabilities: { focusMode: ["continuous", "single-shot"] },
+    actuallyApplies: ["focusMode"],
+  });
+  const result = await requestCameraRefocus(md.track, { settleMs: 1, wait: async () => {} });
+  assert.equal(result.requested, "single-shot");
+  assert.equal(result.restoredContinuous, true);
+  assert.deepEqual(md.calls, [
+    { advanced: [{ focusMode: "single-shot" }] },
+    { advanced: [{ focusMode: "continuous" }] },
+  ]);
+});
+
+test("fixed-focus and silently stripped cameras degrade without blocking capture", async () => {
+  const fixed = fakeMediaDevices({ capabilities: { focusMode: [] } });
+  assert.equal((await ensureContinuousFocus(fixed.track)).supported, false);
+  assert.equal(fixed.calls.length, 0);
+
+  const stripped = fakeMediaDevices({ capabilities: { focusMode: ["continuous"] } });
+  const result = await ensureContinuousFocus(stripped.track);
+  assert.equal(result.supported, true);
+  assert.equal(result.applied, false);
 });
 
 test("elapsed time cannot lock a dark opening frame", () => {

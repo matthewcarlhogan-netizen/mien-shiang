@@ -24,6 +24,7 @@ import {
   openCamera, attachCameraPreview, describeCameraError, createLandmarkerGuarded,
   releaseCapture, GreenLatch, PolygonSmoother, BURST_FRAMES, trimmedMedianLab, reduceBurst,
   negotiateCaptureMode, canNegotiateCaptureMode, exposureAssistState, releaseCaptureMode,
+  ensureContinuousFocus, requestCameraRefocus,
 } from "../../qise/camera.js";
 import { createLandmarkerWithFallback } from "../../landmarker.js";
 import {
@@ -38,13 +39,18 @@ import {
   illuminationFrameStable, illuminationInterruption, abandonedIlluminationSummary,
 } from "../../qise/illumination.js";
 import { createScreenWakeLock } from "../../qise/wakelock.js";
-import { evaluateGates, captureGuide } from "../../qise/gates.js";
+import {
+  evaluateGates, captureGuide, captureInstruction, canUseCurrentLight,
+} from "../../qise/gates.js";
 import { frameStats } from "../../qise/framestats.js";
 import { computeReadingMetrics, lumRatioP90P50 } from "../../qise/metrics.js";
 import { interpretReading, readingConfidence, axesOf } from "../../qise/baseline.js";
 import { openStore } from "../../qise/store.js";
 import { readingScreenModel, historyColumnModel } from "./screens.js";
 import { SHARE_CADENCES, shareReadings } from "./share.js";
+import {
+  createExposureHalo, haloStateFromCapture, shouldUseScreenFlash,
+} from "./exposure-halo.js";
 import { createThemeController } from "./theme.js";
 import { findPatterns, describePattern } from "../../qise/patterns.js";
 import { compositionOf } from "../../qise/composition.js";
@@ -70,6 +76,10 @@ let activeReadingTab = "today";
 let illuminationRequested = false;
 let screenLightRequested = false;
 let screenLightRevision = 0;
+let screenLightDismissed = false;
+let lightOverrideRequested = false;
+let screenFlashThemeColour = null;
+let exposureHalo = null;
 
 /* ── screens ─────────────────────────────────────────────────────────────── */
 
@@ -101,8 +111,27 @@ function renderCaptureGuide(report = null) {
   ];
   for (const item of guide) {
     const row = document.querySelector(`[data-guide="${item.id}"]`);
-    if (row) row.dataset.state = item.state;
+    if (row) {
+      row.dataset.state = item.state;
+      if (item.state === "adjust") row.setAttribute("aria-current", "step");
+      else row.removeAttribute("aria-current");
+    }
   }
+  const readyCount = guide.filter((item) => item.state === "ready").length;
+  if ($("capture-ready-count")) {
+    $("capture-ready-count").textContent = `${readyCount} of ${guide.length} ready`;
+  }
+  const instruction = captureInstruction(report);
+  setCapturePrompt(instruction.title, instruction.detail, instruction.id === "ready" ? "ready" : "adjust");
+}
+
+function setCapturePrompt(title, detail = "", state = "adjust") {
+  const line = $("gate-line");
+  const supporting = $("gate-detail");
+  const coach = $("capture-coach");
+  if (line && line.textContent !== title) line.textContent = title;
+  if (supporting && supporting.textContent !== detail) supporting.textContent = detail;
+  if (coach) coach.dataset.state = state;
 }
 
 function showIlluminationPhase(phase) {
@@ -120,16 +149,27 @@ function clearIlluminationPhase() {
   wash.hidden = true;
 }
 
-function setScreenLight(enabled) {
+function setScreenLight(enabled, { syncHalo = true } = {}) {
   const next = Boolean(enabled);
   if (screenLightRequested !== next) screenLightRevision++;
   screenLightRequested = next;
   const fill = $("exposure-fill");
   const button = $("screen-light");
+  const themeMeta = $("theme-color");
+  document.documentElement.dataset.screenFlash = String(next);
+  if (next && themeMeta) {
+    if (screenFlashThemeColour === null) screenFlashThemeColour = themeMeta.content;
+    themeMeta.content = "#FFFDF5";
+  } else if (!next && themeMeta && screenFlashThemeColour !== null) {
+    themeMeta.content = screenFlashThemeColour;
+    screenFlashThemeColour = null;
+  }
   if (fill) fill.hidden = !next;
+  if (syncHalo && exposureHalo) exposureHalo.setLevel(next ? 1 : 0);
   if (button) {
     button.setAttribute("aria-pressed", String(next));
-    button.textContent = next ? "Turn off screen light" : "Use screen as light";
+    button.textContent = next ? "Screen flash on — tap to turn off" : "Turn on screen flash";
+    button.dataset.emphasis = String(!next && !button.hidden);
   }
 }
 
@@ -168,12 +208,17 @@ async function runCapture() {
   }
   show("screen-capture");
   renderCaptureGuide();
-  $("gate-line").textContent = "Starting the camera…";
+  setCapturePrompt("Opening the camera", "Bring your face into the oval.");
   $("ring-fill").setAttribute("stroke-dashoffset", "100");
   $("capture-help").hidden = true;
   clearIlluminationPhase();
   setScreenLight(false);
+  exposureHalo?.reset();
   $("screen-light").hidden = true;
+  $("refocus-camera").hidden = true;
+  $("use-current-light").hidden = true;
+  screenLightDismissed = false;
+  lightOverrideRequested = false;
   $("capture-frame").dataset.previewLift = "false";
   $("illumination-state").hidden = !illuminationRequested;
   $("illumination-state").textContent = illuminationRequested
@@ -199,7 +244,10 @@ async function runCapture() {
   let landmarker = null;
   try {
     await attachCameraPreview(video, opened.stream);
+    const focus = await ensureContinuousFocus(opened.track);
     landmarker = await buildLandmarker("VIDEO");
+    opened.focusSupported = focus.supported;
+    setCapturePrompt("Finding your face", "Keep your full face inside the oval.");
   } catch (error) {
     releaseCapture({
       stream: opened.stream, images: [], landmarks: [], canvas: null,
@@ -238,6 +286,9 @@ async function runCapture() {
   let modeNegotiationStarted = false;
   let exposureReleaseStarted = false;
   let underexposedSince = null;
+  let softSince = null;
+  let flashIssueSince = null;
+  let refocusStarted = false;
 
   const latch = new GreenLatch();
   const illuminationLatch = new GreenLatch(ILLUMINATION_READY_MS);
@@ -254,6 +305,7 @@ async function runCapture() {
   const useIllumination = illuminationRequested && !reducedMotion;
   let illuminationDone = !useIllumination;
   let illuminationSession = null;
+  let resumeScreenLightAfterIllumination = false;
   let illuminationSummary = publicIlluminationSummary(null, {
     requested: illuminationRequested,
     reason: illuminationRequested && reducedMotion ? "reduced-motion" : null,
@@ -358,19 +410,54 @@ async function runCapture() {
         Object.entries(lastRois.rois).map(([k, v]) => [k, v.polygons.map((p) => p.hull)])));
 
       const stats = frameStats(image, lastRois, canvas.width, drift, headPose(pts));
-      const gates = evaluateGates(stats, pts, lastSclera, { elapsedMs: nowMs - startedAt });
+      const gates = evaluateGates(stats, pts, lastSclera, {
+        elapsedMs: nowMs - startedAt,
+        acceptUnevenLight: lightOverrideRequested,
+      });
       const illuminationStable = illuminationFrameStable(gates);
 
       const elapsedMs = nowMs - startedAt;
       const underexposed = gates.failures.some((failure) => failure.id === "underexposed");
+      const unevenLight = gates.failures.some((failure) =>
+        failure.id === "sidelight" || failure.id === "illuminant");
+      const soft = gates.failures.some((failure) => failure.id === "filter");
       underexposedSince = underexposed ? (underexposedSince ?? nowMs) : null;
+      softSince = soft ? (softSince ?? nowMs) : null;
+      const flashIssue = underexposed || unevenLight || soft;
+      flashIssueSince = flashIssue ? (flashIssueSince ?? nowMs) : null;
       const exposureAssist = exposureAssistState({
         underexposed,
         underexposedForMs: underexposedSince === null ? 0 : nowMs - underexposedSince,
         screenLightEnabled: screenLightRequested,
       });
       $("capture-frame").dataset.previewLift = String(exposureAssist.liftPreview);
-      $("screen-light").hidden = !(exposureAssist.offerScreenLight || screenLightRequested);
+      $("screen-light").hidden = !(exposureAssist.offerScreenLight || unevenLight || screenLightRequested);
+      $("screen-light").dataset.emphasis = String(
+        !screenLightRequested && (exposureAssist.offerScreenLight || unevenLight));
+      $("refocus-camera").hidden = !(soft && opened.focusSupported);
+      $("refocus-camera").dataset.emphasis = String(soft && opened.focusSupported);
+      const currentLightAvailable = canUseCurrentLight(gates, elapsedMs);
+      $("use-current-light").hidden = lightOverrideRequested || !currentLightAvailable;
+      $("use-current-light").dataset.emphasis = String(currentLightAvailable);
+
+      if (shouldUseScreenFlash({
+        issuePresent: flashIssue,
+        issueForMs: flashIssueSince === null ? 0 : nowMs - flashIssueSince,
+        enabled: screenLightRequested,
+        dismissed: screenLightDismissed,
+        illuminationActive: Boolean(illuminationSession),
+      })) {
+        setScreenLight(true);
+      }
+
+      if (soft && opened.focusSupported && !illuminationSession && !refocusStarted
+          && nowMs - softSince >= 700) {
+        refocusStarted = true;
+        requestCameraRefocus(opened.track).catch((error) => {
+          console.warn("qise: automatic refocus failed", error);
+        });
+      }
+      if (!soft) refocusStarted = false;
 
       if (observedScreenLightRevision !== screenLightRevision) {
         observedScreenLightRevision = screenLightRevision;
@@ -396,15 +483,16 @@ async function runCapture() {
           });
       }
 
-      $("gate-line").textContent = exposureAssist.message || (gates.pass
-        ? (!captureSettled
-          ? "Good — balancing this light on your device…"
-          : gates.captureTier === "assisted"
-            ? "Good — balancing this light on your device…"
-            : "Hold it there…")
-        : gates.failures[0].message);
       renderCaptureGuide(gates);
-      $("capture-help").hidden = nowMs - startedAt < 6000;
+      if (gates.pass && !captureSettled) {
+        setCapturePrompt("Keep still — the camera is settling", "Stay in the oval for one moment.", "ready");
+      } else if (gates.pass && gates.captureTier === "assisted") {
+        setCapturePrompt("This light will work — hold still", "The reading will record reduced light confidence.", "ready");
+      } else if (exposureAssist.message && underexposed) {
+        const instruction = captureInstruction(gates);
+        setCapturePrompt(instruction.title, instruction.detail);
+      }
+      $("capture-help").hidden = !currentLightAvailable;
 
       if (illuminationSession) {
         const interruption = illuminationInterruption({
@@ -421,6 +509,9 @@ async function runCapture() {
             illuminationDone = true;
             settleUntil = nowMs + SETTLE_MS;
             clearIlluminationPhase();
+            if (resumeScreenLightAfterIllumination && !screenLightDismissed) {
+              setScreenLight(true);
+            }
             latch.reset();
             $("illumination-state").hidden = false;
             $("illumination-state").textContent = "Colour response check complete";
@@ -454,6 +545,7 @@ async function runCapture() {
             String(100 - Math.round(ready.progress * 100)));
         }
         if (ready.ready) {
+          resumeScreenLightAfterIllumination = screenLightRequested;
           setScreenLight(false);
           $("screen-light").hidden = true;
           illuminationSession = createIlluminationSession(nowMs, illuminationOrderBit());
@@ -501,6 +593,9 @@ async function runCapture() {
       // frame.
       const held = latch.update(gates.pass && captureSettled, nowMs);
       $("ring-fill").setAttribute("stroke-dashoffset", String(100 - Math.round(held.progress * 100)));
+      exposureHalo?.setCaptureState(haloStateFromCapture({
+        underexposed, gatesPass: gates.pass, captureSettled,
+      }), held.progress);
 
       if (held.ready) {
         if (nowMs < settleUntil) {
@@ -540,12 +635,18 @@ async function runCapture() {
         });
         abandonIllumination(interruption.reason, nowMs);
       }
-      $("gate-line").textContent = "Bring your face into the frame.";
+      setCapturePrompt("Come into view", "Centre your face inside the oval.");
       underexposedSince = null;
+      softSince = null;
+      flashIssueSince = null;
+      refocusStarted = false;
       $("capture-frame").dataset.previewLift = "false";
+      $("refocus-camera").hidden = true;
+      $("use-current-light").hidden = true;
+      exposureHalo?.setCaptureState("seeking");
       if (!screenLightRequested) $("screen-light").hidden = true;
       renderCaptureGuide();
-      $("capture-help").hidden = nowMs - startedAt < 6000;
+      $("capture-help").hidden = true;
     }
 
     clearFrame();
@@ -1026,6 +1127,16 @@ async function boot() {
     media: window.matchMedia("(prefers-color-scheme: dark)"),
     themeMeta: $("theme-color"),
   });
+  exposureHalo = createExposureHalo({
+    root: $("exposure-halo"),
+    reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
+    onLevel: (level) => {
+      const frame = $("capture-frame");
+      frame.style.setProperty("--halo-screen-strength", (0.18 + level * 0.72).toFixed(3));
+      frame.style.setProperty("--manual-preview-brightness", (1 + level * 0.32).toFixed(3));
+      setScreenLight(level > 0.015, { syncHalo: false });
+    },
+  });
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("./sw.js").catch((error) => {
       console.warn("qise: offline shell registration failed", error);
@@ -1095,7 +1206,27 @@ async function boot() {
     show("screen-capture");
   }));
   $("screen-light").addEventListener("click", () => {
-    setScreenLight(!screenLightRequested);
+    const next = !screenLightRequested;
+    if (!next) screenLightDismissed = true;
+    setScreenLight(next);
+  });
+  $("use-current-light").addEventListener("click", () => {
+    lightOverrideRequested = true;
+    $("use-current-light").hidden = true;
+    $("capture-help").hidden = true;
+    setCapturePrompt(
+      "Using this light — hold still",
+      "The scan will keep an honest reduced-confidence note for this photo.",
+      "ready",
+    );
+  });
+  $("refocus-camera").addEventListener("click", () => {
+    const [track] = scratch?.stream?.getVideoTracks?.() || [];
+    if (!track) return;
+    setCapturePrompt("Refocusing", "Hold still for a moment…");
+    requestCameraRefocus(track).catch((error) => {
+      console.warn("qise: manual refocus failed", error);
+    });
   });
   $("restart-capture").addEventListener("click", () => runCapture().catch((e) => {
     console.error(e);
