@@ -111,20 +111,53 @@ test("captureMode is read back from getSettings, never inferred from a resolved 
   });
   assert.equal((await negotiateCaptureMode(both.track)).captureMode, "locked");
 
-  const stripsOne = fakeMediaDevices({
-    capabilities: { whiteBalanceMode: ["continuous", "manual"], exposureMode: ["continuous", "manual"] },
-    actuallyApplies: ["whiteBalanceMode"],          // exposure silently stripped
-  });
-  const partial = await negotiateCaptureMode(stripsOne.track);
-  assert.equal(partial.captureMode, "partial");
-  assert.deepEqual(partial.locked, ["whiteBalanceMode"]);
-  assert.deepEqual(partial.requested, ["whiteBalanceMode", "exposureMode"]);
-
   const stripsAll = fakeMediaDevices({
     capabilities: { whiteBalanceMode: ["continuous", "manual"], exposureMode: ["continuous", "manual"] },
     actuallyApplies: [],
   });
   assert.equal((await negotiateCaptureMode(stripsAll.track)).captureMode, "auto");
+});
+
+test("EXPOSURE is never switched to manual, whatever the device advertises", async () => {
+  // The defect this pins, observed on a real Android handset: with the warm-up
+  // in front of it the preview converged and looked correct for a second or
+  // two, then went black the moment the lock landed, and the underexposed gate
+  // fired on the pixel buffer afterwards.
+  //
+  // `exposureMode: "manual"` carries no exposure VALUE — the spec pairs it with
+  // `exposureTime` — so with nothing supplied the device may drop to its
+  // default or minimum rather than hold what AE just converged on. Warming up
+  // first fixed WHEN the lock happened and could never fix WHAT it does.
+  const md = fakeMediaDevices({
+    capabilities: { whiteBalanceMode: ["continuous", "manual"], exposureMode: ["continuous", "manual"] },
+    actuallyApplies: ["whiteBalanceMode", "exposureMode"],
+  });
+
+  const r = await negotiateCaptureMode(md.track);
+
+  assert.deepEqual(r.requested, ["whiteBalanceMode"], "exposure must not be requested at all");
+  assert.deepEqual(r.locked, ["whiteBalanceMode"]);
+  for (const call of md.calls) {
+    for (const req of call.advanced || []) {
+      assert.equal("exposureMode" in req, false,
+        "a manual exposure mode with no exposureTime is what blacked out the capture");
+    }
+  }
+  assert.equal(md.track.getSettings().exposureMode, undefined,
+    "the camera's own exposure routine must be left running");
+});
+
+test("a device offering only manual exposure is left on auto, not half-locked", async () => {
+  // Nothing to lock once exposure is off the table, so this must report auto
+  // rather than inventing a partial state from a capability we never use.
+  const md = fakeMediaDevices({
+    capabilities: { exposureMode: ["continuous", "manual"] },
+    actuallyApplies: ["exposureMode"],
+  });
+  const r = await negotiateCaptureMode(md.track);
+  assert.equal(r.captureMode, "auto");
+  assert.deepEqual(r.requested, []);
+  assert.equal(md.calls.length, 0, "no applyConstraints call should have been made at all");
 });
 
 test("a device advertising no manual mode is not asked, and reports auto", async () => {
