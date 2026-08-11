@@ -1397,6 +1397,65 @@ re-acquired when the tab becomes visible again`, plus `releaseCapture hands the
 screen back to the OS idle timer` in the camera suite.
 
 
+### 53. `exposureMode: "manual"` freezes; it does not choose
+
+This is the one that actually produced the reported "camera flashes on, then
+goes dim", and it is not any of items 50 or 51.
+
+`openCamera()` called `negotiateCaptureMode()` on the line *after*
+`getUserMedia` resolved, and the preview was not attached until afterwards. So
+the lock was applied before a single frame had been shown and before
+auto-exposure had run at all.
+
+**`exposureMode: "manual"` with no `exposureTime` beside it does not select an
+exposure. It pins whatever the sensor currently has.** On Android the sensor
+opens near its default and AE ramps up over roughly half a second to two
+seconds, so locking at t=0 pins the capture to the dark opening value — for the
+whole session.
+
+**Symptom:** the preview is live and correctly showing a face, and the frame is
+genuinely, measurably dark. The `underexposed` gate fires every frame
+(`skinPixelsAtOrBelow12 / skinPixelCount` over `EXPOSURE_MAX_FRACTION`), so the
+UI reads *"Too dark — find more light."* — and adding light changes nothing,
+because the sensor is no longer listening.
+**Distinguishing it from items 50 and 51:** those two darken the *preview* —
+one by killing the render loop, one by leaving a CSS wash painted. Neither
+touches the pixel buffer, so in both of those the darkness gate does NOT fire.
+**If the gate is complaining, the pixels really are dark and the cause is the
+sensor, not the view.** That single observation separates all three.
+**Pinned by:** `openCamera does NOT lock exposure before the first frame
+exists` and `settleAndNegotiate waits BEFORE reading what the camera settled
+on`.
+
+Three parts to the fix, and the third is the one most likely to be dropped as
+redundant:
+
+- **`negotiate: false` on the live path.** `openCamera()` returns
+  `captureMode: "pending"` and locks nothing. The default stays `true` so the
+  one-shot negotiation keeps a direct test.
+- **`settleAndNegotiate()` waits `EXPOSURE_WARMUP_MS` first**, with `wait`
+  injected so a test exercises the ordering rather than spending the time. The
+  warm-up runs while the preview is already on screen, and `captureSettled`
+  gates the LATCH rather than the gates, so the user still gets live feedback
+  but cannot complete a hold that ends in a burst lit differently frame to
+  frame.
+- **`releaseCaptureMode()` hands exposure back.** A lock correct when taken is
+  wrong the moment the subject turns towards a window. Without a way back, the
+  gate instructs the user to add light while the app has disabled the only
+  thing that could act on it. It fires once, on a persistent under- or
+  over-exposure failure — flipping repeatedly would itself be a moving
+  illuminant.
+
+**The reading records the NEGOTIATED mode, not the requested one.** `finish()`
+is handed `{ ...opened, captureMode }`, so a capture that ended up back on
+`auto` says `auto`. That is what tells a later baseline the class of capture
+changed, and item 18's rule applies: do not compare across it.
+
+**Locking is still right.** A burst measured under a moving AE is a burst
+measured under two illuminants. The defect was never that the lock existed, it
+was when it was taken.
+
+
 ### 24. The summary may only repeat what was measured
 
 `reading/summary.js` builds the receipt shown above the detailed sections. It is
