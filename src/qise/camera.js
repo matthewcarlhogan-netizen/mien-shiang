@@ -115,6 +115,73 @@ export async function attachCameraPreview(video, stream, {
 const LOCKABLE = ["whiteBalanceMode", "exposureMode"];
 
 /**
+ * How long auto-exposure and auto-white-balance get before anything is locked.
+ *
+ * ── WHY A LOCK WITHOUT THIS IS WORSE THAN NO LOCK ──────────────────────────
+ * `exposureMode: "manual"` with no `exposureTime` alongside it does not choose
+ * an exposure. It FREEZES whatever the sensor happens to be at. Applied the
+ * instant `getUserMedia` resolves — before a single frame has been shown, and
+ * before AE has run at all — it pins the capture to the sensor's opening
+ * value, which on Android is dark because AE ramps up over roughly half a
+ * second to two seconds.
+ *
+ * The result is a camera that visibly comes on and then stays dark for as long
+ * as the user is willing to hold it there, with the underexposed gate firing
+ * on every frame and the advice "find more light" unable to help, because a
+ * locked exposure cannot respond to more light. That was the shipped
+ * behaviour: `openCamera()` called `negotiateCaptureMode()` on the line after
+ * `getUserMedia`, and the preview was not attached until afterwards.
+ *
+ * Locking is still worth doing — a burst measured under a moving AE is a burst
+ * measured under two different illuminants. It just has to happen at a
+ * converged exposure, which means after frames are flowing, not before.
+ */
+export const EXPOSURE_WARMUP_MS = 1500;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Let the camera settle, then lock what it settled on.
+ *
+ * `wait` is injected for the same reason every other browser object here is:
+ * a test must not spend a real second and a half, and the warm-up is the whole
+ * point of the function, so a version that skipped it under test would be
+ * testing nothing.
+ */
+export async function settleAndNegotiate(track, { warmUpMs = EXPOSURE_WARMUP_MS, wait = sleep } = {}) {
+  if (warmUpMs > 0) await wait(warmUpMs);
+  return negotiateCaptureMode(track);
+}
+
+/**
+ * Hand exposure and white balance back to the camera's own routine.
+ *
+ * Needed because a lock can be correct when taken and wrong a moment later —
+ * the subject turns towards a window, or a light is switched off. Without a
+ * way back, the underexposed gate tells the user to find more light while the
+ * only thing that could act on more light is switched off. An instruction the
+ * app has made impossible to follow is worse than no instruction.
+ */
+export async function releaseCaptureMode(track) {
+  if (!track || typeof track.applyConstraints !== "function") {
+    return { captureMode: "auto", reverted: false, error: null };
+  }
+  try {
+    await track.applyConstraints({
+      advanced: [{ exposureMode: "continuous", whiteBalanceMode: "continuous" }],
+    });
+    return { captureMode: "auto", reverted: true, error: null };
+  } catch (e) {
+    // Not swallowed. If the revert fails the capture is stuck at a bad
+    // exposure, and that is worth seeing in a console rather than presenting
+    // as a user who cannot find a well-lit room.
+    const error = String(e && e.message ? e.message : e);
+    console.warn("qise/camera: could not hand exposure back to the camera:", error);
+    return { captureMode: "auto", reverted: false, error };
+  }
+}
+
+/**
  * Try to lock white balance and exposure, then find out what actually stuck.
  *
  * @returns {{captureMode:"locked"|"partial"|"auto", requested:string[],
@@ -161,7 +228,9 @@ export async function negotiateCaptureMode(track) {
  * returning a status: a boolean can be ignored by a caller that forgot to
  * check it, and the whole point is that there is no path around it.
  */
-export async function openCamera({ consent, mediaDevices, constraints = CAPTURE_CONSTRAINTS }) {
+export async function openCamera({
+  consent, mediaDevices, constraints = CAPTURE_CONSTRAINTS, negotiate = true,
+}) {
   assertConsentGranted(consent, "getUserMedia");
 
   if (!mediaDevices || typeof mediaDevices.getUserMedia !== "function") {
@@ -170,8 +239,16 @@ export async function openCamera({ consent, mediaDevices, constraints = CAPTURE_
 
   const stream = await mediaDevices.getUserMedia(constraints);
   const [track] = stream.getVideoTracks();
-  const negotiated = await negotiateCaptureMode(track);
 
+  // `negotiate: false` is what the live capture path uses. Locking here is
+  // locking before the first frame exists — see EXPOSURE_WARMUP_MS. The
+  // default stays true so a caller that genuinely wants the old one-shot
+  // behaviour still has it, and so the negotiation keeps a direct test.
+  if (!negotiate) {
+    return { stream, track, captureMode: "pending", requested: [], locked: [], capabilities: null, error: null };
+  }
+
+  const negotiated = await negotiateCaptureMode(track);
   return { stream, track, ...negotiated };
 }
 

@@ -23,6 +23,7 @@ import { paletteCss } from "./palette.js";
 import {
   openCamera, attachCameraPreview, describeCameraError, createLandmarkerGuarded,
   releaseCapture, GreenLatch, PolygonSmoother, BURST_FRAMES, trimmedMedianLab, reduceBurst,
+  settleAndNegotiate, releaseCaptureMode,
 } from "../../qise/camera.js";
 import { createLandmarkerWithFallback } from "../../landmarker.js";
 import {
@@ -157,7 +158,12 @@ async function runCapture() {
   video.hidden = false;
   selfiePreview.hidden = true;
   $("selfie-status").textContent = "";
-  const opened = await openCamera({ consent, mediaDevices: navigator.mediaDevices });
+  // negotiate:false — the exposure lock happens after the preview is live and
+  // AE has converged, not on the line after getUserMedia. See
+  // EXPOSURE_WARMUP_MS in qise/camera.js.
+  const opened = await openCamera({
+    consent, mediaDevices: navigator.mediaDevices, negotiate: false,
+  });
   if (runId !== captureRun) {
     releaseCapture({ stream: opened.stream, images: [], landmarks: [], canvas: null });
     return;
@@ -195,6 +201,24 @@ async function runCapture() {
     canvas, images: [], landmarks: [], stream: opened.stream, landmarker, video,
     wakeLock,
   };
+
+  // ── EXPOSURE SETTLES BEFORE THE BURST CAN ARM ─────────────────────────────
+  // Kicked off without blocking, so the preview is on screen immediately, but
+  // the latch below refuses to arm until it resolves. A burst taken during AE
+  // convergence is a burst whose frames were lit differently from each other,
+  // which is exactly the drift `frameJitter` would otherwise have to absorb.
+  let captureMode = "pending";
+  let captureSettled = false;
+  let exposureHandedBack = false;
+  settleAndNegotiate(opened.track)
+    .then((negotiated) => { captureMode = negotiated.captureMode; })
+    .catch((error) => {
+      // Not swallowed, and not fatal: an un-negotiated capture is the ordinary
+      // case on most hosts, and every metric downstream is valid without it.
+      console.warn("qise: capture mode negotiation failed", error);
+      captureMode = "auto";
+    })
+    .finally(() => { captureSettled = true; });
 
   const latch = new GreenLatch();
   const smoother = new PolygonSmoother();
@@ -346,7 +370,25 @@ async function runCapture() {
         }
       }
 
-      const held = latch.update(gates.pass, nowMs);
+      // A lock taken at a good exposure can be wrong moments later — the
+      // subject turns towards a window, or a lamp goes off. Handing exposure
+      // back is what keeps "find more light" actionable, because a locked
+      // sensor cannot respond to more light. Once only: flipping back and
+      // forth would itself be a moving illuminant.
+      if (!exposureHandedBack
+          && (captureMode === "locked" || captureMode === "partial")
+          && gates.failures.some((f) => f.id === "underexposed" || f.id === "overexposed")) {
+        exposureHandedBack = true;
+        releaseCaptureMode(opened.track)
+          .then((reverted) => { captureMode = reverted.captureMode; })
+          .catch((error) => console.warn("qise: exposure hand-back failed", error));
+      }
+
+      // `captureSettled` gates the LATCH rather than the gates themselves, so
+      // the user still sees live feedback during the warm-up; what they cannot
+      // do is complete a hold that ends in a burst lit differently frame to
+      // frame.
+      const held = latch.update(gates.pass && captureSettled, nowMs);
       $("ring-fill").setAttribute("stroke-dashoffset", String(100 - Math.round(held.progress * 100)));
 
       if (held.ready) {
@@ -374,8 +416,13 @@ async function runCapture() {
         collecting--;
         if (collecting === 0) {
           clearFrame();
-          await finish(burst, lastRois, lastSclera, opened, history, lastMargins,
-            illuminationSummary);
+          // The NEGOTIATED mode, not the one openCamera returned — that is
+          // "pending" now, and if exposure was handed back part-way through
+          // the hold this reading was taken under "auto". The record has to
+          // say which, because captureMode is what tells a later baseline that
+          // the class of capture changed.
+          await finish(burst, lastRois, lastSclera, { ...opened, captureMode },
+            history, lastMargins, illuminationSummary);
           return;
         }
       }
