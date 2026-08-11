@@ -1260,6 +1260,52 @@ same number, since otherwise the equality would hold for a field that had simply
 stopped discriminating — and `ridgeMean defaults to the axis its field was built
 for`.
 
+### 50. `video.play()` resolving is not a frame, and a dead rAF loop looks like a dim camera
+
+`attachCameraPreview()` attaches the stream and then WAITS for
+`videoWidth > 0 && videoHeight > 0`, via `loadedmetadata`/`canplay` with an
+8 s timeout, before the capture loop is allowed to draw. The obvious
+`video.srcObject = stream; await video.play();` is not sufficient: `play()`
+resolves when playback begins, which on some hosts is before the first decoded
+frame exists, so the element still reports 0x0.
+
+Drawing that frame throws inside `requestAnimationFrame`. Two properties turn
+one exception into a permanently broken screen:
+
+- **`step` is `async`, so a throw becomes a rejected promise, and rAF ignores
+  return values.** There is no error to see unless somebody attached a handler.
+- **The re-schedule is the LAST statement in the body.** Throwing anywhere above
+  it means `requestAnimationFrame(step)` never runs, so the loop stops for good
+  after a single bad frame.
+
+**Symptom:** the camera light comes on, the preview shows briefly and then sits
+frozen on a dark frame while the gate line never updates and the ring never
+fills. It reads as "the camera went dim", which points the investigation at
+exposure, white balance or screen brightness — none of which are involved.
+**Cause:** treating a resolved `play()` as evidence of a decodable frame, and a
+rAF body whose only re-schedule sits below code that can throw.
+**Pinned by:** `the preview waits for real dimensions instead of drawing a 0x0
+Safari frame` in `tests/qise/camera.test.js`, which is reachable only because
+`attachCameraPreview` takes the video, the stream and its timer functions as
+ARGUMENTS — the same reason `createLandmarkerWithFallback()` takes its factory
+(item 14). The loop that consumes it lives in `ui/qise/app.js`, which nothing
+can import, so the guard has to live down here where a test can reach it.
+
+Two companions, both load-bearing, neither sufficient alone:
+
+- `scheduleStep()` wraps the body as `step(time).catch(stopAfterLoopError)`, so
+  a throw reports itself and tears the capture down deliberately instead of
+  leaving a live camera behind a dead loop. **Do not "simplify" this back to a
+  bare `requestAnimationFrame(step)`** — that is the defect verbatim.
+- A `runId`/`captureRun` token guards re-entry, so a second `runCapture()` cannot
+  leave two loops driving one landmarker. `detectForVideo` requires strictly
+  increasing timestamps, and two loops interleaving rAF timestamps is how you get
+  a regression it will throw on.
+
+**This is not an exposure bug and must not be "fixed" by brightening the frame.**
+Every downstream value is a CIELAB delta against the subject's own baseline, so a
+brightness multiplier on the captured pixels silently corrupts every reading ever
+compared with it.
 
 ### 24. The summary may only repeat what was measured
 
