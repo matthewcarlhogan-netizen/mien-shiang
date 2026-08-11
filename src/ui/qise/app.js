@@ -34,7 +34,9 @@ import { sampleSclera } from "../../qise/sclera.js";
 import {
   SETTLE_MS, createIlluminationSession, illuminationPhase, meanFaceRgb,
   recordIlluminationSample, summarizeIllumination, publicIlluminationSummary,
+  illuminationInterruption, abandonedIlluminationSummary,
 } from "../../qise/illumination.js";
+import { createScreenWakeLock } from "../../qise/wakelock.js";
 import { evaluateGates, captureGuide } from "../../qise/gates.js";
 import { computeReadingMetrics, lumRatioP90P50 } from "../../qise/metrics.js";
 import { interpretReading, readingConfidence, axesOf } from "../../qise/baseline.js";
@@ -179,8 +181,19 @@ async function runCapture() {
   }
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  // Held for the whole capture, and released by releaseCapture() on every way
+  // out. Acquired AFTER the camera opened so a refused camera never leaves the
+  // phone awake for a capture that is not happening. Not awaited and never
+  // gated on: the lock is an improvement, and a capture must run identically
+  // on a host that has no wake lock API at all.
+  const wakeLock = createScreenWakeLock({
+    wakeLock: navigator.wakeLock,
+    documentRef: document,
+  });
+  wakeLock.acquire();
   scratch = {
     canvas, images: [], landmarks: [], stream: opened.stream, landmarker, video,
+    wakeLock,
   };
 
   const latch = new GreenLatch();
@@ -205,6 +218,28 @@ async function runCapture() {
   const burst = {};
   let collecting = 0;
   let lastSclera = null, lastRois = null, lastMargins = null;
+
+  /**
+   * Abandon a running screen-light session, wherever the loop noticed.
+   *
+   * ONE function called from BOTH branches, on purpose. This teardown used to
+   * be written inline inside `if (mesh)`, so the gate-failure path cleared the
+   * wash and the face-lost path — which is the `else` of that same `if` — did
+   * not. A lost face therefore left the overlay painted at whatever colour the
+   * sequence had reached, which can be blue or green at 0.62 opacity, and the
+   * preview simply went dark and stayed dark.
+   */
+  const abandonIllumination = (reason, nowMs) => {
+    illuminationSummary = abandonedIlluminationSummary(reason);
+    illuminationSession = null;
+    illuminationDone = true;
+    settleUntil = nowMs + SETTLE_MS;
+    clearIlluminationPhase();
+    // The sequence changed the light on the face part-way through the hold, so
+    // the seconds already banked are not seconds of the steady frame the latch
+    // is meant to be measuring.
+    latch.reset();
+  };
 
   const stopAfterLoopError = (error) => {
     if (runId !== captureRun) return;
@@ -281,15 +316,11 @@ async function runCapture() {
       $("capture-help").hidden = nowMs - startedAt < 10000;
 
       if (illuminationSession) {
-        if (!gates.pass) {
-          illuminationSummary = publicIlluminationSummary(
-            { outcome: "inconclusive", phasesRead: 0 },
-            { requested: true, reason: "frame-moved" });
-          illuminationSession = null;
-          illuminationDone = true;
-          settleUntil = nowMs + SETTLE_MS;
-          clearIlluminationPhase();
-          latch.reset();
+        const interruption = illuminationInterruption({
+          hasFace: true, gatesPass: gates.pass,
+        });
+        if (interruption.abandon) {
+          abandonIllumination(interruption.reason, nowMs);
         } else {
           const active = illuminationPhase(illuminationSession, nowMs);
           if (active.done) {
@@ -349,6 +380,16 @@ async function runCapture() {
         }
       }
     } else {
+      // The face is gone, so there is nothing left to sample and the wash must
+      // come off the preview NOW. Without this the overlay stays painted while
+      // the copy below it asks for a face, which is the one instruction the
+      // darkened preview makes hardest to follow.
+      if (illuminationSession) {
+        const interruption = illuminationInterruption({
+          hasFace: false, gatesPass: false,
+        });
+        abandonIllumination(interruption.reason, nowMs);
+      }
       $("gate-line").textContent = "Bring your face into the frame.";
       renderCaptureGuide();
       $("capture-help").hidden = nowMs - startedAt < 10000;
