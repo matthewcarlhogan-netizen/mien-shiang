@@ -23,7 +23,7 @@ import { paletteCss } from "./palette.js";
 import {
   openCamera, attachCameraPreview, describeCameraError, createLandmarkerGuarded,
   releaseCapture, GreenLatch, PolygonSmoother, BURST_FRAMES, trimmedMedianLab, reduceBurst,
-  settleAndNegotiate, releaseCaptureMode,
+  negotiateCaptureMode, canNegotiateCaptureMode, exposureAssistState, releaseCaptureMode,
 } from "../../qise/camera.js";
 import { createLandmarkerWithFallback } from "../../landmarker.js";
 import {
@@ -68,6 +68,8 @@ let activeShareCadence = "week";
 let captureRun = 0;
 let activeReadingTab = "today";
 let illuminationRequested = false;
+let screenLightRequested = false;
+let screenLightRevision = 0;
 
 /* ── screens ─────────────────────────────────────────────────────────────── */
 
@@ -118,6 +120,19 @@ function clearIlluminationPhase() {
   wash.hidden = true;
 }
 
+function setScreenLight(enabled) {
+  const next = Boolean(enabled);
+  if (screenLightRequested !== next) screenLightRevision++;
+  screenLightRequested = next;
+  const fill = $("exposure-fill");
+  const button = $("screen-light");
+  if (fill) fill.hidden = !next;
+  if (button) {
+    button.setAttribute("aria-pressed", String(next));
+    button.textContent = next ? "Turn off screen light" : "Use screen as light";
+  }
+}
+
 function illuminationOrderBit() {
   const value = new Uint8Array(1);
   crypto.getRandomValues(value);
@@ -157,6 +172,9 @@ async function runCapture() {
   $("ring-fill").setAttribute("stroke-dashoffset", "100");
   $("capture-help").hidden = true;
   clearIlluminationPhase();
+  setScreenLight(false);
+  $("screen-light").hidden = true;
+  $("capture-frame").dataset.previewLift = "false";
 
   const video = $("preview");
   const selfiePreview = $("selfie-preview");
@@ -208,24 +226,17 @@ async function runCapture() {
   };
 
   // ── EXPOSURE SETTLES BEFORE THE BURST CAN ARM ─────────────────────────────
-  // Kicked off without blocking, so the preview is on screen immediately, but
-  // the latch below refuses to arm until it resolves. A burst taken during AE
-  // convergence is a burst whose frames were lit differently from each other,
-  // which is exactly the drift `frameJitter` would otherwise have to absorb.
-  let captureMode = "pending";
+  // Elapsed time alone is not proof that Android auto-exposure has converged.
+  // Keep AE/AWB live until a measured frame is good, then lock that good state
+  // before the sustained hold can arm.
+  let captureMode = "auto";
   let captureSettled = false;
-  let exposureHandedBack = false;
-  settleAndNegotiate(opened.track)
-    .then((negotiated) => { captureMode = negotiated.captureMode; })
-    .catch((error) => {
-      // Not swallowed, and not fatal: an un-negotiated capture is the ordinary
-      // case on most hosts, and every metric downstream is valid without it.
-      console.warn("qise: capture mode negotiation failed", error);
-      captureMode = "auto";
-    })
-    .finally(() => { captureSettled = true; });
+  let modeNegotiationStarted = false;
+  let exposureReleaseStarted = false;
+  let underexposedSince = null;
 
   const latch = new GreenLatch();
+  let observedScreenLightRevision = screenLightRevision;
   const smoother = new PolygonSmoother();
   const drift = [];
   let previous = null;
@@ -340,11 +351,48 @@ async function runCapture() {
       const stats = frameStats(image, lastRois, canvas.width, drift, headPose(pts));
       const gates = evaluateGates(stats, pts, lastSclera, { elapsedMs: nowMs - startedAt });
 
-      $("gate-line").textContent = gates.pass
-        ? (gates.captureTier === "assisted"
+      const elapsedMs = nowMs - startedAt;
+      const underexposed = gates.failures.some((failure) => failure.id === "underexposed");
+      underexposedSince = underexposed ? (underexposedSince ?? nowMs) : null;
+      const exposureAssist = exposureAssistState({
+        underexposed,
+        underexposedForMs: underexposedSince === null ? 0 : nowMs - underexposedSince,
+        screenLightEnabled: screenLightRequested,
+      });
+      $("capture-frame").dataset.previewLift = String(exposureAssist.liftPreview);
+      $("screen-light").hidden = !(exposureAssist.offerScreenLight || screenLightRequested);
+
+      if (observedScreenLightRevision !== screenLightRevision) {
+        observedScreenLightRevision = screenLightRevision;
+        latch.reset();
+      }
+
+      if (canNegotiateCaptureMode({
+        gatesPass: gates.pass, elapsedMs, negotiationStarted: modeNegotiationStarted,
+      })) {
+        modeNegotiationStarted = true;
+        captureSettled = false;
+        latch.reset();
+        negotiateCaptureMode(opened.track)
+          .then((negotiated) => {
+            if (runId === captureRun) captureMode = negotiated.captureMode;
+          })
+          .catch((error) => {
+            console.warn("qise: capture mode negotiation failed", error);
+            if (runId === captureRun) captureMode = "auto";
+          })
+          .finally(() => {
+            if (runId === captureRun) captureSettled = true;
+          });
+      }
+
+      $("gate-line").textContent = exposureAssist.message || (gates.pass
+        ? (!captureSettled
           ? "Good — balancing this light on your device…"
-          : "Hold it there…")
-        : gates.failures[0].message;
+          : gates.captureTier === "assisted"
+            ? "Good — balancing this light on your device…"
+            : "Hold it there…")
+        : gates.failures[0].message);
       renderCaptureGuide(gates);
       $("capture-help").hidden = nowMs - startedAt < 6000;
 
@@ -384,13 +432,27 @@ async function runCapture() {
       // back is what keeps "find more light" actionable, because a locked
       // sensor cannot respond to more light. Once only: flipping back and
       // forth would itself be a moving illuminant.
-      if (!exposureHandedBack
+      if (!exposureReleaseStarted
           && (captureMode === "locked" || captureMode === "partial")
           && gates.failures.some((f) => f.id === "underexposed" || f.id === "overexposed")) {
-        exposureHandedBack = true;
+        exposureReleaseStarted = true;
+        captureSettled = false;
+        latch.reset();
         releaseCaptureMode(opened.track)
-          .then((reverted) => { captureMode = reverted.captureMode; })
-          .catch((error) => console.warn("qise: exposure hand-back failed", error));
+          .then((reverted) => {
+            if (runId !== captureRun) return;
+            captureMode = reverted.captureMode;
+            if (reverted.reverted) {
+              modeNegotiationStarted = false;
+              exposureReleaseStarted = false;
+            } else {
+              captureSettled = true;
+            }
+          })
+          .catch((error) => {
+            console.warn("qise: exposure hand-back failed", error);
+            if (runId === captureRun) captureSettled = true;
+          });
       }
 
       // `captureSettled` gates the LATCH rather than the gates themselves, so
@@ -402,6 +464,8 @@ async function runCapture() {
 
       if (held.ready) {
         if (useIllumination && !illuminationDone) {
+          setScreenLight(false);
+          $("screen-light").hidden = true;
           illuminationSession = createIlluminationSession(nowMs, illuminationOrderBit());
           showIlluminationPhase(illuminationSession.sequence[0]);
           latch.reset();
@@ -447,6 +511,9 @@ async function runCapture() {
         abandonIllumination(interruption.reason, nowMs);
       }
       $("gate-line").textContent = "Bring your face into the frame.";
+      underexposedSince = null;
+      $("capture-frame").dataset.previewLift = "false";
+      if (!screenLightRequested) $("screen-light").hidden = true;
       renderCaptureGuide();
       $("capture-help").hidden = nowMs - startedAt < 6000;
     }
@@ -981,6 +1048,9 @@ async function boot() {
     $("gate-line").textContent = describeCameraError(error);
     show("screen-capture");
   }));
+  $("screen-light").addEventListener("click", () => {
+    setScreenLight(!screenLightRequested);
+  });
   $("restart-capture").addEventListener("click", () => runCapture().catch((e) => {
     console.error(e);
     $("gate-line").textContent = describeCameraError(e);

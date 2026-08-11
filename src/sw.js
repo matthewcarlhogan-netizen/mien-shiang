@@ -5,7 +5,7 @@
  * second launch works with no connection at all. */
 // Bumped when the shell list changes: the activate handler deletes every cache
 // whose name is not CACHE, so a stale v1 holding an old SHELL cannot survive.
-const CACHE = "mienshiang-v20";
+const CACHE = "mienshiang-v21";
 const SHELL = [
   "./", "./index.html", "./ui.js", "./analysis.js", "./engine.js",
   // Measurement calibration. Owned by neither module; engine.js imports both,
@@ -74,6 +74,24 @@ self.addEventListener("fetch", (e) => {
   // here without adding it to the allowlist will fail the bundle lint.
   const cacheable = url.startsWith(self.location.origin);
   if (!cacheable) return;
+
+  // Product code is network-first. A paid user who is online must never run
+  // yesterday's capture logic just because an older worker owns the tab.
+  // The cached response remains the fallback when the device is offline.
+  if (e.request.mode === "navigate" || ["script", "style"].includes(e.request.destination)) {
+    e.respondWith(
+      fetch(e.request)
+        .then((res) => {
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put(e.request, copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match(e.request))
+    );
+    return;
+  }
 
   e.respondWith(
     caches.match(e.request).then((hit) => {

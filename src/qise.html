@@ -216,10 +216,13 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .reading-actions{margin-top:1rem}
 .capture-frame{position:relative;overflow:hidden;border:1px solid var(--qise-border);border-radius:18px;background:#0B0A09}
 .capture-frame video,.capture-frame canvas{display:block;width:100%;height:min(56svh,34rem);object-fit:cover}
+.capture-frame video{transition:filter .24s ease}
+.capture-frame[data-preview-lift="true"] video{filter:brightness(2.15) contrast(.88) saturate(.9)}
 .capture-frame [hidden]{display:none}
-.face-guide{position:absolute;left:50%;top:50%;width:min(66%,18rem);height:76%;transform:translate(-50%,-50%);border:2px solid rgba(255,255,255,.72);border-radius:48% 48% 44% 44%;box-shadow:0 0 0 999px rgba(0,0,0,.12),inset 0 0 30px rgba(255,255,255,.08);pointer-events:none}
-.capture-badge{position:absolute;left:.75rem;top:.75rem;display:flex;align-items:center;gap:.4rem;padding:.28rem .58rem;border-radius:999px;background:rgba(10,10,10,.58);color:#fff;font-size:.68rem;letter-spacing:.05em;text-transform:uppercase;backdrop-filter:blur(8px)}
+.face-guide{position:absolute;z-index:3;left:50%;top:50%;width:min(66%,18rem);height:76%;transform:translate(-50%,-50%);border:2px solid rgba(255,255,255,.9);border-radius:48% 48% 44% 44%;box-shadow:0 0 0 999px rgba(0,0,0,.12),0 0 18px rgba(0,0,0,.7),inset 0 0 30px rgba(255,255,255,.08);pointer-events:none}
+.capture-badge{position:absolute;z-index:4;left:.75rem;top:.75rem;display:flex;align-items:center;gap:.4rem;padding:.28rem .58rem;border-radius:999px;background:rgba(10,10,10,.58);color:#fff;font-size:.68rem;letter-spacing:.05em;text-transform:uppercase;backdrop-filter:blur(8px)}
 .capture-badge span{width:.46rem;height:.46rem;border-radius:50%;background:#8BB5AD;box-shadow:0 0 0 3px rgba(139,181,173,.2)}
+.exposure-fill{position:absolute;inset:0;z-index:1;pointer-events:none;background:radial-gradient(ellipse 46% 58% at 50% 48%,rgba(255,255,255,0) 0 58%,rgba(255,255,255,.88) 100%)}
 .capture-expectation{text-align:center;margin-top:.55rem}
 .illumination-wash{position:absolute;inset:0;z-index:2;pointer-events:none;opacity:0;transition:background-color .22s linear,opacity .22s linear}
 .illumination-choice{margin-top:1rem}
@@ -233,7 +236,7 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .capture-guide li[data-state="adjust"]{border-color:var(--huang)}
 .capture-guide li[data-state="adjust"]::before{border-color:var(--huang)}
 .capture-help{margin:.75rem 0 0;padding:.65rem .75rem;border-left:3px solid var(--huang);background:var(--qise-surface);font-size:.82rem}
-.capture-actions{display:flex;justify-content:flex-end;margin-top:.55rem}
+.capture-actions{display:flex;justify-content:flex-end;gap:.5rem;flex-wrap:wrap;margin-top:.55rem}
 .capture-actions button{font-size:.78rem;min-height:40px;padding:.35rem .7rem;border-color:var(--qise-border)}
 .upload-panel{margin-top:1rem}
 .upload-panel h2{font-size:1.05rem;margin-bottom:.35rem}
@@ -325,9 +328,10 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 <section class="screen" id="screen-capture" aria-labelledby="capture-h">
   <p class="eyebrow">Face scan</p>
   <h1 id="capture-h">Step into the frame</h1>
-  <div class="capture-frame"><video id="preview" playsinline muted autoplay aria-label="Camera preview"
+  <div class="capture-frame" id="capture-frame" data-preview-lift="false"><video id="preview" playsinline muted autoplay aria-label="Camera preview"
          style="width:100%;transform:scaleX(-1)"></video>
     <canvas id="selfie-preview" hidden aria-label="Selected selfie preview"></canvas>
+    <div class="exposure-fill" id="exposure-fill" hidden aria-hidden="true"></div>
     <div class="face-guide" aria-hidden="true"></div>
     <div class="capture-badge" aria-hidden="true"><span></span> Auto capture</div>
     <div class="illumination-wash" id="illumination-wash" hidden aria-hidden="true"></div>
@@ -349,7 +353,10 @@ button[disabled]{opacity:.45;cursor:not-allowed}
   </svg>
   <p class="muted capture-expectation">No shutter needed. Once the guide turns ready, capture takes about one second.</p>
   <p class="capture-help" id="capture-help" hidden>Still waiting? Face a window or plain white lamp. Do not use flash or a coloured lamp, and keep the whole face inside the frame.</p>
-  <div class="capture-actions"><button id="restart-capture" type="button">Restart camera</button></div>
+  <div class="capture-actions">
+    <button id="screen-light" type="button" aria-pressed="false" hidden>Use screen as light</button>
+    <button id="restart-capture" type="button">Restart camera</button>
+  </div>
   <section class="surface upload-panel" aria-labelledby="selfie-upload-h">
     <p class="eyebrow">Camera fallback</p>
     <h2 id="selfie-upload-h">Or choose a clear selfie</h2>

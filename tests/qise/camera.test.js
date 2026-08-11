@@ -15,7 +15,8 @@ import {
   openCamera, negotiateCaptureMode, createLandmarkerGuarded, PolygonSmoother,
   trimmedMedianLab, reduceBurst, iqr, releaseCapture, GreenLatch,
   attachCameraPreview, describeCameraError,
-  settleAndNegotiate, releaseCaptureMode, EXPOSURE_WARMUP_MS,
+  settleAndNegotiate, releaseCaptureMode, canNegotiateCaptureMode,
+  exposureAssistState, EXPOSURE_WARMUP_MS, DARK_ASSIST_DELAY_MS,
   BURST_FRAMES, GATES_GREEN_MS, SMOOTHING_FRAMES, CAPTURE_CONSTRAINTS,
 } from "../../src/qise/camera.js";
 import { createConsent, memoryStorage, ConsentRequiredError } from "../../src/qise/consent.js";
@@ -411,6 +412,42 @@ test("the default warm-up is long enough for AE to have moved at all", async () 
   assert.ok(EXPOSURE_WARMUP_MS >= 1000, "a warm-up shorter than AE convergence is not a warm-up");
 });
 
+test("elapsed time cannot lock a dark opening frame", () => {
+  assert.equal(canNegotiateCaptureMode({
+    gatesPass: false, elapsedMs: EXPOSURE_WARMUP_MS * 4, negotiationStarted: false,
+  }), false, "a timer froze a frame the quality gates had rejected");
+  assert.equal(canNegotiateCaptureMode({
+    gatesPass: true, elapsedMs: EXPOSURE_WARMUP_MS - 1, negotiationStarted: false,
+  }), false, "a good frame was locked before the minimum settling window");
+  assert.equal(canNegotiateCaptureMode({
+    gatesPass: true, elapsedMs: EXPOSURE_WARMUP_MS, negotiationStarted: false,
+  }), true);
+  assert.equal(canNegotiateCaptureMode({
+    gatesPass: true, elapsedMs: EXPOSURE_WARMUP_MS * 2, negotiationStarted: true,
+  }), false, "the same capture started a second lock negotiation");
+});
+
+test("dark-scene assistance lifts only the preview and offers neutral screen light", () => {
+  assert.deepEqual(exposureAssistState({ underexposed: false }), {
+    liftPreview: false, offerScreenLight: false, message: null,
+  });
+  const settling = exposureAssistState({ underexposed: true, underexposedForMs: 500 });
+  assert.equal(settling.liftPreview, true);
+  assert.equal(settling.offerScreenLight, false);
+  assert.match(settling.message, /brightening/i);
+
+  const dark = exposureAssistState({
+    underexposed: true, underexposedForMs: DARK_ASSIST_DELAY_MS,
+  });
+  assert.equal(dark.offerScreenLight, true);
+  assert.match(dark.message, /too dark to measure accurately/i);
+
+  const assisted = exposureAssistState({
+    underexposed: true, underexposedForMs: DARK_ASSIST_DELAY_MS, screenLightEnabled: true,
+  });
+  assert.match(assisted.message, /neutral screen light/i);
+});
+
 test("a zero warm-up still negotiates, so the window is tunable and not load-bearing", async () => {
   const md = lockable();
   let waited = false;
@@ -448,4 +485,19 @@ test("handing exposure back reports failure instead of pretending it worked", as
   const bare = await releaseCaptureMode({});
   assert.equal(bare.reverted, false);
   assert.equal(bare.error, null);
+});
+
+test("a silently stripped hand-back is not reported as continuous exposure", async () => {
+  const md = fakeMediaDevices({
+    capabilities: { whiteBalanceMode: ["continuous", "manual"], exposureMode: ["continuous", "manual"] },
+    actuallyApplies: ["whiteBalanceMode", "exposureMode"],
+  });
+  await negotiateCaptureMode(md.track);
+  md.track.applyConstraints = async (constraints) => { md.calls.push(constraints); };
+
+  const reverted = await releaseCaptureMode(md.track);
+
+  assert.equal(reverted.reverted, false);
+  assert.equal(reverted.captureMode, "locked");
+  assert.equal(md.track.getSettings().exposureMode, "manual");
 });

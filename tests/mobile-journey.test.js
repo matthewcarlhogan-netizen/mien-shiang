@@ -11,6 +11,10 @@ test("the shared project URL opens the scanner, with an explicit classic escape 
   const entryGeneration = html.match(/qise\.html\?v=(\d+)/)?.[1];
   const shellGeneration = worker.match(/mienshiang-v(\d+)/)?.[1];
   assert.equal(entryGeneration, shellGeneration, "the entry URL must bypass the previous shell once");
+  assert.match(worker, /e\.request\.mode === "navigate"/,
+    "online page navigations must not prefer a stale scanner");
+  assert.match(worker, /\["script", "style"\]\.includes\(e\.request\.destination\)/,
+    "online product code must not prefer a stale module graph");
 });
 
 test("the mobile journey leads with a promise before the consent detail", () => {

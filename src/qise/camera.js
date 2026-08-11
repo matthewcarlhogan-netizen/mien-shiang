@@ -138,6 +138,44 @@ const LOCKABLE = ["whiteBalanceMode", "exposureMode"];
  */
 export const EXPOSURE_WARMUP_MS = 1500;
 
+/** A dark frame gets an immediate preview lift and a neutral-light offer shortly after. */
+export const DARK_ASSIST_DELAY_MS = 1800;
+
+/**
+ * Lock only after the sensor has produced a frame that is actually usable.
+ * Elapsed time alone is not proof that Android auto-exposure has converged.
+ */
+export function canNegotiateCaptureMode({ gatesPass, elapsedMs, negotiationStarted }) {
+  return gatesPass === true
+    && Number.isFinite(elapsedMs)
+    && elapsedMs >= EXPOSURE_WARMUP_MS
+    && negotiationStarted !== true;
+}
+
+/** Pure UI decision for a dark scene; the raw measurement pixels are unchanged. */
+export function exposureAssistState({
+  underexposed, underexposedForMs = 0, screenLightEnabled = false,
+}) {
+  if (!underexposed) {
+    return { liftPreview: false, offerScreenLight: false, message: null };
+  }
+  if (screenLightEnabled) {
+    return {
+      liftPreview: true,
+      offerScreenLight: true,
+      message: "Using neutral screen light — keep your face inside the guide.",
+    };
+  }
+  const offerScreenLight = underexposedForMs >= DARK_ASSIST_DELAY_MS;
+  return {
+    liftPreview: true,
+    offerScreenLight,
+    message: offerScreenLight
+      ? "This scene is too dark to measure accurately. Face a light or use the screen light."
+      : "Camera is brightening the frame…",
+  };
+}
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
@@ -166,18 +204,33 @@ export async function releaseCaptureMode(track) {
   if (!track || typeof track.applyConstraints !== "function") {
     return { captureMode: "auto", reverted: false, error: null };
   }
+  const capabilities = (typeof track.getCapabilities === "function" ? track.getCapabilities() : null) || {};
+  const before = (typeof track.getSettings === "function" ? track.getSettings() : null) || {};
+  const detected = LOCKABLE.filter((key) =>
+    (Array.isArray(capabilities[key]) && capabilities[key].includes("continuous"))
+    || before[key] === "manual");
+  // A track can expose applyConstraints while hiding both capabilities and
+  // settings (notably older WebViews). Ask for both, but never call it
+  // reverted unless getSettings verifies the result below.
+  const requested = detected.length ? detected : LOCKABLE;
   try {
-    await track.applyConstraints({
-      advanced: [{ exposureMode: "continuous", whiteBalanceMode: "continuous" }],
-    });
-    return { captureMode: "auto", reverted: true, error: null };
+    await track.applyConstraints({ advanced: [
+      Object.fromEntries(requested.map((key) => [key, "continuous"])),
+    ] });
+    const after = (typeof track.getSettings === "function" ? track.getSettings() : null) || {};
+    const reverted = requested.every((key) => after[key] === "continuous");
+    const stillManual = LOCKABLE.filter((key) => after[key] === "manual");
+    const captureMode = reverted
+      ? "auto"
+      : (stillManual.length === LOCKABLE.length ? "locked" : (stillManual.length ? "partial" : "auto"));
+    return { captureMode, reverted, requested, error: null };
   } catch (e) {
     // Not swallowed. If the revert fails the capture is stuck at a bad
     // exposure, and that is worth seeing in a console rather than presenting
     // as a user who cannot find a well-lit room.
     const error = String(e && e.message ? e.message : e);
     console.warn("qise/camera: could not hand exposure back to the camera:", error);
-    return { captureMode: "auto", reverted: false, error };
+    return { captureMode: "auto", reverted: false, requested, error };
   }
 }
 
