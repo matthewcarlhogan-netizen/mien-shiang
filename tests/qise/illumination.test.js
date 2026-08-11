@@ -2,9 +2,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  PHASE_MS, illuminationSequence, createIlluminationSession, illuminationPhase,
+  PHASE_MS, ILLUMINATION_READY_MS, illuminationSequence, createIlluminationSession, illuminationPhase,
   meanFaceRgb, recordIlluminationSample, summarizeIllumination,
-  publicIlluminationSummary, illuminationInterruption, abandonedIlluminationSummary,
+  publicIlluminationSummary, illuminationFrameStable,
+  illuminationInterruption, abandonedIlluminationSummary,
 } from "../../src/qise/illumination.js";
 
 test("the screen-light sequence is slow, finite, and contains no saturated red", () => {
@@ -26,6 +27,23 @@ test("phase boundaries do not repeat or skip the final state", () => {
   assert.equal(illuminationPhase(session, 1000 + PHASE_MS).phase.key, "blue");
   assert.equal(illuminationPhase(session, 1000 + PHASE_MS * 5 - 1).phase.key, "neutral-end");
   assert.equal(illuminationPhase(session, 1000 + PHASE_MS * 5).done, true);
+});
+
+test("the colour check waits for stable geometry, not perfect lighting", () => {
+  assert.ok(ILLUMINATION_READY_MS >= 300);
+  const margins = {
+    pose: 1, distance: 1, motion: 1, filter: 1, roiValidity: 1,
+    underexposed: -1, illuminant: -1,
+  };
+  assert.equal(illuminationFrameStable({
+    margins,
+    failures: [{ id: "underexposed" }, { id: "illuminant" }],
+  }), true, "a deliberate light change blocked the light experiment");
+  assert.equal(illuminationFrameStable({
+    margins: { ...margins, motion: -1 }, failures: [{ id: "motion" }],
+  }), false, "a moving frame was allowed into the experiment");
+  assert.equal(illuminationFrameStable({ margins: {}, failures: [] }), false,
+    "missing stability measurements were treated as safe");
 });
 
 test("the frame sampler reads valid face regions only", () => {
@@ -72,15 +90,15 @@ test("a LOST FACE abandons the session, not only a failed gate", () => {
   // stayed painted at whatever colour the sequence had reached — blue or green
   // at 0.62 opacity — so the preview went dark and stayed dark while the copy
   // underneath asked for a face.
-  const lost = illuminationInterruption({ hasFace: false, gatesPass: true });
+  const lost = illuminationInterruption({ hasFace: false, frameStable: true });
   assert.equal(lost.abandon, true, "a session cannot continue without a face to sample");
   assert.equal(lost.reason, "face-lost");
 
-  const moved = illuminationInterruption({ hasFace: true, gatesPass: false });
+  const moved = illuminationInterruption({ hasFace: true, frameStable: false });
   assert.equal(moved.abandon, true);
   assert.equal(moved.reason, "frame-moved");
 
-  const fine = illuminationInterruption({ hasFace: true, gatesPass: true });
+  const fine = illuminationInterruption({ hasFace: true, frameStable: true });
   assert.equal(fine.abandon, false);
   assert.equal(fine.reason, null);
 });
@@ -89,7 +107,7 @@ test("no face beats a failed gate, because there is nothing left to sample", () 
   // Order is load-bearing: meanFaceRgb() reads the face regions, so with no
   // mesh the remaining phases record nothing whatever the gates say. Reporting
   // "frame-moved" here would name a cause that was never measured.
-  const both = illuminationInterruption({ hasFace: false, gatesPass: false });
+  const both = illuminationInterruption({ hasFace: false, frameStable: false });
   assert.equal(both.reason, "face-lost");
 });
 

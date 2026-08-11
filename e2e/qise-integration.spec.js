@@ -31,6 +31,19 @@ test("a stale grant and saved reading always return to consent renewal", async (
   await expect(page.getByRole("heading", { name: /quietly showing/i })).toBeVisible();
 });
 
+test("the optional colour check visibly confirms both states before camera access", async ({ page }) => {
+  await page.getByRole("button", { name: "Begin my reading" }).click();
+  const checkbox = page.getByLabel(/Optional screen-light experiment/);
+  const status = page.locator("#illumination-choice-status");
+
+  await expect(status).toHaveText(/Off — the reading will use the normal camera only/);
+  await checkbox.check();
+  await expect(page.locator("#illumination-choice")).toHaveAttribute("data-selected", "true");
+  await expect(status).toHaveText(/Selected — the colour response check will run before capture/);
+  await checkbox.uncheck();
+  await expect(status).toHaveText(/Off — the reading will use the normal camera only/);
+});
+
 test("the accepted-frame boundary runs in a real browser canvas", async ({ page }) => {
   const result = await page.evaluate(async (points) => {
     const { measureIntegratedReading } = await import("/qise/integrated.js");

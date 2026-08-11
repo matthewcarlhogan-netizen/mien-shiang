@@ -24,6 +24,7 @@ test("the mobile journey leads with a promise before the consent detail", () => 
   assert.match(html, /Agree &amp; open camera/);
   assert.match(html, /never uploaded, never stored/);
   assert.match(html, /Optional screen-light experiment/);
+  assert.match(html, /illumination-choice-status/);
   assert.match(html, /type="checkbox"/);
   assert.match(html, /Leave this off if changing light causes discomfort/);
   assert.match(html, /Or choose a clear selfie/);

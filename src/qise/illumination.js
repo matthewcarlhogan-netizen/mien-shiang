@@ -14,6 +14,18 @@
 export const ILLUMINATION_VERSION = "screen-light-v1";
 export const PHASE_MS = 700;
 export const SETTLE_MS = 900;
+export const ILLUMINATION_READY_MS = 450;
+
+// The experiment deliberately changes light and colour, so lighting gates
+// cannot decide whether it is allowed to continue. These are the properties
+// that must remain stable while face-colour response is sampled.
+const FRAME_STABILITY_GATES = Object.freeze(["pose", "distance", "motion", "filter", "roiValidity"]);
+
+export function illuminationFrameStable(gateReport) {
+  const margins = gateReport?.margins || {};
+  const failed = new Set((gateReport?.failures || []).map((failure) => failure.id));
+  return FRAME_STABILITY_GATES.every((id) => Number.isFinite(margins[id]) && !failed.has(id));
+}
 
 const NEUTRAL = Object.freeze({ id: "neutral", colour: "#EDE8DC", opacity: 0.58 });
 const BLUE = Object.freeze({ id: "blue", colour: "#426B7A", opacity: 0.62 });
@@ -152,9 +164,9 @@ export function publicIlluminationSummary(result, { requested = false, reason = 
  * remaining phases would record nothing whatever the gates said. Asking about
  * the gates first would answer a question that has already been settled.
  */
-export function illuminationInterruption({ hasFace, gatesPass }) {
+export function illuminationInterruption({ hasFace, frameStable }) {
   if (!hasFace) return { abandon: true, reason: "face-lost" };
-  if (!gatesPass) return { abandon: true, reason: "frame-moved" };
+  if (!frameStable) return { abandon: true, reason: "frame-moved" };
   return { abandon: false, reason: null };
 }
 

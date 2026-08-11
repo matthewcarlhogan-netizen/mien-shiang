@@ -226,8 +226,11 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .capture-expectation{text-align:center;margin-top:.55rem}
 .illumination-wash{position:absolute;inset:0;z-index:2;pointer-events:none;opacity:0;transition:background-color .22s linear,opacity .22s linear}
 .illumination-choice{margin-top:1rem}
+.illumination-choice[data-selected="true"]{border-color:var(--qing);box-shadow:inset 0 0 0 1px var(--qing)}
 .illumination-choice label{display:flex;align-items:flex-start;gap:.7rem;font-size:.88rem;line-height:1.5}
 .illumination-choice input{width:1.1rem;height:1.1rem;margin-top:.2rem;flex:none;accent-color:var(--qing)}
+.illumination-choice-status{margin:.65rem 0 0 1.8rem;font-size:.76rem;opacity:.76}
+.illumination-state{display:inline-flex;margin:0 0 .5rem;padding:.28rem .55rem;border:1px solid var(--qing);border-radius:999px;color:var(--qing);font-size:.7rem;letter-spacing:.04em}
 .capture-status{margin:.8rem 0 0}
 .capture-guide{list-style:none;margin:.75rem 0 0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:.45rem}
 .capture-guide li{display:flex;align-items:center;gap:.5rem;min-height:2.5rem;padding:.45rem .55rem;border:1px solid var(--qise-border);border-radius:10px;font-size:.78rem}
@@ -310,11 +313,12 @@ button[disabled]{opacity:.45;cursor:not-allowed}
         Delete everything at any time.</p></div>
       <p>For entertainment and self-reflection only — not a medical or identity check.</p>
       <details class="muted"><summary>Why explicit consent is required</summary><p>The app temporarily generates a face map, facial-proportion observations and new colour observations from your camera or chosen selfie. The map is discarded immediately; only the derived reading stays in this browser and nothing reaches us. You should understand and choose that processing before it begins. The optional screen-light experiment is a separate choice below.</p></details>
-      <div class="surface illumination-choice">
+      <div class="surface illumination-choice" id="illumination-choice" data-selected="false">
         <label for="illumination-opt-in">
           <input id="illumination-opt-in" type="checkbox">
           <span><strong>Optional screen-light experiment.</strong> The screen can slowly show neutral, blue and green while scanning. It checks only whether the camera sees an expected change; it never identifies you, never blocks the reading and stores no response data. Leave this off if changing light causes discomfort.</span>
         </label>
+        <p class="illumination-choice-status" id="illumination-choice-status" role="status" aria-live="polite">Off — the reading will use the normal camera only.</p>
       </div>
       <div class="consent-actions">
         <button id="consent-back" type="button">Back</button>
@@ -338,6 +342,7 @@ button[disabled]{opacity:.45;cursor:not-allowed}
   </div>
 
   <div class="capture-status">
+    <p class="illumination-state" id="illumination-state" hidden></p>
     <p id="gate-line" role="status" aria-live="polite">Starting the camera…</p>
     <ul class="capture-guide" id="capture-guide" aria-label="Scan readiness">
       <li data-guide="frame" data-state="waiting">Face in frame</li>

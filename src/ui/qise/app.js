@@ -33,9 +33,9 @@ import { readRois } from "../../qise/rois.js";
 import { headPose } from "../../qise/pose.js";
 import { sampleSclera } from "../../qise/sclera.js";
 import {
-  SETTLE_MS, createIlluminationSession, illuminationPhase, meanFaceRgb,
+  SETTLE_MS, ILLUMINATION_READY_MS, createIlluminationSession, illuminationPhase, meanFaceRgb,
   recordIlluminationSample, summarizeIllumination, publicIlluminationSummary,
-  illuminationInterruption, abandonedIlluminationSummary,
+  illuminationFrameStable, illuminationInterruption, abandonedIlluminationSummary,
 } from "../../qise/illumination.js";
 import { createScreenWakeLock } from "../../qise/wakelock.js";
 import { evaluateGates, captureGuide } from "../../qise/gates.js";
@@ -175,6 +175,10 @@ async function runCapture() {
   setScreenLight(false);
   $("screen-light").hidden = true;
   $("capture-frame").dataset.previewLift = "false";
+  $("illumination-state").hidden = !illuminationRequested;
+  $("illumination-state").textContent = illuminationRequested
+    ? "Colour response check selected"
+    : "";
 
   const video = $("preview");
   const selfiePreview = $("selfie-preview");
@@ -236,6 +240,7 @@ async function runCapture() {
   let underexposedSince = null;
 
   const latch = new GreenLatch();
+  const illuminationLatch = new GreenLatch(ILLUMINATION_READY_MS);
   let observedScreenLightRevision = screenLightRevision;
   const smoother = new PolygonSmoother();
   const drift = [];
@@ -275,6 +280,10 @@ async function runCapture() {
     illuminationDone = true;
     settleUntil = nowMs + SETTLE_MS;
     clearIlluminationPhase();
+    $("illumination-state").hidden = false;
+    $("illumination-state").textContent = reason === "face-lost"
+      ? "Colour response check skipped — face left the frame"
+      : "Colour response check skipped — frame moved";
     // The sequence changed the light on the face part-way through the hold, so
     // the seconds already banked are not seconds of the steady frame the latch
     // is meant to be measuring.
@@ -350,6 +359,7 @@ async function runCapture() {
 
       const stats = frameStats(image, lastRois, canvas.width, drift, headPose(pts));
       const gates = evaluateGates(stats, pts, lastSclera, { elapsedMs: nowMs - startedAt });
+      const illuminationStable = illuminationFrameStable(gates);
 
       const elapsedMs = nowMs - startedAt;
       const underexposed = gates.failures.some((failure) => failure.id === "underexposed");
@@ -398,7 +408,7 @@ async function runCapture() {
 
       if (illuminationSession) {
         const interruption = illuminationInterruption({
-          hasFace: true, gatesPass: gates.pass,
+          hasFace: true, frameStable: illuminationStable,
         });
         if (interruption.abandon) {
           abandonIllumination(interruption.reason, nowMs);
@@ -412,9 +422,13 @@ async function runCapture() {
             settleUntil = nowMs + SETTLE_MS;
             clearIlluminationPhase();
             latch.reset();
+            $("illumination-state").hidden = false;
+            $("illumination-state").textContent = "Colour response check complete";
             $("gate-line").textContent = "Screen-light check complete. Hold steady for the reading…";
           } else {
             showIlluminationPhase(active.phase);
+            $("illumination-state").hidden = false;
+            $("illumination-state").textContent = `Colour response check · ${active.phase.id}`;
             recordIlluminationSample(
               illuminationSession, active.phase.key, meanFaceRgb(lastRois));
             $("gate-line").textContent = "Optional screen-light check in progress…";
@@ -425,6 +439,32 @@ async function runCapture() {
             return;
           }
         }
+      }
+
+      // The opted-in colour sequence happens before capture and needs stable
+      // geometry, not already-perfect lighting. Requiring every light gate to
+      // pass made the control appear dead in exactly the dark-scene case where
+      // the user expected to see it, and the blue/green phases then failed the
+      // very gates whose input they intentionally change.
+      if (useIllumination && !illuminationDone && !illuminationSession) {
+        const ready = illuminationLatch.update(illuminationStable, nowMs);
+        if (illuminationStable) {
+          $("gate-line").textContent = "Colour response check ready — hold still…";
+          $("ring-fill").setAttribute("stroke-dashoffset",
+            String(100 - Math.round(ready.progress * 100)));
+        }
+        if (ready.ready) {
+          setScreenLight(false);
+          $("screen-light").hidden = true;
+          illuminationSession = createIlluminationSession(nowMs, illuminationOrderBit());
+          showIlluminationPhase(illuminationSession.sequence[0]);
+          $("illumination-state").hidden = false;
+          $("illumination-state").textContent = "Colour response check · neutral";
+          latch.reset();
+        }
+        clearFrame();
+        scheduleStep();
+        return;
       }
 
       // A lock taken at a good exposure can be wrong moments later — the
@@ -463,16 +503,6 @@ async function runCapture() {
       $("ring-fill").setAttribute("stroke-dashoffset", String(100 - Math.round(held.progress * 100)));
 
       if (held.ready) {
-        if (useIllumination && !illuminationDone) {
-          setScreenLight(false);
-          $("screen-light").hidden = true;
-          illuminationSession = createIlluminationSession(nowMs, illuminationOrderBit());
-          showIlluminationPhase(illuminationSession.sequence[0]);
-          latch.reset();
-          clearFrame();
-          scheduleStep();
-          return;
-        }
         if (nowMs < settleUntil) {
           latch.reset();
         } else {
@@ -506,7 +536,7 @@ async function runCapture() {
       // darkened preview makes hardest to follow.
       if (illuminationSession) {
         const interruption = illuminationInterruption({
-          hasFace: false, gatesPass: false,
+          hasFace: false, frameStable: false,
         });
         abandonIllumination(interruption.reason, nowMs);
       }
@@ -1010,6 +1040,22 @@ async function boot() {
   };
   $("consent-next").addEventListener("click", () => showConsentStep("privacy"));
   $("consent-back").addEventListener("click", () => showConsentStep("purpose"));
+  const illuminationMotionBlocked = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (illuminationMotionBlocked) {
+    $("illumination-opt-in").checked = false;
+    $("illumination-opt-in").disabled = true;
+  }
+  const renderIlluminationChoice = () => {
+    const selected = Boolean($("illumination-opt-in")?.checked);
+    $("illumination-choice").dataset.selected = String(selected);
+    $("illumination-choice-status").textContent = illuminationMotionBlocked
+      ? "Unavailable while reduced-motion mode is enabled on this device."
+      : selected
+        ? "Selected — the colour response check will run before capture."
+        : "Off — the reading will use the normal camera only.";
+  };
+  $("illumination-opt-in").addEventListener("change", renderIlluminationChoice);
+  renderIlluminationChoice();
   for (const button of document.querySelectorAll("[data-reading-tab]")) {
     button.addEventListener("click", () => selectReadingTab(button.dataset.readingTab));
   }
