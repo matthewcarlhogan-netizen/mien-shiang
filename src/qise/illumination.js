@@ -131,3 +131,43 @@ export function publicIlluminationSummary(result, { requested = false, reason = 
     reason: reason || null,
   };
 }
+
+/* ── abandoning a session part-way ───────────────────────────────────────── */
+
+/**
+ * Should a running session be abandoned on this frame, and why?
+ *
+ * ── WHY THIS IS A FUNCTION AND NOT TWO `if`s AT THE CALL SITE ──────────────
+ * It was two `if`s at the call site, and only one of them existed. The capture
+ * loop cleared the wash when the gates failed and did NOT clear it when the
+ * face was lost, because the face-lost branch is the `else` of `if (mesh)` and
+ * sits outside the block that owns the session. So a lost face left
+ * `illuminationSession` non-null with the overlay still painted, and the
+ * overlay can be mid-sequence: blue or green at 0.62 opacity over the preview.
+ * The camera stayed open behind a preview that had gone dark, with the only
+ * copy on screen reading "Bring your face into the frame."
+ *
+ * NO FACE IS CHECKED FIRST, and the order is load-bearing. `meanFaceRgb()`
+ * reads the face regions, so without a mesh there is nothing to sample and the
+ * remaining phases would record nothing whatever the gates said. Asking about
+ * the gates first would answer a question that has already been settled.
+ */
+export function illuminationInterruption({ hasFace, gatesPass }) {
+  if (!hasFace) return { abandon: true, reason: "face-lost" };
+  if (!gatesPass) return { abandon: true, reason: "frame-moved" };
+  return { abandon: false, reason: null };
+}
+
+/**
+ * The public summary for a session cut short.
+ *
+ * `phasesRead: 0` rather than the count reached so far: a partial sequence has
+ * no neutral to compare against, so the phases that WERE read cannot support a
+ * response either way. Reporting them would imply a measurement that no
+ * arithmetic here produced.
+ */
+export function abandonedIlluminationSummary(reason) {
+  return publicIlluminationSummary(
+    { outcome: "inconclusive", phasesRead: 0 },
+    { requested: true, reason });
+}

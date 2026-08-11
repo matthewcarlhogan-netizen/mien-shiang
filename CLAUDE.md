@@ -467,8 +467,17 @@ cache, which does not contain the new module.
 release that works perfectly on a fresh install.
 **Cause:** new entry in `SHELL`, unchanged `CACHE` name.
 
-Currently `mienshiang-v6` (bumped when `reading/summary.js` and
-`sharecard.js` were added).
+Currently `mienshiang-v19` (bumped when `qise/wakelock.js` was added).
+
+**The version is coupled to `index.html`, which is easy to miss.** The entry
+redirect is `location.replace("./qise.html?v=<n>")`, and `<n>` must equal the
+`CACHE` generation: the query is what makes a returning user bypass the stale
+shell exactly once. Bumping `CACHE` alone leaves the old page being served from
+the old cache, which is the same white-screen symptom the bump was meant to
+prevent. Pinned by `the shared project URL opens the scanner, with an explicit
+classic escape hatch` in `tests/mobile-journey.test.js`, which compares the two
+numbers and fails on a mismatch — it caught exactly this while `wakelock.js`
+was being added.
 
 ### 16. The module boundary sits BELOW labelling, not at it
 
@@ -1259,6 +1268,192 @@ explicitly.
 same number, since otherwise the equality would hold for a field that had simply
 stopped discriminating — and `ridgeMean defaults to the axis its field was built
 for`.
+
+### 50. `video.play()` resolving is not a frame, and a dead rAF loop looks like a dim camera
+
+`attachCameraPreview()` attaches the stream and then WAITS for
+`videoWidth > 0 && videoHeight > 0`, via `loadedmetadata`/`canplay` with an
+8 s timeout, before the capture loop is allowed to draw. The obvious
+`video.srcObject = stream; await video.play();` is not sufficient: `play()`
+resolves when playback begins, which on some hosts is before the first decoded
+frame exists, so the element still reports 0x0.
+
+Drawing that frame throws inside `requestAnimationFrame`. Two properties turn
+one exception into a permanently broken screen:
+
+- **`step` is `async`, so a throw becomes a rejected promise, and rAF ignores
+  return values.** There is no error to see unless somebody attached a handler.
+- **The re-schedule is the LAST statement in the body.** Throwing anywhere above
+  it means `requestAnimationFrame(step)` never runs, so the loop stops for good
+  after a single bad frame.
+
+**Symptom:** the camera light comes on, the preview shows briefly and then sits
+frozen on a dark frame while the gate line never updates and the ring never
+fills. It reads as "the camera went dim", which points the investigation at
+exposure, white balance or screen brightness — none of which are involved.
+**Cause:** treating a resolved `play()` as evidence of a decodable frame, and a
+rAF body whose only re-schedule sits below code that can throw.
+**Pinned by:** `the preview waits for real dimensions instead of drawing a 0x0
+Safari frame` in `tests/qise/camera.test.js`, which is reachable only because
+`attachCameraPreview` takes the video, the stream and its timer functions as
+ARGUMENTS — the same reason `createLandmarkerWithFallback()` takes its factory
+(item 14). The loop that consumes it lives in `ui/qise/app.js`, which nothing
+can import, so the guard has to live down here where a test can reach it.
+
+Two companions, both load-bearing, neither sufficient alone:
+
+- `scheduleStep()` wraps the body as `step(time).catch(stopAfterLoopError)`, so
+  a throw reports itself and tears the capture down deliberately instead of
+  leaving a live camera behind a dead loop. **Do not "simplify" this back to a
+  bare `requestAnimationFrame(step)`** — that is the defect verbatim.
+- A `runId`/`captureRun` token guards re-entry, so a second `runCapture()` cannot
+  leave two loops driving one landmarker. `detectForVideo` requires strictly
+  increasing timestamps, and two loops interleaving rAF timestamps is how you get
+  a regression it will throw on.
+
+**This is not an exposure bug and must not be "fixed" by brightening the frame.**
+Every downstream value is a CIELAB delta against the subject's own baseline, so a
+brightness multiplier on the captured pixels silently corrupts every reading ever
+compared with it.
+
+### 51. A teardown written inside one branch is missing from the other
+
+`ui/qise/app.js` runs the screen-light sequence inside `if (mesh)`. The
+abandon-and-clear teardown was written inline in that block, so it covered the
+gate-failure path and simply did not exist on the face-lost path — which is the
+`else` of the very same `if`, a few lines below.
+
+The consequence is not a stalled state machine, it is a dark screen. The wash
+is `position:absolute; inset:0` over the preview, and mid-sequence it is blue
+`#426B7A` or green `#4A7267` at 0.62 opacity. A lost face left it painted, with
+`illuminationSession` still non-null, so the preview went dark and stayed dark
+while the copy underneath read *"Bring your face into the frame."* — the one
+instruction a darkened preview makes hardest to follow.
+
+**Symptom:** the camera opens, the preview flashes bright and then goes dim and
+stays dim. It reads as an exposure or a brightness fault and is neither; the
+video element is fine and the pixels underneath are fine.
+**Cause:** teardown written at a call site inside one branch of a conditional,
+when the condition has two branches that both need it.
+**Pinned by:** `a LOST FACE abandons the session, not only a failed gate` and
+`no face beats a failed gate, because there is nothing left to sample`.
+
+The decision now lives in `illuminationInterruption()` in `qise/illumination.js`
+rather than as two `if`s in the loop, for the reason everything else in that
+tree is a pure function elsewhere: `app.js` is the file no test can import
+(item 44), so a rule kept there is a rule nothing checks.
+
+**Order inside it is load-bearing.** No-face is tested BEFORE gates, because
+`meanFaceRgb()` samples the face regions — without a mesh the remaining phases
+record nothing whatever the gates say, so reporting `frame-moved` would name a
+cause that was never measured. And an abandoned session reports
+`phasesRead: 0`, not the count it had reached: a partial sequence has no
+neutral to compare against, so the phases that *were* read cannot support a
+response in either direction.
+
+### 52. The screen is a light source, so the wake lock is a measurement control
+
+There is no shutter. The reading is taken when the frame is good, so the user
+holds a pose through `GATES_GREEN_MS` and then a fifteen-frame burst, touching
+nothing — which is precisely what the OS idle timer waits for. The screen dims,
+and on most phones dims to black, in the middle of the only interaction the app
+has.
+
+**This is not a comfort fix.** The screen is a light source pointed at the face
+— that is the entire premise of the optional check in `illumination.js` — so a
+screen that dims part-way through a burst moves the illuminant between frames of
+a single reading, and every value downstream is a CIELAB difference against the
+subject's own baseline. `reduceBurst()` would see it as frame jitter and degrade
+confidence, which is the honest response to a corrupted burst, but the better
+answer is for the illuminant not to move.
+
+`qise/wakelock.js` takes `navigator.wakeLock` and the document as ARGUMENTS,
+for the same reason `createLandmarkerWithFallback()` takes its factory (item
+14): the paths that matter are the ones a developer machine never takes — the
+host with no wake lock API, and the host that REFUSES the request.
+
+Four things that look like detail and are not:
+
+- **`unsupported` and `failed` are different states.** One is a platform fact,
+  the other is a policy or battery condition on this device. Collapsing them is
+  item 23's `zoneNotExtracted`/`colourNotMeasurable` mistake in another costume.
+- **`visibilitychange` is mandatory, not a refinement.** The platform drops a
+  screen lock whenever the document stops being visible and does NOT restore it.
+  Requesting once at the start of capture holds nothing after the first glance
+  at a notification, and that is the path nobody exercises while checking that
+  the feature works.
+- **Release is idempotent, and lives in `releaseCapture()`.** There are four
+  ways out of a capture — the burst completing, the loop error handler, a
+  re-entrant `runCapture()`, and withdrawal. A lock released on only some of
+  them leaves the phone awake indefinitely; a throw from a second release
+  strands the camera it was called to shut down.
+- **It is never a precondition.** A capture must run identically where the API
+  is absent. The lock is an improvement, and `acquire()` is deliberately not
+  awaited.
+
+**Pinned by:** `tests/qise/wakelock.test.js`, including
+`a REFUSED lock is reported as failed, not as unsupported` and `the lock is
+re-acquired when the tab becomes visible again`, plus `releaseCapture hands the
+screen back to the OS idle timer` in the camera suite.
+
+
+### 53. `exposureMode: "manual"` freezes; it does not choose
+
+This is the one that actually produced the reported "camera flashes on, then
+goes dim", and it is not any of items 50 or 51.
+
+`openCamera()` called `negotiateCaptureMode()` on the line *after*
+`getUserMedia` resolved, and the preview was not attached until afterwards. So
+the lock was applied before a single frame had been shown and before
+auto-exposure had run at all.
+
+**`exposureMode: "manual"` with no `exposureTime` beside it does not select an
+exposure. It pins whatever the sensor currently has.** On Android the sensor
+opens near its default and AE ramps up over roughly half a second to two
+seconds, so locking at t=0 pins the capture to the dark opening value — for the
+whole session.
+
+**Symptom:** the preview is live and correctly showing a face, and the frame is
+genuinely, measurably dark. The `underexposed` gate fires every frame
+(`skinPixelsAtOrBelow12 / skinPixelCount` over `EXPOSURE_MAX_FRACTION`), so the
+UI reads *"Too dark — find more light."* — and adding light changes nothing,
+because the sensor is no longer listening.
+**Distinguishing it from items 50 and 51:** those two darken the *preview* —
+one by killing the render loop, one by leaving a CSS wash painted. Neither
+touches the pixel buffer, so in both of those the darkness gate does NOT fire.
+**If the gate is complaining, the pixels really are dark and the cause is the
+sensor, not the view.** That single observation separates all three.
+**Pinned by:** `openCamera does NOT lock exposure before the first frame
+exists` and `settleAndNegotiate waits BEFORE reading what the camera settled
+on`.
+
+Three parts to the fix, and the third is the one most likely to be dropped as
+redundant:
+
+- **`negotiate: false` on the live path.** `openCamera()` returns
+  `captureMode: "pending"` and locks nothing. The default stays `true` so the
+  one-shot negotiation keeps a direct test.
+- **`settleAndNegotiate()` waits `EXPOSURE_WARMUP_MS` first**, with `wait`
+  injected so a test exercises the ordering rather than spending the time. The
+  warm-up runs while the preview is already on screen, and `captureSettled`
+  gates the LATCH rather than the gates, so the user still gets live feedback
+  but cannot complete a hold that ends in a burst lit differently frame to
+  frame.
+- **`releaseCaptureMode()` hands exposure back.** A lock correct when taken is
+  wrong the moment the subject turns towards a window. Without a way back, the
+  gate instructs the user to add light while the app has disabled the only
+  thing that could act on it. It fires once, on a persistent under- or
+  over-exposure failure — flipping repeatedly would itself be a moving
+  illuminant.
+
+**The reading records the NEGOTIATED mode, not the requested one.** `finish()`
+is handed `{ ...opened, captureMode }`, so a capture that ended up back on
+`auto` says `auto`. That is what tells a later baseline the class of capture
+changed, and item 18's rule applies: do not compare across it.
+
+**Locking is still right.** A burst measured under a moving AE is a burst
+measured under two illuminants. The defect was never that the lock existed, it
+was when it was taken.
 
 
 ### 24. The summary may only repeat what was measured

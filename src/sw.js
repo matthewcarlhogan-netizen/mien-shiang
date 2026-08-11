@@ -36,6 +36,7 @@ const SHELL = [
   "./qise.html",
   "./qise/consent.js", "./qise/color.js", "./qise/rois.js", "./qise/sclera.js",
   "./qise/illumination.js", "./qise/upload.js", "./qise/framestats.js",
+  "./qise/wakelock.js",
   "./qise/gates.js", "./qise/camera.js", "./qise/metrics.js", "./qise/pose.js",
   "./qise/baseline.js", "./qise/store.js", "./qise/passages.js",
   "./qise/patterns.js", "./qise/composition.js",

@@ -23,6 +23,7 @@ import { paletteCss } from "./palette.js";
 import {
   openCamera, attachCameraPreview, describeCameraError, createLandmarkerGuarded,
   releaseCapture, GreenLatch, PolygonSmoother, BURST_FRAMES, trimmedMedianLab, reduceBurst,
+  settleAndNegotiate, releaseCaptureMode,
 } from "../../qise/camera.js";
 import { createLandmarkerWithFallback } from "../../landmarker.js";
 import {
@@ -34,7 +35,9 @@ import { sampleSclera } from "../../qise/sclera.js";
 import {
   SETTLE_MS, createIlluminationSession, illuminationPhase, meanFaceRgb,
   recordIlluminationSample, summarizeIllumination, publicIlluminationSummary,
+  illuminationInterruption, abandonedIlluminationSummary,
 } from "../../qise/illumination.js";
+import { createScreenWakeLock } from "../../qise/wakelock.js";
 import { evaluateGates, captureGuide } from "../../qise/gates.js";
 import { frameStats } from "../../qise/framestats.js";
 import { computeReadingMetrics, lumRatioP90P50 } from "../../qise/metrics.js";
@@ -157,7 +160,12 @@ async function runCapture() {
   video.hidden = false;
   selfiePreview.hidden = true;
   $("selfie-status").textContent = "";
-  const opened = await openCamera({ consent, mediaDevices: navigator.mediaDevices });
+  // negotiate:false — the exposure lock happens after the preview is live and
+  // AE has converged, not on the line after getUserMedia. See
+  // EXPOSURE_WARMUP_MS in qise/camera.js.
+  const opened = await openCamera({
+    consent, mediaDevices: navigator.mediaDevices, negotiate: false,
+  });
   if (runId !== captureRun) {
     releaseCapture({ stream: opened.stream, images: [], landmarks: [], canvas: null });
     return;
@@ -181,9 +189,38 @@ async function runCapture() {
   }
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  // Held for the whole capture, and released by releaseCapture() on every way
+  // out. Acquired AFTER the camera opened so a refused camera never leaves the
+  // phone awake for a capture that is not happening. Not awaited and never
+  // gated on: the lock is an improvement, and a capture must run identically
+  // on a host that has no wake lock API at all.
+  const wakeLock = createScreenWakeLock({
+    wakeLock: navigator.wakeLock,
+    documentRef: document,
+  });
+  wakeLock.acquire();
   scratch = {
     canvas, images: [], landmarks: [], stream: opened.stream, landmarker, video,
+    wakeLock,
   };
+
+  // ── EXPOSURE SETTLES BEFORE THE BURST CAN ARM ─────────────────────────────
+  // Kicked off without blocking, so the preview is on screen immediately, but
+  // the latch below refuses to arm until it resolves. A burst taken during AE
+  // convergence is a burst whose frames were lit differently from each other,
+  // which is exactly the drift `frameJitter` would otherwise have to absorb.
+  let captureMode = "pending";
+  let captureSettled = false;
+  let exposureHandedBack = false;
+  settleAndNegotiate(opened.track)
+    .then((negotiated) => { captureMode = negotiated.captureMode; })
+    .catch((error) => {
+      // Not swallowed, and not fatal: an un-negotiated capture is the ordinary
+      // case on most hosts, and every metric downstream is valid without it.
+      console.warn("qise: capture mode negotiation failed", error);
+      captureMode = "auto";
+    })
+    .finally(() => { captureSettled = true; });
 
   const latch = new GreenLatch();
   const smoother = new PolygonSmoother();
@@ -207,6 +244,28 @@ async function runCapture() {
   const burst = {};
   let collecting = 0;
   let lastSclera = null, lastRois = null, lastMargins = null, lastCaptureTier = "clean";
+
+  /**
+   * Abandon a running screen-light session, wherever the loop noticed.
+   *
+   * ONE function called from BOTH branches, on purpose. This teardown used to
+   * be written inline inside `if (mesh)`, so the gate-failure path cleared the
+   * wash and the face-lost path — which is the `else` of that same `if` — did
+   * not. A lost face therefore left the overlay painted at whatever colour the
+   * sequence had reached, which can be blue or green at 0.62 opacity, and the
+   * preview simply went dark and stayed dark.
+   */
+  const abandonIllumination = (reason, nowMs) => {
+    illuminationSummary = abandonedIlluminationSummary(reason);
+    illuminationSession = null;
+    illuminationDone = true;
+    settleUntil = nowMs + SETTLE_MS;
+    clearIlluminationPhase();
+    // The sequence changed the light on the face part-way through the hold, so
+    // the seconds already banked are not seconds of the steady frame the latch
+    // is meant to be measuring.
+    latch.reset();
+  };
 
   const stopAfterLoopError = (error) => {
     if (runId !== captureRun) return;
@@ -287,15 +346,11 @@ async function runCapture() {
       $("capture-help").hidden = nowMs - startedAt < 6000;
 
       if (illuminationSession) {
-        if (!gates.pass) {
-          illuminationSummary = publicIlluminationSummary(
-            { outcome: "inconclusive", phasesRead: 0 },
-            { requested: true, reason: "frame-moved" });
-          illuminationSession = null;
-          illuminationDone = true;
-          settleUntil = nowMs + SETTLE_MS;
-          clearIlluminationPhase();
-          latch.reset();
+        const interruption = illuminationInterruption({
+          hasFace: true, gatesPass: gates.pass,
+        });
+        if (interruption.abandon) {
+          abandonIllumination(interruption.reason, nowMs);
         } else {
           const active = illuminationPhase(illuminationSession, nowMs);
           if (active.done) {
@@ -321,7 +376,25 @@ async function runCapture() {
         }
       }
 
-      const held = latch.update(gates.pass, nowMs);
+      // A lock taken at a good exposure can be wrong moments later — the
+      // subject turns towards a window, or a lamp goes off. Handing exposure
+      // back is what keeps "find more light" actionable, because a locked
+      // sensor cannot respond to more light. Once only: flipping back and
+      // forth would itself be a moving illuminant.
+      if (!exposureHandedBack
+          && (captureMode === "locked" || captureMode === "partial")
+          && gates.failures.some((f) => f.id === "underexposed" || f.id === "overexposed")) {
+        exposureHandedBack = true;
+        releaseCaptureMode(opened.track)
+          .then((reverted) => { captureMode = reverted.captureMode; })
+          .catch((error) => console.warn("qise: exposure hand-back failed", error));
+      }
+
+      // `captureSettled` gates the LATCH rather than the gates themselves, so
+      // the user still sees live feedback during the warm-up; what they cannot
+      // do is complete a hold that ends in a burst lit differently frame to
+      // frame.
+      const held = latch.update(gates.pass && captureSettled, nowMs);
       $("ring-fill").setAttribute("stroke-dashoffset", String(100 - Math.round(held.progress * 100)));
 
       if (held.ready) {
@@ -350,12 +423,27 @@ async function runCapture() {
         collecting--;
         if (collecting === 0) {
           clearFrame();
-          await finish(burst, lastRois, lastSclera, opened, history, lastMargins,
-            illuminationSummary, lastCaptureTier);
+          // The NEGOTIATED mode, not the one openCamera returned — that is
+          // "pending" now, and if exposure was handed back part-way through
+          // the hold this reading was taken under "auto". The record has to
+          // say which, because captureMode is what tells a later baseline that
+          // the class of capture changed.
+          await finish(burst, lastRois, lastSclera, { ...opened, captureMode },
+            history, lastMargins, illuminationSummary, lastCaptureTier);
           return;
         }
       }
     } else {
+      // The face is gone, so there is nothing left to sample and the wash must
+      // come off the preview NOW. Without this the overlay stays painted while
+      // the copy below it asks for a face, which is the one instruction the
+      // darkened preview makes hardest to follow.
+      if (illuminationSession) {
+        const interruption = illuminationInterruption({
+          hasFace: false, gatesPass: false,
+        });
+        abandonIllumination(interruption.reason, nowMs);
+      }
       $("gate-line").textContent = "Bring your face into the frame.";
       renderCaptureGuide();
       $("capture-help").hidden = nowMs - startedAt < 6000;
