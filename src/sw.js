@@ -5,7 +5,7 @@
  * second launch works with no connection at all. */
 // Bumped when the shell list changes: the activate handler deletes every cache
 // whose name is not CACHE, so a stale v1 holding an old SHELL cannot survive.
-const CACHE = "mienshiang-v22";
+const CACHE = "mienshiang-v23";
 const SHELL = [
   "./", "./index.html", "./ui.js", "./analysis.js", "./engine.js",
   // Measurement calibration. Owned by neither module; engine.js imports both,
@@ -41,7 +41,7 @@ const SHELL = [
   "./qise/baseline.js", "./qise/store.js", "./qise/passages.js",
   "./qise/patterns.js", "./qise/composition.js", "./qise/integrated.js",
   "./ui/qise/palette.js", "./ui/qise/seal.js", "./ui/qise/screens.js",
-  "./ui/qise/share.js", "./ui/qise/theme.js", "./ui/qise/app.js",
+  "./ui/qise/share.js", "./ui/qise/theme.js", "./ui/qise/exposure-halo.js", "./ui/qise/app.js",
   "./manifest.webmanifest", "./icon-192.png", "./icon-512.png",
   "./icon-512-maskable.png",
 ];

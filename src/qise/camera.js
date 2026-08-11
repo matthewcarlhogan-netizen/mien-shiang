@@ -39,6 +39,63 @@ export const CAPTURE_CONSTRAINTS = Object.freeze({
 
 export const CAMERA_READY_TIMEOUT_MS = 8000;
 
+/** Ask supported mobile cameras to keep autofocus alive. */
+export async function ensureContinuousFocus(track) {
+  if (!track || typeof track.applyConstraints !== "function") {
+    return { supported: false, requested: null, applied: false, error: null };
+  }
+  const capabilities = (typeof track.getCapabilities === "function"
+    ? track.getCapabilities() : null) || {};
+  const modes = Array.isArray(capabilities.focusMode) ? capabilities.focusMode : [];
+  if (!modes.includes("continuous")) {
+    return { supported: false, requested: null, applied: false, error: null };
+  }
+  try {
+    await track.applyConstraints({ advanced: [{ focusMode: "continuous" }] });
+    const settings = (typeof track.getSettings === "function" ? track.getSettings() : null) || {};
+    return {
+      supported: true,
+      requested: "continuous",
+      applied: settings.focusMode === "continuous",
+      error: null,
+    };
+  } catch (error) {
+    const message = String(error?.message || error);
+    console.warn("qise/camera: continuous autofocus request failed:", message);
+    return { supported: true, requested: "continuous", applied: false, error: message };
+  }
+}
+
+/** Trigger a fresh focus scan without touching exposure or white balance. */
+export async function requestCameraRefocus(track, { settleMs = 450, wait = sleep } = {}) {
+  if (!track || typeof track.applyConstraints !== "function") {
+    return { supported: false, requested: null, restoredContinuous: false, error: null };
+  }
+  const capabilities = (typeof track.getCapabilities === "function"
+    ? track.getCapabilities() : null) || {};
+  const modes = Array.isArray(capabilities.focusMode) ? capabilities.focusMode : [];
+  const requested = modes.includes("single-shot")
+    ? "single-shot"
+    : (modes.includes("continuous") ? "continuous" : null);
+  if (!requested) {
+    return { supported: false, requested: null, restoredContinuous: false, error: null };
+  }
+  try {
+    await track.applyConstraints({ advanced: [{ focusMode: requested }] });
+    let restoredContinuous = requested === "continuous";
+    if (requested === "single-shot" && modes.includes("continuous")) {
+      if (settleMs > 0) await wait(settleMs);
+      await track.applyConstraints({ advanced: [{ focusMode: "continuous" }] });
+      restoredContinuous = true;
+    }
+    return { supported: true, requested, restoredContinuous, error: null };
+  } catch (error) {
+    const message = String(error?.message || error);
+    console.warn("qise/camera: refocus request failed:", message);
+    return { supported: true, requested, restoredContinuous: false, error: message };
+  }
+}
+
 /** Turn browser camera errors into a useful next action rather than a dead preview. */
 export function describeCameraError(error) {
   const name = error?.name || "";
