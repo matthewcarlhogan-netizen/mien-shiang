@@ -30,6 +30,8 @@ export const PALACES = [
     reading:
       "In Mian Xiang the Life Palace is the gate the whole reading passes through — the classical texts " +
       "regard it as the register of a person's general fortune and of how freely things move for them.",
+    keynote:
+      "Mian Xiang reads this gate as how freely things move.",
   },
   {
     key: "wealth", hanzi: "財帛宮", name: "Wealth Palace",
@@ -37,6 +39,8 @@ export const PALACES = [
     reading:
       "Classical Chinese face reading places the Wealth Palace at the tip of the nose, and reads it as what " +
       "a person gathers and keeps — the texts are as interested in holding as in getting.",
+    keynote:
+      "Mian Xiang reads this dome as what gathers and holds.",
   },
   {
     key: "siblings", hanzi: "兄弟宮", name: "Siblings Palace",
@@ -44,6 +48,8 @@ export const PALACES = [
     reading:
       "In Mian Xiang the brows are the Siblings Palace, read as the company a person keeps and the people " +
       "they count as their own, whether or not they were born to them.",
+    keynote:
+      "Mian Xiang reads the brows as the company kept.",
   },
   {
     key: "property", hanzi: "田宅宮", name: "Property Palace",
@@ -51,6 +57,8 @@ export const PALACES = [
     reading:
       "Classical Chinese face reading gives the upper eyelids the Property Palace, read as home and what a " +
       "person builds to stay in rather than to pass through.",
+    keynote:
+      "Mian Xiang reads the lids as what is built to stay in.",
   },
   {
     key: "children", hanzi: "男女宮", name: "Children Palace",
@@ -58,6 +66,8 @@ export const PALACES = [
     reading:
       "In Mian Xiang the area beneath the eyes is the Children Palace, read as what a person tends and " +
       "brings on — the texts extend it to work and ideas raised as carefully as offspring.",
+    keynote:
+      "Mian Xiang reads this ground as what is tended and brought on.",
   },
   {
     key: "support", hanzi: "奴僕宮", name: "Support Palace",
@@ -65,6 +75,8 @@ export const PALACES = [
     reading:
       "In Mian Xiang the lower jaw is the Support Palace, read as the help a person can call on and the " +
       "loyalty they attract from those around them.",
+    keynote:
+      "Mian Xiang reads the jaw as the help that can be called on.",
   },
   {
     key: "partner", hanzi: "妻妾宮", name: "Partner Palace",
@@ -72,6 +84,8 @@ export const PALACES = [
     reading:
       "Classical Chinese face reading places the Partner Palace at the outer eye corners, and reads it as " +
       "closeness and the weather of a person's nearest relationships.",
+    keynote:
+      "Mian Xiang reads these corners as the weather of closeness.",
   },
   {
     key: "trials", hanzi: "疾厄宮", name: "Palace of Trials",
@@ -82,6 +96,8 @@ export const PALACES = [
     translationNote:
       "The classical name 疾厄宮 is usually given as the Health Palace. This reading takes only its " +
       "adversity sense — what is weathered, and how — because this is a face reading and not anything else.",
+    keynote:
+      "Mian Xiang reads the bridge as what is weathered, and the coming back.",
   },
   {
     key: "travel", hanzi: "遷移宮", name: "Travel Palace",
@@ -89,6 +105,8 @@ export const PALACES = [
     reading:
       "In Mian Xiang the temples are the Travel Palace, read as movement and change of place, and as how " +
       "well a person does away from what they know.",
+    keynote:
+      "Mian Xiang reads the temples as movement and change of place.",
   },
   {
     key: "career", hanzi: "官祿宮", name: "Career Palace",
@@ -96,6 +114,8 @@ export const PALACES = [
     reading:
       "Classical Chinese face reading gives the centre forehead the Career Palace, read as standing and " +
       "recognition — the texts are more interested in reputation than in position.",
+    keynote:
+      "Mian Xiang reads the crown as standing, and as the solitary road.",
   },
   {
     key: "fortune", hanzi: "福德宮", name: "Fortune Palace",
@@ -104,6 +124,8 @@ export const PALACES = [
     reading:
       "In Mian Xiang the upper forehead is the Fortune Palace, read as ease of mind and the quiet kind of " +
       "good luck the texts rate more highly than the loud kind.",
+    keynote:
+      "Mian Xiang reads the upper forehead as ease of mind.",
   },
   {
     key: "parents", hanzi: "父母宮", name: "Parents Palace",
@@ -112,6 +134,8 @@ export const PALACES = [
     reading:
       "Classical Chinese face reading reads the upper forehead as the Parents Palace — inheritance in the " +
       "broad sense, meaning what was handed on rather than what was earned.",
+    keynote:
+      "Mian Xiang reads this brow as what was handed on.",
   },
 ];
 
@@ -162,6 +186,47 @@ function toneFor(deltaMi) {
 }
 
 /**
+ * The one palace sitting furthest from the subject's own baseline, by absolute
+ * pigment difference.
+ *
+ * ── WHY THIS IS A FLAG AND NOT THE SCALAR ─────────────────────────────────
+ * The view needs to know WHICH palace to mark, not by how much. Exporting the
+ * magnitude would put a raw measurement scalar on a rendered object and into
+ * the persisted record, where item 39's argument applies: an allow-list stops
+ * being one the moment it carries the numbers the record exists not to hold.
+ * So the comparison happens here, where `deltaMi` already lives, and only a
+ * boolean crosses out.
+ *
+ * `even` palaces are eligible. The tone bands are a coarse three-way cut at
+ * ±PALACE_TONE_DELTA, so on a face where nothing crosses the band every palace
+ * reads `even` and a selection restricted to graded palaces would find nothing
+ * to mark — the grid would lose its focal point on exactly the ordinary
+ * captures that make up most of them. Distance from baseline is defined
+ * whether or not it crossed a threshold.
+ *
+ * Ties break to the first in classical palace order, so the same frame always
+ * marks the same card. An unmeasured palace is never selected: it has no
+ * distance, and `null` is not a small number.
+ *
+ * @param {Array<{measured: boolean, deltaMi: number|null}>} palaces
+ * @returns {number} index into `palaces`, or -1 if nothing was measured.
+ */
+function furthestFromBaselineIndex(palaces) {
+  let best = -1;
+  let bestDistance = -Infinity;
+  palaces.forEach((palace, index) => {
+    if (!palace.measured || !Number.isFinite(palace.deltaMi)) return;
+    const distance = Math.abs(palace.deltaMi);
+    // Strictly greater, so a tie keeps the earlier palace.
+    if (distance > bestDistance) {
+      bestDistance = distance;
+      best = index;
+    }
+  });
+  return best;
+}
+
+/**
  * @param {object} raw `rawScalars()` output — Module A consumes the neutral
  *        scalar layer, never the labelled one.
  */
@@ -180,13 +245,19 @@ export function readTwelvePalaces(raw) {
       supported,
       measured,
       tone,
+      deltaMi,
       toneGloss: tone ? TONE_GLOSS[tone] : null,
       /** Stated for every unmeasured palace, every time. */
       notMeasuredNote: measured
         ? null
         : "This palace could not be measured clearly enough in this photo, so no reading is guessed for it.",
+      // Assigned below, once every palace has a distance to be compared against.
+      furthestFromBaseline: false,
     };
   });
+
+  const furthest = furthestFromBaselineIndex(palaces);
+  if (furthest >= 0) palaces[furthest].furthestFromBaseline = true;
 
   return {
     palaces,

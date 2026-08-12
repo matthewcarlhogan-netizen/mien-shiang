@@ -70,6 +70,34 @@ export const TYPE = Object.freeze({
     intended: "Noto Serif SC",
     stack: "'Noto Serif SC','Noto Serif CJK SC','Songti SC','Source Han Serif SC',serif",
   },
+  /*
+   * The two ritual roles, added for the palace grid's seal treatment.
+   *
+   * ── WHY THESE ARE SEPARATE ROLES AND NOT A REDEFINITION OF passage/numeric ─
+   * `passage` is body prose and `numeric` is instrument output; both are set
+   * at reading sizes and both are load-bearing for how the app reads as an
+   * instrument. `ritual` is a display role used at 1.5rem italic for one line
+   * on one card, and `terminal` is a small-caps annotation role. Redefining
+   * the two existing roles to reach the new look would restyle every screen
+   * to serve one card, which is the opposite of a scoped change.
+   *
+   * ── AND WHY THERE IS STILL NO @font-face ───────────────────────────────────
+   * Same reason as the four families above, and it has not changed: no woff2
+   * is committed, so a rule here would 404 on every load and precache a
+   * missing entry. Google Fonts is not the escape hatch — it is a third-party
+   * request on every load for a product whose claim is that nothing leaves the
+   * device, and both index.html and qise.html record that removal deliberately.
+   * The named family sits first in each stack, so a device that already has it
+   * uses it and every other device gets the fallback silently.
+   */
+  ritual: {
+    intended: "Cormorant Garamond",
+    stack: "'Cormorant Garamond','EB Garamond',Garamond,Georgia,'Times New Roman',serif",
+  },
+  terminal: {
+    intended: "JetBrains Mono",
+    stack: "'JetBrains Mono','IBM Plex Mono',ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace",
+  },
 });
 
 /**
@@ -90,6 +118,8 @@ export function paletteCss() {
   lines.push(`  --passage: ${TYPE.passage.stack};`);
   lines.push(`  --numeric: ${TYPE.numeric.stack};`);
   lines.push(`  --cjk: ${TYPE.cjk.stack};`);
+  lines.push(`  --font-ritual: ${TYPE.ritual.stack};`);
+  lines.push(`  --font-terminal: ${TYPE.terminal.stack};`);
   lines.push("}");
   return lines.join("\n");
 }

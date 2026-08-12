@@ -934,7 +934,7 @@ function integratedTodayMarkup(model) {
     </div>`;
 }
 
-function integratedStoryMarkup(model) {
+function integratedStoryMarkup(model, { firstReading = false } = {}) {
   if (!model?.available) return model?.note
     ? `<section class="structure-section"><p class="muted">${esc(model.note)}</p></section>`
     : "";
@@ -951,16 +951,29 @@ function integratedStoryMarkup(model) {
     const revealId = `palace-reveal-${esc(palace.key)}`;
     const status = palace.measured ? `${palace.tone} · read today` : "traditional context";
     const reading = palace.measured ? palace.toneGloss : palace.reading;
+    // The one palace furthest from this subject's own baseline, resolved in
+    // the reading layer. Only ever true for one card, and false for all twelve
+    // when nothing was measurable.
+    const selected = palace.furthestFromBaseline === true;
     return `<article class="palace-card" data-open="false" data-palace="${esc(palace.key)}"
+        data-selected="${selected}"
         style="--palace-index:${index};--palace-accent:var(--${palaceAccents[index % palaceAccents.length]})">
+      ${selected ? `<span class="palace-grain" aria-hidden="true"></span>` : ""}
       <button class="palace-enter" type="button" aria-expanded="false" aria-controls="${revealId}">
-        <span class="palace-number num">${String(index + 1).padStart(2, "0")}</span>
+        <span class="palace-number num">${String(index + 1).padStart(2, "0")}${selected
+      // Named rather than aria-hidden: the dot is the only thing on the closed
+      // card saying this palace was picked, so hiding it from assistive tech
+      // withholds the one piece of information the mark exists to carry.
+      ? `<span class="acupuncture-node" role="img" aria-label="furthest from your baseline in this photo"></span>`
+      : ""}</span>
         <span class="palace-title"><strong>${esc(palace.hanzi)} ${esc(palace.name)}</strong>
           <span class="muted">${esc(palace.location)}</span></span>
         <span class="palace-arrow" aria-hidden="true">↗</span>
       </button>
       <div class="palace-reveal" id="${revealId}" hidden>
         <span class="palace-tone" data-contextual="${!palace.measured}">${esc(status)}</span>
+        ${selected ? `<span class="palace-anatomy">${esc(palace.location)}</span>` : ""}
+        ${selected && palace.keynote ? `<p class="palace-keynote">${esc(palace.keynote)}</p>` : ""}
         <p>${esc(reading)}</p>
         ${palace.measured ? "" : `<p class="source-note">${esc(palace.notMeasuredNote)}</p>`}
       </div>
@@ -990,6 +1003,12 @@ function integratedStoryMarkup(model) {
     : `${model.palaces.measuredCount} read from this older scan · ${model.palaces.totalCount - model.palaces.measuredCount} preserved as traditional context.`}</p></div>
       <div class="palace-count" aria-label="12 of 12 palaces revealed"><strong>12</strong><span>/ 12</span></div></div>
       <div class="palace-grid">${palaces}</div>
+      ${firstReading
+    // First reading on this device only. It explains why one card carries the
+    // thread and the other eleven do not, which is the question the mark
+    // raises and nothing else on this screen answers.
+    ? `<p class="onboarding-terminal-text">The meridian shifts daily. Tomorrow, another gate opens.</p>`
+    : ""}
       <button class="palace-delight" type="button" data-delight="palaces">This speaks to me · Share the moment</button>
       <details class="source-note"><summary>Placement note</summary><p>${esc(model.palaces.sourcesDiffer)}</p></details>
     </section>
@@ -1022,7 +1041,7 @@ async function renderReading(reading) {
   const integratedCard = $("reading-integrated");
   integratedCard.hidden = !m.integrated.available;
   integratedCard.innerHTML = integratedTodayMarkup(m.integrated);
-  $("reading-structure-story").innerHTML = integratedStoryMarkup(m.integrated);
+  $("reading-structure-story").innerHTML = integratedStoryMarkup(m.integrated, { firstReading: m.firstReading });
   releasePalaceExperience();
   releasePalaceExperience = bindPalaceExperience($("reading-structure-story"), {
     reducedMotion: reduced,
