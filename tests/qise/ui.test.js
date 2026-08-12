@@ -9,6 +9,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 import {
   PALETTE, GROUND, COLOUR_ORDER, TYPE, paletteCss,
@@ -450,4 +451,35 @@ test("calibration and the return prompt agree on how many scans remain", () => {
   assert.equal(n.remaining, c.remaining);
   assert.equal(n.current, c.current);
   assert.equal(n.building, c.active && c.remaining > 0);
+});
+
+test("no palace text is painted in a raw accent, because two accents are grounds", () => {
+  // The accents cycle through all five colours. `bai` (#EDE8DC) is the light
+  // ground and `hei` (#1B1917) is the dark one, so a rule painting text in the
+  // raw accent loses palaces 4 and 9 on the light theme and 5 and 10 on the
+  // dark one — number AND expand arrow, which is the only affordance saying
+  // the card opens. It shipped exactly that way.
+  const css = readFileSync(new URL("../../src/qise.html", import.meta.url), "utf8");
+  for (const rule of ["palace-number", "palace-arrow"]) {
+    const m = css.match(new RegExp(`\\.${rule}\\{[^}]*\\}`));
+    assert.ok(m, `${rule} rule not found`);
+    assert.doesNotMatch(m[0], /color:\s*var\(--palace-accent\)/,
+      `.${rule} paints text in the raw accent, which is invisible on two of the five`);
+    // Checked as substrings: a `[^)]*` span cannot cross the `)` that closes
+    // the nested var(), so the obvious one-shot regex never matches.
+    assert.ok(m[0].includes("color-mix(") && m[0].includes("--palace-accent")
+      && m[0].includes("--qise-ink"),
+    `.${rule} must mix the accent toward ink so it survives both themes: ${m[0]}`);
+  }
+});
+
+test("every palace carries a short keynote, distinct from every other", () => {
+  // The closed card shows the keynote. Twelve rows of anatomy ("the upper
+  // eyelids") cannot be told apart without opening all twelve.
+  const notes = PALACES.map((p) => p.keynote);
+  assert.equal(notes.filter(Boolean).length, 12);
+  assert.equal(new Set(notes).size, 12);
+  for (const [i, n] of notes.entries()) {
+    assert.ok(n.split(/\s+/).length <= 8, `${PALACES[i].key}: keynote must stay scannable, got ${JSON.stringify(n)}`);
+  }
 });

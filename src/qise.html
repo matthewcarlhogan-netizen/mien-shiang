@@ -220,29 +220,51 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .palace-count strong{font-family:var(--numeric);font-size:2.4rem;line-height:1}
 .palace-count span{font-size:.75rem}
 .palace-grid{display:grid;grid-template-columns:1fr 1fr;gap:.65rem;margin-top:1rem}
+@media (max-width:560px){.palace-grid{grid-template-columns:1fr}}
 .palace-card{position:relative;border:1px solid color-mix(in srgb,var(--palace-accent) 32%,var(--qise-border));border-radius:18px;background:linear-gradient(135deg,color-mix(in srgb,var(--palace-accent) 8%,var(--qise-surface)),var(--qise-surface));overflow:hidden;animation:palace-arrive .5s cubic-bezier(.2,.75,.2,1) both;animation-delay:calc(var(--palace-index) * 55ms)}
 .palace-card::before{content:"";position:absolute;width:5rem;height:5rem;right:-2rem;top:-2.5rem;border-radius:50%;background:var(--palace-accent);filter:blur(24px);opacity:.12;pointer-events:none}
 .palace-enter{position:relative;width:100%;display:grid;grid-template-columns:auto 1fr auto;gap:.65rem;align-items:center;text-align:left;border:0;border-radius:0;padding:.8rem;color:inherit}
-.palace-number{font-size:.64rem;color:var(--palace-accent);letter-spacing:.08em}
+/* NEVER paint text in the raw accent. The accents cycle through all five
+   colours, and two of them are ground colours: `bai` (#EDE8DC) vanishes on the
+   light theme and `hei` (#1B1917) vanishes on the dark one — so palaces 4 and 9
+   silently lost their number AND their expand arrow, which is the only
+   affordance saying the card opens. Mixing toward ink keeps the accent legible
+   in both themes. */
+.palace-number{font-size:.64rem;color:color-mix(in srgb,var(--palace-accent) 42%,var(--qise-ink));letter-spacing:.08em}
 .palace-title strong{display:block;font-family:var(--passage);font-size:1rem;line-height:1.2}
 .palace-title .muted{display:block;font-size:.7rem;margin-top:.15rem}
-.palace-arrow{color:var(--palace-accent);transition:transform .25s ease}
+/* The closed card carries the KEYNOTE, not the anatomy. Twelve rows of "the
+   upper eyelids" are twelve rows a reader has to open to tell apart; twelve
+   keynotes can be scanned. The location moves into the reveal. */
+.palace-keynote{display:block;font-family:var(--passage);font-style:italic;font-size:.82rem;line-height:1.3;margin-top:.2rem;opacity:.78}
+.palace-where{font-size:.7rem!important;letter-spacing:.04em;text-transform:uppercase;opacity:.6;margin-top:.35rem!important}
+.palace-arrow{color:color-mix(in srgb,var(--palace-accent) 42%,var(--qise-ink));transition:transform .25s ease}
 .palace-card[data-open="true"] .palace-arrow{transform:rotate(90deg)}
 .palace-reveal{padding:0 .8rem .8rem;animation:palace-reveal .3s ease-out both}
-.palace-reveal p{font-size:.8rem;line-height:1.55;margin:.5rem 0 0}
+.palace-reveal p{font-size:.86rem;line-height:1.65;margin:.5rem 0 0;max-width:34rem}
 .palace-tone{display:inline-block;margin:.3rem 0;padding:.16rem .45rem;border-radius:999px;background:var(--qise-track);font-size:.68rem;text-transform:uppercase;letter-spacing:.06em}
 .palace-tone[data-contextual="true"]{border:1px solid var(--qise-border);background:transparent}
 /* The tone line is an ANNOTATION under the palace's own reading, never a
    replacement for it — it has three possible values across all twelve cards,
    so at body weight it made every palace look identical. */
 .palace-tone-line{font-size:.75rem;line-height:1.5;opacity:.72;border-left:2px solid color-mix(in srgb,var(--palace-accent) 45%,transparent);padding-left:.55rem;margin-top:.55rem}
-.palace-lead-flag{align-self:start;padding:.14rem .42rem;border-radius:999px;background:color-mix(in srgb,var(--chi) 20%,transparent);border:1px solid color-mix(in srgb,var(--chi) 45%,transparent);font-size:.6rem;text-transform:uppercase;letter-spacing:.07em;white-space:nowrap}
+/* A full-width strip above the button, not a fourth cell inside it. Inside,
+   it broke the `auto 1fr auto` grid: the keynote wrapped and the expand arrow
+   was pushed onto its own line. */
+.palace-lead-flag{margin:0;padding:.3rem .8rem;background:color-mix(in srgb,var(--chi) 16%,transparent);border-bottom:1px solid color-mix(in srgb,var(--chi) 28%,transparent);color:var(--chi);font-size:.6rem;text-transform:uppercase;letter-spacing:.09em}
 .palace-card[data-lead="true"]{border-color:color-mix(in srgb,var(--chi) 52%,var(--qise-border))}
-.palace-focus{position:relative;margin:.9rem 0 .3rem;padding:1rem 1.05rem;border:1px solid color-mix(in srgb,var(--chi) 38%,var(--qise-border));border-radius:20px;background:linear-gradient(135deg,color-mix(in srgb,var(--chi) 10%,var(--qise-surface)),var(--qise-surface))}
-.palace-focus-name{font-family:var(--passage);font-size:1.5rem;line-height:1.15;margin:.15rem 0 .2rem}
-.palace-focus-where{font-size:.72rem;text-transform:lowercase}
-.palace-focus-reading{font-size:.92rem;line-height:1.6;margin-top:.6rem}
+.palace-focus{position:relative;margin:.9rem 0 .3rem;padding:1.3rem 1.15rem 1.15rem;border:1px solid color-mix(in srgb,var(--chi) 38%,var(--qise-border));border-radius:22px;background:linear-gradient(150deg,color-mix(in srgb,var(--chi) 13%,var(--qise-surface)),var(--qise-surface) 62%);overflow:hidden}
+.palace-focus::after{content:"";position:absolute;right:-3rem;top:-3rem;width:9rem;height:9rem;border-radius:50%;background:var(--chi);filter:blur(40px);opacity:.13;pointer-events:none}
+.palace-focus-glyph{position:relative;font-family:var(--cjk);font-size:4.4rem;line-height:.95;margin:.35rem 0 .1rem;color:var(--chi)}
+.palace-focus-name{font-family:var(--passage);font-size:1.9rem;line-height:1.1;margin:0}
+/* The one line a reader takes away. Kept short on purpose: the attributed
+   prose below is the source, this is the handle. */
+.palace-focus-keynote{font-family:var(--passage);font-style:italic;font-size:1.12rem;line-height:1.35;margin:.3rem 0 0;opacity:.85}
+.palace-focus-chips{display:flex;flex-wrap:wrap;gap:.35rem;margin:.85rem 0 .1rem}
+.palace-chip{padding:.2rem .5rem;border:1px solid color-mix(in srgb,var(--chi) 30%,var(--qise-border));border-radius:999px;font-size:.64rem;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap}
+.palace-focus-reading{font-size:.9rem;line-height:1.65;margin-top:.75rem}
 .palace-focus[data-empty="true"]{background:var(--qise-surface);border-color:var(--qise-border)}
+.palace-focus[data-empty="true"]::after{display:none}
 .next-scan{margin:1.15rem 0 .3rem;padding:1.1rem;border:1px solid var(--qise-border);border-radius:22px;background:linear-gradient(120deg,color-mix(in srgb,var(--qing) 11%,var(--qise-surface)),var(--qise-surface))}
 .next-scan h2{font-family:var(--passage);font-size:1.32rem;line-height:1.25;margin:.15rem 0 .5rem}
 .next-scan p{font-size:.82rem;line-height:1.55}

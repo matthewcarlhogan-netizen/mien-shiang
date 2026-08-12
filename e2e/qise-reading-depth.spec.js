@@ -87,7 +87,11 @@ async function seedReading(page, record = reading) {
   await page.reload();
 }
 
-const BODY = ".palace-reveal > p:not(.palace-tone-line):not(.source-note)";
+/* The palace's own reading: the only <p> in the reveal that is not the tone
+ * annotation, the anatomy line, or a source note. Named by exclusion so a new
+ * sibling paragraph fails loudly here rather than quietly inflating the count
+ * of "distinct readings" this file exists to assert. */
+const BODY = ".palace-reveal > p:not(.palace-tone-line):not(.palace-where):not(.source-note)";
 
 test("twelve palaces render twelve DIFFERENT readings, not three tone glosses", async ({ page }) => {
   const errors = [];

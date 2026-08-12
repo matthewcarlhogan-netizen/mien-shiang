@@ -26,6 +26,7 @@
 export const PALACES = [
   {
     key: "life", hanzi: "命宮", name: "Life Palace",
+    keynote: "how freely things move",
     location: "between the brows", zone: "glabella",
     reading:
       "In Mian Xiang the Life Palace is the gate the whole reading passes through — the classical texts " +
@@ -33,6 +34,7 @@ export const PALACES = [
   },
   {
     key: "wealth", hanzi: "財帛宮", name: "Wealth Palace",
+    keynote: "what is gathered, and kept",
     location: "the tip of the nose", zone: "nose_apex",
     reading:
       "Classical Chinese face reading places the Wealth Palace at the tip of the nose, and reads it as what " +
@@ -40,6 +42,7 @@ export const PALACES = [
   },
   {
     key: "siblings", hanzi: "兄弟宮", name: "Siblings Palace",
+    keynote: "the company a person keeps",
     location: "the eyebrows", zones: ["eyebrow_right", "eyebrow_left"],
     reading:
       "In Mian Xiang the brows are the Siblings Palace, read as the company a person keeps and the people " +
@@ -47,6 +50,7 @@ export const PALACES = [
   },
   {
     key: "property", hanzi: "田宅宮", name: "Property Palace",
+    keynote: "what is built to stay in",
     location: "the upper eyelids", zones: ["upper_eyelid_right", "upper_eyelid_left"],
     reading:
       "Classical Chinese face reading gives the upper eyelids the Property Palace, read as home and what a " +
@@ -54,6 +58,7 @@ export const PALACES = [
   },
   {
     key: "children", hanzi: "男女宮", name: "Children Palace",
+    keynote: "what is tended and brought on",
     location: "beneath the eyes", zones: ["periorbital_right", "periorbital_left"],
     reading:
       "In Mian Xiang the area beneath the eyes is the Children Palace, read as what a person tends and " +
@@ -61,6 +66,7 @@ export const PALACES = [
   },
   {
     key: "support", hanzi: "奴僕宮", name: "Support Palace",
+    keynote: "the help that can be called on",
     location: "the lower jaw and chin", zone: "chin",
     reading:
       "In Mian Xiang the lower jaw is the Support Palace, read as the help a person can call on and the " +
@@ -68,6 +74,7 @@ export const PALACES = [
   },
   {
     key: "partner", hanzi: "妻妾宮", name: "Partner Palace",
+    keynote: "the weather of closeness",
     location: "the outer corners of the eyes", zones: ["outer_eye_right", "outer_eye_left"],
     reading:
       "Classical Chinese face reading places the Partner Palace at the outer eye corners, and reads it as " +
@@ -75,6 +82,7 @@ export const PALACES = [
   },
   {
     key: "trials", hanzi: "疾厄宮", name: "Palace of Trials",
+    keynote: "what is weathered, and the coming back",
     location: "the bridge of the nose", zone: "nose_bridge",
     reading:
       "In Mian Xiang the bridge of the nose is read as what a person weathers and how they come back from " +
@@ -85,6 +93,7 @@ export const PALACES = [
   },
   {
     key: "travel", hanzi: "遷移宮", name: "Travel Palace",
+    keynote: "movement, and being far from home",
     location: "the temples and the sides of the forehead", zones: ["temple_right", "temple_left"],
     reading:
       "In Mian Xiang the temples are the Travel Palace, read as movement and change of place, and as how " +
@@ -92,6 +101,7 @@ export const PALACES = [
   },
   {
     key: "career", hanzi: "官祿宮", name: "Career Palace",
+    keynote: "standing, more than position",
     location: "the centre of the forehead", zone: "center_forehead",
     reading:
       "Classical Chinese face reading gives the centre forehead the Career Palace, read as standing and " +
@@ -99,6 +109,7 @@ export const PALACES = [
   },
   {
     key: "fortune", hanzi: "福德宮", name: "Fortune Palace",
+    keynote: "ease of mind",
     location: "the upper sides of the forehead",
     zones: ["fortune_forehead_right", "fortune_forehead_left"],
     reading:
@@ -107,6 +118,7 @@ export const PALACES = [
   },
   {
     key: "parents", hanzi: "父母宮", name: "Parents Palace",
+    keynote: "what was handed on",
     location: "the upper forehead, left and right",
     zones: ["parent_forehead_right", "parent_forehead_left"],
     reading:
@@ -150,7 +162,11 @@ export const SOURCES_DIFFER =
  * attribution, so this layer never has to make a reading claim to do its job.
  */
 export const LEAD_COPY = Object.freeze({
-  label: "Furthest from your own baseline",
+  /* The eyebrow is the HOOK, so it states the finding, not the method.
+   * "Furthest from your own baseline" is how the palace was chosen and reads
+   * like a lab bench; it moved into `scope`, behind a disclosure, where a
+   * reader who wants the method can still get all of it. */
+  label: "One region stood out today",
   scope:
     "Of the twelve palaces, this one sat furthest from the peripheral baseline of the same photo. That is a "
     + "statement about this frame. It does not make the palace more important than the other eleven, and it "

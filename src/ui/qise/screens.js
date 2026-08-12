@@ -228,14 +228,11 @@ export const NEXT_SCAN_COPY = Object.freeze({
   buildingLabel: "What the next scan adds",
   readyLabel: "What the next scan adds",
   ready:
-    "Your personal range is live. Each further scan is measured against the ones already in your column, so "
-    + "the gauges and the thirty-day line move with you rather than against anyone else.",
+    "Each scan is measured against the ones already in your column.",
   leadMoves:
-    "The lead palace is measured fresh every time. Classical writers regarded facial colour as a passing "
-    + "season, so a different palace leading next time is the expected case, not a fault in the reading.",
+    "Classical writers regarded facial colour as a passing season — so expect a different region to lead.",
   noHistory:
-    "The only comparison this app makes is with your own earlier scans, which is why the first few readings "
-    + "build toward something a single scan cannot show.",
+    "The only comparison this app makes is with your own earlier scans.",
 });
 
 export function nextScanModel(calibration, focus) {
@@ -246,7 +243,7 @@ export function nextScanModel(calibration, focus) {
     label: building ? NEXT_SCAN_COPY.buildingLabel : NEXT_SCAN_COPY.readyLabel,
     headline: building
       ? `${scans[0].toUpperCase()}${scans.slice(1)} unlocks your personal range.`
-      : "Your column is already comparing you with yourself.",
+      : "A different region will lead next time.",
     body: building ? NEXT_SCAN_COPY.noHistory : NEXT_SCAN_COPY.ready,
     // Deliberately NOT "Scan again": the footer carries that label on every
     // tab, and two identically named buttons a thumb apart is a choice the

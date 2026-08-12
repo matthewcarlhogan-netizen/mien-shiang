@@ -81,6 +81,7 @@ const projectPalaces = (value) => value ? {
     key: palace?.key ?? null,
     hanzi: palace?.hanzi ?? null,
     name: palace?.name ?? null,
+    keynote: palace?.keynote ?? null,
     location: palace?.location ?? null,
     supported: palace?.supported === true,
     measured: palace?.measured === true,

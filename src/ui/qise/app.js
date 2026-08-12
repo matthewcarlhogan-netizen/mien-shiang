@@ -952,14 +952,23 @@ function palaceFocusMarkup(focus) {
     </div>`;
   }
   const lead = focus.lead;
+  // The order is the hook: the seal-sized hanzi and the short keynote land
+  // first, the attributed prose second, the method last and folded away. Led
+  // by the method line, this card read as a lab bench.
   return `<div class="palace-focus">
     <p class="eyebrow">${esc(focus.label)}</p>
-    <h3 class="palace-focus-name">${esc(lead.hanzi)} ${esc(lead.name)}</h3>
-    <p class="palace-focus-where muted">${esc(lead.location)} · read as ${esc(lead.tone)} in this frame</p>
+    <p class="palace-focus-glyph" aria-hidden="true">${esc(lead.hanzi)}</p>
+    <h3 class="palace-focus-name">${esc(lead.name)}</h3>
+    ${lead.keynote ? `<p class="palace-focus-keynote">${esc(lead.keynote)}</p>` : ""}
+    <div class="palace-focus-chips">
+      <span class="palace-chip">1 of 12 regions</span>
+      <span class="palace-chip">read as ${esc(lead.tone)}</span>
+      <span class="palace-chip">${esc(lead.location)}</span>
+    </div>
     <p class="palace-focus-reading">${esc(lead.reading)}</p>
     <p class="palace-tone-line">${esc(lead.toneGloss)}</p>
-    <details class="source-note"><summary>What "furthest" means here</summary>
-      <p>${esc(focus.scope)}</p></details>
+    <details class="source-note"><summary>Why this one, and what that does not mean</summary>
+      <p>${esc(focus.scope)}</p><p>${esc(focus.movesNote)}</p></details>
   </div>`;
 }
 
@@ -989,15 +998,16 @@ function integratedStoryMarkup(model) {
     return `<article class="palace-card" data-open="false" data-palace="${esc(palace.key)}"
         data-lead="${isLead}"
         style="--palace-index:${index};--palace-accent:var(--${palaceAccents[index % palaceAccents.length]})">
+      ${isLead ? `<p class="palace-lead-flag">Stood out today</p>` : ""}
       <button class="palace-enter" type="button" aria-expanded="false" aria-controls="${revealId}">
         <span class="palace-number num">${String(index + 1).padStart(2, "0")}</span>
         <span class="palace-title"><strong>${esc(palace.hanzi)} ${esc(palace.name)}</strong>
-          <span class="muted">${esc(palace.location)}</span></span>
-        ${isLead ? `<span class="palace-lead-flag">Furthest today</span>` : ""}
+          <span class="palace-keynote">${esc(palace.keynote || palace.location)}</span></span>
         <span class="palace-arrow" aria-hidden="true">↗</span>
       </button>
       <div class="palace-reveal" id="${revealId}" hidden>
         <span class="palace-tone" data-contextual="${!palace.measured}">${esc(status)}</span>
+        <p class="palace-where">${esc(palace.location)}</p>
         <p>${esc(palace.reading)}</p>
         ${palace.measured
     ? `<p class="palace-tone-line">${esc(palace.toneGloss)}</p>`
