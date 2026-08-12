@@ -85,6 +85,10 @@ const projectPalaces = (value) => value ? {
     supported: palace?.supported === true,
     measured: palace?.measured === true,
     tone: palace?.tone ?? null,
+    /* A derived pigment delta, not an image-derived identifier — the same
+     * class of value as `deltas` and `axes` on the record. Explicitly listed,
+     * never spread, per CLAUDE.md item 39. */
+    deltaMi: scalar(palace?.deltaMi),
     toneGloss: palace?.toneGloss ?? null,
     reading: palace?.reading ?? null,
     translationNote: palace?.translationNote ?? null,

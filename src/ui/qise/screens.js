@@ -11,6 +11,7 @@ import { sealModel, sealSvg } from "./seal.js";
 import { passageFor } from "../../qise/passages.js";
 import { isLowConfidence } from "../../qise/baseline.js";
 import { compositionOf, COMPOSITION_COLOURS } from "../../qise/composition.js";
+import { leadPalaceOf, LEAD_COPY } from "../../reading/twelve-palaces.js";
 
 export const COMPOSITION_LABELS = Object.freeze({
   chi: Object.freeze({ cjk: "赤", name: "chi", note: "warm note" }),
@@ -186,6 +187,82 @@ export function hookFor(compass) {
   return READING_HOOKS[ascendant];
 }
 
+/**
+ * The lead palace, as a view model.
+ *
+ * WHY THIS EXISTS. Twelve equal cards have no entry point, and the render they
+ * replaced made that worse: it showed `toneGloss` as each palace's body, and
+ * `toneGloss` has exactly three values. A 12-of-12 scan therefore paid out
+ * three sentences repeated four times each — the better the capture, the more
+ * boilerplate the reader got. One named palace, chosen by measurement, is what
+ * makes the screen about THIS frame rather than about the tradition in general.
+ *
+ * `leadKey` flags; it never filters. Every palace stays in the grid, because
+ * the twelve-palace contract in `reading/twelve-palaces.js` is that no palace
+ * is hidden by any branch — a "highlights" view that quietly drops nine of them
+ * is the pagination that file rules out, in nicer clothes.
+ */
+export function palaceFocusModel(twelvePalaces) {
+  const lead = leadPalaceOf(twelvePalaces);
+  return {
+    available: lead !== null,
+    leadKey: lead ? lead.palace.key : null,
+    lead: lead ? { ...lead.palace, distance: lead.distance } : null,
+    label: LEAD_COPY.label,
+    scope: LEAD_COPY.scope,
+    movesNote: LEAD_COPY.movesNote,
+    noneNote: LEAD_COPY.none,
+  };
+}
+
+/**
+ * What the NEXT scan adds — the one thing on this screen that is about the
+ * future rather than the frame.
+ *
+ * It states a mechanism, never a promise. "Three more comparable scans and the
+ * gauges get a personal range" is checkable against `calibrationModel`; "come
+ * back tomorrow for a deeper reading" is a marketing claim about content that
+ * does not vary.
+ */
+export const NEXT_SCAN_COPY = Object.freeze({
+  buildingLabel: "What the next scan adds",
+  readyLabel: "What the next scan adds",
+  ready:
+    "Your personal range is live. Each further scan is measured against the ones already in your column, so "
+    + "the gauges and the thirty-day line move with you rather than against anyone else.",
+  leadMoves:
+    "The lead palace is measured fresh every time. Classical writers regarded facial colour as a passing "
+    + "season, so a different palace leading next time is the expected case, not a fault in the reading.",
+  noHistory:
+    "The only comparison this app makes is with your own earlier scans, which is why the first few readings "
+    + "build toward something a single scan cannot show.",
+});
+
+export function nextScanModel(calibration, focus) {
+  const building = calibration.active && calibration.remaining > 0;
+  const scans = calibration.remaining === 1 ? "one more comparable scan" : `${calibration.remaining} more comparable scans`;
+  return {
+    building,
+    label: building ? NEXT_SCAN_COPY.buildingLabel : NEXT_SCAN_COPY.readyLabel,
+    headline: building
+      ? `${scans[0].toUpperCase()}${scans.slice(1)} unlocks your personal range.`
+      : "Your column is already comparing you with yourself.",
+    body: building ? NEXT_SCAN_COPY.noHistory : NEXT_SCAN_COPY.ready,
+    // Deliberately NOT "Scan again": the footer carries that label on every
+    // tab, and two identically named buttons a thumb apart is a choice the
+    // reader has to stop and make. This one names what the next scan is FOR.
+    cta: building
+      ? `Add anchor ${Math.min(calibration.current + 1, calibration.required)} of ${calibration.required}`
+      : "Take the next scan",
+    // Only offered once there is a lead to move. Promising movement in a
+    // reading that named no lead is a promise about something unmeasured.
+    leadNote: focus?.available ? NEXT_SCAN_COPY.leadMoves : null,
+    remaining: calibration.remaining,
+    current: calibration.current,
+    required: calibration.required,
+  };
+}
+
 export function compositionStrip(reading) {
   const composition = compositionOf(reading);
   return {
@@ -245,6 +322,7 @@ export function integratedReadingModel(reading) {
         ([key, value]) => [key, Number.isFinite(value) ? Math.round(value * 100) : null],
       )),
     },
+    focus: palaceFocusModel(palaceSource),
     palaces: {
       // All twelve stay visible. `measured` remains as a compatibility view
       // for old locally stored readings made before twelve-region capture.
@@ -314,6 +392,8 @@ export function readingScreenModel(reading, history, options = {}) {
   const hook = calibration.active
     ? { title: calibration.title, reflection: calibration.reflection }
     : hookFor(compass);
+  const integrated = integratedReadingModel(reading);
+  const nextScan = nextScanModel(calibration, integrated.focus);
 
   return {
     order: READING_SCREEN_ORDER,
@@ -325,7 +405,8 @@ export function readingScreenModel(reading, history, options = {}) {
     hook,
     calibration,
     composition: compositionStrip(reading),
-    integrated: integratedReadingModel(reading),
+    integrated,
+    nextScan,
     gauges: [
       gaugeModel(history, metricOf(reading, "ming"), "ming", "明 lustre"),
       gaugeModel(history, metricOf(reading, "run"), "run", "潤 moisture"),

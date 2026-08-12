@@ -934,6 +934,35 @@ function integratedTodayMarkup(model) {
     </div>`;
 }
 
+/**
+ * The lead palace, rendered ahead of the grid.
+ *
+ * This is the screen's entry point: one palace, named because it MEASURED
+ * furthest from the subject's own baseline in this frame, so it differs
+ * between scans and between people without anything being asserted about
+ * either. The traditional interpretation is the palace's own attributed
+ * `reading`; nothing new is claimed here.
+ */
+function palaceFocusMarkup(focus) {
+  if (!focus) return "";
+  if (!focus.available) {
+    return `<div class="palace-focus" data-empty="true">
+      <p class="eyebrow">${esc(focus.label)}</p>
+      <p class="muted">${esc(focus.noneNote)}</p>
+    </div>`;
+  }
+  const lead = focus.lead;
+  return `<div class="palace-focus">
+    <p class="eyebrow">${esc(focus.label)}</p>
+    <h3 class="palace-focus-name">${esc(lead.hanzi)} ${esc(lead.name)}</h3>
+    <p class="palace-focus-where muted">${esc(lead.location)} · read as ${esc(lead.tone)} in this frame</p>
+    <p class="palace-focus-reading">${esc(lead.reading)}</p>
+    <p class="palace-tone-line">${esc(lead.toneGloss)}</p>
+    <details class="source-note"><summary>What "furthest" means here</summary>
+      <p>${esc(focus.scope)}</p></details>
+  </div>`;
+}
+
 function integratedStoryMarkup(model) {
   if (!model?.available) return model?.note
     ? `<section class="structure-section"><p class="muted">${esc(model.note)}</p></section>`
@@ -947,22 +976,33 @@ function integratedStoryMarkup(model) {
   const palaceAccents = ["chi", "huang", "qing", "bai", "hei"];
   const palaceList = model.palaces.all || model.palaces.measured;
   const allMeasured = model.palaces.measuredCount === model.palaces.totalCount;
+  const leadKey = model.focus?.leadKey ?? null;
+  // Each card renders the palace's OWN reading. It used to render toneGloss
+  // instead whenever the palace was measured, and toneGloss has three values —
+  // so a full 12-of-12 scan paid out three sentences four times each, and the
+  // best captures read as the most generic. The tone line is an annotation
+  // BELOW the reading now, never a substitute for it.
   const palaces = palaceList.map((palace, index) => {
     const revealId = `palace-reveal-${esc(palace.key)}`;
     const status = palace.measured ? `${palace.tone} · read today` : "traditional context";
-    const reading = palace.measured ? palace.toneGloss : palace.reading;
+    const isLead = palace.key === leadKey;
     return `<article class="palace-card" data-open="false" data-palace="${esc(palace.key)}"
+        data-lead="${isLead}"
         style="--palace-index:${index};--palace-accent:var(--${palaceAccents[index % palaceAccents.length]})">
       <button class="palace-enter" type="button" aria-expanded="false" aria-controls="${revealId}">
         <span class="palace-number num">${String(index + 1).padStart(2, "0")}</span>
         <span class="palace-title"><strong>${esc(palace.hanzi)} ${esc(palace.name)}</strong>
           <span class="muted">${esc(palace.location)}</span></span>
+        ${isLead ? `<span class="palace-lead-flag">Furthest today</span>` : ""}
         <span class="palace-arrow" aria-hidden="true">↗</span>
       </button>
       <div class="palace-reveal" id="${revealId}" hidden>
         <span class="palace-tone" data-contextual="${!palace.measured}">${esc(status)}</span>
-        <p>${esc(reading)}</p>
-        ${palace.measured ? "" : `<p class="source-note">${esc(palace.notMeasuredNote)}</p>`}
+        <p>${esc(palace.reading)}</p>
+        ${palace.measured
+    ? `<p class="palace-tone-line">${esc(palace.toneGloss)}</p>`
+    : `<p class="source-note">${esc(palace.notMeasuredNote)}</p>`}
+        ${palace.translationNote ? `<p class="source-note">${esc(palace.translationNote)}</p>` : ""}
       </div>
     </article>`;
   }).join("");
@@ -984,6 +1024,7 @@ function integratedStoryMarkup(model) {
     </section>
     <section class="structure-section palace-collection" id="palace-collection">
       <p class="eyebrow">Twelve Palaces · 十二宮</p>
+      ${palaceFocusMarkup(model.focus)}
       <div class="palace-heading"><div><h2>All 12 palaces are open</h2>
       <p class="muted">${allMeasured
     ? "12 of 12 measured from this scan. Tap a palace to enter."
@@ -1000,6 +1041,21 @@ function integratedStoryMarkup(model) {
       <div class="harmony-parts">${harmonyParts}</div>
       <details class="source-note"><summary>Why the sources do not form one system</summary><p>${esc(model.harmony.sourcesDiffer)}</p></details>
     </section>` : ""}`;
+}
+
+/**
+ * Start a capture from any of the several places that offer one.
+ *
+ * Extracted so the reading screen's "scan again" call to action and the
+ * footer button cannot drift apart — a second copy of this would be a second
+ * error path, and the error path is the one nobody exercises.
+ */
+function startCapture() {
+  runCapture().catch((error) => {
+    console.error(error);
+    $("gate-line").textContent = describeCameraError(error);
+    show("screen-capture");
+  });
 }
 
 async function renderReading(reading) {
@@ -1031,6 +1087,19 @@ async function renderReading(reading) {
       $("share-status").textContent = "The moment could not be prepared. Your reading is unchanged.";
     }),
   });
+  const nextScan = $("reading-next-scan");
+  nextScan.innerHTML = `<p class="eyebrow">${esc(m.nextScan.label)}</p>
+    <h2 id="next-scan-h">${esc(m.nextScan.headline)}</h2>
+    <p class="muted">${esc(m.nextScan.body)}</p>
+    ${m.nextScan.leadNote ? `<p class="muted next-scan-lead">${esc(m.nextScan.leadNote)}</p>` : ""}
+    ${m.nextScan.building
+    ? `<div class="pattern-dots" aria-label="${m.nextScan.current} of ${m.nextScan.required} anchor readings">${
+      Array.from({ length: m.nextScan.required }, (_, index) =>
+        `<span class="pattern-dot" data-filled="${index < m.nextScan.current}"></span>`).join("")}</div>`
+    : ""}
+    <button type="button" class="next-scan-cta" id="next-scan-again">${esc(m.nextScan.cta)}</button>`;
+  $("next-scan-again").addEventListener("click", startCapture);
+
   $("story-eyebrow").textContent = m.calibration.active ? "How it becomes yours" : "The tradition’s reading";
   $("story-heading").textContent = m.calibration.active ? "Why the first mark matters" : "The story beneath today";
 
@@ -1251,11 +1320,7 @@ async function boot() {
       $("selfie-status").textContent = "That selfie could not be read. Choose another original photo.";
     }).finally(() => { input.value = ""; });
   });
-  $("go-capture").addEventListener("click", () => runCapture().catch((error) => {
-    console.error(error);
-    $("gate-line").textContent = describeCameraError(error);
-    show("screen-capture");
-  }));
+  $("go-capture").addEventListener("click", startCapture);
   $("screen-light").addEventListener("click", () => {
     const next = !screenLightRequested;
     if (!next) screenLightDismissed = true;

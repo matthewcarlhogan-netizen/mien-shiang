@@ -139,6 +139,65 @@ export const SOURCES_DIFFER =
   "arrangement, but some Mian Xiang texts work with thirteen and others place the Partner and Travel " +
   "palaces on the same stretch of temple, which changes what each one reads.";
 
+/**
+ * Copy for the lead palace — the one sitting furthest from the subject's own
+ * baseline in this frame.
+ *
+ * Every line here describes the MEASUREMENT, not the reader. "This palace sat
+ * furthest from your own baseline" is checkable against `deltaMi`; "this palace
+ * is your strongest" is a claim nothing in this repo supports. The traditional
+ * interpretation is still carried by the palace's own `reading`, with its own
+ * attribution, so this layer never has to make a reading claim to do its job.
+ */
+export const LEAD_COPY = Object.freeze({
+  label: "Furthest from your own baseline",
+  scope:
+    "Of the twelve palaces, this one sat furthest from the peripheral baseline of the same photo. That is a "
+    + "statement about this frame. It does not make the palace more important than the other eleven, and it "
+    + "is not a judgement about a person.",
+  movesNote:
+    "The lead palace is expected to move between scans. Classical writers regarded facial colour as a "
+    + "passing season rather than a fixed state, so a different palace leading tomorrow is the ordinary case.",
+  none:
+    "No palace stood out from the baseline in this frame — the twelve read close together, which the texts "
+    + "regard as the unremarkable case.",
+});
+
+/**
+ * The palace furthest from baseline in this frame, or null.
+ *
+ * Ranked on |deltaMi| so a clear palace and a shadowed one compete on distance
+ * rather than on sign — otherwise the lead would always be whichever direction
+ * happened to be positive, which is an artefact of the sign convention and not
+ * a property of the face.
+ *
+ * Ties break on `PALACES` order, so the same frame always names the same lead.
+ * A random or insertion-order tie-break would make the hook look like it had
+ * measured something it had not.
+ *
+ * @param {object} twelvePalaces `readTwelvePalaces()` output, or a stored
+ *        record's `integrated.twelvePalaces` — old records predate `deltaMi`
+ *        and are handled by returning null rather than by inventing a rank.
+ */
+export function leadPalaceOf(twelvePalaces) {
+  const palaces = Array.isArray(twelvePalaces?.palaces) ? twelvePalaces.palaces : [];
+  const order = new Map(PALACES.map((p, i) => [p.key, i]));
+
+  let lead = null;
+  for (const palace of palaces) {
+    if (!palace?.measured || !Number.isFinite(palace.deltaMi)) continue;
+    const distance = Math.abs(palace.deltaMi);
+    if (distance < PALACE_TONE_DELTA) continue;
+    if (lead === null
+      || distance > lead.distance
+      || (distance === lead.distance
+        && (order.get(palace.key) ?? Infinity) < (order.get(lead.palace.key) ?? Infinity))) {
+      lead = { palace, distance };
+    }
+  }
+  return lead;
+}
+
 /** Shadow/clarity thresholds on the zone's pigment difference from baseline. */
 export const PALACE_TONE_DELTA = 1.5;
 
@@ -180,6 +239,11 @@ export function readTwelvePalaces(raw) {
       supported,
       measured,
       tone,
+      /* The pigment difference the tone was derived from. Kept so the view can
+       * rank the twelve by distance from baseline instead of presenting them
+       * as twelve equal cards — the tone alone is three buckets and ties
+       * almost everywhere. */
+      deltaMi: measured ? deltaMi : null,
       toneGloss: tone ? TONE_GLOSS[tone] : null,
       /** Stated for every unmeasured palace, every time. */
       notMeasuredNote: measured

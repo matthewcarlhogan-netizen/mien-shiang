@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import { composeReading, readFiveElements, readThreeCourts, readTwelvePalaces, readQiSe }
   from "../src/reading/index.js";
 import { SHAPE_TO_ELEMENT } from "../src/reading/five-elements.js";
-import { PALACES } from "../src/reading/twelve-palaces.js";
+import { PALACES, leadPalaceOf, LEAD_COPY } from "../src/reading/twelve-palaces.js";
 import { geometryReport, LM } from "../src/geometry.js";
 import { readComplexion } from "../src/adapters/entertainment.js";
 
@@ -164,6 +164,68 @@ test("palace tone tracks the measured pigment difference", () => {
   assert.equal(toneOf(shadowed), "shadowed");
   assert.equal(toneOf(clear), "clear");
   assert.equal(toneOf(even), "even");
+});
+
+test("every palace keeps its OWN reading, so twelve cards are not three sentences", () => {
+  // The regression this pins is a VIEW defect with a measurable shape: the
+  // reading screen rendered `toneGloss` as each palace's body, and toneGloss
+  // has three values. A full 12-of-12 scan therefore paid out three distinct
+  // sentences — the better the capture, the more generic the result.
+  const r = readTwelvePalaces(makeRaw({ deltaMi: 5 }));
+  const readings = new Set(r.palaces.map((p) => p.reading));
+  const glosses = new Set(r.palaces.map((p) => p.toneGloss));
+
+  assert.equal(readings.size, 12, "each palace must carry its own distinct reading");
+  assert.equal(glosses.size, 1, "the tone gloss is per-TONE, which is why it cannot be the body");
+  for (const p of r.palaces) {
+    assert.ok(p.reading.length > 60, `${p.key}: the palace reading must survive measurement`);
+  }
+});
+
+test("the lead palace is the one furthest from baseline, and ties are deterministic", () => {
+  const raw = makeRaw({ deltaMi: 2 });
+  // Career sits furthest; sign must not decide, so it is driven NEGATIVE while
+  // everything else is positive. A signed comparison would pick a shadowed
+  // palace here and call the sign convention a finding.
+  raw.zones.center_forehead.deltaMi = -9;
+  const r = readTwelvePalaces(raw);
+  const lead = leadPalaceOf(r);
+
+  assert.equal(lead.palace.key, "career");
+  assert.equal(lead.distance, 9);
+  assert.equal(lead.palace.tone, "clear");
+
+  // Same frame, same lead, every time — including where several palaces tie.
+  const flat = readTwelvePalaces(makeRaw({ deltaMi: 5 }));
+  const first = leadPalaceOf(flat);
+  assert.equal(first.palace.key, "life", "a tie breaks on PALACES order, not insertion order");
+  assert.equal(leadPalaceOf(flat).palace.key, first.palace.key);
+});
+
+test("no lead is named when nothing stood out, and none is invented for old records", () => {
+  // Within the tone threshold: the honest answer is that no palace led.
+  assert.equal(leadPalaceOf(readTwelvePalaces(makeRaw({ deltaMi: 0 }))), null);
+
+  // Records stored before `deltaMi` was carried. Ranking these would mean
+  // ranking on a value that was never measured.
+  const legacy = { palaces: readTwelvePalaces(makeRaw({ deltaMi: 5 })).palaces
+    .map(({ deltaMi, ...rest }) => rest) };
+  assert.equal(leadPalaceOf(legacy), null);
+  assert.equal(leadPalaceOf(null), null);
+  assert.equal(leadPalaceOf({ palaces: [] }), null);
+});
+
+test("an unmeasured palace can never lead, whatever it carries", () => {
+  const raw = makeRaw({ deltaMi: 2 });
+  delete raw.zones.temple_left;
+  const r = readTwelvePalaces(raw);
+  const travel = r.palaces.find((p) => p.key === "travel");
+  assert.equal(travel.measured, false);
+  assert.equal(travel.deltaMi, null, "an unmeasured palace must not carry a delta");
+
+  // Even with a large value welded on, `measured: false` decides.
+  travel.deltaMi = 99;
+  assert.notEqual(leadPalaceOf(r).palace.key, "travel");
 });
 
 // ────────────────────────────────────────────────────────────────── qi se ───

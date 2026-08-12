@@ -19,8 +19,10 @@ import {
 import {
   readingScreenModel, historyColumnModel, gaugeModel, courtsStrip,
   sparklineModel, verdictFor, hookFor, READING_HOOKS, READING_SCREEN_ORDER, THREE_COURTS,
+  palaceFocusModel, nextScanModel, calibrationModel,
 } from "../../src/ui/qise/screens.js";
 import { LOW_CONFIDENCE } from "../../src/qise/baseline.js";
+import { PALACES, TONE_GLOSS } from "../../src/reading/twelve-palaces.js";
 
 /* ───────────────────────────────────────────────────────────── the palette ── */
 
@@ -324,4 +326,128 @@ test("the column is stable, so the share card and the screen agree", () => {
 test("an empty history renders an empty column rather than throwing", () => {
   assert.deepEqual(historyColumnModel([]), { rows: [], n: 0, colours: COLOUR_ORDER });
   assert.deepEqual(historyColumnModel(null).rows, []);
+});
+
+/* ────────────────────────────────────── the lead palace and the return hook ── */
+
+/** Twelve palaces as the store holds them, with a controllable delta. */
+const palaceSet = (deltas = {}) => ({
+  measuredCount: 12,
+  supportedCount: 12,
+  totalCount: 12,
+  sourcesDiffer: "Sources differ on the placement of the palaces.",
+  palaces: PALACES.map((p) => {
+    const deltaMi = deltas[p.key] ?? 2;
+    const tone = deltaMi > 1.5 ? "shadowed" : (deltaMi < -1.5 ? "clear" : "even");
+    return {
+      key: p.key, hanzi: p.hanzi, name: p.name, location: p.location,
+      supported: true, measured: true, tone, deltaMi,
+      toneGloss: TONE_GLOSS[tone], reading: p.reading,
+      translationNote: p.translationNote ?? null, notMeasuredNote: null,
+    };
+  }),
+});
+
+test("the focus model names one palace and hides none of the others", () => {
+  // The whole risk of a "highlight" is that it becomes a filter. The
+  // twelve-palace contract is that no branch may hide a palace, so the model
+  // flags a key and leaves the list alone.
+  const set = palaceSet({ career: -9 });
+  const focus = palaceFocusModel(set);
+
+  assert.equal(focus.available, true);
+  assert.equal(focus.leadKey, "career");
+  assert.equal(focus.lead.distance, 9);
+  assert.equal(set.palaces.length, 12, "the focus model must not filter the set");
+  assert.ok(!("rest" in focus) && !("visible" in focus),
+    "the model must not expose a reduced palace list that a view could render instead");
+});
+
+test("the lead carries the palace's own reading, never the shared tone gloss", () => {
+  const focus = palaceFocusModel(palaceSet({ wealth: 8 }));
+  const wealth = PALACES.find((p) => p.key === "wealth");
+  assert.equal(focus.lead.reading, wealth.reading);
+  assert.notEqual(focus.lead.reading, focus.lead.toneGloss);
+  assert.match(focus.lead.reading, /Mian Xiang|Classical Chinese face reading/,
+    "the hook still has to name the tradition it reads from");
+});
+
+test("a flat frame names no lead, and says so rather than picking one", () => {
+  const focus = palaceFocusModel(palaceSet(
+    Object.fromEntries(PALACES.map((p) => [p.key, 0])),
+  ));
+  assert.equal(focus.available, false);
+  assert.equal(focus.leadKey, null);
+  assert.equal(focus.lead, null);
+  assert.ok(focus.noneNote.length > 40);
+  assert.equal(palaceFocusModel(null).available, false);
+});
+
+test("the return prompt states a mechanism and never promises new content", () => {
+  const building = nextScanModel(
+    { active: true, remaining: 3, current: 1, required: 4 },
+    { available: true },
+  );
+  assert.equal(building.building, true);
+  assert.match(building.headline, /^3 more comparable scans/);
+  assert.ok(building.leadNote, "a named lead is allowed to be described as moving");
+
+  const ready = nextScanModel(
+    { active: false, remaining: 0, current: 4, required: 4 },
+    { available: true },
+  );
+  assert.equal(ready.building, false);
+  assert.match(ready.body, /your own earlier scans|already in your column/i);
+
+  // The footer already says "Scan again" on every tab. Two buttons with one
+  // label, a thumb apart, is a decision the reader should not have to make.
+  assert.equal(building.cta, "Add anchor 2 of 4");
+  assert.equal(ready.cta, "Take the next scan");
+  for (const m of [building, ready]) {
+    assert.notEqual(m.cta, "Scan again");
+  }
+
+  // No promise of content that does not vary, on either branch.
+  for (const m of [building, ready]) {
+    for (const s of [m.headline, m.body, m.leadNote || ""]) {
+      assert.doesNotMatch(s, /\b(unlock a deeper|new reading|more accurate|come back tomorrow)\b/i,
+        `the return prompt promised content rather than a mechanism: ${JSON.stringify(s)}`);
+    }
+  }
+});
+
+test("movement is only promised where a lead was actually measured", () => {
+  // "The lead palace moves between scans" is a statement about something that
+  // was measured. With no lead there is nothing to make that claim about.
+  const none = nextScanModel({ active: false, remaining: 0, current: 4, required: 4 },
+    { available: false });
+  assert.equal(none.leadNote, null);
+  assert.equal(nextScanModel({ active: false, remaining: 0, current: 4, required: 4 },
+    undefined).leadNote, null);
+});
+
+test("one scan reads as one scan — the singular is not '1 more comparable scans'", () => {
+  const m = nextScanModel({ active: true, remaining: 1, current: 3, required: 4 }, null);
+  assert.match(m.headline, /^One more comparable scan\b/);
+  assert.doesNotMatch(m.headline, /1 more/);
+});
+
+test("the reading screen model carries the focus and the return prompt", () => {
+  const m = readingScreenModel(reading(), history());
+  assert.ok(m.nextScan, "the return prompt must reach the screen model");
+  assert.equal(typeof m.nextScan.building, "boolean");
+  // No integrated reading on this fixture: the model must degrade, not throw.
+  assert.equal(m.integrated.available, false);
+  assert.equal(m.nextScan.leadNote, null);
+});
+
+test("calibration and the return prompt agree on how many scans remain", () => {
+  // Two surfaces reading the same counter. They drifted apart once already,
+  // when the Pattern tab held the only copy of the anchor count.
+  const h = history(2);
+  const c = calibrationModel(reading({ compass: null }), h);
+  const n = nextScanModel(c, null);
+  assert.equal(n.remaining, c.remaining);
+  assert.equal(n.current, c.current);
+  assert.equal(n.building, c.active && c.remaining > 0);
 });

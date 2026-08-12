@@ -1456,6 +1456,57 @@ measured under two illuminants. The defect was never that the lock existed, it
 was when it was taken.
 
 
+### 54. A per-TONE string is not a per-PALACE reading
+
+`integratedStoryMarkup()` rendered each palace card's body as
+`palace.measured ? palace.toneGloss : palace.reading` — so measuring a palace
+successfully **replaced** its distinctive reading with `TONE_GLOSS[tone]`, and
+`TONE_GLOSS` has exactly three values.
+
+The arithmetic of that is the whole finding: twelve cards, three sentences, four
+repeats each. **The better the capture, the more generic the result** — a
+refused palace showed its own text, a measured one showed boilerplate. A
+flawless 12-of-12 scan was the worst-reading outcome the screen could produce.
+
+**Symptom:** a reader who scrolls twelve palaces, sees the same two sentences
+over and over, and concludes the reading is generated filler. No error, no
+failing test, and every model underneath correct.
+**Cause:** treating the tone as the reading. It is an *annotation on* the
+reading — three buckets over a pigment delta — and it belongs below the palace's
+own text, never in place of it.
+**Pinned by:** `e2e/qise-reading-depth.spec.js` → `twelve palaces render twelve
+DIFFERENT readings, not three tone glosses`, which counts DISTINCT rendered
+bodies rather than matching strings, so a re-collapse fails whatever wording it
+uses; and `every palace keeps its OWN reading, so twelve cards are not three
+sentences` in `tests/reading.test.js`, which pins 12 distinct readings against
+1 distinct gloss at the data layer.
+
+**It had to be an e2e test.** The defect was three characters of a ternary in
+`ui/qise/app.js`, which nothing can import (item 44) — every unit test in the
+repo was green while it shipped. This is item 18a's rule reaching the view
+layer: coverage is what the tests can reach, and the file that renders the
+busiest screen in the app is reachable only through a browser.
+
+Two things added with the fix, both load-bearing:
+
+- **`deltaMi` is carried on the palace**, and through `projectPalaces`'
+  allow-list explicitly (never a spread — item 39). Without a magnitude the
+  twelve can only be ordered by tone, which is three buckets and ties almost
+  everywhere. Records stored before it exists rank as `null` rather than being
+  given an invented order.
+- **`leadPalaceOf()` ranks on `|deltaMi|`, not on the signed value.** Ranking
+  signed picks whichever direction happens to be positive, which is a property
+  of the erythema sign convention (item 2) and not of the face. Ties break on
+  `PALACES` order so the same frame always names the same lead — a hook that
+  moved between renders would be advertising a measurement it had not made.
+
+**The highlight flags; it must never filter.** `palaceFocusModel` returns a
+`leadKey` and no reduced list, and the grid still renders twelve. A "highlights"
+view that shows the lead and hides the rest is the pagination
+`reading/twelve-palaces.js` rules out, in nicer clothes. Pinned by `the focus
+model names one palace and hides none of the others`, which also asserts the
+model exposes no reduced palace array a view could render instead.
+
 ### 24. The summary may only repeat what was measured
 
 `reading/summary.js` builds the receipt shown above the detailed sections. It is
