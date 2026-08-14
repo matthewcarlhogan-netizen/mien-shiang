@@ -45,6 +45,8 @@ test("critical governance and release paths name the product owner", () => {
     "/docs/DECISION_REGISTER.md",
     "/docs/AGENT_OPERATING_MODEL.md",
     "/docs/INTERPRETATION_SYSTEM.md",
+    "/docs/OPTION_B_PROGRAM.md",
+    "/docs/OPTION_B_EXECUTION_PLAN.md",
     "/docs/agents/",
     "/docs/proposals/",
     "/docs/CLAUDE_CODE_BOOTSTRAP.md",
@@ -94,8 +96,20 @@ test("the Codespace stays small and installs a pinned Gemini CLI", () => {
   assert.equal(config.image, "mcr.microsoft.com/devcontainers/universal:2");
   assert.match(config.postCreateCommand,
     /npm ci && npm install --global @google\/gemini-cli@0\.55\.1$/);
-  assert.doesNotMatch(source, /GEMINI_API_KEY|GOOGLE_API_KEY|CLAUDE_CODE_OAUTH_TOKEN/,
-    "credentials must not be embedded in the devcontainer configuration");
+  assert.deepEqual(Object.keys(config.secrets || {}), ["GEMINI_API_KEY"]);
+  assert.deepEqual(Object.keys(config.secrets.GEMINI_API_KEY).sort(),
+    ["description", "documentationUrl"],
+    "the devcontainer may recommend the Codespaces secret but cannot contain its value");
+  assert.equal(config.secrets.GEMINI_API_KEY.documentationUrl,
+    "https://ai.google.dev/gemini-api/docs/api-key");
+  assert.doesNotMatch(JSON.stringify({
+    image: config.image,
+    hostRequirements: config.hostRequirements,
+    postCreateCommand: config.postCreateCommand,
+    containerEnv: config.containerEnv,
+    remoteEnv: config.remoteEnv,
+  }), /GEMINI_API_KEY|GOOGLE_API_KEY|CLAUDE_CODE_OAUTH_TOKEN/,
+    "credentials must not be embedded or mapped in the devcontainer configuration");
 });
 
 test("local agent state and temporary credentials are ignored", () => {
@@ -117,6 +131,12 @@ test("human review and proposal provenance are explicit gates", () => {
   assert.match(runbook, /test-only exception to the mark-ready and merge prohibition/);
   assert.match(runbook, /Windows `gh` login currently has `gist`, `read:org`, `repo` and `workflow` scopes/);
   assert.match(runbook, /Immediately after that proof, revoke the Windows credential/);
+  assert.match(runbook, /stopped Gemini CLI service for free, Pro and Ultra individual accounts/);
+  assert.match(runbook, /Codespaces secret named `GEMINI_API_KEY`/);
+  assert.match(runbook, /Enable \*\*Environment Variable Redaction\*\*/);
+  assert.match(runbook, /`no sandbox` label means Gemini has no second, nested sandbox/);
+  assert.match(runbook, /including item 8 for the Option B programme/);
+  assert.match(runbook, /If item 8 is absent, Option B is not yet on that Codespace's `main`/);
 
   const proposal = read("docs/proposals/SPIRITUAL_SCANNER_DEFINITION.md");
   assert.match(proposal, /Status:\*\* proposed, not approved/);
@@ -128,6 +148,36 @@ test("human review and proposal provenance are explicit gates", () => {
 
   const register = read("docs/DECISION_REGISTER.md");
   assert.match(register, /DR-2026-08-15-DAILY-LOOP/);
-  assert.match(register, /Option A — enduring portrait/);
-  assert.match(register, /Option B — daily loop/);
+  assert.match(register, /Status:\*\* approved/);
+  assert.match(register, /Decision:\*\* Option B — daily loop/);
+  assert.match(register, /research → design → proof → implementation/);
+});
+
+test("Option B is executable but cannot self-certify", () => {
+  const programme = read("docs/OPTION_B_PROGRAM.md");
+  assert.match(programme, /Approval of the programme is not approval of a proposed signal/);
+  assert.match(programme, /frameJitter.*capture quality/s);
+  assert.match(programme, /single capture using MediaPipe blendshapes/);
+  assert.match(programme, /independent evidence verdict/);
+  assert.match(programme, /may not.*mark a pull request ready or merge/s);
+
+  const plan = read("docs/OPTION_B_EXECUTION_PLAN.md");
+  for (const task of [
+    "B-000", "B-010", "B-015", "B-020", "B-025", "B-030", "B-040", "B-050", "B-060",
+    "B-070", "B-075", "B-080", "B-090", "B-100", "B-110", "B-120", "B-130",
+    "B-140", "B-150", "B-160", "B-170", "B-180",
+  ]) {
+    assert.match(plan, new RegExp(`\\| ${task} \\|`), `${task} must remain in the execution queue`);
+  }
+  assert.match(plan, /first `ready` item whose dependencies are `complete`/);
+  assert.match(plan, /must not mark a pull request ready, merge, push to `main`/);
+  assert.match(plan, /Synthetic success does not approve a signal/);
+
+  const operatingModel = read("docs/AGENT_OPERATING_MODEL.md");
+  assert.match(operatingModel, /Daily Loop Program Architect/);
+  assert.match(operatingModel, /does not replace the domain owners or the independent evidence/);
+
+  const role = read("docs/agents/daily-loop-program-architect.md");
+  assert.match(role, /Existing Qi Se is the foundation/);
+  assert.match(role, /Never approve your own source, cultural, measurement, fairness, privacy or release evidence/);
 });

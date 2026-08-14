@@ -7,6 +7,7 @@ Agents are accountable roles, not permission to run disconnected workstreams. Th
 | Role | Owns | Must not own |
 |---|---|---|
 | Architect | phase scope, dependency map, decisions, integration order | release verdict |
+| Daily Loop Program Architect | Option B queue, cross-phase dependencies, contract integration, evidence index and handoffs | its own evidence approval, readiness or release verdict |
 | Experience Director | product flows, visual system, accessibility, anti-generic review | measurement thresholds |
 | Scanner Engineer | camera, MediaPipe, capture lifecycle, performance, fallback | classical interpretation claims |
 | Geometry Researcher | sourced systems, region definitions, landmark evidence | invented indices or production approval |
@@ -18,6 +19,8 @@ Agents are accountable roles, not permission to run disconnected workstreams. Th
 | Release Gatekeeper | CI, release checks, performance/device evidence, reproducibility | changing requirements to get green |
 
 Detailed briefs live in `docs/agents/`.
+
+For approved Option B work, the Daily Loop Program Architect is the dedicated coordinator across research, design, proof and implementation. It follows `docs/OPTION_B_PROGRAM.md` and `docs/OPTION_B_EXECUTION_PLAN.md`; it does not replace the domain owners or the independent evidence, compliance and release reviewers named there.
 
 ## Delivery loop
 

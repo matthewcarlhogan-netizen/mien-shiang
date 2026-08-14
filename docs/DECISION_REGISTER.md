@@ -25,6 +25,20 @@ Use this register to stop prompts, discussions and implementation from collapsin
 - Independent compliance and release review.
 - A human-supervised cloud development path using a two-core GitHub Codespace and interactive Gemini CLI sign-in. It creates task branches and pull requests; it does not add runtime AI or a public-comment agent trigger.
 
+### DR-2026-08-15-DAILY-LOOP
+
+- **Date:** 15 August 2026
+- **Owner:** product owner
+- **Status:** approved
+- **Question:** Should the product remain an enduring portrait, enhanced by the existing Qi Se longitudinal comparison, or expand into a daily loop that crosses structural constructs with additional measured transient variables and parallel corpora?
+- **Decision:** Option B — daily loop. Run it as an ordered research → design → proof → implementation programme under a dedicated Daily Loop Program Architect. The programme is defined in `docs/OPTION_B_PROGRAM.md` and its executable queue is `docs/OPTION_B_EXECUTION_PLAN.md`.
+- **Existing foundation:** Qi Se already measures personal-baseline deviation, history and magnitude bands. Preserve and reuse that implementation unless a separately approved migration has evidence for changing it.
+- **Unproven scope:** “Shen burst variance” and “baseline-relative tension delta” are research labels, not established production signals. Current burst jitter is capture-quality data and current blendshape/asymmetry output describes one capture. Neither may drive a user-facing reading until its versioned contract and independent proof verdict pass.
+- **Consequences:** approving Option B commits the product direction and the research programme; it does not pre-approve a measurement definition, threshold, source interpretation, persistence change, corpus claim or release. Failed proof means abstention, redesign or removal—not a weakened gate.
+- **Execution authority:** the dedicated agent may research, design and implement on task branches, run checks, commit, push and open draft pull requests. It may not approve its own evidence, mark a pull request ready, merge, alter acceptance criteria to obtain a pass or issue the final release verdict.
+- **Human and external gates:** the product owner retains product decisions and diff review. Consented participant/device evidence, source and cultural review, legal/rights review, the unresolved history-retention decision and store approval cannot be manufactured or self-certified by an agent.
+- **Supersedes:** the unresolved state of this same decision record. Option A is parked, not the selected product direction.
+
 ## Unresolved proposals
 
 These must not be implemented as settled decisions without approval:
@@ -36,17 +50,6 @@ These must not be implemented as settled decisions without approval:
 - A future corpus-schema property for tradition attribution. Current DOM markers use kebab-case `data-copy`; do not infer a JSON field name from that syntax.
 - Unimplemented scanner improvements, including underexposure rejection and any threshold changes. Thresholds require recorded evidence and must not be silently retuned.
 - Mappings where primary sources disagree, including left/right cheek traditions.
-
-### DR-2026-08-15-DAILY-LOOP
-
-- **Owner:** product owner
-- **Status:** unresolved
-- **Question:** Should the product remain an enduring portrait, enhanced by the existing Qi Se longitudinal comparison, or expand into a daily loop that crosses structural constructs with additional measured transient variables and parallel corpora?
-- **Option A — enduring portrait:** deepen the currently implemented structural readings and Qi Se history without claiming unimplemented transient signals. This is closest to the present product.
-- **Option B — daily loop:** add separately verified Shen burst variance, baseline-relative tension delta, explicit transient-state contracts and source-led parallel corpora. This is a substantial product and measurement programme, not a copy-only expansion.
-- **Current evidence:** Qi Se already measures personal-baseline deviation, history and intensity bands. The repository does not currently establish production implementations for the proposed Shen or tension-delta measurements, nor the proposed cross-construct transient corpus.
-- **Proposal source:** `docs/proposals/SPIRITUAL_SCANNER_DEFINITION.md`, retained for consideration with provenance and known errors. Its presence is not approval.
-- **Decision required:** the product owner must select Option A or Option B in a later decision record before work treats the daily loop as committed scope.
 
 ## Decision template
 
