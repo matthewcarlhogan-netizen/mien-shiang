@@ -290,24 +290,35 @@ export const isLowConfidence = (c) => c < LOW_CONFIDENCE;
  * @param {Object} metrics one pipeline's metrics for today
  * @param {Array} history oldest first, each `{axes, valid, timestampIso, ...}`
  */
+export const BASELINE_VERSION = "v2";
+
 export function interpretReading(metrics, history, options = {}) {
   const axes = axesOf(metrics);
-  const lastReading = history[history.length - 1];
+  const currentTimestamp = options.timestampIso;
   
-  // Canonical-day policy: reroll/retake allowed until first successful reading.
-  // We use the timestamp to enforce this deterministically.
-  const currentTimestamp = options.timestampIso || new Date().toISOString();
-  if (lastReading && lastReading.timestampIso && 
+  // Segmentation: baseline/history by algorithm version and capture class.
+  // We filter history to match current algorithm and capture class,
+  // or reset lineage if they don't match.
+  const captureClass = options.captureMode || "auto";
+  const historyToUse = history.filter(r => 
+    (r.baselineVersion === BASELINE_VERSION || !r.baselineVersion) && 
+    (r.captureClass === captureClass || !r.captureClass)
+  );
+
+  const lastReading = historyToUse[historyToUse.length - 1];
+  
+  // Canonical-day policy: Use persisted timestamp for determinism.
+  if (currentTimestamp && lastReading && lastReading.timestampIso && 
       lastReading.timestampIso.split('T')[0] === currentTimestamp.split('T')[0]) {
-    // Already have a reading for this canonical day.
-    // Logic for "retake" is handled by the caller/UI.
+    // Logic for "retake" is handled by the caller/UI: 
+    // it will overwrite this entry in the store.
   }
 
-  // Baseline reset
+  // Baseline reset: check for gap
   const resetCheck = shouldResetBaseline(lastReading, { ...metrics, timestampIso: currentTimestamp });
-  const historyToUse = resetCheck.reset ? [] : history;
+  const validHistory = resetCheck.reset ? [] : historyToUse;
 
-  const validCount = (historyToUse || []).filter((r) => r && r.valid !== false).length;
+  const validCount = (validHistory || []).filter((r) => r && r.valid !== false).length;
 
   if (validCount < CALIBRATING_READINGS) {
     return {
@@ -316,7 +327,7 @@ export function interpretReading(metrics, history, options = {}) {
     };
   }
 
-  const baseline = computeBaseline(historyToUse);
+  const baseline = computeBaseline(validHistory);
   if (!baseline.ready) {
     return {
       state: "calibrating", readingsSoFar: validCount, needed: CALIBRATING_READINGS + 1,
@@ -324,15 +335,13 @@ export function interpretReading(metrics, history, options = {}) {
     };
   }
 
-  const floor = noiseFloor(historyToUse);
+  const floor = noiseFloor(validHistory);
   const deltas = deltasFrom(axes, baseline);
   const compass = projectCompass(deltas, floor);
   
-  // Ming/Run z-scores for passage engine.
-  const ming = metrics.corrected?.ming ?? 0;
-  const run = metrics.corrected?.run ?? 0;
-  const mingZ = (ming - (baseline.axes?.ming ?? 0)) / (floor.ming ?? 1);
-  const runZ = (run - (baseline.axes?.run ?? 0)) / (floor.run ?? 1);
+  // Ming/Run z-scores for passage engine, using provided metrics.
+  const mingZ = (metrics.ming - (baseline.axes?.ming ?? 0)) / (floor.ming ?? 1);
+  const runZ = (metrics.run - (baseline.axes?.run ?? 0)) / (floor.run ?? 1);
 
   return {
     state: "read",
