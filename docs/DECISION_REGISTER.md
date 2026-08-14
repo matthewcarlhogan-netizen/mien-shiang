@@ -23,6 +23,7 @@ Use this register to stop prompts, discussions and implementation from collapsin
 - Broader, source-led interpretation coverage with deterministic eligibility and abstention.
 - No ads and no weekly subscription.
 - Independent compliance and release review.
+- A human-supervised cloud development path using a two-core GitHub Codespace and interactive Gemini CLI sign-in. It creates task branches and pull requests; it does not add runtime AI or a public-comment agent trigger.
 
 ## Unresolved proposals
 
