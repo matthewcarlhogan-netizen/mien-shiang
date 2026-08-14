@@ -44,7 +44,7 @@ import {
 } from "../../qise/gates.js";
 import { frameStats } from "../../qise/framestats.js";
 import { computeReadingMetrics, lumRatioP90P50 } from "../../qise/metrics.js";
-import { interpretReading, readingConfidence, axesOf } from "../../qise/baseline.js";
+import { interpretReading, readingConfidence, axesOf, shouldResetBaseline } from "../../qise/baseline.js";
 import { openStore } from "../../qise/store.js";
 import { readingScreenModel, historyColumnModel } from "./screens.js";
 import { SHARE_CADENCES, shareReadings } from "./share.js";
@@ -851,7 +851,19 @@ async function finish(burst, rois, sclera, opened, history, gateMargins, illumin
     captureTier,
   });
 
-  const interpreted = interpretReading(metrics.corrected, history, { confidence });
+  const currentTimestamp = new Date().toISOString();
+  const lastReading = history[history.length - 1];
+  const reset = shouldResetBaseline(lastReading, { ...metrics.corrected, timestampIso: currentTimestamp });
+  if (reset.reset) {
+    await store.deleteAll();
+    history = [];
+  } else {
+    const today = currentTimestamp.split('T')[0];
+    const index = history.findIndex(r => r.timestampIso.startsWith(today));
+    if (index !== -1) history.splice(index, 1);
+  }
+
+  const interpreted = interpretReading(metrics.corrected, history, { confidence, timestampIso: currentTimestamp });
 
   let integrated = null;
   if (acceptedImage && acceptedPoints) {
@@ -866,6 +878,7 @@ async function finish(burst, rois, sclera, opened, history, gateMargins, illumin
     axes: axesOf(metrics.corrected),
     deltas: interpreted.deltas,
     compass: interpreted.compass,
+    z: interpreted.z,
     composition: compositionOf({ metrics, compass: interpreted.compass }),
     integrated,
     tags: [],

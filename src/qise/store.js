@@ -85,6 +85,7 @@ export function toRecord(reading) {
 
     axes: scalarMap(r.axes),
     deltas: scalarMap(r.deltas),
+    z: scalarMap(r.z, ["ming", "run"]),
     compass: r.compass ? {
       ascendant: r.compass.ascendant ?? null,
       magnitude: r.compass.magnitude ?? null,

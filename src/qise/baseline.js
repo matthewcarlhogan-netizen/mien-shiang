@@ -47,11 +47,11 @@ export const RESET_GAP_DAYS = 45;
  * the sclera MAD floor; the units differ, so the numbers do.
  */
 export const AXIS_MAD_FLOOR = Object.freeze({
-  a: 0.15, b: 0.15, L: 0.25, C: 0.15, periorbitalL: 0.30,
+  a: 0.15, b: 0.15, L: 0.25, C: 0.15, periorbitalL: 0.30, ming: 0.15, run: 0.15,
 });
 
-/** The axes the compass projects onto. */
-export const COMPASS_AXES = Object.freeze(["a", "b", "L", "C", "periorbitalL"]);
+/** The axes the compass projects onto, plus ming/run for passage course logic. */
+export const COMPASS_AXES = Object.freeze(["a", "b", "L", "C", "periorbitalL", "ming", "run"]);
 
 /**
  * Weight given to the periorbital axis when scoring `hei`.
@@ -292,7 +292,22 @@ export const isLowConfidence = (c) => c < LOW_CONFIDENCE;
  */
 export function interpretReading(metrics, history, options = {}) {
   const axes = axesOf(metrics);
-  const validCount = (history || []).filter((r) => r && r.valid !== false).length;
+  const lastReading = history[history.length - 1];
+  
+  // Canonical-day policy: reroll/retake allowed until first successful reading.
+  // We use the timestamp to enforce this deterministically.
+  const currentTimestamp = options.timestampIso || new Date().toISOString();
+  if (lastReading && lastReading.timestampIso && 
+      lastReading.timestampIso.split('T')[0] === currentTimestamp.split('T')[0]) {
+    // Already have a reading for this canonical day.
+    // Logic for "retake" is handled by the caller/UI.
+  }
+
+  // Baseline reset
+  const resetCheck = shouldResetBaseline(lastReading, { ...metrics, timestampIso: currentTimestamp });
+  const historyToUse = resetCheck.reset ? [] : history;
+
+  const validCount = (historyToUse || []).filter((r) => r && r.valid !== false).length;
 
   if (validCount < CALIBRATING_READINGS) {
     return {
@@ -301,7 +316,7 @@ export function interpretReading(metrics, history, options = {}) {
     };
   }
 
-  const baseline = computeBaseline(history);
+  const baseline = computeBaseline(historyToUse);
   if (!baseline.ready) {
     return {
       state: "calibrating", readingsSoFar: validCount, needed: CALIBRATING_READINGS + 1,
@@ -309,14 +324,21 @@ export function interpretReading(metrics, history, options = {}) {
     };
   }
 
-  const floor = noiseFloor(history);
+  const floor = noiseFloor(historyToUse);
   const deltas = deltasFrom(axes, baseline);
   const compass = projectCompass(deltas, floor);
+  
+  // Ming/Run z-scores for passage engine.
+  const ming = metrics.corrected?.ming ?? 0;
+  const run = metrics.corrected?.run ?? 0;
+  const mingZ = (ming - (baseline.axes?.ming ?? 0)) / (floor.ming ?? 1);
+  const runZ = (run - (baseline.axes?.run ?? 0)) / (floor.run ?? 1);
 
   return {
     state: "read",
     axes, baseline, floor, deltas, compass,
     basis: metrics.basis,
+    z: { ming: mingZ, run: runZ },
     confidence: options.confidence ?? null,
   };
 }
