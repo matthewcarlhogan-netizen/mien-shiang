@@ -109,6 +109,11 @@ test("human review and proposal provenance are explicit gates", () => {
   assert.match(runbook, /Human diff review is therefore load-bearing, not optional/);
   assert.match(runbook, /They prove that the code runs and that existing guards still hold; they do not judge/);
   assert.match(runbook, /must not mark a pull request ready or merge it/);
+  assert.match(runbook, /probe #23/);
+  assert.match(runbook, /probe #24/);
+  assert.match(runbook, /must not be represented as an empirically enforced human gate/);
+  assert.match(runbook, /Windows `gh` login currently has `gist`, `read:org`, `repo` and `workflow` scopes/);
+  assert.match(runbook, /Immediately after that proof, revoke the Windows credential/);
 
   const proposal = read("docs/proposals/SPIRITUAL_SCANNER_DEFINITION.md");
   assert.match(proposal, /Status:\*\* proposed, not approved/);

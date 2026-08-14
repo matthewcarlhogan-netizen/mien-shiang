@@ -8,6 +8,8 @@ The supported low-cost path is an interactive Gemini CLI session inside a two-co
 
 For this supervised phase, required status checks are the repository-enforced merge gate. They prove that the code runs and that existing guards still hold; they do not judge whether a change quietly narrows, reinterprets or settles a product decision. There is no independent-review barrier in this single-maintainer setup. Human diff review is therefore load-bearing, not optional, and CI must never be described as sufficient on its own.
 
+The GitHub connector is not a technical approval barrier. On 15 August 2026, a disposable pull request was marked ready and merged without a distinct confirmation while the connector inherited **Allow low-risk actions** ([probe #23](https://github.com/matthewcarlhogan-netizen/mien-shiang/pull/23)). The connector was then changed to the app-specific **Allow read actions** setting and that setting was read back successfully. A second disposable test still created branches and a file, opened and marked ready, and merged [probe #24](https://github.com/matthewcarlhogan-netizen/mien-shiang/pull/24) without a distinct confirmation prompt. Neither probe targeted `main`; their temporary branches were deleted and `main` remained at `fdff96d25409fb66279924bf4569a3ec88d49fcf`. The permission setting is retained because it states the intended least-privilege policy, but it must not be represented as an empirically enforced human gate in this client context.
+
 ## One-time setup
 
 1. Check the current [GitHub Codespaces allowance and billing controls](https://docs.github.com/en/billing/concepts/product-billing/github-codespaces). Personal-account quotas and prices can change.
@@ -35,6 +37,7 @@ Start with a small documentation or test task to prove the full branch-to-PR loo
 - If a future non-interactive task genuinely needs a key, pause for a separate security decision. Use a scoped GitHub secret in the correct environment, never a repository file.
 - Do not add AI workflows triggered by public issue or review comments. Automation must have an allow-list, least-privilege permissions, spend controls and explicit owner approval before activation.
 - Treat any connector or shell credential with unverified scope as merge-capable until demonstrated otherwise. Procedural supervision is the current control; unattended operation requires a separate, restricted identity working from a fork.
+- **Known open item:** the Windows `gh` login currently has `gist`, `read:org`, `repo` and `workflow` scopes, so it remains a separate merge and workflow-authority path. Keep it only until the Codespace loop has been proven by a real container build, Gemini sign-in, bounded task branch, local gates, draft pull request and required CI. Immediately after that proof, revoke the Windows credential or replace it with a fine-grained credential that cannot merge to `main` or modify workflows, then verify the reduced state with `gh auth status`.
 
 ## End-of-session handoff
 
