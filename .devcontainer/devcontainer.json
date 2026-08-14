@@ -1,0 +1,8 @@
+{
+  "name": "Mien Shiang cloud agent",
+  "image": "mcr.microsoft.com/devcontainers/universal:2",
+  "hostRequirements": {
+    "cpus": 2
+  },
+  "postCreateCommand": "npm ci && npm install --global @google/gemini-cli@0.55.1"
+}

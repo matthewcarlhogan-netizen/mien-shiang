@@ -4,6 +4,10 @@ saved_models/
 test-results/
 playwright-report/
 
+# Local AI-agent state and temporary GitHub Action credentials.
+.gemini/
+gha-creds-*.json
+
 # Bubblewrap / Android build output. The keystore especially must never be
 # committed — losing it means you cannot ship updates under the same identity,
 # and leaking it means someone else can.

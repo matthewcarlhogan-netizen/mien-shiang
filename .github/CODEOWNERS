@@ -1,0 +1,23 @@
+# Governance, automation and release gates require explicit owner review.
+/AGENTS.md @matthewcarlhogan-netizen
+/CLAUDE.md @matthewcarlhogan-netizen
+/GEMINI.md @matthewcarlhogan-netizen
+/.github/CODEOWNERS @matthewcarlhogan-netizen
+/.github/claude/prompts/ @matthewcarlhogan-netizen
+/.github/workflows/ @matthewcarlhogan-netizen
+/.devcontainer/ @matthewcarlhogan-netizen
+/docs/PROJECT_CHARTER.md @matthewcarlhogan-netizen
+/docs/DECISION_REGISTER.md @matthewcarlhogan-netizen
+/docs/AGENT_OPERATING_MODEL.md @matthewcarlhogan-netizen
+/docs/INTERPRETATION_SYSTEM.md @matthewcarlhogan-netizen
+/docs/agents/ @matthewcarlhogan-netizen
+/docs/proposals/ @matthewcarlhogan-netizen
+/docs/CLAUDE_CODE_BOOTSTRAP.md @matthewcarlhogan-netizen
+/docs/CLOUD_AGENT_RUNBOOK.md @matthewcarlhogan-netizen
+/scripts/check-release.js @matthewcarlhogan-netizen
+/scripts/copy-scan.js @matthewcarlhogan-netizen
+/scripts/lint-bundle.js @matthewcarlhogan-netizen
+/tests/agent-governance.test.js @matthewcarlhogan-netizen
+/tests/copy-guard.test.js @matthewcarlhogan-netizen
+/tests/copy-lint.test.js @matthewcarlhogan-netizen
+/tests/source-integrity.test.js @matthewcarlhogan-netizen
