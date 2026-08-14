@@ -4,5 +4,11 @@
   "hostRequirements": {
     "cpus": 2
   },
+  "secrets": {
+    "GEMINI_API_KEY": {
+      "description": "Personal Gemini Developer API key for Gemini CLI. Keep the AI Studio project on the Free tier unless paid use is deliberate.",
+      "documentationUrl": "https://ai.google.dev/gemini-api/docs/api-key"
+    }
+  },
   "postCreateCommand": "npm ci && npm install --global @google/gemini-cli@0.55.1"
 }

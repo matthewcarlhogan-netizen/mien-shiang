@@ -96,8 +96,20 @@ test("the Codespace stays small and installs a pinned Gemini CLI", () => {
   assert.equal(config.image, "mcr.microsoft.com/devcontainers/universal:2");
   assert.match(config.postCreateCommand,
     /npm ci && npm install --global @google\/gemini-cli@0\.55\.1$/);
-  assert.doesNotMatch(source, /GEMINI_API_KEY|GOOGLE_API_KEY|CLAUDE_CODE_OAUTH_TOKEN/,
-    "credentials must not be embedded in the devcontainer configuration");
+  assert.deepEqual(Object.keys(config.secrets || {}), ["GEMINI_API_KEY"]);
+  assert.deepEqual(Object.keys(config.secrets.GEMINI_API_KEY).sort(),
+    ["description", "documentationUrl"],
+    "the devcontainer may recommend the Codespaces secret but cannot contain its value");
+  assert.equal(config.secrets.GEMINI_API_KEY.documentationUrl,
+    "https://ai.google.dev/gemini-api/docs/api-key");
+  assert.doesNotMatch(JSON.stringify({
+    image: config.image,
+    hostRequirements: config.hostRequirements,
+    postCreateCommand: config.postCreateCommand,
+    containerEnv: config.containerEnv,
+    remoteEnv: config.remoteEnv,
+  }), /GEMINI_API_KEY|GOOGLE_API_KEY|CLAUDE_CODE_OAUTH_TOKEN/,
+    "credentials must not be embedded or mapped in the devcontainer configuration");
 });
 
 test("local agent state and temporary credentials are ignored", () => {
@@ -119,6 +131,12 @@ test("human review and proposal provenance are explicit gates", () => {
   assert.match(runbook, /test-only exception to the mark-ready and merge prohibition/);
   assert.match(runbook, /Windows `gh` login currently has `gist`, `read:org`, `repo` and `workflow` scopes/);
   assert.match(runbook, /Immediately after that proof, revoke the Windows credential/);
+  assert.match(runbook, /stopped Gemini CLI service for free, Pro and Ultra individual accounts/);
+  assert.match(runbook, /Codespaces secret named `GEMINI_API_KEY`/);
+  assert.match(runbook, /Enable \*\*Environment Variable Redaction\*\*/);
+  assert.match(runbook, /`no sandbox` label means Gemini has no second, nested sandbox/);
+  assert.match(runbook, /including item 8 for the Option B programme/);
+  assert.match(runbook, /If item 8 is absent, Option B is not yet on that Codespace's `main`/);
 
   const proposal = read("docs/proposals/SPIRITUAL_SCANNER_DEFINITION.md");
   assert.match(proposal, /Status:\*\* proposed, not approved/);

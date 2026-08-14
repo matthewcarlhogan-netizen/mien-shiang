@@ -4,7 +4,9 @@
 
 This is a development environment, not a product dependency. Mien Shiang remains an on-device application with no runtime AI, server-side inference, upload or account requirement. The cloud agent may change repository files only through a task branch and pull request.
 
-The supported low-cost path is an interactive Gemini CLI session inside a two-core GitHub Codespace. It does not use a public issue-comment trigger or an unattended AI workflow.
+The supported low-cost path is an interactive Gemini CLI session inside a two-core GitHub Codespace, authenticated by a personal Gemini Developer API key supplied as an encrypted Codespaces secret. It does not use a public issue-comment trigger or an unattended AI workflow.
+
+The original individual-account OAuth route is retired. Google [stopped Gemini CLI service for free, Pro and Ultra individual accounts on 18 June 2026](https://github.com/google-gemini/gemini-cli/discussions/28017); enterprise Code Assist licences and API-key authentication were explicitly left available. A current Gemini CLI may still display **Sign in with Google**, but an individual account can receive “this client is no longer supported”. Treat that as an unavailable route, not as a user or browser failure.
 
 For this supervised phase, required status checks are the repository-enforced merge gate. They prove that the code runs and that existing guards still hold; they do not judge whether a change quietly narrows, reinterprets or settles a product decision. There is no independent-review barrier in this single-maintainer setup. Human diff review is therefore load-bearing, not optional, and CI must never be described as sufficient on its own.
 
@@ -16,9 +18,12 @@ A subsequent read-only, injection-shaped probe fetched [an untrusted instruction
 
 1. Check the current [GitHub Codespaces allowance and billing controls](https://docs.github.com/en/billing/concepts/product-billing/github-codespaces). Personal-account quotas and prices can change.
 2. In GitHub **Settings > Codespaces**, set the default idle timeout to 10 minutes. Do not create a prebuild for this repository. GitHub also documents [ways to reduce included usage](https://docs.github.com/en/codespaces/troubleshooting/troubleshooting-included-usage).
-3. From the repository page, choose **Code > Codespaces > Create codespace on main**. Keep the machine at two cores. The repository configuration installs dependencies and the pinned stable Gemini CLI release.
-4. In the Codespace terminal, run `gemini`. Choose **Sign in with Google** with a personal account. This is Gemini CLI's recommended individual setup and avoids placing an API key in the repository. See the official [authentication](https://geminicli.com/docs/get-started/authentication/) and [quota](https://geminicli.com/docs/resources/quota-and-pricing/) pages for current terms and limits.
-5. At the Gemini prompt, run `/memory show`. Confirm that the displayed context includes the contents of `AGENTS.md`. The root `GEMINI.md` imports that canonical file using Gemini CLI's [documented context import](https://geminicli.com/docs/cli/gemini-md/).
+3. In [Google AI Studio](https://aistudio.google.com/apikey), create a Gemini Developer API key. To keep this path free, leave its project on the **Free** tier and do not attach billing. Free model availability and limits vary; check the project's current tier and quota in AI Studio rather than relying on a fixed number.
+4. In GitHub **Settings > Codespaces > New secret**, create a personal Codespaces secret named `GEMINI_API_KEY` and grant it only to this repository. Never put the value in the repository, a prompt, chat, screenshot, shell profile or command history. GitHub documents that [Codespaces secrets are encrypted development environment variables](https://docs.github.com/en/codespaces/managing-your-codespaces/managing-your-account-specific-secrets-for-github-codespaces). If the Codespace already exists, follow GitHub's reload prompt or stop and restart it so the secret is injected.
+5. From the repository page, choose **Code > Codespaces > Create codespace on main**. Keep the machine at two cores. The repository configuration installs dependencies and the pinned Gemini CLI release, and recommends the secret without containing its value.
+6. In the Codespace terminal, verify presence without printing the value: `test -n "${GEMINI_API_KEY:-}" && echo "Gemini API key loaded"`. Then run `gemini --approval-mode auto_edit` and choose **Use Gemini API Key** if prompted. The official [Gemini CLI authentication guide](https://geminicli.com/docs/get-started/authentication/) supports `GEMINI_API_KEY`; API authentication has different quota, pricing and privacy terms from the retired individual OAuth service.
+7. In Gemini, open `/settings`. Enable **Environment Variable Redaction**, **Disable YOLO Mode** and **Disable Always Allow**. Keep approval mode at Auto-Edit. The footer's `no sandbox` label means Gemini has no second, nested sandbox; the `/workspaces/...` Codespace container remains the outer isolation boundary, while shell commands still require confirmation in Auto-Edit. Do not reproduce this unsandboxed setup directly on the Windows host.
+8. At the Gemini prompt, run `/memory show`. Confirm that the displayed context includes the contents of `AGENTS.md`, including item 8 for the Option B programme. The root `GEMINI.md` imports that canonical file using Gemini CLI's [documented context import](https://geminicli.com/docs/cli/gemini-md/). If item 8 is absent, Option B is not yet on that Codespace's `main`: merge the bootstrap PR, run `git pull --ff-only`, then restart Gemini before giving it the mission.
 
 ## Work loop
 
@@ -49,7 +54,8 @@ Security probes #23 and #24 were an explicit, product-owner-authorised, test-onl
 
 - Stop the Codespace as soon as a session ends; delete Codespaces that are no longer needed. A stopped Codespace still consumes storage.
 - Use `/stats model` to inspect the current Gemini session usage. Free quotas are service limits, not a guarantee of uninterrupted access.
-- Never paste credentials into a prompt, commit them, or store them in `GEMINI.md`.
+- A Gemini Developer API project begins on the Free tier, but it can become billable only if billing is deliberately attached. Keep billing disabled for this programme and verify the tier in AI Studio. Free-tier prompts may be used by Google to improve its products under the applicable Gemini API terms.
+- Never paste credentials into a prompt, commit them, or store them in `GEMINI.md`. If an API key was exposed in a prompt, chat, screenshot, repository file or command history, revoke it in AI Studio and create a replacement Codespaces secret.
 - If a future non-interactive task genuinely needs a key, pause for a separate security decision. Use a scoped GitHub secret in the correct environment, never a repository file.
 - Do not add AI workflows triggered by public issue or review comments. Automation must have an allow-list, least-privilege permissions, spend controls and explicit owner approval before activation.
 - Treat any connector or shell credential with unverified scope as merge-capable until demonstrated otherwise. Procedural supervision is the current control; unattended operation requires a separate, restricted identity working from a fork.
