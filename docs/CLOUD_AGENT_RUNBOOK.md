@@ -6,6 +6,8 @@ This is a development environment, not a product dependency. Mien Shiang remains
 
 The supported low-cost path is an interactive Gemini CLI session inside a two-core GitHub Codespace. It does not use a public issue-comment trigger or an unattended AI workflow.
 
+For this supervised phase, required status checks are the repository-enforced merge gate. They prove that the code runs and that existing guards still hold; they do not judge whether a change quietly narrows, reinterprets or settles a product decision. There is no independent-review barrier in this single-maintainer setup. Human diff review is therefore load-bearing, not optional, and CI must never be described as sufficient on its own.
+
 ## One-time setup
 
 1. Check the current [GitHub Codespaces allowance and billing controls](https://docs.github.com/en/billing/concepts/product-billing/github-codespaces). Personal-account quotas and prices can change.
@@ -18,10 +20,10 @@ The supported low-cost path is an interactive Gemini CLI session inside a two-co
 
 1. Synchronise the base and create a task branch: `git switch main`, `git pull --ff-only`, then `git switch -c codex/<short-task-name>`.
 2. Give Gemini one bounded task with acceptance criteria and excluded work. Tell it to read `AGENTS.md` and the relevant linked documents before editing.
-3. Review its proposed changes before allowing broad commands. Do not use `--yolo` or approve a request that writes outside this repository.
+3. Review its proposed changes before allowing broad commands. Do not use `--yolo` or approve a request that writes outside this repository. Before merge, read the complete diff against `docs/PROJECT_CHARTER.md` and `docs/DECISION_REGISTER.md`; if you cannot explain every product-decision effect, stop. Neither green CI nor CODEOWNERS substitutes for this judgement.
 4. Run the repository's real gates: `npm test`, `npm run build`, and `npm run lint:bundle`. Run browser and device checks when the changed surface requires them.
 5. Inspect `git status` and `git diff`. Commit only intended files, push the task branch and open a draft pull request.
-6. Wait for GitHub CI, review the diff yourself and merge only when the required checks pass. Never push directly to `main`.
+6. Wait for GitHub CI, review the diff yourself and merge only when the required checks pass. The cloud agent must not mark a pull request ready or merge it; those are product-owner actions performed after the human review. Never push directly to `main`.
 
 Start with a small documentation or test task to prove the full branch-to-PR loop before assigning corpus, geometry, compliance or scanner work.
 
@@ -32,6 +34,7 @@ Start with a small documentation or test task to prove the full branch-to-PR loo
 - Never paste credentials into a prompt, commit them, or store them in `GEMINI.md`.
 - If a future non-interactive task genuinely needs a key, pause for a separate security decision. Use a scoped GitHub secret in the correct environment, never a repository file.
 - Do not add AI workflows triggered by public issue or review comments. Automation must have an allow-list, least-privilege permissions, spend controls and explicit owner approval before activation.
+- Treat any connector or shell credential with unverified scope as merge-capable until demonstrated otherwise. Procedural supervision is the current control; unattended operation requires a separate, restricted identity working from a fork.
 
 ## End-of-session handoff
 

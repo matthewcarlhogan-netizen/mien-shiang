@@ -37,6 +37,17 @@ These must not be implemented as settled decisions without approval:
 - Unimplemented scanner improvements, including underexposure rejection and any threshold changes. Thresholds require recorded evidence and must not be silently retuned.
 - Mappings where primary sources disagree, including left/right cheek traditions.
 
+### DR-2026-08-15-DAILY-LOOP
+
+- **Owner:** product owner
+- **Status:** unresolved
+- **Question:** Should the product remain an enduring portrait, enhanced by the existing Qi Se longitudinal comparison, or expand into a daily loop that crosses structural constructs with additional measured transient variables and parallel corpora?
+- **Option A — enduring portrait:** deepen the currently implemented structural readings and Qi Se history without claiming unimplemented transient signals. This is closest to the present product.
+- **Option B — daily loop:** add separately verified Shen burst variance, baseline-relative tension delta, explicit transient-state contracts and source-led parallel corpora. This is a substantial product and measurement programme, not a copy-only expansion.
+- **Current evidence:** Qi Se already measures personal-baseline deviation, history and intensity bands. The repository does not currently establish production implementations for the proposed Shen or tension-delta measurements, nor the proposed cross-construct transient corpus.
+- **Proposal source:** `docs/proposals/SPIRITUAL_SCANNER_DEFINITION.md`, retained for consideration with provenance and known errors. Its presence is not approval.
+- **Decision required:** the product owner must select Option A or Option B in a later decision record before work treats the daily loop as committed scope.
+
 ## Decision template
 
 Record: ID, date, owner, status, question, options, evidence, decision, consequences, migration, tests and superseded decisions.

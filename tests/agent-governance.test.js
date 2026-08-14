@@ -46,6 +46,7 @@ test("critical governance and release paths name the product owner", () => {
     "/docs/AGENT_OPERATING_MODEL.md",
     "/docs/INTERPRETATION_SYSTEM.md",
     "/docs/agents/",
+    "/docs/proposals/",
     "/docs/CLAUDE_CODE_BOOTSTRAP.md",
     "/docs/CLOUD_AGENT_RUNBOOK.md",
     "/scripts/check-release.js",
@@ -101,4 +102,24 @@ test("local agent state and temporary credentials are ignored", () => {
   const source = read(".gitignore");
   assert.match(source, /^\.gemini\/$/m);
   assert.match(source, /^gha-creds-\*\.json$/m);
+});
+
+test("human review and proposal provenance are explicit gates", () => {
+  const runbook = read("docs/CLOUD_AGENT_RUNBOOK.md");
+  assert.match(runbook, /Human diff review is therefore load-bearing, not optional/);
+  assert.match(runbook, /They prove that the code runs and that existing guards still hold; they do not judge/);
+  assert.match(runbook, /must not mark a pull request ready or merge it/);
+
+  const proposal = read("docs/proposals/SPIRITUAL_SCANNER_DEFINITION.md");
+  assert.match(proposal, /Status:\*\* proposed, not approved/);
+  assert.match(proposal, /conversation-derived/);
+  assert.match(proposal, /not verified against the repository before it was written/);
+  assert.match(proposal, /`verify-release\.mjs` as the release gate\. That file does not exist/);
+  assert.match(proposal, /plain-JavaScript PWA, not Vite/);
+  assert.match(proposal, /word-boundary matching/);
+
+  const register = read("docs/DECISION_REGISTER.md");
+  assert.match(register, /DR-2026-08-15-DAILY-LOOP/);
+  assert.match(register, /Option A — enduring portrait/);
+  assert.match(register, /Option B — daily loop/);
 });
