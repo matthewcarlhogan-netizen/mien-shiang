@@ -11,6 +11,7 @@ Before changing the product, read:
 5. The relevant brief under `docs/agents/`.
 6. `docs/INTERPRETATION_SYSTEM.md` for scanner-to-reading expansion work.
 7. `docs/scanner-development-report.md` for the scanner's evidence and remaining limitations.
+8. For approved daily-loop work, `docs/OPTION_B_PROGRAM.md`, `docs/OPTION_B_EXECUTION_PLAN.md` and `docs/agents/daily-loop-program-architect.md`.
 
 ## Non-negotiable workflow
 
@@ -22,6 +23,7 @@ Before changing the product, read:
 - Raw frames remain in volatile memory and are not persisted or transmitted.
 - The product is entertainment and self-discovery, not diagnosis, identity, attractiveness scoring, prediction or a fixed judgement of character.
 - When evidence is missing, abstain or set `needsVerification: true`; never fabricate a MediaPipe index, classical claim, legal conclusion or commercial decision.
+- For Option B, programme approval is not signal approval. Follow the execution queue in dependency order; no new transient signal becomes persistent, eligible or user-facing before its contract and independent proof verdict pass.
 
 ## Required handoff
 

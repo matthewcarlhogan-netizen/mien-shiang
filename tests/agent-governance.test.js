@@ -45,6 +45,8 @@ test("critical governance and release paths name the product owner", () => {
     "/docs/DECISION_REGISTER.md",
     "/docs/AGENT_OPERATING_MODEL.md",
     "/docs/INTERPRETATION_SYSTEM.md",
+    "/docs/OPTION_B_PROGRAM.md",
+    "/docs/OPTION_B_EXECUTION_PLAN.md",
     "/docs/agents/",
     "/docs/proposals/",
     "/docs/CLAUDE_CODE_BOOTSTRAP.md",
@@ -128,6 +130,36 @@ test("human review and proposal provenance are explicit gates", () => {
 
   const register = read("docs/DECISION_REGISTER.md");
   assert.match(register, /DR-2026-08-15-DAILY-LOOP/);
-  assert.match(register, /Option A — enduring portrait/);
-  assert.match(register, /Option B — daily loop/);
+  assert.match(register, /Status:\*\* approved/);
+  assert.match(register, /Decision:\*\* Option B — daily loop/);
+  assert.match(register, /research → design → proof → implementation/);
+});
+
+test("Option B is executable but cannot self-certify", () => {
+  const programme = read("docs/OPTION_B_PROGRAM.md");
+  assert.match(programme, /Approval of the programme is not approval of a proposed signal/);
+  assert.match(programme, /frameJitter.*capture quality/s);
+  assert.match(programme, /single capture using MediaPipe blendshapes/);
+  assert.match(programme, /independent evidence verdict/);
+  assert.match(programme, /may not.*mark a pull request ready or merge/s);
+
+  const plan = read("docs/OPTION_B_EXECUTION_PLAN.md");
+  for (const task of [
+    "B-000", "B-010", "B-015", "B-020", "B-025", "B-030", "B-040", "B-050", "B-060",
+    "B-070", "B-075", "B-080", "B-090", "B-100", "B-110", "B-120", "B-130",
+    "B-140", "B-150", "B-160", "B-170", "B-180",
+  ]) {
+    assert.match(plan, new RegExp(`\\| ${task} \\|`), `${task} must remain in the execution queue`);
+  }
+  assert.match(plan, /first `ready` item whose dependencies are `complete`/);
+  assert.match(plan, /must not mark a pull request ready, merge, push to `main`/);
+  assert.match(plan, /Synthetic success does not approve a signal/);
+
+  const operatingModel = read("docs/AGENT_OPERATING_MODEL.md");
+  assert.match(operatingModel, /Daily Loop Program Architect/);
+  assert.match(operatingModel, /does not replace the domain owners or the independent evidence/);
+
+  const role = read("docs/agents/daily-loop-program-architect.md");
+  assert.match(role, /Existing Qi Se is the foundation/);
+  assert.match(role, /Never approve your own source, cultural, measurement, fairness, privacy or release evidence/);
 });

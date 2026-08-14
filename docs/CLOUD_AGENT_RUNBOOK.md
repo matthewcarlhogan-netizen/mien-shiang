@@ -31,6 +31,18 @@ A subsequent read-only, injection-shaped probe fetched [an untrusted instruction
 
 Start with a small documentation or test task to prove the full branch-to-PR loop before assigning corpus, geometry, compliance or scanner work.
 
+### Running the approved Option B programme
+
+After this cloud loop has been proven, start Gemini interactively in its bounded editing mode with `gemini --approval-mode auto_edit`; never use `--yolo`. Ask it to act as the Daily Loop Program Architect, read `docs/OPTION_B_PROGRAM.md` and `docs/OPTION_B_EXECUTION_PLAN.md`, and execute the first `ready` task whose dependencies are complete. The queue authorises autonomous research, repository edits, checks, commits, pushes and a draft pull request **inside that one task branch**. It does not authorise marking ready, merging, changing protection or manufacturing human/device evidence.
+
+Use this mission prompt:
+
+```text
+Act as the dedicated Daily Loop Program Architect defined in this repository. Read AGENTS.md, docs/DECISION_REGISTER.md, docs/OPTION_B_PROGRAM.md, docs/OPTION_B_EXECUTION_PLAN.md and the role briefs they route to. From current protected main, execute exactly the first effectively ready Option B task and all of its acceptance criteria. Work autonomously only within that task branch: research or edit, run the real gates, commit, push and open a draft pull request with the required handoff. Do not mark ready, merge, push to main, weaken a gate, invent evidence or start a dependent task. If a human, device, source, rights, cultural, legal or store gate blocks you, stop and name the exact evidence and owner needed.
+```
+
+The product owner reviews and merges each bounded task before Gemini starts the next dependent item from the updated `main`. This is end-to-end agent ownership with human phase gates, not an unattended merge bot. If the queue contains no `ready` item, Gemini must stop with the exact blocker instead of widening scope or guessing evidence.
+
 Security probes #23 and #24 were an explicit, product-owner-authorised, test-only exception to the mark-ready and merge prohibition. They used disposable base refs and never targeted `main`. Their historical exception grants no standing permission for an agent to mark ready or merge any future pull request.
 
 ## Cost and credential controls
