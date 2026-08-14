@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Context for working on this repo. Read before changing anything in `src/`.
+Context for working on this repo. Read before changing anything in `src/`.\n\n## Canonical operating documents\n\nRead `AGENTS.md`, `docs/PROJECT_CHARTER.md`, `docs/DECISION_REGISTER.md`,\n`docs/AGENT_OPERATING_MODEL.md`, `docs/INTERPRETATION_SYSTEM.md` and the\nrelevant brief under `docs/agents/`. These files distinguish implemented facts\nfrom approved direction and unresolved proposals; chat prompts do not override them.
 
 ## What this is
 
@@ -18,14 +18,14 @@ change the product's regulatory status, not just its tone.
 
 ```bash
 npm start        # dev server on http://localhost:5173 (honours PORT)
-npm test         # 612 tests, node:test, no dependencies
+npm test         # node:test suite
 npm run build    # dist/ — copy of src/, Module B stubbed in the entertainment flavour
 npm run lint:bundle   # compliance guards, run against dist/ not src/
 node scripts/qise-bakeoff.mjs --self-test   # Phase 5b decision table
 node scripts/engine-bench.mjs out.txt       # engine timings + measurement fingerprint
 ```
 
-There is a build step now, and still no npm dependencies. It was added in
+The build is a copy-only step rather than a framework bundle. Runtime includes\npinned MediaPipe Tasks Vision and development tooling includes Playwright. It was added in
 Phase 3 because the compliance guards must run on the ARTEFACT — a term in a
 file that never ships is not a finding — and because the entertainment flavour
 needs Module B genuinely absent from the bundle, not merely unreachable, before
@@ -33,7 +33,7 @@ its Google Play Health declaration is true. `scripts/build.js` performs no
 transform: `dist/` is a copy of `src/` with three Module B files replaced by
 stubs when the flag is off.
 
-`package-lock.json` exists only so `npm ci` works in CI; it locks nothing.
+`package-lock.json` pins the declared dependencies for reproducible `npm ci` installs.
 
 612 across forty-nine files. If you see 44, the traversal suite is not being
 discovered; if you see 312, the `tests/qise/` tree is not.
