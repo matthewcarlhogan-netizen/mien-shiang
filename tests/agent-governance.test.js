@@ -111,7 +111,10 @@ test("human review and proposal provenance are explicit gates", () => {
   assert.match(runbook, /must not mark a pull request ready or merge it/);
   assert.match(runbook, /probe #23/);
   assert.match(runbook, /probe #24/);
-  assert.match(runbook, /must not be represented as an empirically enforced human gate/);
+  assert.match(runbook, /Both probes were initiated by explicit product-owner requests/);
+  assert.match(runbook, /enforcement against an attempted unsolicited write remains untested/);
+  assert.match(runbook, /This demonstrates agent-side refusal for that fixture/);
+  assert.match(runbook, /test-only exception to the mark-ready and merge prohibition/);
   assert.match(runbook, /Windows `gh` login currently has `gist`, `read:org`, `repo` and `workflow` scopes/);
   assert.match(runbook, /Immediately after that proof, revoke the Windows credential/);
 
