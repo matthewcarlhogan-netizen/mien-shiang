@@ -11,10 +11,11 @@ Repair the Qi Se foundation: baseline reset, lineage, personal `ming`/`run` repl
 - No weakening of compliance gates.
 
 ## Semantics
-- **Baseline Reset:** Triggered on device fingerprint change, capture mode change, or gap > 45 days. Must run on the production path. Baseline reset preserves historical data without deletion (lineage segmentation).
-- **`ming`/`run` Course:** Persist normalised z-scores in `IndexedDB` (schema change) and ensure deterministic replay.
-- **Canonical-Day:** Deterministic daily outcome based on the persisted timestamp; same-day retakes overwrite the previous entry.
+- **Baseline Reset:** Triggered on capture mode change or gap > 45 days. Production path: `src/ui/qise/app.js` (finish). Baseline reset preserves historical data without deletion (lineage segmentation).
+- **`ming`/`run` Course:** Persist normalised z-scores (schema change) and ensure deterministic replay.
+- **Canonical-Day:** Deterministic daily outcome based on the persisted timestamp; same-day retakes overwrite the previous entry based on the persisted canonicalDay (`src/ui/qise/app.js`).
 - **Parking:** Tags remain unreachable; marked with rationale for future decision.
+- **Verification:** All claims subject to test suite `tests/qise/foundation-repair.test.js` verification. Status: Evidence pending.
 
 ## Inputs/Exclusions
 - **Inputs:** Capture sequence (burst), timestamp, local baseline state.

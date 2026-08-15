@@ -316,7 +316,7 @@ export function interpretReading(metrics, history, options = {}) {
   const resetCheck = shouldResetBaseline(lastReading, { ...metrics, timestampIso: currentTimestamp, captureMode });
   const validHistory = resetCheck.reset ? [] : historyToUse;
 
-  const validCount = (validHistory || []).filter((r) => r && r.valid !== false).length;
+  const validCount = (validHistory || []).filter((r) => r && r.axes && r.valid !== false).length;
 
   if (validCount < CALIBRATING_READINGS) {
     return {
@@ -337,15 +337,11 @@ export function interpretReading(metrics, history, options = {}) {
   const deltas = deltasFrom(axes, baseline);
   const compass = projectCompass(deltas, floor);
   
-  // Ming/Run z-scores for passage engine, using provided metrics.
-  const mingZ = (metrics.ming - (baseline.axes?.ming ?? 0)) / (floor.ming ?? 1);
-  const runZ = (metrics.run - (baseline.axes?.run ?? 0)) / (floor.run ?? 1);
-
   return {
     state: "read",
     axes, baseline, floor, deltas, compass,
     basis: metrics.basis,
-    z: { ming: mingZ, run: runZ },
+    z: compass.z,
     confidence: options.confidence ?? null,
   };
 }

@@ -97,6 +97,9 @@ export function toRecord(reading) {
 
     captureMode: r.captureMode ?? null,
     captureTier: r.captureTier ?? null,
+    captureClass: r.captureClass ?? null,
+    baselineVersion: r.baselineVersion ?? null,
+    canonicalDay: r.canonicalDay ?? null,
     readingState: r.readingState ?? null,
     baselineProgress: Number.isInteger(r.baselineProgress) ? r.baselineProgress : null,
     consentVersion: r.consentVersion ?? null,
@@ -263,6 +266,11 @@ export async function openStore(indexedDBFactory) {
       await request(tx("readwrite").clear());
       if (typeof clearConsent === "function") clearConsent();
       return { cleared: true, consentCleared: typeof clearConsent === "function" };
+    },
+
+    async delete(timestampIso) {
+      await request(tx("readwrite").delete(timestampIso));
+      return { deleted: timestampIso };
     },
   };
 }

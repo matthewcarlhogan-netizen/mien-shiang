@@ -852,15 +852,21 @@ async function finish(burst, rois, sclera, opened, history, gateMargins, illumin
   });
 
   const currentTimestamp = new Date().toISOString();
+  const now = new Date();
+  const canonicalDay = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const lastReading = history[history.length - 1];
   const reset = shouldResetBaseline(lastReading, { ...metrics.corrected, timestampIso: currentTimestamp });
   if (reset.reset) {
-    await store.deleteAll();
-    history = [];
+    // Instead of deleting everything, we mark the previous history as incompatible
+    // with the current line and start a new lineage by effectively filtering it out.
+    // The store remains intact.
+    history = []; 
   } else {
-    const today = currentTimestamp.split('T')[0];
-    const index = history.findIndex(r => r.timestampIso.startsWith(today));
-    if (index !== -1) history.splice(index, 1);
+    const index = history.findIndex(r => r.canonicalDay === canonicalDay);
+    if (index !== -1) {
+      await store.delete(history[index].timestampIso);
+      history.splice(index, 1);
+    }
   }
 
   const interpreted = interpretReading(metrics.corrected, history, { 
@@ -878,6 +884,7 @@ async function finish(burst, rois, sclera, opened, history, gateMargins, illumin
 
   const reading = {
     timestampIso: currentTimestamp,
+    canonicalDay,
     metrics,
     axes: axesOf(metrics.corrected),
     deltas: interpreted.deltas,
@@ -911,7 +918,7 @@ async function finish(burst, rois, sclera, opened, history, gateMargins, illumin
   scratch = null;
 
   const stored = await store.put(reading);
-  await renderReading({ ...stored, z: interpreted.compass ? interpreted.compass.z : null });
+  await renderReading(stored);
 }
 
 function correctLab(lab, gains) {
