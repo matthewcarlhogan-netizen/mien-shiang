@@ -98,6 +98,7 @@ export function toRecord(reading) {
     captureMode: r.captureMode ?? null,
     captureTier: r.captureTier ?? null,
     captureClass: r.captureClass ?? null,
+    lineageId: r.lineageId ?? null,
     baselineVersion: r.baselineVersion ?? null,
     canonicalDay: r.canonicalDay ?? null,
     readingState: r.readingState ?? null,

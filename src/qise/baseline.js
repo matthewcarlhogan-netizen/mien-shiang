@@ -234,13 +234,16 @@ export function projectCompass(deltas, floor) {
  * different. Continuing across any of them reports the discontinuity as a
  * change in the person.
  */
-export function shouldResetBaseline(previous, current) {
+export function shouldResetBaseline(previous, current, { captureMode } = {}) {
   const reasons = [];
   if (!previous) return { reset: false, reasons };
 
-  if (previous.captureMode && current.captureMode && previous.captureMode !== current.captureMode) {
+  // Explicitly check capture mode if provided, otherwise fallback to property comparison
+  const effectiveCaptureMode = captureMode ?? current.captureMode;
+  if (previous.captureMode && effectiveCaptureMode && previous.captureMode !== effectiveCaptureMode) {
     reasons.push("capture_mode_changed");
   }
+  
   const gapMs = Date.parse(current.timestampIso) - Date.parse(previous.timestampIso);
   if (Number.isFinite(gapMs) && gapMs > RESET_GAP_DAYS * 86400000) {
     reasons.push("gap_exceeded");

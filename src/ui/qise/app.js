@@ -855,19 +855,24 @@ async function finish(burst, rois, sclera, opened, history, gateMargins, illumin
   const now = new Date();
   const canonicalDay = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const lastReading = history[history.length - 1];
-  const reset = shouldResetBaseline(lastReading, { ...metrics.corrected, timestampIso: currentTimestamp });
+  const reset = shouldResetBaseline(lastReading, { ...metrics.corrected, timestampIso: currentTimestamp }, { captureMode });
+  
   if (reset.reset) {
-    // Instead of deleting everything, we mark the previous history as incompatible
-    // with the current line and start a new lineage by effectively filtering it out.
-    // The store remains intact.
-    history = []; 
+    history = []; // Effectively start a new lineage
   } else {
+    // Filter history to only include current lineage (or no legacy)
+    const currentLineageId = lastReading?.lineageId ?? "v1";
+    history = history.filter(r => r.lineageId === currentLineageId);
+
     const index = history.findIndex(r => r.canonicalDay === canonicalDay);
     if (index !== -1) {
       await store.delete(history[index].timestampIso);
       history.splice(index, 1);
     }
   }
+
+  // Ensure new reading gets a lineageId
+  const lineageId = reset.reset ? `v2-${currentTimestamp}` : (lastReading?.lineageId ?? "v1");
 
   const interpreted = interpretReading(metrics.corrected, history, { 
     confidence, 
@@ -884,7 +889,9 @@ async function finish(burst, rois, sclera, opened, history, gateMargins, illumin
 
   const reading = {
     timestampIso: currentTimestamp,
+    lineageId,
     canonicalDay,
+    captureMode,
     metrics,
     axes: axesOf(metrics.corrected),
     deltas: interpreted.deltas,
@@ -895,7 +902,6 @@ async function finish(burst, rois, sclera, opened, history, gateMargins, illumin
     tags: [],
     baselineVersion: BASELINE_VERSION,
     captureClass: opened.captureMode || "auto",
-    captureMode: opened.captureMode,
     captureTier,
     readingState: interpreted.state,
     baselineProgress: Math.min(4, history.filter((item) => item && item.valid !== false).length + 1),
