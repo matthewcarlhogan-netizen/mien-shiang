@@ -854,13 +854,21 @@ async function finish(burst, rois, sclera, opened, history, gateMargins, illumin
   const currentTimestamp = new Date().toISOString();
   const now = new Date();
   const canonicalDay = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  
+  // Migration: Legacy unversioned rows (or null lineage) get migrated to 'v1'
+  history.forEach(r => {
+      if (!r.lineageId) r.lineageId = "v1";
+      if (!r.baselineVersion) r.baselineVersion = "v1";
+  });
+
   const lastReading = history[history.length - 1];
-  const reset = shouldResetBaseline(lastReading, { ...metrics.corrected, timestampIso: currentTimestamp }, { captureMode });
+  const captureClass = opened.captureMode || "auto";
+  const reset = shouldResetBaseline(lastReading, { ...metrics.corrected, timestampIso: currentTimestamp }, { captureMode: captureClass });
   
   if (reset.reset) {
     history = []; // Effectively start a new lineage
   } else {
-    // Filter history to only include current lineage (or no legacy)
+    // Filter history to only include current lineage
     const currentLineageId = lastReading?.lineageId ?? "v1";
     history = history.filter(r => r.lineageId === currentLineageId);
 
@@ -877,7 +885,7 @@ async function finish(burst, rois, sclera, opened, history, gateMargins, illumin
   const interpreted = interpretReading(metrics.corrected, history, { 
     confidence, 
     timestampIso: currentTimestamp,
-    captureMode: opened.captureMode,
+    captureMode: captureClass,
   });
 
   let integrated = null;
@@ -891,7 +899,7 @@ async function finish(burst, rois, sclera, opened, history, gateMargins, illumin
     timestampIso: currentTimestamp,
     lineageId,
     canonicalDay,
-    captureMode,
+    captureClass,
     metrics,
     axes: axesOf(metrics.corrected),
     deltas: interpreted.deltas,
@@ -901,7 +909,6 @@ async function finish(burst, rois, sclera, opened, history, gateMargins, illumin
     integrated,
     tags: [],
     baselineVersion: BASELINE_VERSION,
-    captureClass: opened.captureMode || "auto",
     captureTier,
     readingState: interpreted.state,
     baselineProgress: Math.min(4, history.filter((item) => item && item.valid !== false).length + 1),

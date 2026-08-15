@@ -47,29 +47,34 @@ test("persisted z-score usage", () => {
     { 
       axes: { a: 0, b: 0, L: 50, C: 10, periorbitalL: 50, ming: 5, run: 10 },
       valid: true,
-      timestampIso: "2026-06-01T00:00:00.000Z"
+      timestampIso: "2026-06-01T00:00:00.000Z",
+      baselineVersion: BASELINE_VERSION,
+      captureClass: "auto"
     },
     { 
       axes: { a: 0, b: 0, L: 50, C: 10, periorbitalL: 50, ming: 5, run: 10 },
       valid: true,
-      timestampIso: "2026-06-02T00:00:00.000Z"
+      timestampIso: "2026-06-02T00:00:00.000Z",
+      baselineVersion: BASELINE_VERSION,
+      captureClass: "auto"
     },
     { 
       axes: { a: 0, b: 0, L: 50, C: 10, periorbitalL: 50, ming: 5, run: 10 },
       valid: true,
-      timestampIso: "2026-06-03T00:00:00.000Z"
+      timestampIso: "2026-06-03T00:00:00.000Z",
+      baselineVersion: BASELINE_VERSION,
+      captureClass: "auto"
     },
     { 
       axes: { a: 0, b: 0, L: 50, C: 10, periorbitalL: 50, ming: 5, run: 10 },
       valid: true,
-      timestampIso: "2026-06-04T00:00:00.000Z"
+      timestampIso: "2026-06-04T00:00:00.000Z",
+      baselineVersion: BASELINE_VERSION,
+      captureClass: "auto"
     }
   ]; 
 
   const res = interpretReading(metrics, history, { timestampIso: "2026-06-05T00:00:00.000Z", captureMode: "auto" });
-
-  console.log("DEBUG: interpretReading state:", res.state);
-  console.log("DEBUG: interpretReading res:", res);
 
   assert.ok(res.z, "res.z should exist");
   assert.ok(typeof res.z.ming === "number", "res.z.ming should be a number");

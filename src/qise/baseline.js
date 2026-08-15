@@ -298,12 +298,12 @@ export function interpretReading(metrics, history, options = {}) {
   const currentTimestamp = options.timestampIso;
   
   // Segmentation: baseline/history by algorithm version and capture class.
-  // We filter history to match current algorithm and capture class,
-  // or reset lineage if they don't match.
+  // We filter history to match current algorithm and capture class.
+  // Legacy unversioned rows are excluded entirely.
   const captureMode = options.captureMode || "auto";
   const historyToUse = history.filter(r => 
-    (r.baselineVersion === BASELINE_VERSION || !r.baselineVersion) && 
-    (r.captureMode === captureMode || !r.captureMode)
+    r.baselineVersion === BASELINE_VERSION && 
+    (r.captureClass === captureMode)
   );
 
   const lastReading = historyToUse[historyToUse.length - 1];

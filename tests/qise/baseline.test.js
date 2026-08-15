@@ -17,12 +17,16 @@ function steadyHistory(n = 34, jitter = 0.2) {
   return Array.from({ length: n }, (_, i) => ({
     timestampIso: new Date(Date.UTC(2026, 6, 1 + i)).toISOString(),
     valid: true,
+    baselineVersion: "v2",
+    captureClass: "auto",
     axes: {
       a: 14 + ((i % 3) - 1) * jitter,
       b: 12 + ((i % 2) - 0.5) * jitter,
       L: 62 + ((i % 5) - 2) * jitter,
       C: 18 + ((i % 3) - 1) * jitter,
       periorbitalL: 55 + ((i % 4) - 1.5) * jitter,
+      ming: 10 + ((i % 3) - 1) * jitter,
+      run: 20 + ((i % 3) - 1) * jitter,
     },
   }));
 }
