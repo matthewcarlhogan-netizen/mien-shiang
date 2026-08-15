@@ -855,12 +855,6 @@ async function finish(burst, rois, sclera, opened, history, gateMargins, illumin
   const now = new Date();
   const canonicalDay = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   
-  // Migration: Legacy unversioned rows (or null lineage) get migrated to 'v1'
-  history.forEach(r => {
-      if (!r.lineageId) r.lineageId = "v1";
-      if (!r.baselineVersion) r.baselineVersion = "v1";
-  });
-
   const lastReading = history[history.length - 1];
   const captureClass = opened.captureMode || "auto";
   const reset = shouldResetBaseline(lastReading, { ...metrics.corrected, timestampIso: currentTimestamp }, { captureMode: captureClass });
@@ -868,9 +862,9 @@ async function finish(burst, rois, sclera, opened, history, gateMargins, illumin
   if (reset.reset) {
     history = []; // Effectively start a new lineage
   } else {
-    // Filter history to only include current lineage
+    // Filter history to only include current lineage (treating legacy null-lineage as 'v1')
     const currentLineageId = lastReading?.lineageId ?? "v1";
-    history = history.filter(r => r.lineageId === currentLineageId);
+    history = history.filter(r => (r.lineageId ?? "v1") === currentLineageId);
 
     const index = history.findIndex(r => r.canonicalDay === canonicalDay);
     if (index !== -1) {

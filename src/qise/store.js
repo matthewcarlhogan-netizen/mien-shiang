@@ -95,9 +95,8 @@ export function toRecord(reading) {
 
     tags: Array.isArray(r.tags) ? r.tags.filter((t) => typeof t === "string") : [],
 
-    captureMode: r.captureMode ?? null,
+    captureClass: r.captureClass ?? r.captureMode ?? null,
     captureTier: r.captureTier ?? null,
-    captureClass: r.captureClass ?? null,
     lineageId: r.lineageId ?? null,
     baselineVersion: r.baselineVersion ?? null,
     canonicalDay: r.canonicalDay ?? null,

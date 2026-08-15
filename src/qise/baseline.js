@@ -234,13 +234,14 @@ export function projectCompass(deltas, floor) {
  * different. Continuing across any of them reports the discontinuity as a
  * change in the person.
  */
-export function shouldResetBaseline(previous, current, { captureMode } = {}) {
+export function shouldResetBaseline(previous, current, { captureClass } = {}) {
   const reasons = [];
   if (!previous) return { reset: false, reasons };
 
-  // Explicitly check capture mode if provided, otherwise fallback to property comparison
-  const effectiveCaptureMode = captureMode ?? current.captureMode;
-  if (previous.captureMode && effectiveCaptureMode && previous.captureMode !== effectiveCaptureMode) {
+  // Standardized on captureClass (supporting fallback to legacy captureMode on loaded records)
+  const prevClass = previous.captureClass ?? previous.captureMode;
+  const currClass = captureClass ?? current.captureClass ?? current.captureMode;
+  if (prevClass && currClass && prevClass !== currClass) {
     reasons.push("capture_mode_changed");
   }
   
