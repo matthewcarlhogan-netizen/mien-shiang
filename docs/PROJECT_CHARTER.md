@@ -10,7 +10,7 @@ The live product should run its capture, measurement, eligibility and interpreta
 
 The interface must feel authored, restrained and premium: high-contrast editorial composition, deliberate typography, deep neutrals, subtle material texture, exact spacing, sharp geometry and legible data visualisation. Avoid generic mystical imagery, purple glow, stock starfields, arbitrary gradients, glass-card grids, default component-library styling and decorative charts without information value.
 
-Design review asks whether every screen expresses this product's specific ideas—regions, balance, change, attention and reflection—rather than whether it merely looks polished.
+Design review asks whether every screen expresses this product's specific ideas—regions, balance, change, attention and reflection—rather than whether it merely looks polished. For the detailed visual-research, authorship and review requirements, read `docs/VISUAL_DIRECTION.md` before changing any user-facing visual experience.
 
 ## Personalisation standard
 
@@ -24,6 +24,8 @@ Each daily reading should reveal depth in controlled layers:
 4. An optional gentle ritual or journalling prompt.
 
 Personalisation must be deterministic, traceable and bounded. Reading assembly uses approved, stable copy modules and evidence-backed eligibility rules; it must not rely on free-form improvisation to manufacture specificity. Each user-facing variant requires a stable ID, a clear selection reason, safe copy and an abstention/fallback state.
+
+Writing must be intriguing, precise and humane—not cryptic for its own sake, generic therapeutic affirmation or an interchangeable horoscope. A passage should reward a second reading through a concrete image, a considered turn of phrase or a useful question; it must not intensify certainty beyond its evidence. If the same wording could be pasted unchanged into any generic astrology, wellness or AI app, it fails the specificity review.
 
 When evidence is weak, incomplete or ineligible, the experience should remain graceful and valuable through an honest reflection or calibration prompt. It must never simulate bespoke certainty.
 
