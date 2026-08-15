@@ -53,7 +53,7 @@ A culturally specific visual element needs documented context: what it is, why i
 Before changing a complete journey, design system, landing screen, results screen or share card, the responsible agent must add a short visual research note to the PR description or `docs/design/`. It must contain:
 
 1. The screen’s visual thesis and user moment.
-2. At least six cited references across at least three different source families: editorial/print, material or spatial design, contemporary Chinese visual culture, and digital interaction. Record what is learned, not just images collected.
+2. At least six verifiable references across at least three different source families: editorial/print, material or spatial design, contemporary Chinese visual culture, and digital interaction. Record what is learned, not just images collected. If the references cannot be verified, park the visual change.
 3. One explicit statement of what will *not* be copied from each reference.
 4. Asset provenance, licence and attribution requirements.
 5. A mobile-first sketch or screenshot plan for the resting, loading, empty/abstaining, error and long-text states.
