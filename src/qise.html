@@ -121,6 +121,42 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .screen{display:none}
 .screen[data-active="true"]{display:block}
 
+/* ── post-scan reveal ──────────────────────────────────────────────────── */
+.postscan-screen{min-height:calc(100svh - 4rem);display:grid;align-content:center;gap:1.1rem;padding:1.25rem 0 2rem}
+.postscan-kicker{margin:0;color:var(--qing);font-size:.72rem;letter-spacing:.13em;text-transform:uppercase}
+.postscan-screen h1{max-width:18rem;margin:0;font-family:var(--passage);font-size:clamp(2.25rem,11vw,4rem);font-weight:500;line-height:.98;letter-spacing:-.04em}
+.postscan-message{max-width:28rem;margin:0;font-size:.92rem;line-height:1.5;opacity:.78}
+.postscan-field-frame{position:relative;max-width:23rem;margin:.25rem auto 0;border:1px solid var(--qise-border);background:var(--qise-surface);padding:1.1rem;overflow:hidden}
+.postscan-field-frame::before{content:"";position:absolute;inset:1.1rem;border:1px solid color-mix(in srgb,var(--huang) 45%,transparent);pointer-events:none}
+.postscan-field{display:block;width:100%;height:auto;color:var(--qise-ink)}
+.postscan-field-boundary{fill:none;stroke:currentColor;stroke-width:.65;opacity:.62}
+.postscan-field-axis{fill:none;stroke:var(--huang);stroke-width:.35;stroke-dasharray:1.2 1.8;opacity:.7}
+.postscan-field-thread{fill:none;stroke:var(--qise-border);stroke-width:.42}
+.postscan-region{opacity:0}
+.postscan-region path{fill:color-mix(in srgb,var(--qing) 12%,transparent);stroke:var(--qing);stroke-width:.55}
+.postscan-region circle{fill:var(--chi);stroke:var(--qise-surface);stroke-width:.3}
+.postscan-screen[data-state="active"] .postscan-region{animation:postscan-region-arrive .45s ease-out both}
+.postscan-screen[data-state="complete"] .postscan-region{opacity:1}
+.postscan-screen[data-state="abstained"] .postscan-region,.postscan-screen[data-state="error"] .postscan-region{opacity:.58}
+@keyframes postscan-region-arrive{from{opacity:0;transform:translateY(2px)}to{opacity:1;transform:translateY(0)}}
+.postscan-field-note{margin:-.65rem 0 0;text-align:center;font-size:.72rem;opacity:.66}
+.postscan-stages{list-style:none;margin:0;padding:0;border-top:1px solid var(--qise-border)}
+.postscan-stages li{display:grid;grid-template-columns:1rem 1fr auto;gap:.6rem;align-items:start;padding:.7rem 0;border-bottom:1px solid var(--qise-border);font-size:.78rem}
+.postscan-stages li span:nth-child(2){display:grid;gap:.16rem}
+.postscan-stages small{font-size:.72rem;line-height:1.35;opacity:.64}
+.postscan-stages em{font-family:var(--numeric);font-size:.64rem;font-style:normal;letter-spacing:.04em;text-transform:uppercase;opacity:.62}
+.postscan-stage-mark{width:.72rem;height:.72rem;border:1px solid var(--qise-border);border-radius:50%;margin-top:.14rem}
+.postscan-stages li[data-state="active"] .postscan-stage-mark{border-color:var(--huang);box-shadow:0 0 0 3px color-mix(in srgb,var(--huang) 16%,transparent)}
+.postscan-stages li[data-state="complete"] .postscan-stage-mark{background:var(--qing);border-color:var(--qing)}
+.postscan-stages li[data-state="stopped"] .postscan-stage-mark{background:var(--chi);border-color:var(--chi)}
+.postscan-privacy{margin:0;font-size:.74rem;opacity:.7}
+.postscan-live{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.postscan-actions{display:grid;gap:.5rem;margin-top:.1rem}
+.postscan-actions[hidden]{display:none}
+@media (prefers-reduced-motion: reduce){
+  .postscan-screen[data-state="active"] .postscan-region{animation:none;opacity:1}
+}
+
 /* ── the seal ─────────────────────────────────────────────────────────── */
 .qise-seal{width:100%;height:auto;color:var(--qise-ink);display:block}
 .seal-frame{width:min(52vw,13rem);margin:0 auto .8rem;filter:drop-shadow(0 18px 24px color-mix(in srgb,var(--qise-shadow) 70%,transparent))}
@@ -468,6 +504,24 @@ html[data-screen-flash="true"] .capture-badge span{background:#FFFDF5;box-shadow
     </label>
     <p class="muted selfie-status" id="selfie-status" role="status" aria-live="polite"></p>
   </section>
+</section>
+
+<!-- ═══ Post-scan reveal — named production events only ═══════════════════ -->
+<section class="screen postscan-screen" id="screen-postscan" aria-labelledby="postscan-h"
+  data-state="idle" data-reduced-motion="false">
+  <p class="postscan-kicker">Private on-device work</p>
+  <h1 id="postscan-h" data-postscan-heading>Your reading is taking shape</h1>
+  <p class="postscan-message" data-postscan-message>The reading is taking shape from this scan.</p>
+  <div class="postscan-field-frame">
+    <div data-postscan-field></div>
+  </div>
+  <p class="postscan-field-note">A schematic field, not a portrait. Only eligible regions are marked.</p>
+  <ol class="postscan-stages" data-postscan-stages aria-label="Reading stages"></ol>
+  <p class="postscan-privacy">Working on this device · your face image is not being stored.</p>
+  <p class="postscan-live" data-postscan-live role="status" aria-live="polite" aria-atomic="true"></p>
+  <div class="postscan-actions" data-postscan-actions hidden>
+    <button class="primary wide" id="postscan-retry" type="button">Return to scan choices</button>
+  </div>
 </section>
 
 <!-- ═══ Phase 9 — the reading ════════════════════════════════════════════ -->
