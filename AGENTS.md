@@ -12,6 +12,7 @@ Before changing the product, read:
 6. `docs/INTERPRETATION_SYSTEM.md` for scanner-to-reading expansion work.
 7. `docs/scanner-development-report.md` for the scanner's evidence and remaining limitations.
 8. For approved daily-loop work, `docs/OPTION_B_PROGRAM.md`, `docs/OPTION_B_EXECUTION_PLAN.md` and `docs/agents/daily-loop-program-architect.md`.
+9. Before changing any user-facing visual experience, `docs/VISUAL_DIRECTION.md`.
 
 ## Non-negotiable workflow
 
