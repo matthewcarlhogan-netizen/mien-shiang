@@ -26,6 +26,22 @@ The thesis determines hierarchy, spacing, type, colour and motion. It is not a s
 
 The first viewport must have one clear focal point. Prefer composition, rhythm, progressive disclosure and whitespace over stacks of equally weighted cards. A data display appears only when it helps a person understand change, range, provenance or uncertainty.
 
+## Post-scan computation reveal
+
+A dedicated post-scan reveal is appropriate when genuine computation remains after capture. Its visual thesis is “your reading taking shape from visible, bounded evidence”: an original, non-photographic face field on which eligible regions and measurement points appear in the same order that the production pipeline completes them.
+
+This screen must reveal work, not imitate work:
+
+- Drive every stage from a real production event. Suggested plain-language stages are capture quality, eligible regions, comparison with the person's own history, and reflection assembly—but show only stages the current run actually performs.
+- A point, region or line may appear only if it corresponds to an approved input used by that reading. Do not animate all 478 landmarks, a full mesh or invented connections merely to look technical. Ineligible or abstaining regions stay absent or are explained as not read.
+- Prefer a canonical, non-identifying face diagram. If a transient visual derives from the person's live landmarks, it remains on-device and in volatile memory, must not reconstruct a recognisable face, and is erased on success, failure, cancellation and backgrounding with the rest of the capture material.
+- Never show a fabricated percentage, countdown or stage duration. If progress cannot be measured, use named stage completion instead.
+- Do not hold a completed reading merely to make the process appear expensive. If work completes quickly, the reveal becomes a brief transition; if it takes longer, the same sequence expands naturally with the real events.
+- Keep one persistent privacy line visible, such as “Working on this device · your face image is not being stored.”
+- Provide a reduced-motion version in which regions change state without sequential fading. Failure and abstention leave the face field calmly and return a useful next action.
+
+The result should feel considered because the system exposes its real care, not because the interface wastes the person's time. Verification must cover fast and slow devices, offline operation, interrupted/backgrounded capture, reduced motion, and the release of all transient face data.
+
 ## Cultural responsibility
 
 Chinese visual culture is not a bag of props. Do not add Chinese characters, seals, scrolls, temple imagery, calligraphy or “ancient” texture merely to signal atmosphere.
