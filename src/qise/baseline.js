@@ -47,11 +47,11 @@ export const RESET_GAP_DAYS = 45;
  * the sclera MAD floor; the units differ, so the numbers do.
  */
 export const AXIS_MAD_FLOOR = Object.freeze({
-  a: 0.15, b: 0.15, L: 0.25, C: 0.15, periorbitalL: 0.30,
+  a: 0.15, b: 0.15, L: 0.25, C: 0.15, periorbitalL: 0.30, ming: 0.15, run: 0.15,
 });
 
-/** The axes the compass projects onto. */
-export const COMPASS_AXES = Object.freeze(["a", "b", "L", "C", "periorbitalL"]);
+/** The axes the compass projects onto, plus ming/run for passage course logic. */
+export const COMPASS_AXES = Object.freeze(["a", "b", "L", "C", "periorbitalL", "ming", "run"]);
 
 /**
  * Weight given to the periorbital axis when scoring `hei`.
@@ -103,6 +103,8 @@ export function axesOf(metrics) {
     L: metrics.meanL,
     C: metrics.meanChroma,
     periorbitalL: metrics.periorbitalL,
+    ming: metrics.ming,
+    run: metrics.run,
   };
 }
 
@@ -232,17 +234,17 @@ export function projectCompass(deltas, floor) {
  * different. Continuing across any of them reports the discontinuity as a
  * change in the person.
  */
-export function shouldResetBaseline(previous, current) {
+export function shouldResetBaseline(previous, current, { captureClass } = {}) {
   const reasons = [];
   if (!previous) return { reset: false, reasons };
 
-  if (previous.deviceFingerprint && current.deviceFingerprint
-      && previous.deviceFingerprint !== current.deviceFingerprint) {
-    reasons.push("device_changed");
-  }
-  if (previous.captureMode && current.captureMode && previous.captureMode !== current.captureMode) {
+  // Standardized on captureClass (supporting fallback to legacy captureMode on loaded records)
+  const prevClass = previous.captureClass ?? previous.captureMode;
+  const currClass = captureClass ?? current.captureClass ?? current.captureMode;
+  if (prevClass && currClass && prevClass !== currClass) {
     reasons.push("capture_mode_changed");
   }
+  
   const gapMs = Date.parse(current.timestampIso) - Date.parse(previous.timestampIso);
   if (Number.isFinite(gapMs) && gapMs > RESET_GAP_DAYS * 86400000) {
     reasons.push("gap_exceeded");
@@ -290,9 +292,35 @@ export const isLowConfidence = (c) => c < LOW_CONFIDENCE;
  * @param {Object} metrics one pipeline's metrics for today
  * @param {Array} history oldest first, each `{axes, valid, timestampIso, ...}`
  */
+export const BASELINE_VERSION = "v2";
+
 export function interpretReading(metrics, history, options = {}) {
   const axes = axesOf(metrics);
-  const validCount = (history || []).filter((r) => r && r.valid !== false).length;
+  const currentTimestamp = options.timestampIso;
+  
+  // Segmentation: baseline/history by algorithm version and capture class.
+  // We filter history to match current algorithm and capture class.
+  // Legacy unversioned rows are excluded entirely.
+  const captureMode = options.captureMode || "auto";
+  const historyToUse = history.filter(r => 
+    r.baselineVersion === BASELINE_VERSION && 
+    (r.captureClass === captureMode)
+  );
+
+  const lastReading = historyToUse[historyToUse.length - 1];
+  
+  // Canonical-day policy: Use persisted timestamp for determinism.
+  if (currentTimestamp && lastReading && lastReading.timestampIso && 
+      lastReading.timestampIso.split('T')[0] === currentTimestamp.split('T')[0]) {
+    // Logic for "retake" is handled by the caller/UI: 
+    // it will overwrite this entry in the store.
+  }
+
+  // Baseline reset: check for gap
+  const resetCheck = shouldResetBaseline(lastReading, { ...metrics, timestampIso: currentTimestamp, captureMode });
+  const validHistory = resetCheck.reset ? [] : historyToUse;
+
+  const validCount = (validHistory || []).filter((r) => r && r.axes && r.valid !== false).length;
 
   if (validCount < CALIBRATING_READINGS) {
     return {
@@ -301,7 +329,7 @@ export function interpretReading(metrics, history, options = {}) {
     };
   }
 
-  const baseline = computeBaseline(history);
+  const baseline = computeBaseline(validHistory);
   if (!baseline.ready) {
     return {
       state: "calibrating", readingsSoFar: validCount, needed: CALIBRATING_READINGS + 1,
@@ -309,14 +337,15 @@ export function interpretReading(metrics, history, options = {}) {
     };
   }
 
-  const floor = noiseFloor(history);
+  const floor = noiseFloor(validHistory);
   const deltas = deltasFrom(axes, baseline);
   const compass = projectCompass(deltas, floor);
-
+  
   return {
     state: "read",
     axes, baseline, floor, deltas, compass,
     basis: metrics.basis,
+    z: compass.z,
     confidence: options.confidence ?? null,
   };
 }

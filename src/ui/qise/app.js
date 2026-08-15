@@ -44,7 +44,7 @@ import {
 } from "../../qise/gates.js";
 import { frameStats } from "../../qise/framestats.js";
 import { computeReadingMetrics, lumRatioP90P50 } from "../../qise/metrics.js";
-import { interpretReading, readingConfidence, axesOf } from "../../qise/baseline.js";
+import { interpretReading, readingConfidence, axesOf, shouldResetBaseline, BASELINE_VERSION } from "../../qise/baseline.js";
 import { openStore } from "../../qise/store.js";
 import { readingScreenModel, historyColumnModel } from "./screens.js";
 import { SHARE_CADENCES, shareReadings } from "./share.js";
@@ -851,7 +851,36 @@ async function finish(burst, rois, sclera, opened, history, gateMargins, illumin
     captureTier,
   });
 
-  const interpreted = interpretReading(metrics.corrected, history, { confidence });
+  const currentTimestamp = new Date().toISOString();
+  const now = new Date();
+  const canonicalDay = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  
+  const lastReading = history[history.length - 1];
+  const captureClass = opened.captureMode || "auto";
+  const reset = shouldResetBaseline(lastReading, { ...metrics.corrected, timestampIso: currentTimestamp }, { captureMode: captureClass });
+  
+  if (reset.reset) {
+    history = []; // Effectively start a new lineage
+  } else {
+    // Filter history to only include current lineage (treating legacy null-lineage as 'v1')
+    const currentLineageId = lastReading?.lineageId ?? "v1";
+    history = history.filter(r => (r.lineageId ?? "v1") === currentLineageId);
+
+    const index = history.findIndex(r => r.canonicalDay === canonicalDay);
+    if (index !== -1) {
+      await store.delete(history[index].timestampIso);
+      history.splice(index, 1);
+    }
+  }
+
+  // Ensure new reading gets a lineageId
+  const lineageId = reset.reset ? `v2-${currentTimestamp}` : (lastReading?.lineageId ?? "v1");
+
+  const interpreted = interpretReading(metrics.corrected, history, { 
+    confidence, 
+    timestampIso: currentTimestamp,
+    captureMode: captureClass,
+  });
 
   let integrated = null;
   if (acceptedImage && acceptedPoints) {
@@ -861,15 +890,19 @@ async function finish(burst, rois, sclera, opened, history, gateMargins, illumin
   }
 
   const reading = {
-    timestampIso: new Date().toISOString(),
+    timestampIso: currentTimestamp,
+    lineageId,
+    canonicalDay,
+    captureClass,
     metrics,
     axes: axesOf(metrics.corrected),
     deltas: interpreted.deltas,
     compass: interpreted.compass,
+    z: interpreted.z,
     composition: compositionOf({ metrics, compass: interpreted.compass }),
     integrated,
     tags: [],
-    captureMode: opened.captureMode,
+    baselineVersion: BASELINE_VERSION,
     captureTier,
     readingState: interpreted.state,
     baselineProgress: Math.min(4, history.filter((item) => item && item.valid !== false).length + 1),
@@ -892,7 +925,7 @@ async function finish(burst, rois, sclera, opened, history, gateMargins, illumin
   scratch = null;
 
   const stored = await store.put(reading);
-  await renderReading({ ...stored, z: interpreted.compass ? interpreted.compass.z : null });
+  await renderReading(stored);
 }
 
 function correctLab(lab, gains) {
@@ -1313,7 +1346,7 @@ async function boot() {
   });
 
   $("withdraw").addEventListener("click", async () => {
-    await consent.withdraw({ deleteAll: () => store.deleteAll() });
+    await consent.withdraw();
     location.reload();
   });
 

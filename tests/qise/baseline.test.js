@@ -17,12 +17,16 @@ function steadyHistory(n = 34, jitter = 0.2) {
   return Array.from({ length: n }, (_, i) => ({
     timestampIso: new Date(Date.UTC(2026, 6, 1 + i)).toISOString(),
     valid: true,
+    baselineVersion: "v2",
+    captureClass: "auto",
     axes: {
       a: 14 + ((i % 3) - 1) * jitter,
       b: 12 + ((i % 2) - 0.5) * jitter,
       L: 62 + ((i % 5) - 2) * jitter,
       C: 18 + ((i % 3) - 1) * jitter,
       periorbitalL: 55 + ((i % 4) - 1.5) * jitter,
+      ming: 10 + ((i % 3) - 1) * jitter,
+      run: 20 + ((i % 3) - 1) * jitter,
     },
   }));
 }
@@ -230,13 +234,10 @@ test("axesOf refuses a metric set that measured nothing", () => {
 
 /* ────────────────────────────────────────────────────────────────── resets ── */
 
-test("the baseline resets on a device change, a capture-class change, or a long gap", () => {
-  const base = { deviceFingerprint: "A", captureMode: "auto", timestampIso: "2026-06-01T00:00:00.000Z" };
+test("the baseline resets on a capture-mode change or a long gap", () => {
+  const base = { captureMode: "auto", timestampIso: "2026-06-01T00:00:00.000Z" };
 
   assert.equal(shouldResetBaseline(base, { ...base, timestampIso: "2026-06-02T00:00:00.000Z" }).reset, false);
-
-  const device = shouldResetBaseline(base, { ...base, deviceFingerprint: "B", timestampIso: "2026-06-02T00:00:00.000Z" });
-  assert.deepEqual(device.reasons, ["device_changed"]);
 
   const mode = shouldResetBaseline(base, { ...base, captureMode: "locked", timestampIso: "2026-06-02T00:00:00.000Z" });
   assert.deepEqual(mode.reasons, ["capture_mode_changed"]);

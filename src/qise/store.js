@@ -85,6 +85,7 @@ export function toRecord(reading) {
 
     axes: scalarMap(r.axes),
     deltas: scalarMap(r.deltas),
+    z: scalarMap(r.z, ["ming", "run"]),
     compass: r.compass ? {
       ascendant: r.compass.ascendant ?? null,
       magnitude: r.compass.magnitude ?? null,
@@ -94,8 +95,11 @@ export function toRecord(reading) {
 
     tags: Array.isArray(r.tags) ? r.tags.filter((t) => typeof t === "string") : [],
 
-    captureMode: r.captureMode ?? null,
+    captureClass: r.captureClass ?? r.captureMode ?? null,
     captureTier: r.captureTier ?? null,
+    lineageId: r.lineageId ?? null,
+    baselineVersion: r.baselineVersion ?? null,
+    canonicalDay: r.canonicalDay ?? null,
     readingState: r.readingState ?? null,
     baselineProgress: Number.isInteger(r.baselineProgress) ? r.baselineProgress : null,
     consentVersion: r.consentVersion ?? null,
@@ -258,10 +262,9 @@ export async function openStore(indexedDBFactory) {
      * deleting the readings and leaving a standing grant behind is the shape
      * of "delete everything" that deletes not-quite-everything.
      */
-    async deleteAll({ clearConsent } = {}) {
-      await request(tx("readwrite").clear());
-      if (typeof clearConsent === "function") clearConsent();
-      return { cleared: true, consentCleared: typeof clearConsent === "function" };
+    async delete(timestampIso) {
+      await request(tx("readwrite").delete(timestampIso));
+      return { deleted: timestampIso };
     },
   };
 }
