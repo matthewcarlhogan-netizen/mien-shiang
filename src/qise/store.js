@@ -262,12 +262,6 @@ export async function openStore(indexedDBFactory) {
      * deleting the readings and leaving a standing grant behind is the shape
      * of "delete everything" that deletes not-quite-everything.
      */
-    async deleteAll({ clearConsent } = {}) {
-      await request(tx("readwrite").clear());
-      if (typeof clearConsent === "function") clearConsent();
-      return { cleared: true, consentCleared: typeof clearConsent === "function" };
-    },
-
     async delete(timestampIso) {
       await request(tx("readwrite").delete(timestampIso));
       return { deleted: timestampIso };

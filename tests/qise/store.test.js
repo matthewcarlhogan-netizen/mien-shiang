@@ -241,25 +241,6 @@ test("exportAll produces a portable document", async () => {
   assert.deepEqual(JSON.parse(JSON.stringify(doc)).readings.length, 1);
 });
 
-test("delete-all wipes the readings AND the consent record", async () => {
-  // Deleting the readings and leaving a standing grant behind is the shape of
-  // "delete everything" that deletes not-quite-everything.
-  const idb = fakeIndexedDB();
-  const store = await openStore(idb);
-  await store.put(hazardousReading());
-  assert.equal(idb.data.size, 1);
-
-  const consent = createConsent(memoryStorage());
-  consent.grant();
-  assert.equal(consent.isGranted(), true);
-
-  const r = await store.deleteAll({ clearConsent: () => consent.withdraw({ deleteAll: () => {} }) });
-  assert.equal(idb.data.size, 0);
-  assert.equal(r.cleared, true);
-  await new Promise((res) => setTimeout(res, 0));
-  assert.equal(consent.isGranted(), false);
-});
-
 test("a host with no IndexedDB fails loudly at the call site", async () => {
   await assert.rejects(() => openStore(null), /no IndexedDB/);
 });

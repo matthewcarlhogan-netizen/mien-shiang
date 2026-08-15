@@ -36,13 +36,11 @@ test("canonical-day replacement logic", () => {
   assert.equal(history.length, 1);
   assert.equal(history[0].canonicalDay, "2026-06-01");
 });
-test("persisted z-score usage", () => {
-  // `metrics` must contain what `axesOf` expects: hueVector, meanL, meanChroma, periorbitalL, ming, run
+test("z-score calculation and persistence", () => {
   const metrics = { 
-    hueVector: { a: 0, b: 0 }, meanL: 50, meanChroma: 10, periorbitalL: 50, basis: "x",
+    hueVector: { a: 1, b: 1 }, meanL: 50, meanChroma: 10, periorbitalL: 50, basis: "x",
     ming: 10, run: 20 
   };
-  // `history` entries must have axes (with all COMPASS_AXES) and valid
   const history = [
     { 
       axes: { a: 0, b: 0, L: 50, C: 10, periorbitalL: 50, ming: 5, run: 10 },
@@ -79,4 +77,9 @@ test("persisted z-score usage", () => {
   assert.ok(res.z, "res.z should exist");
   assert.ok(typeof res.z.ming === "number", "res.z.ming should be a number");
   assert.ok(typeof res.z.run === "number", "res.z.run should be a number");
+  
+  // Verify it's calculated using the metrics (ming 10, run 20) vs baseline (ming 5, run 10)
+  // This is a rough check
+  assert.ok(res.z.ming > 0, "res.z.ming should be positive");
+  assert.ok(res.z.run > 0, "res.z.run should be positive");
 });

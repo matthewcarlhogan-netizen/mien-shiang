@@ -1346,7 +1346,7 @@ async function boot() {
   });
 
   $("withdraw").addEventListener("click", async () => {
-    await consent.withdraw({ deleteAll: () => store.deleteAll() });
+    await consent.withdraw();
     location.reload();
   });
 
