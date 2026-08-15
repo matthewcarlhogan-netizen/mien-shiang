@@ -47,6 +47,11 @@ import { computeReadingMetrics, lumRatioP90P50 } from "../../qise/metrics.js";
 import { interpretReading, readingConfidence, axesOf } from "../../qise/baseline.js";
 import { openStore } from "../../qise/store.js";
 import { readingScreenModel, historyColumnModel } from "./screens.js";
+import {
+  createPostScanReveal,
+  renderPostScanReveal,
+  POST_SCAN_REVEAL_REGIONS,
+} from "./postscan-reveal.js";
 import { SHARE_CADENCES, shareReadings } from "./share.js";
 import {
   createExposureHalo, haloStateFromCapture, shouldUseScreenFlash,
@@ -74,6 +79,9 @@ let scratch = null;
 let activeShareCadence = "week";
 let captureRun = 0;
 let activeReadingTab = "today";
+let activePostScanReveal = null;
+let activePostScanRun = null;
+let activeSelfieSource = null;
 let illuminationRequested = false;
 let screenLightRequested = false;
 let screenLightRevision = 0;
@@ -88,6 +96,76 @@ let releasePalaceExperience = () => {};
 function show(id) {
   for (const s of document.querySelectorAll(".screen")) {
     s.dataset.active = String(s.id === id);
+  }
+}
+
+function renderPostScan(state) {
+  renderPostScanReveal($("screen-postscan"), state);
+}
+
+function beginPostScan(runId) {
+  const reveal = createPostScanReveal({
+    reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
+    onChange: renderPostScan,
+  });
+  activePostScanReveal = reveal;
+  activePostScanRun = runId;
+  show("screen-postscan");
+  reveal.begin();
+  return reveal;
+}
+
+function nextPaint() {
+  if (document.hidden) return Promise.resolve();
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
+function eligiblePostScanRegions(rois) {
+  return Object.entries(rois?.rois || {})
+    .filter(([id, roi]) => POST_SCAN_REVEAL_REGIONS[id]
+      && roi?.valid === true
+      && Array.isArray(roi.pixels)
+      && roi.pixels.length > 0)
+    .map(([id]) => id);
+}
+
+function showPostScanFailure(runId, error) {
+  const reveal = activePostScanReveal;
+  if (!reveal || activePostScanRun !== runId) return false;
+  const abstained = error?.code === "INCOMPLETE_PALACE_MEASUREMENT";
+  const message = abstained
+    ? "Not enough approved regions were readable for a complete reading. Return to the scan choices and try again."
+    : "The on-device reading stopped before it was assembled. Return to the scan choices and try again.";
+  if (abstained) reveal.abstain(message);
+  else reveal.fail(message);
+  show("screen-postscan");
+  return true;
+}
+
+function releaseTransientCapture(reason = "cancelled", { backgrounded = false } = {}) {
+  if (!scratch && !activePostScanReveal && !activeSelfieSource) return;
+  const runId = captureRun;
+  captureRun++;
+  if (scratch) releaseCapture(scratch);
+  scratch = null;
+  activeSelfieSource?.release?.();
+  activeSelfieSource = null;
+  clearIlluminationPhase();
+  setScreenLight(false);
+  const reveal = activePostScanReveal;
+  if (reveal && activePostScanRun === runId && reveal.state.status === "active") {
+    if (backgrounded) reveal.background("The scan was cleared when this tab went into the background.");
+    else reveal.cancel(reason === "restart"
+      ? "The previous scan was cleared before restarting."
+      : "The scan was cancelled before the reading was finished.");
+    show("screen-postscan");
+    activePostScanReveal = null;
+    activePostScanRun = null;
+    return;
+  }
+  if (backgrounded) {
+    $("gate-line").textContent = "The scan was cleared when this tab went into the background. Return when ready to try again.";
+    show("screen-capture");
   }
 }
 
@@ -209,6 +287,11 @@ async function buildLandmarker(runningMode = "VIDEO") {
 async function runCapture() {
   assertConsentGranted(consent, "the capture screen");
   const runId = ++captureRun;
+  if (activePostScanReveal?.state.status === "active") {
+    activePostScanReveal.cancel("The previous scan was cleared before restarting.");
+  }
+  activePostScanReveal = null;
+  activePostScanRun = null;
   if (scratch) {
     releaseCapture(scratch);
     scratch = null;
@@ -352,10 +435,13 @@ async function runCapture() {
   const stopAfterLoopError = (error) => {
     if (runId !== captureRun) return;
     console.error("qise: live capture stopped", error);
+    const hadPostScanReveal = activePostScanReveal?.state.status === "active"
+      && activePostScanRun === runId;
     captureRun++;
     if (scratch) releaseCapture(scratch);
     scratch = null;
     clearIlluminationPhase();
+    if (hadPostScanReveal && showPostScanFailure(runId, error)) return;
     renderCaptureGuide();
     if (error?.code === "INCOMPLETE_PALACE_MEASUREMENT") {
       $("gate-line").textContent =
@@ -636,7 +722,7 @@ async function runCapture() {
           // say which, because captureMode is what tells a later baseline that
           // the class of capture changed.
           await finish(burst, lastRois, lastSclera, { ...opened, captureMode },
-            history, lastMargins, illuminationSummary, lastCaptureTier, image, pts);
+            history, lastMargins, illuminationSummary, lastCaptureTier, image, pts, runId);
           return;
         }
       }
@@ -717,6 +803,11 @@ async function runSelfie(file) {
   }
 
   const runId = ++captureRun;
+  if (activePostScanReveal?.state.status === "active") {
+    activePostScanReveal.cancel("The previous scan was cleared before restarting.");
+  }
+  activePostScanReveal = null;
+  activePostScanRun = null;
   if (scratch) releaseCapture(scratch);
   scratch = null;
   show("screen-capture");
@@ -737,6 +828,7 @@ async function runSelfie(file) {
   let landmarker = null;
   try {
     decoded = await decodeSelfie(file);
+    activeSelfieSource = decoded;
     const dimensionCheck = validateSelfieDimensions(decoded.width, decoded.height);
     if (!dimensionCheck.ok) throw new Error(dimensionCheck.message);
     const fitted = fitSelfieDimensions(decoded.width, decoded.height);
@@ -747,6 +839,7 @@ async function runSelfie(file) {
     ctx.drawImage(decoded.source, 0, 0, fitted.width, fitted.height);
     decoded.release();
     decoded = null;
+    activeSelfieSource = null;
 
     const image = ctx.getImageData(0, 0, fitted.width, fitted.height);
     scratch = {
@@ -805,13 +898,17 @@ async function runSelfie(file) {
     });
     await finish(
       burst, rois, sclera, { captureMode: "upload" }, history, gates.margins, illumination,
-      gates.captureTier, image, pts,
+      gates.captureTier, image, pts, runId,
     );
   } catch (error) {
     decoded?.release?.();
+    activeSelfieSource = null;
     if (runId === captureRun) {
       console.error("qise: selfie processing failed", error);
+      const hadPostScanReveal = activePostScanReveal?.state.status === "active"
+        && activePostScanRun === runId;
       discardSelfieScratch();
+      if (hadPostScanReveal && showPostScanFailure(runId, error)) return;
       $("gate-line").textContent = "Choose another clear, front-facing selfie.";
       $("selfie-status").textContent = `${error?.message || "The selected image could not be read."} The photo was discarded.`;
     }
@@ -821,78 +918,116 @@ async function runSelfie(file) {
 /* ── finishing a reading ─────────────────────────────────────────────────── */
 
 async function finish(burst, rois, sclera, opened, history, gateMargins, illumination,
-  captureTier = "clean", acceptedImage = null, acceptedPoints = null) {
-  const reduced = reduceBurst(burst);
-  const rawLab = reduced.lab;
-  // A still image has no temporal samples. Do not report duplicated analysis
-  // rows as measured zero jitter; null says that stability was not observed.
-  const frameJitter = opened.captureMode === "upload"
-    ? { ...reduced.frameJitter, overall: null }
-    : reduced.frameJitter;
+  captureTier = "clean", acceptedImage = null, acceptedPoints = null,
+  runId = captureRun) {
+  const reveal = beginPostScan(runId);
+  try {
+    // Yield one paint so the named first stage can be seen on slower devices.
+    // This is a frame boundary, not a minimum duration or artificial wait.
+    await nextPaint();
+    if (runId !== captureRun) return;
 
-  const correctedLab = {};
-  for (const [name, lab] of Object.entries(rawLab)) {
-    if (!lab) { correctedLab[name] = null; continue; }
-    correctedLab[name] = sclera.gains
-      ? correctLab(lab, sclera.gains)
-      : { ...lab };
+    const reduced = reduceBurst(burst);
+    const rawLab = reduced.lab;
+    // A still image has no temporal samples. Do not report duplicated analysis
+    // rows as measured zero jitter; null says that stability was not observed.
+    const frameJitter = opened.captureMode === "upload"
+      ? { ...reduced.frameJitter, overall: null }
+      : reduced.frameJitter;
+
+    const correctedLab = {};
+    for (const [name, lab] of Object.entries(rawLab)) {
+      if (!lab) { correctedLab[name] = null; continue; }
+      correctedLab[name] = sclera.gains
+        ? correctLab(lab, sclera.gains)
+        : { ...lab };
+    }
+
+    const lumRatio = {};
+    for (const [name, roi] of Object.entries(rois.rois)) {
+      if (roi.pixels.length) lumRatio[name] = lumRatioP90P50(roi.pixels, color);
+    }
+
+    const metrics = computeReadingMetrics({ rawLab, correctedLab, lumRatio });
+    const confidence = readingConfidence({
+      scleraConfidenceValue: sclera.confidenceValue,
+      validFraction: rois.validFraction,
+      frameJitter: frameJitter.overall,
+      captureTier,
+    });
+    reveal.completeStage(
+      "capture-quality",
+      captureTier === "assisted" ? "Accepted capture · assisted light" : "Accepted capture · clean light",
+    );
+
+    let integrated = null;
+    if (acceptedImage && acceptedPoints) {
+      $("gate-line").textContent = "Analyzing geometry… Mapping all 12 palaces.";
+      integrated = measureIntegratedReading(acceptedImage, acceptedPoints);
+      $("gate-line").textContent = "12 palaces unlocked. Opening your reading…";
+    }
+    const eligibleRegions = eligiblePostScanRegions(rois);
+    reveal.completeStage(
+      "eligible-regions",
+      `${eligibleRegions.length} approved regions used for this reading.`,
+      eligibleRegions,
+    );
+
+    const interpreted = interpretReading(metrics.corrected, history, { confidence });
+    if (interpreted.state === "read") {
+      reveal.completeStage("personal-history", "Compared with your own earlier readings.");
+    } else {
+      reveal.skipStage("personal-history", "Personal comparison will begin after more scans.");
+    }
+
+    const reading = {
+      timestampIso: new Date().toISOString(),
+      metrics,
+      axes: axesOf(metrics.corrected),
+      deltas: interpreted.deltas,
+      compass: interpreted.compass,
+      composition: compositionOf({ metrics, compass: interpreted.compass }),
+      integrated,
+      tags: [],
+      captureMode: opened.captureMode,
+      captureTier,
+      readingState: interpreted.state,
+      baselineProgress: Math.min(4, history.filter((item) => item && item.valid !== false).length + 1),
+      consentVersion: consent.read() && consent.read().version,
+      illumination,
+      // The margins from the frame that opened the burst. gates.js normalises
+      // them precisely so a capture that scraped through at +0.02 can later be
+      // told apart from one that sailed through, and storing null here would
+      // have made that claim false of every record ever written.
+      gateMargins,
+      sclera,
+      roiValidity: Object.fromEntries(Object.entries(rois.rois).map(([k, v]) => [k, v.valid])),
+      frameJitter: frameJitter.overall,
+      confidence,
+      valid: rois.accepted,
+    };
+
+    // The pixels and the mesh go now, in this tick, before anything is rendered.
+    releaseCapture(scratch);
+    scratch = null;
+
+    const stored = await store.put(reading);
+    if (runId !== captureRun) return;
+    reveal.completeStage("reflection-assembly", "Reflection assembled on-device.");
+    await renderReading(
+      { ...stored, z: interpreted.compass ? interpreted.compass.z : null },
+      { expectedRunId: runId },
+    );
+  } finally {
+    // This is idempotent and covers success, an exception from any production
+    // computation, and cancellation while the first paint is pending.
+    if (scratch) releaseCapture(scratch);
+    scratch = null;
+    if (activePostScanReveal === reveal && reveal.state.status !== "active") {
+      activePostScanReveal = null;
+      activePostScanRun = null;
+    }
   }
-
-  const lumRatio = {};
-  for (const [name, roi] of Object.entries(rois.rois)) {
-    if (roi.pixels.length) lumRatio[name] = lumRatioP90P50(roi.pixels, color);
-  }
-
-  const metrics = computeReadingMetrics({ rawLab, correctedLab, lumRatio });
-  const confidence = readingConfidence({
-    scleraConfidenceValue: sclera.confidenceValue,
-    validFraction: rois.validFraction,
-    frameJitter: frameJitter.overall,
-    captureTier,
-  });
-
-  const interpreted = interpretReading(metrics.corrected, history, { confidence });
-
-  let integrated = null;
-  if (acceptedImage && acceptedPoints) {
-    $("gate-line").textContent = "Analyzing geometry… Mapping all 12 palaces.";
-    integrated = measureIntegratedReading(acceptedImage, acceptedPoints);
-    $("gate-line").textContent = "12 palaces unlocked. Opening your reading…";
-  }
-
-  const reading = {
-    timestampIso: new Date().toISOString(),
-    metrics,
-    axes: axesOf(metrics.corrected),
-    deltas: interpreted.deltas,
-    compass: interpreted.compass,
-    composition: compositionOf({ metrics, compass: interpreted.compass }),
-    integrated,
-    tags: [],
-    captureMode: opened.captureMode,
-    captureTier,
-    readingState: interpreted.state,
-    baselineProgress: Math.min(4, history.filter((item) => item && item.valid !== false).length + 1),
-    consentVersion: consent.read() && consent.read().version,
-    illumination,
-    // The margins from the frame that opened the burst. gates.js normalises
-    // them precisely so a capture that scraped through at +0.02 can later be
-    // told apart from one that sailed through, and storing null here would
-    // have made that claim false of every record ever written.
-    gateMargins,
-    sclera,
-    roiValidity: Object.fromEntries(Object.entries(rois.rois).map(([k, v]) => [k, v.valid])),
-    frameJitter: frameJitter.overall,
-    confidence,
-    valid: rois.accepted,
-  };
-
-  // The pixels and the mesh go now, in this tick, before anything is rendered.
-  releaseCapture(scratch);
-  scratch = null;
-
-  const stored = await store.put(reading);
-  await renderReading({ ...stored, z: interpreted.compass ? interpreted.compass.z : null });
 }
 
 function correctLab(lab, gains) {
@@ -1002,8 +1137,9 @@ function integratedStoryMarkup(model) {
     </section>` : ""}`;
 }
 
-async function renderReading(reading) {
+async function renderReading(reading, { expectedRunId = null } = {}) {
   const history = await store.all();
+  if (expectedRunId !== null && expectedRunId !== captureRun) return;
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const m = readingScreenModel(reading, history, { reducedMotion: reduced });
 
@@ -1212,6 +1348,19 @@ async function boot() {
   for (const button of document.querySelectorAll("[data-reading-tab]")) {
     button.addEventListener("click", () => selectReadingTab(button.dataset.readingTab));
   }
+  $("postscan-retry").addEventListener("click", () => {
+    activePostScanReveal = null;
+    activePostScanRun = null;
+    show("screen-capture");
+    renderCaptureGuide();
+    setCapturePrompt("Ready when you are", "Choose the camera or a selfie below.");
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) releaseTransientCapture("backgrounded", { backgrounded: true });
+  });
+  window.addEventListener("pagehide", () => {
+    releaseTransientCapture("backgrounded", { backgrounded: true });
+  });
   $("today-palaces").addEventListener("click", () => {
     selectReadingTab("story", { scroll: false });
     requestAnimationFrame(() => $("palace-collection")?.scrollIntoView({ behavior: "smooth" }));
