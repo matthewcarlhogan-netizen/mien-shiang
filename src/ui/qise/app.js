@@ -44,7 +44,7 @@ import {
 } from "../../qise/gates.js";
 import { frameStats } from "../../qise/framestats.js";
 import { computeReadingMetrics, lumRatioP90P50 } from "../../qise/metrics.js";
-import { interpretReading, readingConfidence, axesOf, shouldResetBaseline } from "../../qise/baseline.js";
+import { interpretReading, readingConfidence, axesOf, shouldResetBaseline, BASELINE_VERSION } from "../../qise/baseline.js";
 import { openStore } from "../../qise/store.js";
 import { readingScreenModel, historyColumnModel } from "./screens.js";
 import { SHARE_CADENCES, shareReadings } from "./share.js";
@@ -863,7 +863,11 @@ async function finish(burst, rois, sclera, opened, history, gateMargins, illumin
     if (index !== -1) history.splice(index, 1);
   }
 
-  const interpreted = interpretReading(metrics.corrected, history, { confidence, timestampIso: currentTimestamp });
+  const interpreted = interpretReading(metrics.corrected, history, { 
+    confidence, 
+    timestampIso: currentTimestamp,
+    captureMode: opened.captureMode,
+  });
 
   let integrated = null;
   if (acceptedImage && acceptedPoints) {
@@ -873,7 +877,7 @@ async function finish(burst, rois, sclera, opened, history, gateMargins, illumin
   }
 
   const reading = {
-    timestampIso: new Date().toISOString(),
+    timestampIso: currentTimestamp,
     metrics,
     axes: axesOf(metrics.corrected),
     deltas: interpreted.deltas,
@@ -882,6 +886,8 @@ async function finish(burst, rois, sclera, opened, history, gateMargins, illumin
     composition: compositionOf({ metrics, compass: interpreted.compass }),
     integrated,
     tags: [],
+    baselineVersion: BASELINE_VERSION,
+    captureClass: opened.captureMode || "auto",
     captureMode: opened.captureMode,
     captureTier,
     readingState: interpreted.state,

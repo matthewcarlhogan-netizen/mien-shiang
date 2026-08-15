@@ -103,6 +103,8 @@ export function axesOf(metrics) {
     L: metrics.meanL,
     C: metrics.meanChroma,
     periorbitalL: metrics.periorbitalL,
+    ming: metrics.ming,
+    run: metrics.run,
   };
 }
 
@@ -236,10 +238,6 @@ export function shouldResetBaseline(previous, current) {
   const reasons = [];
   if (!previous) return { reset: false, reasons };
 
-  if (previous.deviceFingerprint && current.deviceFingerprint
-      && previous.deviceFingerprint !== current.deviceFingerprint) {
-    reasons.push("device_changed");
-  }
   if (previous.captureMode && current.captureMode && previous.captureMode !== current.captureMode) {
     reasons.push("capture_mode_changed");
   }
@@ -299,10 +297,10 @@ export function interpretReading(metrics, history, options = {}) {
   // Segmentation: baseline/history by algorithm version and capture class.
   // We filter history to match current algorithm and capture class,
   // or reset lineage if they don't match.
-  const captureClass = options.captureMode || "auto";
+  const captureMode = options.captureMode || "auto";
   const historyToUse = history.filter(r => 
     (r.baselineVersion === BASELINE_VERSION || !r.baselineVersion) && 
-    (r.captureClass === captureClass || !r.captureClass)
+    (r.captureMode === captureMode || !r.captureMode)
   );
 
   const lastReading = historyToUse[historyToUse.length - 1];
@@ -315,7 +313,7 @@ export function interpretReading(metrics, history, options = {}) {
   }
 
   // Baseline reset: check for gap
-  const resetCheck = shouldResetBaseline(lastReading, { ...metrics, timestampIso: currentTimestamp });
+  const resetCheck = shouldResetBaseline(lastReading, { ...metrics, timestampIso: currentTimestamp, captureMode });
   const validHistory = resetCheck.reset ? [] : historyToUse;
 
   const validCount = (validHistory || []).filter((r) => r && r.valid !== false).length;

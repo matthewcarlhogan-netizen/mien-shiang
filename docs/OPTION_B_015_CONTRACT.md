@@ -11,9 +11,9 @@ Repair the Qi Se foundation: baseline reset, lineage, personal `ming`/`run` repl
 - No weakening of compliance gates.
 
 ## Semantics
-- **Baseline Reset:** Triggered on device fingerprint change, capture mode change, or gap > 45 days. Must run on the production path.
-- **`ming`/`run` Course:** Persist normalised z-scores in `IndexedDB` and ensure deterministic replay.
-- **Canonical-Day:** Deterministic daily outcome based on the local timestamp; retakes are allowed only until the first successful outcome of the day.
+- **Baseline Reset:** Triggered on device fingerprint change, capture mode change, or gap > 45 days. Must run on the production path. Baseline reset preserves historical data without deletion (lineage segmentation).
+- **`ming`/`run` Course:** Persist normalised z-scores in `IndexedDB` (schema change) and ensure deterministic replay.
+- **Canonical-Day:** Deterministic daily outcome based on the persisted timestamp; same-day retakes overwrite the previous entry.
 - **Parking:** Tags remain unreachable; marked with rationale for future decision.
 
 ## Inputs/Exclusions

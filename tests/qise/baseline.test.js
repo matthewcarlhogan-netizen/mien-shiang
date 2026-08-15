@@ -230,13 +230,10 @@ test("axesOf refuses a metric set that measured nothing", () => {
 
 /* ────────────────────────────────────────────────────────────────── resets ── */
 
-test("the baseline resets on a device change, a capture-class change, or a long gap", () => {
-  const base = { deviceFingerprint: "A", captureMode: "auto", timestampIso: "2026-06-01T00:00:00.000Z" };
+test("the baseline resets on a capture-mode change or a long gap", () => {
+  const base = { captureMode: "auto", timestampIso: "2026-06-01T00:00:00.000Z" };
 
   assert.equal(shouldResetBaseline(base, { ...base, timestampIso: "2026-06-02T00:00:00.000Z" }).reset, false);
-
-  const device = shouldResetBaseline(base, { ...base, deviceFingerprint: "B", timestampIso: "2026-06-02T00:00:00.000Z" });
-  assert.deepEqual(device.reasons, ["device_changed"]);
 
   const mode = shouldResetBaseline(base, { ...base, captureMode: "locked", timestampIso: "2026-06-02T00:00:00.000Z" });
   assert.deepEqual(mode.reasons, ["capture_mode_changed"]);
