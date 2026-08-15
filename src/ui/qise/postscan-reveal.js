@@ -209,9 +209,9 @@ function fieldSvg(visibleRegions) {
   }).join("");
   return `<svg class="postscan-field" viewBox="0 0 100 100" role="img"
     aria-label="Abstract measurement field; only eligible regions are marked">
-    <path class="postscan-field-boundary" d="M15 17 Q29 8 43 13 T69 10 Q78 12 86 22 M14 38 Q27 31 39 36 T65 32 Q77 34 86 42 M11 58 Q25 52 37 59 T63 54 Q76 56 88 64 M21 82 Q32 72 45 79 T70 76 Q78 79 82 87" />
+    <path class="postscan-field-boundary" d="M20 22 Q30 12 43 16 M57 16 Q70 12 80 22 M18 45 Q25 35 38 36 M62 36 Q75 35 82 45 M25 67 Q34 76 43 75 M57 75 Q66 76 75 67" />
     <path class="postscan-field-axis" d="M51 11 Q47 28 53 42 T48 61 Q46 73 53 89" />
-    <path class="postscan-field-thread" d="M19 24 L35 20 L48 25 L62 19 L80 26 M18 47 L32 43 L46 49 L63 44 L83 50 M20 69 L34 65 L49 71 L66 65 L82 73" />
+    <path class="postscan-field-thread" d="M31 30 L43 27 L47 31 M53 31 L57 27 L69 30 M33 43 L44 40 M56 40 L67 43 M47 49 L50 56 L53 49 M40 63 L50 66 L60 63" />
     <g class="postscan-region-layer">${marks}</g>
   </svg>`;
 }

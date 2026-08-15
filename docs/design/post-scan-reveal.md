@@ -8,6 +8,7 @@ This checklist was written from the approved “Post-scan computation reveal” 
 - [x] The screen is driven by named production events: capture quality, eligible regions, personal-history comparison when eligible, and reflection assembly.
 - [x] A personal-history stage is skipped for calibration runs rather than implied.
 - [x] The visual field is an original, non-photographic schematic; it never receives a frame or landmark array.
+- [x] The field retains contrast and the privacy boundary in the existing light and dark themes.
 - [x] Only eligible approved Qi Se regions are marked. Ineligible regions remain absent.
 - [x] No 478-point mesh, fabricated progress percentage, countdown, stage duration or minimum display time is used.
 - [x] The privacy line remains visible: “Working on this device · your face image is not being stored.”

@@ -1,9 +1,13 @@
 import { test, expect } from "@playwright/test";
 
-async function prepare(page, { reducedMotion = false } = {}) {
+async function prepare(page, { reducedMotion = false, darkMode = false } = {}) {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ reducedMotion: reducedMotion ? "reduce" : "no-preference" });
   await page.goto("/qise.html");
+  if (darkMode) {
+    const theme = await page.locator("html").getAttribute("data-theme");
+    if (theme !== "dark") await page.locator("#theme-toggle").click();
+  }
   await page.evaluate(() => {
     for (const screen of document.querySelectorAll(".screen")) {
       screen.dataset.active = String(screen.id === "screen-postscan");
@@ -94,4 +98,21 @@ test("reduced motion keeps the same event states without region animation", asyn
   expect(animation).toBe("none");
   await page.screenshot({ path: testInfo.outputPath("postscan-reduced-motion-mobile.png"), fullPage: true });
   expect(state.reducedMotion).toBe(true);
+});
+
+test("dark mode keeps the face field legible at target mobile width", async ({ page }, testInfo) => {
+  await prepare(page, { darkMode: true });
+  const state = await drive(page, "fast");
+  await expect(page.locator("#screen-postscan")).toHaveAttribute("data-state", "complete");
+  const theme = await page.evaluate(() => ({
+    theme: document.documentElement.dataset.theme,
+    colourScheme: getComputedStyle(document.documentElement).colorScheme,
+    ground: getComputedStyle(document.documentElement).getPropertyValue("--ground").trim(),
+    surface: getComputedStyle(document.querySelector(".postscan-field-frame")).backgroundColor,
+  }));
+  expect(theme).toMatchObject({ theme: "dark", colourScheme: "dark", ground: "#151311" });
+  expect(theme.surface).not.toBe("rgba(0, 0, 0, 0)");
+  await expect(page.getByText("Working on this device · your face image is not being stored.")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("postscan-dark-mobile.png"), fullPage: true });
+  expect(state.status).toBe("complete");
 });
