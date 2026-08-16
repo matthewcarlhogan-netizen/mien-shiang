@@ -6,19 +6,20 @@ This ledger synthesizes the current state of the Mien Shiang codebase as require
 
 - **B-000:** Complete.
 - **B-010:** Status: **evidence-review** (Task B-010 remains blocked until this PR is merged).
-- **Next Task:** B-015 (Qi Se foundation repair) remains blocked.
+- **B-015:** Complete (PR #27 as remediated by B-015-R1/R2).
+- **Next Task:** B-020 (source and terminology dossier) is ready.
 
 ## 2. Baseline Reset and Lineage
 
 - **Baseline:** Computed in `src/qise/baseline.js` (`computeBaseline`).
-- **Reset Logic:** `src/qise/baseline.js` (`shouldResetBaseline`) defines conditions: device fingerprint change, capture mode change, or gap > `RESET_GAP_DAYS` (45).
-- **Production Invocation:** `src/ui/qise/app.js` calls `interpretReading` (which invokes `computeBaseline`) but does not explicitly trigger `shouldResetBaseline` before the interpretation step. The lineage is effectively continued unless reset logic is explicitly integrated.
+- **Reset Logic:** `src/qise/baseline.js` (`shouldResetBaseline`) defines two conditions: capture-class change, or gap > `RESET_GAP_DAYS` (45). Device fingerprinting was removed and is not reintroduced.
+- **Production Invocation:** `planSegment()` in `src/qise/baseline.js` runs `shouldResetBaseline` and returns the segment plan; `finish()` in `src/ui/qise/app.js` applies it before calling `interpretReading`. Both reset reasons are reachable from the production argument shape and are covered by tests in `tests/qise/foundation-repair.test.js`.
 
 ## 3. Persistence and Replay
 
 - **Fields:** Persisted fields are strictly allow-listed in `src/qise/store.js` (`toRecord`).
-- **Ming/Run:** `ming` and `run` components are computed in `src/qise/composition.js`, but production **does not persist the normalised z-scores** required by the composed passage course logic. Replay functionality is therefore incomplete for these values.
-- **Replay:** Persisted readings are loaded, but full replay of passage course logic is constrained by missing persisted state.
+- **Ming/Run:** `ming` and `run` are carried as compass axes and their normalised z-scores are persisted by `toRecord` in `src/qise/store.js` under an explicit allow-list. `axes.ming`, `axes.run`, `z.ming`, `z.run` and `lineageId` are covered by a round-trip test in `tests/qise/store.test.js`.
+- **Replay:** Persisted readings replay the course logic. Band edges remain provisional; see `CALIBRATION_TODO.md` for the open `AXIS_MAD_FLOOR.ming` unit question.
 
 ## 4. Eligibility: Burst, Still, Expression
 
