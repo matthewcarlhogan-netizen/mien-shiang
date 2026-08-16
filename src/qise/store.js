@@ -255,12 +255,18 @@ export async function openStore(indexedDBFactory) {
     },
 
     /**
-     * Wipe the object store AND the consent record, together.
+     * Wipe the object store.
      *
-     * The consent eraser is passed in rather than imported so that the store
-     * does not reach into another module's storage, but it is not optional:
-     * deleting the readings and leaving a standing grant behind is the shape
-     * of "delete everything" that deletes not-quite-everything.
+     * This is the bulk erase behind consent withdrawal. The production caller
+     * is consent.withdraw(), which runs this as its eraser and then clears the
+     * consent record itself, so it passes no clearConsent.
+     *
+     * clearConsent is optional, and exists for callers that own consent
+     * storage directly rather than going through consent.withdraw(). It is
+     * passed in rather than imported so the store never reaches into another
+     * module's storage. Erasing readings while leaving a standing grant is
+     * "delete everything" that deletes not-quite-everything — but preventing
+     * that is consent.withdraw()'s job, not this method's.
      */
     async deleteAll({ clearConsent } = {}) {
       await request(tx("readwrite").clear());

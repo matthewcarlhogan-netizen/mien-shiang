@@ -14,7 +14,7 @@ import {
   toRecord, findForbiddenKeys, openStore, FORBIDDEN_KEY_PATTERN,
   STORE_READINGS, DB_NAME,
 } from "../../src/qise/store.js";
-import { createConsent, memoryStorage } from "../../src/qise/consent.js";
+import { createConsent, memoryStorage, CONSENT_STORAGE_KEY } from "../../src/qise/consent.js";
 
 /* ── a reading with every hazard the capture path could attach ───────────── */
 
@@ -261,11 +261,30 @@ test("withdrawal erases the readings and the consent record together", async () 
   await store.put({ ...hazardousReading(), timestampIso: "2026-08-09T10:00:00.000Z" });
   assert.equal((await store.all()).length, 1);
 
-  // exactly what src/ui/qise/app.js does on the withdraw button
-  await consent.withdraw({ deleteAll: () => store.deleteAll({ clearConsent: () => storage.removeItem("qise.consent.v1") }) });
+  // Byte-for-byte what src/ui/qise/app.js does on the withdraw button. No
+  // clearConsent callback is passed, because production passes none: consent
+  // is cleared by withdraw() itself once the eraser returns. Passing one here
+  // would let this test keep passing if production stopped clearing consent.
+  await consent.withdraw({ deleteAll: () => store.deleteAll() });
 
   assert.equal((await store.all()).length, 0, "readings must be gone");
   assert.equal(consent.isGranted(), false, "the grant must be gone too");
+  assert.equal(storage.getItem(CONSENT_STORAGE_KEY), null, "the stored grant must be gone from storage, not just from the in-memory view");
+});
+
+test("deleteAll runs an optional clearConsent callback when one is supplied", async () => {
+  // The parameter is retained for callers that own consent storage directly.
+  // Production is not one of them, so it is exercised separately from T1
+  // rather than being smuggled into it.
+  const store = await openStore(fakeIndexedDB());
+  let called = 0;
+  const result = await store.deleteAll({ clearConsent: () => { called += 1; } });
+  assert.equal(called, 1);
+  assert.equal(result.consentCleared, true);
+
+  const bare = await store.deleteAll();
+  assert.equal(bare.cleared, true);
+  assert.equal(bare.consentCleared, false);
 });
 
 test("a withdrawal whose eraser throws leaves BOTH the readings and the grant", async () => {

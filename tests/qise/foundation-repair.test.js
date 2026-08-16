@@ -23,10 +23,6 @@ const row = (day, over = {}) => ({
   baselineVersion: BASELINE_VERSION, captureClass: "auto", lineageId: "v1",
   ...over,
 });
-const read = (history) => interpretReading(METRICS, history, {
-  timestampIso: "2026-06-20T00:00:00.000Z", captureMode: "auto",
-}).state;
-
 /* T2 — the capture-class reset, called the way production calls it. */
 
 test("capture-class reset fires from the PRODUCTION argument shape", () => {
