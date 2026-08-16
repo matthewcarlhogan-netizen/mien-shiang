@@ -24,8 +24,9 @@ import { RULES_B, MODULE_B_DISCLAIMER } from "../src/rules-b.js";
 import { ELEMENTS, SHAPE_TO_ELEMENT } from "../src/reading/five-elements.js";
 import { COURTS, BALANCED_READING, SOURCES_DIFFER as COURTS_DIFFER }
   from "../src/reading/three-courts.js";
-import { PALACES, TONE_GLOSS, SOURCES_DIFFER as PALACE_DIFFER }
+import { PALACES, TONE_GLOSS, LEAD_COPY, SOURCES_DIFFER as PALACE_DIFFER }
   from "../src/reading/twelve-palaces.js";
+import { NEXT_SCAN_COPY } from "../src/ui/qise/screens.js";
 import { BANDS, SOURCES_DIFFER as QISE_DIFFER } from "../src/reading/qi-se.js";
 import { SCIENCE_POINTS, SCIENCE_INTRO } from "../src/reading/science.js";
 
@@ -42,6 +43,12 @@ const MODULE_A_COPY = {
   COURTS, BALANCED_READING, COURTS_DIFFER,
   PALACES, TONE_GLOSS, PALACE_DIFFER,
   BANDS, QISE_DIFFER,
+  // The lead-palace hook and the return prompt. Both are user-facing Module A
+  // copy on the busiest screen in the app, and the lead hook is the one place
+  // where a measurement statement sits next to a traditional reading — which
+  // is exactly where a verdict about a person would be easiest to write by
+  // accident. Registered so they are scanned, not trusted.
+  LEAD_COPY, NEXT_SCAN_COPY,
   // The reading receipt and the palace scope note are user-facing Module A
   // copy too. Registered here so they are scanned rather than trusted —
   // an unregistered surface ships unread, which is the original defect.
