@@ -11,7 +11,7 @@ Repair the Qi Se foundation: baseline reset, lineage, personal `ming`/`run` repl
 - No weakening of compliance gates.
 
 ## Semantics
-- **Baseline Reset:** Triggered on capture mode change or gap > 45 days. Production path: `src/ui/qise/app.js` (finish). Baseline reset preserves historical data without deletion (lineage segmentation).
+- **Baseline Reset:** Triggered on capture-class change or gap > 45 days. Production path: `planSegment()` in `src/qise/baseline.js`, called by `finish()` in `src/ui/qise/app.js`. A reset writes no deletion: it starts a new `lineageId`, and subsequent readings load only that lineage, so pre-reset rows remain in the store and out of the baseline. `baselineVersion` and `captureClass` filtering in `interpretReading` is a second, independent guard covering rows that predate lineage or were captured a different way.
 - **`ming`/`run` Course:** Persist normalised z-scores (schema change) and ensure deterministic replay.
 - **Canonical-Day:** Deterministic daily outcome based on the persisted timestamp; same-day retakes overwrite the previous entry based on the persisted canonicalDay (`src/ui/qise/app.js`).
 - **Parking:** Tags remain unreachable; marked with rationale for future decision.

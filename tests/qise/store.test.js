@@ -146,6 +146,7 @@ function fakeIndexedDB() {
     put: (rec) => tick(() => { data.set(rec.timestampIso, rec); return rec.timestampIso; }),
     getAll: () => tick(() => [...data.values()]),
     clear: () => tick(() => { data.clear(); return undefined; }),
+    delete: (key) => tick(() => { data.delete(key); return undefined; }),
   };
   const tick = (fn) => {
     const req = {};
@@ -245,32 +246,60 @@ test("a host with no IndexedDB fails loudly at the call site", async () => {
   await assert.rejects(() => openStore(null), /no IndexedDB/);
 });
 
-test("lineage filtering: only the current lineage is loaded after reopen", async () => {
+test("the object store is the one the brief names", () => {
+  assert.equal(STORE_READINGS, "qise_readings");
+  assert.equal(DB_NAME, "qise");
+});
+
+/* T1 — withdrawal erases readings AND consent, through the production wiring. */
+
+test("withdrawal erases the readings and the consent record together", async () => {
+  const storage = memoryStorage();
+  const consent = createConsent(storage);
+  consent.grant();
+  const store = await openStore(fakeIndexedDB());
+  await store.put({ ...hazardousReading(), timestampIso: "2026-08-09T10:00:00.000Z" });
+  assert.equal((await store.all()).length, 1);
+
+  // exactly what src/ui/qise/app.js does on the withdraw button
+  await consent.withdraw({ deleteAll: () => store.deleteAll({ clearConsent: () => storage.removeItem("qise.consent.v1") }) });
+
+  assert.equal((await store.all()).length, 0, "readings must be gone");
+  assert.equal(consent.isGranted(), false, "the grant must be gone too");
+});
+
+test("a withdrawal whose eraser throws leaves BOTH the readings and the grant", async () => {
+  const consent = createConsent(memoryStorage());
+  consent.grant();
+  const store = await openStore(fakeIndexedDB());
+  await store.put({ ...hazardousReading(), timestampIso: "2026-08-09T10:00:00.000Z" });
+
+  await assert.rejects(() => consent.withdraw({ deleteAll: () => { throw new Error("disk"); } }));
+
+  assert.equal((await store.all()).length, 1);
+  assert.equal(consent.isGranted(), true, "a failed erase must not silently revoke");
+});
+
+/* T5 — ming/run survive the round trip, in axes and in z. */
+
+test("ming and run round-trip through put -> reopen -> all, in axes and in z", async () => {
   const idb = fakeIndexedDB();
   const store = await openStore(idb);
-
-  // Write readings from different lineages
-  await store.put({ 
-    timestampIso: "2026-08-01T10:00:00.000Z", 
-    lineageId: "v1", 
-    baselineVersion: "v2", 
-    captureClass: "auto" 
-  });
-  await store.put({ 
-    timestampIso: "2026-08-02T10:00:00.000Z", 
-    lineageId: "v2-20260802", 
-    baselineVersion: "v2", 
-    captureClass: "auto" 
+  await store.put({
+    ...hazardousReading(),
+    timestampIso: "2026-08-09T10:00:00.000Z",
+    axes: { a: 14, b: 12, L: 62, C: 18, periorbitalL: 55, ming: 1.21, run: 26.4 },
+    z: { a: 0.4, b: 0.2, L: 0.1, C: 0.3, periorbitalL: 0.2, ming: 1.9, run: -2.3 },
+    lineageId: "v2-2026-08-09T10:00:00.000Z",
   });
 
-  // Reopen store (simulates app restart)
-  const store2 = await openStore(idb);
-  const all = await store2.all();
-  
-  // Lineage filter: only include v2 lineage
-  const currentLineage = "v2-20260802";
-  const filtered = all.filter(r => (r.lineageId ?? "v1") === currentLineage);
-  
-  assert.equal(filtered.length, 1);
-  assert.equal(filtered[0].lineageId, currentLineage);
+  const [back] = await (await openStore(idb)).all();
+  assert.equal(back.axes.ming, 1.21, "axes.ming must persist or replay is a lie");
+  assert.equal(back.axes.run, 26.4);
+  assert.equal(back.z.ming, 1.9, "z.ming must persist");
+  assert.equal(back.z.run, -2.3);
+  // The lineage id is the boundary a baseline reset creates. If the store
+  // drops it on write, the boundary lasts exactly one reading: the next scan
+  // reloads every pre-reset row and readmits it to the baseline.
+  assert.equal(back.lineageId, "v2-2026-08-09T10:00:00.000Z", "lineageId must persist");
 });

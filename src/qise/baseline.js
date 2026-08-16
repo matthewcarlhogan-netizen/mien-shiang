@@ -252,6 +252,56 @@ export function shouldResetBaseline(previous, current, { captureClass } = {}) {
   return { reset: reasons.length > 0, reasons };
 }
 
+/**
+ * The whole per-reading segment decision, as one pure function.
+ *
+ * `finish()` in app.js used to do this inline, which meant the only way to
+ * test it was to re-type it in the test file and assert on the copy. This
+ * takes the history the store handed back and returns what the caller should
+ * do: which rows belong to the current lineage, which stored row (if any) the
+ * caller must delete because it is a same-day retake, and the lineage id the
+ * new reading carries.
+ *
+ * The caller performs the delete. This function touches no storage.
+ *
+ * @param {Array<Object>} history rows as returned by store.all(), oldest first
+ * @param {{timestampIso: string, canonicalDay: string, captureClass: string,
+ *          current: Object}} context
+ * @returns {{reset: {reset: boolean, reasons: string[]},
+ *            history: Array<Object>, lineageId: string,
+ *            replacedTimestampIso: string|null}}
+ */
+export function planSegment(history, { timestampIso, canonicalDay, captureClass, current }) {
+  const rows = history || [];
+  const lastReading = rows[rows.length - 1];
+  const reset = shouldResetBaseline(
+    lastReading,
+    { ...current, timestampIso },
+    { captureClass },
+  );
+
+  if (reset.reset) {
+    return {
+      reset,
+      history: [],
+      lineageId: `${BASELINE_VERSION}-${timestampIso}`,
+      replacedTimestampIso: null,
+    };
+  }
+
+  const lineageId = lastReading?.lineageId ?? "v1";
+  const kept = rows.filter((r) => (r.lineageId ?? "v1") === lineageId);
+
+  const index = kept.findIndex((r) => r.canonicalDay === canonicalDay);
+  let replacedTimestampIso = null;
+  if (index !== -1) {
+    replacedTimestampIso = kept[index].timestampIso;
+    kept.splice(index, 1);
+  }
+
+  return { reset, history: kept, lineageId, replacedTimestampIso };
+}
+
 /* ── confidence ──────────────────────────────────────────────────────────── */
 
 /** Jitter magnitude at which the jitter term has fallen to one half. */
@@ -316,9 +366,12 @@ export function interpretReading(metrics, history, options = {}) {
     // it will overwrite this entry in the store.
   }
 
-  // Baseline reset: check for gap
-  const resetCheck = shouldResetBaseline(lastReading, { ...metrics, timestampIso: currentTimestamp, captureMode });
-  const validHistory = resetCheck.reset ? [] : historyToUse;
+  // Reset detection lives in planSegment(), which the caller runs before this
+  // function. It cannot usefully run here: historyToUse is already filtered to
+  // rows whose captureClass equals the current one, so the capture-class
+  // condition can never differ, and the gap condition has already decided
+  // whether history reached this call at all.
+  const validHistory = historyToUse;
 
   const validCount = (validHistory || []).filter((r) => r && r.axes && r.valid !== false).length;
 

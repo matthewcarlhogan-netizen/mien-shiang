@@ -87,3 +87,26 @@ set: if too many false positives appear on smooth cheeks, tighten toward 20°.
 4. **Validate ITA_CONFIDENCE** asymmetry against erythema ground truth.
 5. Consider isotonic calibration of severity → confidence mapping once
    sufficient labelled data exists (target n ≥ 100 per stratum).
+
+## `AXIS_MAD_FLOOR.ming` — unit mismatch (needsVerification)
+
+`src/qise/baseline.js` sets `ming: 0.15` and `run: 0.15`, copied from the
+CIELAB axes. The comment above the constant warns that the units differ.
+
+- `ming` is `L*(P90) / L*(P50)` (`src/qise/metrics.js`, `lumRatioP90P50`) —
+  dimensionless, typically a little above 1. The floor is
+  `max(2 * MAD, AXIS_MAD_FLOOR)`, so whenever the personal MAD is small the
+  constant binds. `courseKey` in `src/qise/passages.js` thresholds at 1, so
+  lustre only leaves `"level"` once the ratio moves by 0.15 or more — a very
+  large day-to-day swing for that quantity.
+- `run` is `C * (1 + 0.045 * C)` (`src/qise/metrics.js`, `src/qise/color.js`),
+  roughly 25 at C ≈ 15. Its own MAD dominates the 0.15 floor, so `run`
+  self-scales correctly and needs no change.
+
+**Prediction if unaddressed:** `ming` reads `"level"` nearly always and
+`courseKey` collapses toward `moistureLed`/`level`, i.e. `run` alone drives the
+course.
+
+**Measurement that would settle it:** the personal MAD of `ming` across a real
+multi-day capture series, per capture class. Until that exists there is no
+basis for a value, so the constant is left untouched. `needsVerification: true`.

@@ -103,7 +103,7 @@ src/
   qise.html     Qi Se tracker entry point; consent gate copy lives here, marked
                 as a disclaimer (one wording, two consumers — see item 24)
   qise/         THE QI SE LONGITUDINAL TRACKER — all pure, all DOM-free
-    consent.js    unbundled opt-in; withdraw() REQUIRES an eraser (item 37)
+    consent.js    unbundled opt-in; withdraw() REQUIRES an eraser
     color.js      sRGB->Lab, ITA, dE76, dE2000, sCWeight, von Kries
     rois.js       eight regions; `mirrored` is required, never defaulted
     sclera.js     four-filter illuminant estimate + personal drift baseline

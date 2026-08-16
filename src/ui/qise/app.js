@@ -44,7 +44,7 @@ import {
 } from "../../qise/gates.js";
 import { frameStats } from "../../qise/framestats.js";
 import { computeReadingMetrics, lumRatioP90P50 } from "../../qise/metrics.js";
-import { interpretReading, readingConfidence, axesOf, shouldResetBaseline, BASELINE_VERSION } from "../../qise/baseline.js";
+import { interpretReading, readingConfidence, axesOf, planSegment, BASELINE_VERSION } from "../../qise/baseline.js";
 import { openStore } from "../../qise/store.js";
 import { readingScreenModel, historyColumnModel } from "./screens.js";
 import { SHARE_CADENCES, shareReadings } from "./share.js";
@@ -855,26 +855,16 @@ async function finish(burst, rois, sclera, opened, history, gateMargins, illumin
   const now = new Date();
   const canonicalDay = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   
-  const lastReading = history[history.length - 1];
   const captureClass = opened.captureMode || "auto";
-  const reset = shouldResetBaseline(lastReading, { ...metrics.corrected, timestampIso: currentTimestamp }, { captureMode: captureClass });
-  
-  if (reset.reset) {
-    history = []; // Effectively start a new lineage
-  } else {
-    // Filter history to only include current lineage (treating legacy null-lineage as 'v1')
-    const currentLineageId = lastReading?.lineageId ?? "v1";
-    history = history.filter(r => (r.lineageId ?? "v1") === currentLineageId);
-
-    const index = history.findIndex(r => r.canonicalDay === canonicalDay);
-    if (index !== -1) {
-      await store.delete(history[index].timestampIso);
-      history.splice(index, 1);
-    }
-  }
-
-  // Ensure new reading gets a lineageId
-  const lineageId = reset.reset ? `v2-${currentTimestamp}` : (lastReading?.lineageId ?? "v1");
+  const plan = planSegment(history, {
+    timestampIso: currentTimestamp,
+    canonicalDay,
+    captureClass,
+    current: metrics.corrected,
+  });
+  if (plan.replacedTimestampIso) await store.delete(plan.replacedTimestampIso);
+  history = plan.history;
+  const lineageId = plan.lineageId;
 
   const interpreted = interpretReading(metrics.corrected, history, { 
     confidence, 
@@ -1346,7 +1336,7 @@ async function boot() {
   });
 
   $("withdraw").addEventListener("click", async () => {
-    await consent.withdraw();
+    await consent.withdraw({ deleteAll: () => store.deleteAll() });
     location.reload();
   });
 

@@ -262,6 +262,18 @@ export async function openStore(indexedDBFactory) {
      * deleting the readings and leaving a standing grant behind is the shape
      * of "delete everything" that deletes not-quite-everything.
      */
+    async deleteAll({ clearConsent } = {}) {
+      await request(tx("readwrite").clear());
+      if (typeof clearConsent === "function") clearConsent();
+      return { cleared: true, consentCleared: typeof clearConsent === "function" };
+    },
+
+    /**
+     * Remove exactly one reading, by its primary key.
+     *
+     * This is the same-day retake path and nothing else. It is not a wipe:
+     * deleteAll() above is the wipe, and the two must not be confused.
+     */
     async delete(timestampIso) {
       await request(tx("readwrite").delete(timestampIso));
       return { deleted: timestampIso };
