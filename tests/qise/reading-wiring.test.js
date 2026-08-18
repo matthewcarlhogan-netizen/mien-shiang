@@ -69,6 +69,31 @@ test("the renderer stands down completely when the flag is off", () => {
     "the engine runs before the flag is checked; an off build would still pay for it");
 });
 
+test("EVERY stand-down branch hides the Why panel, not only its tab", () => {
+  // The tab and the panel are two elements. Hiding the tab alone leaves a
+  // reader who already opened Why looking at the PREVIOUS reading's text,
+  // presented as current, with no control left to dismiss it. The `off`
+  // branch got this right and the `!tiers` branch did not — item 51's
+  // shape, a teardown written into one branch of a conditional and not the
+  // other. Asserted over every branch rather than the one that was wrong,
+  // so a third stand-down path cannot reintroduce it.
+  const body = renderReflectionBody();
+
+  const standDowns = [...body.matchAll(/whyTab\.hidden = true/g)].map((m) => m.index);
+  assert.ok(standDowns.length >= 2,
+    `expected at least two stand-down branches, found ${standDowns.length}`);
+
+  for (const at of standDowns) {
+    const blockStart = body.lastIndexOf("{", at);
+    const returnAt = body.indexOf("return;", at);
+    assert.ok(returnAt > at, "a stand-down branch hides the tab but never returns");
+    const branch = body.slice(blockStart, returnAt);
+    assert.match(branch, /whyPanel\.hidden = true/,
+      "a stand-down branch hides the Why tab without hiding the Why panel; " +
+      "stale reflection text survives into a reading that produced none");
+  }
+});
+
 test("the flagged surfaces ship hidden", () => {
   for (const id of ["reflection-today", "reflection-story", "reflection-compare"]) {
     const tag = HTML.slice(HTML.indexOf(`id="${id}"`));

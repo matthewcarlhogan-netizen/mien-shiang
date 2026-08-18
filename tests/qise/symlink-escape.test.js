@@ -3,7 +3,13 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { execSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+
+// Built as an argv array, never a shell string: a temp path containing a
+// space would otherwise be split into two arguments and fail this test for
+// the wrong reason. Same shell-quoting hazard as the test runner in item 7.
+const INGEST_SCRIPT = fileURLToPath(new URL("../../scripts/ingest-disposition.mjs", import.meta.url));
 
 test("symlink escape refusal", () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "escape-"));
@@ -25,7 +31,9 @@ test("symlink escape refusal", () => {
     }));
 
     // Should fail when running script with --write (or just via plan/apply if path is checked)
-    assert.throws(() => execSync(`node scripts/ingest-disposition.mjs ${jsonPath} --write`), /outside disposition directory/);
+    const res = spawnSync(process.execPath, [INGEST_SCRIPT, jsonPath, "--write"], { encoding: "utf8" });
+    assert.notEqual(res.status, 0, "an escaping symlink must fail closed under --write");
+    assert.match(res.stderr, /outside disposition directory/);
 
   } finally {
     fs.rmSync(tmp, { recursive: true });

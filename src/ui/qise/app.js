@@ -1067,6 +1067,12 @@ function renderReflection(reading, history) {
   if (!tiers) {
     for (const node of [todayNode, storyNode, compareNode]) if (node) node.hidden = true;
     whyTab.hidden = true;
+    // The panel is hidden alongside its tab, exactly as the `off` branch
+    // above does. Hiding only the tab leaves a reader who already opened Why
+    // looking at the PREVIOUS reading's text with no way to dismiss it —
+    // stale content presented as current. Item 51's shape: a teardown
+    // written into one branch of a conditional and not the other.
+    whyPanel.hidden = true;
     return;
   }
 
