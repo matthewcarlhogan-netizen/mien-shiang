@@ -25,6 +25,42 @@ Use this register to stop prompts, discussions and implementation from collapsin
 - Independent compliance and release review.
 - A human-supervised cloud development path using a two-core GitHub Codespace and interactive Gemini CLI sign-in. It creates task branches and pull requests; it does not add runtime AI or a public-comment agent trigger.
 
+### DR-2026-08-17-B020-CLASS-A
+
+- **Date:** 17 August 2026
+- **Owner:** product owner
+- **Status:** approved
+- **Question:** B-020 produced fourteen open dispositions (R1–R14). Which can the product owner settle alone, and what are they?
+- **Decision:** the ten Class-A rows below are approved as recorded. R3, R6, R8 and R9 are **not** approved and remain provisional pending independent cultural review; the fact that the flagged corpus already embodies the recommendation for those rows is a build artefact, not a disposition.
+
+| Row | Decision |
+|---|---|
+| R1 | The construct is **Three Sections** 三停. "Three Courts" is withdrawn — no scholarly source for it was located and 停 does not mean "court". |
+| R2 | **Harmony is not one of the six enduring constructs.** It remains available only as an explicitly computed proportion score, labelled as our own measure. |
+| R4 | **北岳 = 頦** (menton). 頷 and 地閣 are retained and versioned in the source notes as alternative readings. |
+| R5 | **中岳 = 鼻**, subject to measurement availability. The traditional criterion is prominence, which a front-facing capture cannot recover, so the region abstains. |
+| R7 | Ship the **five-type Five Elements reduction**, stating clearly that 靈樞·陰陽二十五人 defines twenty-five. The tonal subdivision has no visual correlate. |
+| R10 | **Subject-side laterality**, enforced by a CI mirroring test. The 男左女右 rule is **rejected** — unattested in every source retrieved, and it would make output depend on declared gender. |
+| R11 | The **fourteen prohibited inferences** in `OPTION_B_020_DOSSIER.md` §10.2 are absolute product constraints, pending legal confirmation where marked. |
+| R12 | Safety-gate copy is **completely non-specific** and never names a clinical finding, pending legal confirmation. |
+| R13 | **假神 is removed** from the rule system. Gate precedence is enforced programmatically with negative tests, not by convention. |
+| R14 | The **diagonal-earlobe-crease gate is withdrawn from v1** and the charter is amended. The MediaPipe canonical mesh contains no auricle geometry; `src/engine.js:227` already recorded this. |
+
+- **Evidence:** `docs/OPTION_B_020_DOSSIER.md` and `docs/OPTION_B_020_DISPOSITIONS.md`, which carry the source, the consequence and the risk both ways for each row.
+- **Consequences:** these are decisions, not recommendations. Corpus and code may be changed to match without further approval. They do **not** approve any heritage family for commercial release — all six remain `Blocked` in `docs/commercial-rights-audit.md`.
+- **Explicitly not decided:** R3 (Four Rivers lineage), R6 (五官 membership), R8 (妻妾宮 / 奴僕宮 handling), R9 (colour as classifier input). R9's recommendation — exclusion — is additionally constrained by EU AI Act Art. 5(1)(g) and should not be treated as a free choice.
+
+### DR-2026-08-17-REFLECTION-ENGINE-INTERNAL-DEFAULT
+
+- **Date:** 17 August 2026
+- **Owner:** product owner
+- **Status:** approved
+- **Question:** The Reflection Engine has met the engineering bar. Should it become the default?
+- **Decision:** **internal default yes, public default no.** Development proceeds against the Reflection Engine; public release behaviour stays on the passage engine until the heritage rights and cultural-review gates close.
+- **Mechanism:** `src/qise/reading-flags.js` defaults to `on` for development origins on a named allowlist and `off` for every other origin, including any it has never heard of. This was chosen over a build flag deliberately: a build flag can be set wrongly in a release pipeline and fails open in public; a host allowlist fails closed. `?reflection=` and stored preference still override in both directions, and `compare` remains available.
+- **Evidence:** `docs/PARITY_2026-08-17.md` — ten of ten migration gates pass, 1,152 real records, zero regressions, 0.0% verbatim repetition over a simulated year against the passage engine's 26.8%.
+- **Consequences:** the passage engine is **not** removed. Both engines remain, and the parity gate keeps running against both.
+
 ### DR-2026-08-15-DAILY-LOOP
 
 - **Date:** 15 August 2026

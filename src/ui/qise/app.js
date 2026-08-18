@@ -45,6 +45,10 @@ import {
 import { frameStats } from "../../qise/framestats.js";
 import { computeReadingMetrics, lumRatioP90P50 } from "../../qise/metrics.js";
 import { interpretReading, readingConfidence, axesOf, planSegment, BASELINE_VERSION } from "../../qise/baseline.js";
+import { passageFor } from "../../qise/passages.js";
+import { reflectionMode } from "../../qise/reading-flags.js";
+import { reflectionFor } from "../../qise/reading-pipeline.js";
+import { readingTiers } from "../../qise/reading-tiers.js";
 import { openStore } from "../../qise/store.js";
 import { readingScreenModel, historyColumnModel } from "./screens.js";
 import { SHARE_CADENCES, shareReadings } from "./share.js";
@@ -1025,6 +1029,101 @@ function integratedStoryMarkup(model) {
     </section>` : ""}`;
 }
 
+/*
+ * THE REFLECTION ENGINE SURFACES, BEHIND THE ROLLOUT FLAG.
+ *
+ * Off by default. `?reflection=on` runs the new path; `?reflection=compare`
+ * renders both engines against the same stored reading so the two can be read
+ * side by side before the old one is retired. Nothing here mutates the record
+ * or the existing panels — the current engine keeps writing what it always
+ * wrote, and this adds surfaces beside it. That is the whole point of a
+ * comparison flag: if the new path is wrong, the evidence is visible rather
+ * than shipped.
+ */
+function renderReflection(reading, history) {
+  const todayNode = $("reflection-today");
+  const storyNode = $("reflection-story");
+  const compareNode = $("reflection-compare");
+  const whyNode = $("reflection-why");
+  const whyTab = $("reading-tab-why");
+  const whyPanel = document.querySelector('[data-reading-panel="why"]');
+  if (!todayNode || !storyNode || !whyNode || !whyTab || !whyPanel) return;
+
+  const mode = reflectionMode({
+    search: location.search,
+    hostname: location.hostname,
+    storage: (() => { try { return localStorage; } catch { return null; } })(),
+  });
+
+  if (mode === "off") {
+    for (const node of [todayNode, storyNode, compareNode]) if (node) node.hidden = true;
+    whyTab.hidden = true;
+    whyPanel.hidden = true;
+    return;
+  }
+
+  const reflection = reflectionFor(reading, history);
+  const tiers = reflection && readingTiers(reflection);
+  if (!tiers) {
+    for (const node of [todayNode, storyNode, compareNode]) if (node) node.hidden = true;
+    whyTab.hidden = true;
+    // The panel is hidden alongside its tab, exactly as the `off` branch
+    // above does. Hiding only the tab leaves a reader who already opened Why
+    // looking at the PREVIOUS reading's text with no way to dismiss it —
+    // stale content presented as current. Item 51's shape: a teardown
+    // written into one branch of a conditional and not the other.
+    whyPanel.hidden = true;
+    return;
+  }
+
+  const { tier1, tier2, tier3 } = tiers;
+
+  todayNode.hidden = false;
+  todayNode.innerHTML = `
+    <p class="eyebrow">${tier1.abstained ? "Not read today" : "Today"}</p>
+    <h2>${esc(tier1.headline)}</h2>
+    ${tier1.body.map((line) => `<p>${esc(line)}</p>`).join("")}
+    ${tier1.history.map((line) => `<p class="muted">${esc(line)}</p>`).join("")}
+    ${tier1.confidence ? `<p class="muted">${esc(tier1.confidence)}</p>` : ""}
+    ${tier1.selfReport ? `<p class="muted">${esc(tier1.selfReport)}</p>` : ""}`;
+
+  storyNode.hidden = false;
+  storyNode.innerHTML = `
+    <p class="eyebrow">The tradition\u2019s reading</p>
+    <p class="story-passage">${esc(tier2.passage)}</p>
+    <p class="muted">${esc(tier2.attribution)}</p>
+    <p class="muted">${esc(tier2.rotationDisclosure)}</p>
+    <p>${esc(tier2.bridge)}</p>
+    <p class="reflection">${esc(tier2.question)}</p>`;
+
+  if (compareNode) {
+    const comparing = mode === "compare";
+    compareNode.hidden = !comparing;
+    if (comparing) {
+      const previous = passageFor(reading.compass, reading.z || {}, reading.timestampIso);
+      compareNode.innerHTML = `
+        <p class="eyebrow">Side by side</p>
+        <div class="section-label"><h2>Current engine</h2><span class="muted">${esc(previous.provenanceId)}</span></div>
+        <p class="story-passage">${esc(previous.text)}</p>
+        <div class="section-label"><h2>Reflection engine</h2><span class="muted">${esc(tier3.provenance.engine)}</span></div>
+        <p class="story-passage">${esc(tier2.passage)} ${esc(tier2.bridge)} ${esc(tier2.question)}</p>`;
+    }
+  }
+
+  whyTab.hidden = false;
+  whyNode.innerHTML = `
+    <div class="section-label"><h2>What produced each line</h2><span class="muted">${esc(tier3.provenance.corpus)}</span></div>
+    ${["observation", "heritage", "reflection"].map((layer) => `
+      <p class="eyebrow">${esc(layer)}</p>
+      ${tier3.byLayer[layer].map((entry) => `
+        <p>${esc(entry.sentence)}</p>
+        <p class="muted">${esc(entry.component)} \u2190 ${esc(entry.because.join(", "))}</p>`).join("")}`).join("")}
+    <div class="section-label"><h2>Today\u2019s state</h2><span class="muted">what makes this reading this reading</span></div>
+    <div class="chips">${tier3.dimensions.map((d) =>
+      `<span class="chip">${esc(d.field)}: ${esc(String(d.value))}</span>`).join("")}</div>
+    <p class="muted">Carried but not part of the state: ${esc(tier3.notIdentifying.join(", "))}.</p>`;
+}
+
 async function renderReading(reading) {
   const history = await store.all();
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -1083,6 +1182,7 @@ async function renderReading(reading) {
      <div class="num">${c.read}/${c.total} read</div></div>`).join("");
 
   $("reading-passage").textContent = m.passage.text;
+  renderReflection(reading, history);
 
   $("reading-tags").innerHTML = m.tags.length
     ? m.tags.map((t) => `<span class="chip">${esc(t)}</span>`).join("")

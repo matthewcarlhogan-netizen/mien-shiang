@@ -17,12 +17,29 @@ export const CONTRIBUTOR_REGISTRY = Object.freeze({
 });
 
 export const SOURCE_REGISTRY = Object.freeze({
-  "suwen-ch17-unverified": Object.freeze({
-    title: "Su Wen, chapter 17 (edition and translation not yet recorded)",
+  /*
+   * RESOLVED 17 August 2026 — DR-2026-08-17-SU-WEN-EDITION.
+   *
+   * The audit's recorded defect was "the Su Wen chapter reference has no
+   * recorded edition or translation", and this entry carried the defect in its
+   * own title. The chapter has now been retrieved verbatim and the edition
+   * designated, so the citation is recorded.
+   *
+   * What has NOT changed: `culturalReviewStatus` stays pending. The passage
+   * gives five paired similes and our English renderings of two of them —
+   * 地蒼 as "charcoal" and 蒼璧之澤 as jade "dampened" rather than lustrous —
+   * are interpretive choices, not obvious translations. Those are the cultural
+   * reviewer's to confirm, and recording an edition does not confer a reading.
+   */
+  "suwen-ch17": Object.freeze({
+    title: "黃帝內經·素問·脈要精微論第十七 (Huangdi Neijing, Suwen, ch. 17)",
     kind: "historical-primary-text",
-    locator: "chapter-17",
-    citationStatus: "needs-edition-audit",
-    rightsStatus: "unverified",
+    edition: "四庫全書 recension; received text per the 王冰 762 CE arrangement",
+    locator: "素問 卷五·脈要精微論第十七",
+    citationStatus: "edition-recorded",
+    rightsStatus: "public-domain-by-age",
+    culturalReviewStatus: "pending",
+    translationStatus: "original-to-this-project",
   }),
   "mianxiang-unspecified": Object.freeze({
     title: "Mian Xiang tradition referenced by existing application copy",
@@ -70,7 +87,7 @@ export const CONTENT_PROVENANCE = Object.freeze({
     measurementCoverage: { listed: 12, sampled: 12, bilateralRegionsRequired: true },
   }),
   "qi-se-reading-v1": profile({
-    family: "qi-se", sourceIds: ["mianxiang-unspecified", "suwen-ch17-unverified"],
+    family: "qi-se", sourceIds: ["mianxiang-unspecified", "suwen-ch17"],
     measurementCoverage: { bands: 3 },
   }),
   "harmony-v1": profile({
@@ -80,7 +97,7 @@ export const CONTENT_PROVENANCE = Object.freeze({
   }),
   "qise-passages-v1": profile({
     family: "qi-se-composed-passages",
-    sourceIds: ["mianxiang-unspecified", "suwen-ch17-unverified"],
+    sourceIds: ["mianxiang-unspecified", "suwen-ch17"],
     measurementCoverage: { theoreticalCompositions: 12000 },
   }),
 });
