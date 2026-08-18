@@ -38,10 +38,22 @@ npm run build
 # Floor check, mirroring the one in CI: a build that produced nothing must not
 # be reported as a build. Exit code 0 is not evidence that work happened
 # (Verification Protocol item 2).
+# dist/ is checked for existence FIRST, on its own. `find dist` on a missing
+# directory fails, and under `set -o pipefail` that aborts the script at the
+# assignment below -- so the explicit message underneath, written for exactly
+# this case, would never reach the log. The reader would get find\'s "No such
+# file or directory" and nothing saying what it meant. A guard whose diagnostic
+# is unreachable in the case it guards is the shape of defect CLAUDE.md keeps a
+# list of.
+if [ ! -d dist ]; then
+  echo "session-start: ERROR - the build reported success but created no dist/" >&2
+  exit 1
+fi
+
 dist_files="$(find dist -type f | wc -l)"
 echo "session-start: dist/ contains ${dist_files} files"
 if [ ! -f dist/index.html ] || [ "${dist_files}" -lt 20 ]; then
-  echo "session-start: ERROR - build did not produce a usable dist/" >&2
+  echo "session-start: ERROR - dist/ exists but holds ${dist_files} files and/or no index.html" >&2
   exit 1
 fi
 
