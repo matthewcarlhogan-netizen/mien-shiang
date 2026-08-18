@@ -96,7 +96,15 @@ export function validate(doc) {
     "reviewer.interestsDeclared is required (write 'none' if none)");
   need(typeof r.signatureArtifact === "string" && r.signatureArtifact.trim().length >= 4,
     "reviewer.signatureArtifact is required — an unsigned return is not a review");
-  if (r.signatureArtifact && (r.signatureArtifact.includes("..") || r.signatureArtifact.startsWith("/"))) {
+  // path.win32.isAbsolute() catches "C:\foo", "C:/foo" and "\\server\share" —
+  // none of which is a POSIX absolute path, so none is caught by the
+  // startsWith("/") check, but all three walk out of the disposition
+  // directory just as surely once resolved on a case-insensitive host.
+  if (r.signatureArtifact && (
+    r.signatureArtifact.includes("..") ||
+    r.signatureArtifact.startsWith("/") ||
+    path.win32.isAbsolute(r.signatureArtifact)
+  )) {
     problems.push("reviewer.signatureArtifact cannot be an absolute path or contain '..'");
   }
 
@@ -223,7 +231,8 @@ export function apply(result, doc, { manifestPath, regPath }, { fsOps = fs, hook
   const manifestOrig = JSON.parse(fsOps.readFileSync(manifestPath, "utf8"));
   const regOrig = fsOps.readFileSync(regPath, "utf8");
 
-  // 1.5. Conflict check
+  // 1.5. Conflict check: an existing culturalReview entry for a family must
+  // match this ingest's entry exactly, or the ingest is refused.
   for (const [family, entry] of Object.entries(result.manifest)) {
     if (manifestOrig.families && manifestOrig.families[family] && manifestOrig.families[family].evidence?.culturalReview) {
       const existing = JSON.stringify(manifestOrig.families[family].evidence.culturalReview);
@@ -239,15 +248,18 @@ export function apply(result, doc, { manifestPath, regPath }, { fsOps = fs, hook
     throw new DispositionError("decision register anchor missing or duplicated");
   }
 
-  // 1.5. Conflict check
-  for (const [family, entry] of Object.entries(result.manifest)) {
-    if (manifestOrig.families && manifestOrig.families[family] && manifestOrig.families[family].evidence && manifestOrig.families[family].evidence.culturalReview) {
-      const existing = JSON.stringify(manifestOrig.families[family].evidence.culturalReview);
-      const incoming = JSON.stringify(entry.evidence.culturalReview);
-      if (existing !== incoming) {
-        throw new DispositionError(`conflicting cultural review for ${family}.`);
-      }
-    }
+  // 1.6. Duplicate-entry check. The per-family conflict check above only
+  // fires once a family already carries culturalReview evidence, so it
+  // cannot see a repeat ingestion of a disposition whose families are all
+  // still evidence-free. The register entry's own header is unique per
+  // ingest (keyed off the reviewer's date), so a header already present in
+  // the register means this exact disposition was ingested before —
+  // whether the repeat is byte-identical or a conflicting resubmission,
+  // both are refused the same way.
+  const incomingHeader = result.registerEntry.split("\n")[0];
+  if (regOrig.includes(incomingHeader)) {
+    throw new DispositionError(
+      `duplicate cultural-review register entry: "${incomingHeader}" already exists in the decision register.`);
   }
 
   // 2. Build new outputs
@@ -367,29 +379,39 @@ if (isMain) {
   if (!file) { console.error("usage: node scripts/ingest-disposition.mjs <disposition.json> [--write]"); process.exit(2); }
   const doc = JSON.parse(readFileSync(file, "utf8"));
 
+  const isWrite = flags.includes("--write");
   const sigPath = resolve(dirname(resolve(file)), doc.reviewer?.signatureArtifact || "");
   const baseDir = fs.realpathSync(dirname(resolve(file)));
-  const resolvedArtifact = fs.realpathSync(sigPath);
-  if (!resolvedArtifact.startsWith(baseDir + (baseDir.endsWith(path.sep) ? "" : path.sep))) {
-     console.error(`ERROR: signature artifact ${doc.reviewer?.signatureArtifact} is outside disposition directory.`);
-     process.exit(1);
-  }
 
-  let signatureHash;
-  try {
-    signatureHash = existsSync(sigPath)
-      ? createHash("sha256").update(readFileSync(sigPath)).digest("hex")
-      : null;
-  } catch (e) {
-    console.error(`ERROR: failed to compute hash for ${sigPath}: ${e.message}`);
-    process.exit(1);
-  }
-
-  if (flags.includes("--write") && !signatureHash) {
+  // realpathSync throws ENOENT on a path that doesn't exist, so the
+  // containment check only runs once something is actually there to
+  // contain. A merely-missing artifact is not a containment question —
+  // it is handled below, and must not crash either mode.
+  let signatureHash = null;
+  if (existsSync(sigPath)) {
+    let resolvedArtifact;
+    try {
+      resolvedArtifact = fs.realpathSync(sigPath);
+    } catch (e) {
+      console.error(`ERROR: failed to resolve signature artifact ${doc.reviewer?.signatureArtifact}: ${e.message}`);
+      process.exit(1);
+    }
+    if (!resolvedArtifact.startsWith(baseDir + (baseDir.endsWith(path.sep) ? "" : path.sep))) {
+      console.error(`ERROR: signature artifact ${doc.reviewer?.signatureArtifact} is outside disposition directory.`);
+      process.exit(1);
+    }
+    try {
+      signatureHash = createHash("sha256").update(readFileSync(sigPath)).digest("hex");
+    } catch (e) {
+      console.error(`ERROR: failed to compute hash for ${sigPath}: ${e.message}`);
+      process.exit(1);
+    }
+  } else if (isWrite) {
     console.error(`ERROR: signed artifact not found or unreadable (${doc.reviewer?.signatureArtifact}); refusing to write.`);
     process.exit(1);
+  } else {
+    console.error(`WARNING: signed artifact not found beside the JSON (${doc.reviewer?.signatureArtifact}); hash will be null.`);
   }
-  if (!signatureHash) console.error(`WARNING: signed artifact not found beside the JSON (${doc.reviewer?.signatureArtifact}); hash will be null.`);
 
   let result;
   try { result = plan(doc, { signatureHash }); }

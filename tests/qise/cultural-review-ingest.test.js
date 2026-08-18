@@ -12,8 +12,11 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
+import path from "node:path";
+import os from "node:os";
 
 import {
   validate, plan, assertCannotClear, DispositionError, SATISFIES, REQUIREMENTS,
@@ -88,6 +91,15 @@ test("security: path traversal in signature artifact is refused", () => {
   const d = good();
   d.reviewer.signatureArtifact = "../etc/passwd";
   assert.throws(() => validate(d), /cannot be an absolute path or contain '..'/);
+});
+
+test("security: Windows-style absolute and UNC paths in signature artifact are refused", () => {
+  for (const bad of ["C:\\outside\\sig.pdf", "C:/outside/sig.pdf", "\\\\server\\share\\sig.pdf"]) {
+    const d = good();
+    d.reviewer.signatureArtifact = bad;
+    assert.throws(() => validate(d), /cannot be an absolute path or contain '..'/,
+      `${JSON.stringify(bad)} was not rejected`);
+  }
 });
 
 test("security: invalid dates are refused", () => {
@@ -200,4 +212,50 @@ test("an approved cultural review does not by itself unblock anything", () => {
   assert.equal(Object.values(out.manifest).filter((e) => e.status !== "pending").length, 0);
   assert.ok(out.registerEntry.includes("does **not** clear any family"),
     "the register entry does not state its own limits");
+});
+
+/* ── CLI: dry-run must warn, not crash, on a missing signature artifact ──── */
+
+const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
+const INGEST_SCRIPT = path.join(REPO_ROOT, "scripts", "ingest-disposition.mjs");
+
+function runIngestCli(jsonPath, extraArgs = []) {
+  return spawnSync(process.execPath, [INGEST_SCRIPT, jsonPath, ...extraArgs], { encoding: "utf8" });
+}
+
+test("CLI dry run warns and reports 'hash not recorded' on a missing artifact, and does not crash", () => {
+  const tmp = mkdtempSync(path.join(os.tmpdir(), "ingest-missing-artifact-"));
+  try {
+    const d = good();
+    d.reviewer.signatureArtifact = "does-not-exist.pdf";
+    const jsonPath = path.join(tmp, "disposition.json");
+    writeFileSync(jsonPath, JSON.stringify(d));
+
+    const res = runIngestCli(jsonPath);
+
+    assert.equal(res.status, 0, `dry run should exit 0; stderr: ${res.stderr}`);
+    assert.doesNotMatch(res.stderr, /ENOENT|at Module\.realpathSync/,
+      "a missing artifact must not surface as an uncaught realpathSync crash in dry run");
+    assert.match(res.stderr, /WARNING: signed artifact not found/);
+    assert.match(res.stdout, /hash not recorded/);
+  } finally {
+    rmSync(tmp, { recursive: true });
+  }
+});
+
+test("CLI --write fails closed on a missing artifact, with no filesystem mutation", () => {
+  const tmp = mkdtempSync(path.join(os.tmpdir(), "ingest-missing-artifact-write-"));
+  try {
+    const d = good();
+    d.reviewer.signatureArtifact = "does-not-exist.pdf";
+    const jsonPath = path.join(tmp, "disposition.json");
+    writeFileSync(jsonPath, JSON.stringify(d));
+
+    const res = runIngestCli(jsonPath, ["--write"]);
+
+    assert.notEqual(res.status, 0, "a missing artifact must fail closed under --write");
+    assert.match(res.stderr, /refusing to write/);
+  } finally {
+    rmSync(tmp, { recursive: true });
+  }
 });

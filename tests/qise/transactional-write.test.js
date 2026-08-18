@@ -130,6 +130,93 @@ test("evidence structure validation", () => {
   m2.families["five-elements-v1"].evidence = null;
   const fsOps2 = createInstrumentedMockFs({ "manifest.json": JSON.stringify(m2), "register.md": "### DR-2026-08-17-B020-CLASS-A" });
   assert.throws(() => apply(result, doc, { manifestPath: "manifest.json", regPath: "register.md" }, { fsOps: fsOps2 }), /Malformed evidence/);
+
+  // Array evidence
+  const m3 = JSON.parse(getInitialManifest());
+  m3.families["five-elements-v1"].evidence = [];
+  const fsOps3 = createInstrumentedMockFs({ "manifest.json": JSON.stringify(m3), "register.md": "### DR-2026-08-17-B020-CLASS-A" });
+  assert.throws(() => apply(result, doc, { manifestPath: "manifest.json", regPath: "register.md" }, { fsOps: fsOps3 }), /Malformed evidence/);
+  assert.equal(fsOps3.log.filter(l => ["write", "copy", "rename", "unlink"].includes(l.op)).length, 0);
+
+  // Non-object (string) evidence
+  const m4 = JSON.parse(getInitialManifest());
+  m4.families["five-elements-v1"].evidence = "not-an-object";
+  const fsOps4 = createInstrumentedMockFs({ "manifest.json": JSON.stringify(m4), "register.md": "### DR-2026-08-17-B020-CLASS-A" });
+  assert.throws(() => apply(result, doc, { manifestPath: "manifest.json", regPath: "register.md" }, { fsOps: fsOps4 }), /Malformed evidence/);
+  assert.equal(fsOps4.log.filter(l => ["write", "copy", "rename", "unlink"].includes(l.op)).length, 0);
+});
+
+test("a conflicting existing culturalReview entry is refused before mutation", () => {
+  const families = {};
+  for (const f of FAMILIES) {
+    families[f] = {
+      status: "pending",
+      evidence: {
+        culturalReview: {
+          verdict: "revise", reviewer: "Someone Else", date: "2026-01-01",
+          briefVersion: 1, artifact: "other.pdf", sha256: "different-hash",
+          contestedInterpretations: 0,
+        },
+      },
+    };
+  }
+  const fsOps = createInstrumentedMockFs({
+    "manifest.json": JSON.stringify({ families }),
+    "register.md": "### DR-2026-08-17-B020-CLASS-A",
+  });
+  const doc = getDoc();
+  const result = plan(doc, { signatureHash: "hash" });
+
+  assert.throws(
+    () => apply(result, doc, { manifestPath: "manifest.json", regPath: "register.md" }, { fsOps }),
+    /conflicting cultural review/);
+  assert.equal(fsOps.log.filter(l => ["write", "copy", "rename", "unlink"].includes(l.op)).length, 0);
+});
+
+test("a repeated identical ingestion is refused as a duplicate register entry, with zero mutation on the retry", () => {
+  const fsOps = createInstrumentedMockFs({
+    "manifest.json": getInitialManifest(),
+    "register.md": "### DR-2026-08-17-B020-CLASS-A",
+  });
+  const doc = getDoc();
+  const result = plan(doc, { signatureHash: "hash" });
+
+  apply(result, doc, { manifestPath: "manifest.json", regPath: "register.md" }, { fsOps });
+  const afterFirst = fsOps.readFileSync("register.md");
+  fsOps.log.length = 0;
+
+  assert.throws(
+    () => apply(result, doc, { manifestPath: "manifest.json", regPath: "register.md" }, { fsOps }),
+    /duplicate cultural-review register entry/);
+
+  assert.equal(fsOps.log.filter(l => ["write", "copy", "rename", "unlink"].includes(l.op)).length, 0,
+    "the retry must not touch the filesystem at all");
+  assert.equal(fsOps.readFileSync("register.md"), afterFirst, "the register must be unchanged by the refused retry");
+});
+
+test("a conflicting resubmission under the same register-entry header is refused, not silently absorbed", () => {
+  // Same date and same evidence-relevant fields (verdict, reviewer, briefVersion,
+  // artifact, sha256, contested count) as the first ingest, but a different
+  // rationale. Rationale is not part of the persisted evidence, so the
+  // per-family conflict check alone cannot see this — only the register-entry
+  // duplicate check can, since the entry header is keyed on date alone.
+  const fsOps = createInstrumentedMockFs({
+    "manifest.json": getInitialManifest(),
+    "register.md": "### DR-2026-08-17-B020-CLASS-A",
+  });
+  const first = getDoc();
+  apply(plan(first, { signatureHash: "hash" }), first,
+    { manifestPath: "manifest.json", regPath: "register.md" }, { fsOps });
+  fsOps.log.length = 0;
+
+  const second = getDoc();
+  for (const f of FAMILIES) second.families[f].rationale = "A different rationale entirely, but still long enough.";
+  const result2 = plan(second, { signatureHash: "hash" });
+
+  assert.throws(
+    () => apply(result2, second, { manifestPath: "manifest.json", regPath: "register.md" }, { fsOps }),
+    /duplicate cultural-review register entry/);
+  assert.equal(fsOps.log.filter(l => ["write", "copy", "rename", "unlink"].includes(l.op)).length, 0);
 });
 
 test("authority preservation check", () => {
