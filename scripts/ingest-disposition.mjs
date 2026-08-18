@@ -26,10 +26,12 @@
  * Without --write it prints what it would do and changes nothing.
  */
 
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, renameSync, unlinkSync, copyFileSync } from "node:fs";
+import * as fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
+import path from "node:path";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const p = (rel) => join(ROOT, rel);
@@ -46,16 +48,47 @@ export class DispositionError extends Error {}
 /* ── validation ──────────────────────────────────────────────────────────── */
 
 const VERDICTS = new Set(["approved", "revise", "rejected"]);
+const REQUIRED_QUESTIONS = new Set(["Q1", "Q2", "Q3", "Q4"]);
+const REQUIRED_FAMILIES = new Set([
+  "five-elements-v1",
+  "three-courts-v1",
+  "twelve-palaces-v1",
+  "qi-se-reading-v1",
+  "harmony-v1",
+  "qise-passages-v1"
+]);
+
+function checkAllowedKeys(obj, allowedKeys, label) {
+  const keys = Object.keys(obj || {});
+  for (const key of keys) {
+    if (!allowedKeys.includes(key)) {
+      throw new DispositionError(`${label}: unknown property "${key}"`);
+    }
+  }
+}
 
 export function validate(doc) {
   const problems = [];
   const need = (cond, msg) => { if (!cond) problems.push(msg); };
 
+  try {
+    checkAllowedKeys(doc, ["schemaVersion", "reviewer", "briefVersion", "date", "questions", "families"], "root");
+  } catch (e) { problems.push(e.message); }
+
   need(doc && doc.schemaVersion === 1, "schemaVersion must be 1");
+  need(Number.isInteger(doc?.briefVersion) && doc?.briefVersion >= 1, "briefVersion must be an integer >= 1");
   need(/^\d{4}-\d{2}-\d{2}$/.test(doc?.date || ""), "date must be YYYY-MM-DD");
+  if (/^\d{4}-\d{2}-\d{2}$/.test(doc?.date || "")) {
+    const [year, month, day] = doc.date.split("-").map(n => parseInt(n, 10));
+    const dateObj = new Date(year, month - 1, day);
+    need(dateObj.getFullYear() === year && dateObj.getMonth() === month - 1 && dateObj.getDate() === day, "date must be a valid calendar date");
+  }
 
   const r = doc?.reviewer || {};
-  need(typeof r.name === "string" && r.name.trim().length > 1,
+  try {
+    checkAllowedKeys(r, ["name", "qualifications", "interestsDeclared", "signatureArtifact"], "reviewer");
+  } catch (e) { problems.push(e.message); }
+  need(typeof r.name === "string" && r.name.trim().length >= 2,
     "reviewer.name is required — the audit requires a NAMED reviewer");
   need(typeof r.qualifications === "string" && r.qualifications.trim().length >= 20,
     "reviewer.qualifications is required and must be substantive");
@@ -63,17 +96,41 @@ export function validate(doc) {
     "reviewer.interestsDeclared is required (write 'none' if none)");
   need(typeof r.signatureArtifact === "string" && r.signatureArtifact.trim().length >= 4,
     "reviewer.signatureArtifact is required — an unsigned return is not a review");
+  if (r.signatureArtifact && (r.signatureArtifact.includes("..") || r.signatureArtifact.startsWith("/"))) {
+    problems.push("reviewer.signatureArtifact cannot be an absolute path or contain '..'");
+  }
+
+  need(doc?.questions && typeof doc.questions === "object", "questions object is required");
+  const qKeys = Object.keys(doc?.questions || {});
+  for (const q of qKeys) {
+    if (!REQUIRED_QUESTIONS.has(q)) problems.push(`unknown question: ${q}`);
+  }
+  for (const q of REQUIRED_QUESTIONS) {
+    if (!qKeys.includes(q)) problems.push(`missing question: ${q}`);
+  }
+
+  need(doc?.families && typeof doc.families === "object", "families object is required");
+  const fKeys = Object.keys(doc?.families || {});
+  for (const f of fKeys) {
+    if (!REQUIRED_FAMILIES.has(f)) problems.push(`unknown family: ${f}`);
+  }
+  for (const f of REQUIRED_FAMILIES) {
+    if (!fKeys.includes(f)) problems.push(`missing family: ${f}`);
+  }
 
   const sections = { ...(doc?.questions || {}), ...(doc?.families || {}) };
-  need(Object.keys(doc?.questions || {}).length === 4, "all four questions Q1–Q4 must be dispositioned");
-  need(Object.keys(doc?.families || {}).length === 6, "all six families must be dispositioned");
 
   for (const [key, d] of Object.entries(sections)) {
+    if (!d || typeof d !== "object") { problems.push(`${key}: must be an object`); continue; }
+    try {
+      checkAllowedKeys(d, ["verdict", "rationale", "contestedInterpretations", "wordingDecisions", "_subject"], key);
+    } catch (e) { problems.push(e.message); }
+
     need(VERDICTS.has(d?.verdict), `${key}: verdict must be approved | revise | rejected (found ${JSON.stringify(d?.verdict)})`);
     need(typeof d?.rationale === "string" && d.rationale.trim().length >= 20,
       `${key}: rationale is required and must be substantive`);
     need(Array.isArray(d?.contestedInterpretations),
-      `${key}: contestedInterpretations must be an array (empty means "none found", which is a finding)`);
+      `${key}: contestedInterpretations must be an array`);
     need(Array.isArray(d?.wordingDecisions), `${key}: wordingDecisions must be an array`);
     for (const c of d?.contestedInterpretations || []) {
       need(c && typeof c.claim === "string" && c.claim.trim().length >= 5, `${key}: a contested interpretation has no claim`);
@@ -161,6 +218,125 @@ export function plan(doc, { signatureHash = null } = {}) {
   return out;
 }
 
+export function apply(result, doc, { manifestPath, regPath }, { fsOps = fs, hooks = {} } = {}) {
+  // 1. Read originals
+  const manifestOrig = JSON.parse(fsOps.readFileSync(manifestPath, "utf8"));
+  const regOrig = fsOps.readFileSync(regPath, "utf8");
+
+  // 1.5. Conflict check
+  for (const [family, entry] of Object.entries(result.manifest)) {
+    if (manifestOrig.families && manifestOrig.families[family] && manifestOrig.families[family].evidence?.culturalReview) {
+      const existing = JSON.stringify(manifestOrig.families[family].evidence.culturalReview);
+      const incoming = JSON.stringify(entry.evidence.culturalReview);
+      if (existing !== incoming) {
+        throw new DispositionError(`conflicting cultural review for ${family}.`);
+      }
+    }
+  }
+
+  const anchor = "### DR-2026-08-17-B020-CLASS-A";
+  if (regOrig.split(anchor).length !== 2) {
+    throw new DispositionError("decision register anchor missing or duplicated");
+  }
+
+  // 1.5. Conflict check
+  for (const [family, entry] of Object.entries(result.manifest)) {
+    if (manifestOrig.families && manifestOrig.families[family] && manifestOrig.families[family].evidence && manifestOrig.families[family].evidence.culturalReview) {
+      const existing = JSON.stringify(manifestOrig.families[family].evidence.culturalReview);
+      const incoming = JSON.stringify(entry.evidence.culturalReview);
+      if (existing !== incoming) {
+        throw new DispositionError(`conflicting cultural review for ${family}.`);
+      }
+    }
+  }
+
+  // 2. Build new outputs
+  const manifestNew = JSON.parse(JSON.stringify(manifestOrig));
+  if (!manifestNew.families) {
+    throw new DispositionError("Authoritative manifest has no 'families' property.");
+  }
+  for (const [family, entry] of Object.entries(result.manifest)) {
+    if (!manifestNew.families[family]) {
+      throw new DispositionError(`Family "${family}" from disposition is missing from authoritative manifest.`);
+    }
+    const famEntry = manifestNew.families[family];
+    if (!famEntry.evidence || typeof famEntry.evidence !== 'object' || Array.isArray(famEntry.evidence)) {
+        throw new DispositionError(`Malformed evidence in manifest for family ${family}`);
+    }
+    famEntry.evidence = { ...famEntry.evidence, ...entry.evidence };
+  }
+  manifestNew.updated = doc.date;
+  const manifestNewStr = JSON.stringify(manifestNew, null, 2) + "\n";
+  const regNewStr = regOrig.replace(anchor, anchor + "\n\n" + result.registerEntry);
+
+  // 3. Staging and backup
+  const manifestTemp = manifestPath + ".new";
+  const regTemp = regPath + ".new";
+  const manifestBak = manifestPath + ".bak";
+  const regBak = regPath + ".bak";
+
+  for (const p of [manifestTemp, regTemp, manifestBak, regBak]) {
+    if (fsOps.existsSync(p)) throw new DispositionError(`Conflicting staging artifact: ${p}`);
+  }
+
+  const staged = [];
+  try {
+    fsOps.writeFileSync(manifestTemp, manifestNewStr);
+    staged.push(manifestTemp);
+    fsOps.writeFileSync(regTemp, regNewStr);
+    staged.push(regTemp);
+    fsOps.copyFileSync(manifestPath, manifestBak);
+    staged.push(manifestBak);
+    fsOps.copyFileSync(regPath, regBak);
+    staged.push(regBak);
+  } catch (prepErr) {
+    const cleanupErrors = [];
+    for (const f of staged) {
+        try { if (fsOps.existsSync(f)) fsOps.unlinkSync(f); }
+        catch (e) { cleanupErrors.push(`cleanup failed (${f}): ${e.message}`); }
+    }
+    throw new DispositionError(`Preparation failed: ${prepErr.message}${cleanupErrors.length > 0 ? `, Cleanup errors: ${cleanupErrors.join('; ')}` : ''}`);
+  }
+
+  // 4. Commit (rollback-protected two-file update)
+  try {
+    fsOps.renameSync(manifestTemp, manifestPath); // RENAME 1
+    if (hooks.afterFirstRename) hooks.afterFirstRename();
+    fsOps.renameSync(regTemp, regPath); // RENAME 2
+  } catch (commitErr) {
+    const rollbackErrors = [];
+
+    // Restoration (independently attempt both)
+    for (const [bak, dest] of [[manifestBak, manifestPath], [regBak, regPath]]) {
+      try {
+        if (fsOps.existsSync(bak)) {
+           fsOps.renameSync(bak, dest);
+        }
+      } catch (e) {
+        rollbackErrors.push(`restoration failed (${bak} -> ${dest}): ${e.message}`);
+      }
+    }
+
+    // Cleanup staged/bak (independently attempt all)
+    const toCleanup = [manifestTemp, regTemp, manifestBak, regBak];
+    for (const f of toCleanup) {
+      try {
+        if (fsOps.existsSync(f)) fsOps.unlinkSync(f);
+      } catch (e) {
+        rollbackErrors.push(`cleanup failed (${f}): ${e.message}`);
+      }
+    }
+
+    const msg = `Commit failed: ${commitErr.message}${rollbackErrors.length > 0 ? `, Rollback errors: ${rollbackErrors.join('; ')}` : ''}`;
+    throw new DispositionError(msg);
+  }
+
+  // 5. Cleanup success
+  if (fsOps.existsSync(manifestBak)) fsOps.unlinkSync(manifestBak);
+  if (fsOps.existsSync(regBak)) fsOps.unlinkSync(regBak);
+  return true;
+}
+
 function registerEntry(doc, signatureHash) {
   const L = [];
   L.push(`### DR-${doc.date}-CULTURAL-REVIEW`);
@@ -191,10 +367,28 @@ if (isMain) {
   if (!file) { console.error("usage: node scripts/ingest-disposition.mjs <disposition.json> [--write]"); process.exit(2); }
   const doc = JSON.parse(readFileSync(file, "utf8"));
 
-  const sigPath = join(dirname(resolve(file)), doc.reviewer?.signatureArtifact || "");
-  const signatureHash = existsSync(sigPath)
-    ? createHash("sha256").update(readFileSync(sigPath)).digest("hex")
-    : null;
+  const sigPath = resolve(dirname(resolve(file)), doc.reviewer?.signatureArtifact || "");
+  const baseDir = fs.realpathSync(dirname(resolve(file)));
+  const resolvedArtifact = fs.realpathSync(sigPath);
+  if (!resolvedArtifact.startsWith(baseDir + (baseDir.endsWith(path.sep) ? "" : path.sep))) {
+     console.error(`ERROR: signature artifact ${doc.reviewer?.signatureArtifact} is outside disposition directory.`);
+     process.exit(1);
+  }
+
+  let signatureHash;
+  try {
+    signatureHash = existsSync(sigPath)
+      ? createHash("sha256").update(readFileSync(sigPath)).digest("hex")
+      : null;
+  } catch (e) {
+    console.error(`ERROR: failed to compute hash for ${sigPath}: ${e.message}`);
+    process.exit(1);
+  }
+
+  if (flags.includes("--write") && !signatureHash) {
+    console.error(`ERROR: signed artifact not found or unreadable (${doc.reviewer?.signatureArtifact}); refusing to write.`);
+    process.exit(1);
+  }
   if (!signatureHash) console.error(`WARNING: signed artifact not found beside the JSON (${doc.reviewer?.signatureArtifact}); hash will be null.`);
 
   let result;
@@ -205,19 +399,13 @@ if (isMain) {
   console.log(`\n--- ${result.contested.length} contested interpretations, ${result.wording.length} wording decisions, ${result.blocking.length} sections not approved`);
 
   if (flags.includes("--write")) {
-    const manifestPath = p("docs/commercial-rights-manifest.json");
-    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
-    for (const [family, entry] of Object.entries(result.manifest)) {
-      if (!manifest.families[family]) continue;
-      manifest.families[family].evidence = { ...manifest.families[family].evidence, ...entry.evidence };
+    try {
+      apply(result, doc, { manifestPath: p("docs/commercial-rights-manifest.json"), regPath: p("docs/DECISION_REGISTER.md") }, {});
+      console.log("\nwritten: manifest evidence + decision register entry. Statuses unchanged.");
+    } catch (e) {
+      console.error(`ERROR: rollback-protected write failed: ${e.message}`);
+      process.exit(1);
     }
-    manifest.updated = doc.date;
-    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
-
-    const reg = p("docs/DECISION_REGISTER.md");
-    const s = readFileSync(reg, "utf8");
-    writeFileSync(reg, s.replace("### DR-2026-08-17-B020-CLASS-A", result.registerEntry + "\n\n### DR-2026-08-17-B020-CLASS-A"));
-    console.log("\nwritten: manifest evidence + decision register entry. Statuses unchanged.");
   } else {
     console.log("\n(dry run — pass --write to apply)");
   }

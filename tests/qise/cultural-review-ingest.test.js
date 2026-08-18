@@ -79,18 +79,35 @@ test("an anonymous or unsigned return is refused", () => {
   const thin = good(); thin.reviewer.qualifications = "expert";
   assert.throws(() => validate(thin), /qualifications/);
 });
-
 test("a verdict without a rationale is refused", () => {
   const d = good(); d.families["qi-se-reading-v1"].rationale = "fine";
   assert.throws(() => validate(d), /rationale is required/);
 });
 
+test("security: path traversal in signature artifact is refused", () => {
+  const d = good();
+  d.reviewer.signatureArtifact = "../etc/passwd";
+  assert.throws(() => validate(d), /cannot be an absolute path or contain '..'/);
+});
+
+test("security: invalid dates are refused", () => {
+  const d = good();
+  d.date = "2026-02-30";
+  assert.throws(() => validate(d), /date must be a valid calendar date/);
+});
+
+test("security: unknown root fields are refused", () => {
+  const d = good();
+  d.unknown = "field";
+  assert.throws(() => validate(d), /root: unknown property/);
+});
+
 test("a partial return is refused", () => {
   const q = good(); delete q.questions.Q3;
-  assert.throws(() => validate(q), /all four questions/);
+  assert.throws(() => validate(q), /missing question: Q3/);
 
   const f = good(); delete f.families["harmony-v1"];
-  assert.throws(() => validate(f), /all six families/);
+  assert.throws(() => validate(f), /missing family: harmony-v1/);
 });
 
 test("an invented verdict word is refused", () => {
