@@ -41,7 +41,7 @@ npm run build
 # dist/ is checked for existence FIRST, on its own. `find dist` on a missing
 # directory fails, and under `set -o pipefail` that aborts the script at the
 # assignment below -- so the explicit message underneath, written for exactly
-# this case, would never reach the log. The reader would get find\'s "No such
+# this case, would never reach the log. The reader would get find's "No such
 # file or directory" and nothing saying what it meant. A guard whose diagnostic
 # is unreachable in the case it guards is the shape of defect CLAUDE.md keeps a
 # list of.
