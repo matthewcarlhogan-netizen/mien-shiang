@@ -476,6 +476,7 @@ html[data-screen-flash="true"] .capture-badge span{background:#FFFDF5;box-shadow
     <button type="button" role="tab" data-reading-tab="today" aria-selected="true">Today</button>
     <button type="button" role="tab" data-reading-tab="story" aria-selected="false">Story</button>
     <button type="button" role="tab" data-reading-tab="pattern" aria-selected="false">Pattern</button>
+    <button type="button" role="tab" data-reading-tab="why" aria-selected="false" id="reading-tab-why" hidden>Why</button>
   </nav>
 
   <section class="reading-panel" data-reading-panel="today" role="tabpanel">
@@ -517,6 +518,7 @@ html[data-screen-flash="true"] .capture-badge span{background:#FFFDF5;box-shadow
     </section>
     <section class="integrated-card" id="reading-integrated" aria-labelledby="integrated-h" hidden></section>
     <p class="reflection" id="reading-reflection"></p>
+    <div class="surface" id="reflection-today" hidden></div>
     <p class="muted reading-privacy">Made on this device. The face photo is discarded.</p>
   </section>
 
@@ -524,6 +526,8 @@ html[data-screen-flash="true"] .capture-badge span{background:#FFFDF5;box-shadow
     <p class="eyebrow" id="story-eyebrow">The tradition’s reading</p>
     <h1 id="story-heading">The story beneath today</h1>
     <div class="surface"><p class="story-passage" id="reading-passage"></p></div>
+    <div class="surface" id="reflection-story" hidden></div>
+    <div class="surface" id="reflection-compare" hidden></div>
     <div class="structural-story" id="reading-structure-story"></div>
     <p class="reflection" id="reading-reflection-story"></p>
     <div class="chips" id="reading-tags"></div>
@@ -538,6 +542,13 @@ html[data-screen-flash="true"] .capture-badge span{background:#FFFDF5;box-shadow
     <div class="section-label"><h2>Areas read clearly</h2><span class="muted">Scan coverage</span></div><div class="courts" id="reading-courts"></div>
     <svg class="spark reading-spark" id="reading-spark" viewBox="0 0 300 44" aria-label="Thirty days of lustre"></svg>
     <div id="reading-notices"></div>
+  </section>
+
+  <section class="reading-panel" data-reading-panel="why" role="tabpanel" hidden>
+    <p class="eyebrow">Why this reading</p>
+    <h1>How today&rsquo;s reading was assembled</h1>
+    <p class="muted">Every sentence above, the layer it came from, and the values that produced it.</p>
+    <div id="reflection-why"></div>
   </section>
 
   <div class="actions reading-actions">

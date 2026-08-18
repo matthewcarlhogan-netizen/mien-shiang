@@ -50,3 +50,63 @@ No ads and no weekly subscription are the present product direction. Exact price
 ## Compliance posture
 
 Maintain the repository's blocked divination, medical and protected-trait language rules. On-device processing reduces data exposure but does not cure deceptive copy or consumer-law risk. Any EU AI Act Article 50 notice requirement remains subject to documented legal/product classification; do not state a conditional legal conclusion as settled law.
+
+
+## Amendments — 17 August 2026
+
+Recorded under `DR-2026-08-17-B020-CLASS-A`. Where these conflict with anything
+above, these govern.
+
+### Safety gates
+
+The charter previously named two critical safety gates that override
+interpretation. **One of them has never been able to run.**
+
+- **Diagonal earlobe crease — WITHDRAWN from v1.** The MediaPipe canonical face
+  model contains no auricle geometry: no helix, antihelix, tragus, concha or
+  lobule vertex, and only ten of its 468 vertices sit posterior to z = −1.5. The
+  gate cannot be evaluated from a front-facing capture and never could.
+  `src/engine.js:227` already recorded `diagonal_crease: "needs an ear detector;
+  the face mesh has no earlobe points"`. Reinstating it requires a separate ear
+  detector, a separate capture pose, its own consent and its own failure mode —
+  a project, not a fix.
+- **Malar rash — RETAINED, with non-specific copy.** The gate suppresses all
+  downstream output and shows a generic message. **It does not name the
+  finding.** Naming a clinical sign is a device claim regardless of the wrapper,
+  so the user is told the image cannot be analysed and that a professional may
+  be worth speaking to — not what was seen.
+- **Gate precedence is programmatic.** Any fired gate suppresses everything
+  downstream, heritage content included, enforced by a negative test rather than
+  by convention.
+- **假神 (false shen) is removed from the rule system.** Its cardinal sign is
+  malar flush — the same pixels the malar gate owns — and 靈樞·五色 attaches an
+  explicit mortality prediction to that appearance.
+
+### Constructs
+
+- The six enduring constructs are **Three Sections 三停, Five Elements 五形人,
+  Twelve Palaces 十二宮, Five Mountains 五岳, Four Rivers 四瀆, Five Officers
+  五官**. "Three Courts" is withdrawn as an unattested English rendering.
+- **Harmony is not one of them.** It is a computed proportion score and is
+  labelled as our own measure, not a tradition claim.
+- **Five Elements ships as five types** with the source's twenty-five-type
+  structure stated openly. The tonal subdivision has no visual correlate.
+- **北岳 = 頦**; 頷 and 地閣 versioned as alternatives. **中岳 = 鼻**, abstaining
+  because prominence is not recoverable front-on.
+- **Laterality is subject-side**, enforced by a CI mirroring test. The 男左女右
+  rule is rejected: unattested, and it would make output depend on declared
+  gender.
+
+### Claims
+
+The fourteen prohibited inferences in `docs/OPTION_B_020_DOSSIER.md` §10.2 are
+absolute product constraints in every mode, free or paid. No lifespan,
+mortality, prognosis, wealth, rank, character, intelligence, criminality, race,
+emotion or named-condition output.
+
+### Engine posture
+
+The Reflection Engine is the **internal development default**. Public release
+behaviour remains the passage engine until the heritage rights and cultural
+review gates close. The split is enforced by origin allowlist so that a
+misconfigured build fails closed.
