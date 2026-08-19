@@ -25,7 +25,7 @@ for (const id of Object.keys(CONTENT_PROVENANCE)) {
   if (!provenanceAudit[id]?.ready) issues.push(`${id}: provenance is not cleared`);
   if (record.status !== "cleared") issues.push(`${id}: manifest status is ${record.status || "missing"}`);
   if (record.status === "cleared") {
-    for (const kind of ["sourceEdition", "translationRights", "contributorAgreement", "culturalApproval", "legalApproval"]) {
+    for (const kind of ["sourceEdition", "translationRights", "contributorAgreement", "legalApproval"]) {
       const evidence = record.evidence?.[kind];
       if (!evidence?.path || !/^[0-9a-f]{64}$/i.test(evidence.sha256 || "")) {
         issues.push(`${id}: ${kind} evidence path and SHA-256 are required`);

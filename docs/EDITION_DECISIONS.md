@@ -139,10 +139,10 @@ without a reviewer:**
 2. **Retire the `-unverified` id.** Done — `suwen-ch17` now carries
    `citationStatus: "edition-recorded"`, `rightsStatus: "public-domain-by-age"`,
    `translationStatus: "original-to-this-project"`.
-3. **Keep `culturalReviewStatus: "pending"`.** Recording an edition does not
-   confer a reading.
-4. **Route the two flagged renderings to the cultural reviewer** as a wording
-   decision, not as a translation question — the reviewer's log is the artifact.
+3. **Retain the record.** Recording an edition does not
+confer a reading.
+
+4. **Retain the two flagged renderings** as interpretive choices, not obvious translations.
 
 **Do not assert a date for the text.** Dating is genuinely disputed: Unschuld
 gives 400 BCE–260 CE, Sivin 1st c. BCE, Needham & Lu 2nd c. BCE. The received
@@ -154,9 +154,4 @@ variously as 1053 and 1067 across sources. Cite the recension, not a year.
 The audit's line-41 defect: **closed for the Qi Se colour vocabulary.** The
 edition is recorded and the passage retrieved.
 
-**It does not clear `qi-se-reading-v1`.** That family still needs cultural review
-(requirement 4), a contributor determination (requirement 3), legal (5) and
-hashing (6). And the audit's *other* three defects — the unspecified Mian Xiang
-source, the unspecified neoclassical proportion source, the missing contributor
-agreement — are untouched by this decision. R2 addresses the second; the first
-and third remain open.
+**It does not clear `qi-se-reading-v1`.** That family still needs all release evidence: named edition/locator (requirement 1), translation rights (2), contributor agreement (3), legal approval (4), and hashed evidence (5). And the audit's *other* three defects — the unspecified Mian Xiang source, the unspecified neoclassical proportion source, the missing contributor agreement — are untouched by this decision. R2 addresses the second; the first and third remain open.

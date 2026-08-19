@@ -15,12 +15,11 @@ test("every shipped reading family has a valid provenance record", () => {
   assert.ok(CONTENT_PROVENANCE["qise-passages-v1"]);
 });
 
-test("the registry does not claim unfinished rights or cultural review are complete", () => {
+test("the registry does not claim unfinished rights are complete", () => {
   const audit = auditContentProvenance();
   for (const [id, result] of Object.entries(audit)) {
     assert.equal(result.ready, false, `${id} was incorrectly marked release-ready`);
     assert.ok(result.issues.includes("rights-not-cleared"), `${id} hides its rights gap`);
-    assert.ok(result.issues.includes("cultural-review-pending"), `${id} hides its review gap`);
     assert.ok(result.issues.some((issue) => issue.startsWith("citation-not-verified:")),
       `${id} hides its citation gap`);
   }

@@ -245,8 +245,8 @@ data deletion. Paywalling any of those converts a wellness product into somethin
 indefensible.
 
 **Critical rights constraint:** every family in `commercial-rights-audit.md` is
-currently `Blocked`, and B-020 closes only evidence items (1) and (2) of six.
-**No paid release until a named cultural reviewer's log and written legal approval
+currently `Blocked`, and B-020 closes only evidence items (1) and (2) of five.
+**No paid release until a source/edition locator, rights determination, contributor agreement, legal approval, and hashed evidence are recorded.**
 exist, hashed into `commercial-rights-manifest.json`.** The dossier does not open
 that gate; it only supplies material toward it.
 
@@ -315,6 +315,6 @@ Recorded so it can't drift back in:
 > lineages disagree with each other. Presented as what it is — a thousand years of
 > a way of seeing, not a diagnosis.
 
-That's a product that can be defended in front of a regulator, a cultural reviewer,
+That's a product that can be defended in front of a regulator or subject-matter expert,
 and a sceptical user, and it's one no competitor in this category can copy without
 dismantling their own claims.

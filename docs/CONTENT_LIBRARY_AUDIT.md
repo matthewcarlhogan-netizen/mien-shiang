@@ -34,7 +34,7 @@ An item in that queue is not permission to infer it. Each addition needs:
 3. a named source and precise locator;
 4. edition or translation rights review;
 5. contributor attribution and an agreement on file;
-6. cultural review, including contested interpretations;
+6. legal approval;
 7. bounded entertainment copy that does not become identity, demographic,
    attractiveness, health, personality or future-event profiling.
 
@@ -42,7 +42,7 @@ An item in that queue is not permission to infer it. Each addition needs:
 
 `auditContentProvenance()` is intentionally red for all existing families. The
 repository currently records unresolved source references, unverified rights
-and pending cultural review. No content family may be described as commercially
+and pending legal approval. No content family may be described as commercially
 cleared until those states are replaced with evidence and the repository's
 commercial-rights audit exists.
 

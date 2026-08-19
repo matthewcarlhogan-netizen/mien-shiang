@@ -35,7 +35,7 @@ Approval of the programme is not approval of a proposed signal. Research names s
 - A traditional term cannot silently become a computer-vision claim. Sources may establish cultural meaning; they do not prove that a camera measurement observes that meaning.
 - Missing evidence produces `abstain`, `ineligible` or `needsVerification`; it never produces a guessed value or generic substitute reading.
 - Thresholds and acceptance criteria are decisions. The agent implementing a threshold may not lower its proof gate or approve its own evidence.
-- User-facing copy follows signal proof, source permission and cultural review. Corpus volume is not a substitute for support or distinctness.
+- User-facing copy follows signal proof and source permission. Corpus volume is not a substitute for support or distinctness.
 
 ## Target pipeline
 
@@ -94,7 +94,7 @@ Implement approved candidates behind research-off feature flags, using allow-lis
 
 ### 4 — eligibility, reflection and corpus
 
-Route only approved signal versions into deterministic eligibility and composition. Create source-led parallel corpus cells only for supported states. Require source IDs, rights status, cultural review, blocklist results, similarity results, reachability and golden traces.
+Route only approved signal versions into deterministic eligibility and composition. Create source-led parallel corpus cells only for supported states. Require source IDs, rights status, blocklist results, similarity results, reachability and golden traces.
 
 ### 5 — experience integration
 

@@ -1,8 +1,7 @@
 # Source acquisition — commission brief
 
 **Two retrieval tasks, one researcher, probably one library visit.**
-Prepared 17 August 2026. Both are off the critical path and independent of the
-cultural review, so they can start immediately and in parallel.
+Prepared 17 August 2026. Both are off the critical path and can start immediately and in parallel.
 
 ---
 
@@ -76,7 +75,7 @@ division. Do not pad a negative result.
 
 ## Task 2 — Twelve Palaces: retrieve the chapter body
 
-**Priority: high, and it unblocks a question already with the cultural reviewer.**
+**Priority: high, and it unblocks an existing evidence question.**
 
 ### The problem
 
@@ -101,11 +100,10 @@ per-palace locators.
 
 ### Context the researcher should have
 
-Our cultural reviewer has been asked whether those two palaces should be
-suppressed, shown literally, or modernised. **They are currently being asked
-about names we hold only from secondary sources.** Getting them the chapter body
-materially improves the quality of the answer we get back. If this task
-completes before the review does, send it straight on.
+Our interpretation team is considering whether those two palaces should be
+suppressed, shown literally, or modernised. **They are currently holding only secondary sources.** Getting them the chapter body
+materially improves the quality of the interpretation record we can build. If this task
+completes, it will inform the evidence dossier.
 
 ### A hazard worth flagging
 
@@ -130,7 +128,7 @@ from a physiognomy context.
 
 ## What these do not close
 
-Neither task clears a content family. They satisfy part of one of six
-requirements — a named edition and locator per tradition claim. Cultural review,
-contributor determination, legal approval and hashing remain open regardless of
+Neither task clears a content family. They satisfy part of one of five
+requirements — a named edition and locator per tradition claim.
+Contributor determination, legal approval and hashing remain open regardless of
 the outcome.

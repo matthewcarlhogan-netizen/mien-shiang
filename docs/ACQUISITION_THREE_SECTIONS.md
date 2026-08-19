@@ -72,7 +72,7 @@ already been tried and is what produced this document.
 
 | Outcome | Consequence |
 |---|---|
-| Maxim found in a datable recension, with folio | Requirement 1 closes for this family. Cultural review still required. |
+| Maxim found in a datable recension, with folio | Requirement 1 closes for this family. |
 | Maxim found only in a commentary layer | Ship it as a commentator's gloss and say so. The construct survives with a weaker, honestly stated basis. |
 | Maxim not found in any recension checked | **The construct's stated basis is wrong.** Either find the real source or withdraw the auspiciousness claim and present Three Sections as a division of the face with no attached judgement. |
 | No access obtainable | Status stays `Blocked`. Do not ship the family commercially. |

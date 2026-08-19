@@ -57,7 +57,7 @@ sentence here.
 ### What has NOT happened
 
 - No human editorial review of the writing.
-- No cultural review of the heritage summaries or the terminology.
+- No expert review of the heritage summaries or the terminology.
 - No legal determination of ownership or licensability, and none of the
   machine-authorship question above.
 

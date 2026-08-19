@@ -138,7 +138,7 @@ Exit: the Android camera and performance gates pass on physical devices.
   convention.
 - Audit every tradition claim. Unsourced prose is unpublished content, not a
   source.
-- Start contributor agreements, rights clearance and cultural-review
+- Start contributor agreements, rights clearance
   governance immediately; this is the longest-lead workstream.
 - Introduce source IDs and contributor attribution without calling commissioned
   commentary "scholarship" in store copy.

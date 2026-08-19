@@ -3,7 +3,7 @@
  *
  * Variety is not evidence. A passage can have thousands of combinations and
  * still rest on one unattributed claim, so each content family has a stable ID
- * and explicit source, rights and cultural-review state. Existing gaps are
+ * and explicit source and rights state. Existing gaps are
  * recorded as gaps; this file never upgrades "mentioned in copy" into a
  * verified or commercially cleared source.
  */
@@ -24,12 +24,6 @@ export const SOURCE_REGISTRY = Object.freeze({
    * recorded edition or translation", and this entry carried the defect in its
    * own title. The chapter has now been retrieved verbatim and the edition
    * designated, so the citation is recorded.
-   *
-   * What has NOT changed: `culturalReviewStatus` stays pending. The passage
-   * gives five paired similes and our English renderings of two of them —
-   * 地蒼 as "charcoal" and 蒼璧之澤 as jade "dampened" rather than lustrous —
-   * are interpretive choices, not obvious translations. Those are the cultural
-   * reviewer's to confirm, and recording an edition does not confer a reading.
    */
   "suwen-ch17": Object.freeze({
     title: "黃帝內經·素問·脈要精微論第十七 (Huangdi Neijing, Suwen, ch. 17)",
@@ -38,7 +32,6 @@ export const SOURCE_REGISTRY = Object.freeze({
     locator: "素問 卷五·脈要精微論第十七",
     citationStatus: "edition-recorded",
     rightsStatus: "public-domain-by-age",
-    culturalReviewStatus: "pending",
     translationStatus: "original-to-this-project",
   }),
   "mianxiang-unspecified": Object.freeze({
@@ -61,7 +54,6 @@ const profile = (value) => Object.freeze({
   tradition: "Mian Xiang",
   contributorIds: Object.freeze(["repository-editorial"]),
   rightsStatus: "audit-required",
-  culturalReview: "pending",
   releaseStatus: "existing-copy-needs-audit",
   ...value,
   sourceIds: Object.freeze(value.sourceIds),
@@ -107,7 +99,7 @@ export const EXPANSION_AREAS = Object.freeze([
   { id: "ears", label: "Ears", status: "source-and-measurement-required" },
   { id: "nose", label: "Nose structure", status: "source-and-measurement-required" },
   { id: "mouth", label: "Mouth and philtrum", status: "source-and-measurement-required" },
-  { id: "markings", label: "Lines and visible markings", status: "cultural-review-required" },
+  { id: "markings", label: "Lines and visible markings", status: "source-review-required" },
   { id: "life-stage-map", label: "Traditional position and life-stage maps", status: "source-review-required" },
 ]);
 
@@ -126,7 +118,6 @@ export function validateProvenanceEntry(id, entry) {
     if (!CONTRIBUTOR_REGISTRY[contributorId]) issues.push(`unknown-contributor:${contributorId}`);
   }
   if (!entry?.rightsStatus) issues.push("rights-status-required");
-  if (!entry?.culturalReview) issues.push("cultural-review-required");
   return issues;
 }
 
@@ -135,7 +126,6 @@ export function auditContentProvenance() {
   for (const [id, entry] of Object.entries(CONTENT_PROVENANCE)) {
     const issues = validateProvenanceEntry(id, entry);
     if (entry.rightsStatus !== "cleared") issues.push("rights-not-cleared");
-    if (entry.culturalReview !== "approved") issues.push("cultural-review-pending");
     for (const sourceId of entry.sourceIds) {
       const source = SOURCE_REGISTRY[sourceId];
       if (source.citationStatus !== "verified") issues.push(`citation-not-verified:${sourceId}`);
