@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Cultural review disposition return",
+  "description": "The structured form of a named reviewer's findings. Machine-ingested by scripts/ingest-disposition.mjs into DECISION_REGISTER, provenance, the rights audit and the manifest. Designed so nothing has to be re-typed by us, and so nothing can be inferred that the reviewer did not state.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "reviewer",
+    "briefVersion",
+    "date",
+    "questions",
+    "families"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "briefVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "date": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "reviewer": {
+      "type": "object",
+      "required": [
+        "name",
+        "qualifications",
+        "interestsDeclared",
+        "signatureArtifact"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 2
+        },
+        "qualifications": {
+          "type": "string",
+          "minLength": 20
+        },
+        "interestsDeclared": {
+          "type": "string",
+          "minLength": 4
+        },
+        "signatureArtifact": {
+          "type": "string",
+          "minLength": 4,
+          "description": "Filename of the signed document this JSON accompanies. The audit requires a named reviewer; an unsigned return is not a review."
+        }
+      }
+    },
+    "questions": {
+      "type": "object",
+      "required": [
+        "Q1",
+        "Q2",
+        "Q3",
+        "Q4"
+      ],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^Q[1-4]$": {
+          "$ref": "#/$defs/disposition"
+        }
+      }
+    },
+    "families": {
+      "type": "object",
+      "required": [
+        "five-elements-v1",
+        "three-courts-v1",
+        "twelve-palaces-v1",
+        "qi-se-reading-v1",
+        "harmony-v1",
+        "qise-passages-v1"
+      ],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[a-z0-9-]+$": {
+          "$ref": "#/$defs/disposition"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "disposition": {
+      "type": "object",
+      "required": [
+        "verdict",
+        "rationale",
+        "contestedInterpretations",
+        "wordingDecisions"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "verdict": {
+          "enum": [
+            "approved",
+            "revise",
+            "rejected"
+          ]
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 20
+        },
+        "contestedInterpretations": {
+          "type": "array",
+          "description": "The audit requires a LOG of contested interpretations. An empty array is a positive statement that the reviewer found none, not an omission.",
+          "items": {
+            "type": "object",
+            "required": [
+              "claim",
+              "sources",
+              "reviewerView"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "claim": {
+                "type": "string",
+                "minLength": 5
+              },
+              "sources": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1
+              },
+              "reviewerView": {
+                "type": "string",
+                "minLength": 10
+              },
+              "ourHandlingMisrepresents": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "wordingDecisions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "current",
+              "required"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "current": {
+                "type": "string"
+              },
+              "required": {
+                "type": "string"
+              },
+              "note": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "_subject": {
+          "type": "string",
+          "description": "Human label for the section. Ignored by the ingest."
+        }
+      }
+    }
+  }
+}
