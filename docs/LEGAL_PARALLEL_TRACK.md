@@ -1,15 +1,6 @@
-# Legal questions that do not wait for cultural review
+# Legal questions for counsel
 
-**Prepared 17 August 2026.** Two tracks, deliberately separated.
-
-Most legal questions here depend on what the cultural reviewer concludes — there
-is no point asking counsel to opine on Twelve Palaces copy that may change. But
-**three questions do not depend on any cultural finding at all**, and holding
-them behind the reviewer would extend the critical path for no reason.
-
-Send Track 1 now. Track 2 waits.
-
----
+**Prepared 19 August 2026.**
 
 # TRACK 1 — send to counsel now
 
@@ -50,15 +41,11 @@ it is a category question.
 ### Why it cannot wait
 
 It gates `qise-passages-v1` and touches every family that ships composed prose.
-It is independent of what a cultural reviewer says about 五官 or 四瀆 — the
-question is about authorship, not accuracy. And if the answer requires a
+The question is about authorship, not accuracy. And if the answer requires a
 different production method, we would rather know before commissioning more
 corpus.
 
 ## L2. Terms-of-service scope and consequential-use prohibition
-
-Independent of cultural review because it is about what the ToS must say, not
-about content.
 
 - **EU AI Act Art. 5(1)(d)** prohibits criminal-risk prediction from profiling
   or personality traits; **Art. 5(1)(f)** prohibits emotion inference in
@@ -81,42 +68,14 @@ We need confirmation, not analysis. Our positions:
 | 四庫全書 (1781), 欽定古今圖書集成 (1726) | Public domain by age. **Designated editions** — see `docs/EDITION_DECISIONS.md`. |
 | Shuge scan of 神相全編 Ming 致和堂 | Faithful reproduction of a PD work; **no explicit licence stated by the host**. Used for reference; image files not redistributed. |
 
-**Question:** are any of these positions wrong, and is the Shuge caveat
-sufficient?
+## L4. EU AI Act - colour-derived biometric typing
 
----
+- **Question:** Whether colour-derived five elements typing or Four Rivers lineage logic constitutes "biometric categorisation" under the EU AI Act, and what obligations arise.
 
-# TRACK 2 — after the cultural review
+## L5. Prohibited-inference constraints
 
-These depend on findings we do not have.
+- **Question:** Confirm that the fourteen prohibited inferences in `OPTION_B_020_DOSSIER.md` §10.2 are effectively banned across all intended territories.
 
-| Question | Depends on |
-|---|---|
-| R9 / Q4 — EU AI Act Art. 5(1)(g) confirmation | Whether the reviewer agrees geometry-only remains 五形人, and how we then describe it |
-| R11 — the fourteen prohibited inferences across territories | Final copy, which the reviewer may change |
-| R12 — non-specific safety-gate copy as a General Wellness posture | Gate copy, once written |
-| Requirement 5 per family | Requirement 4 per family |
-| Store-policy review | All of the above |
+## L6. General Wellness posture
 
-Reviewing Track 2 before the cultural log exists means reviewing twice.
-
----
-
-## What we are not asking counsel to do
-
-Confirm that our reading of a Ming physiognomy text is correct. That is the
-cultural reviewer's, and the two roles are not interchangeable — a lawyer
-approving a translation and a sinologist approving a compliance posture are the
-same category error in opposite directions.
-
-## What returns and where it goes
-
-Track 1 answers feed:
-
-- **L1** → `docs/CORPUS_PROVENANCE.md`, and whatever artifact replaces
-  requirement 3 in `commercial-rights-manifest.json`
-- **L2** → terms of service; possibly a decision not to expose an API
-- **L3** → `docs/RIGHTS_CLOSURE.md`, confirming or correcting the positions above
-
-As with the cultural review, **no legal gate is marked complete by us**. The
-returned advice is hashed in unaltered.
+- **Question:** Review the safety-gate copy for compliance with the "General Wellness" product posture to ensure it does not imply a clinical diagnosis or medical recommendation.

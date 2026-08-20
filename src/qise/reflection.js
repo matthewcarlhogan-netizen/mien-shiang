@@ -64,13 +64,6 @@ const read = (s) => s.availability === "read";
  * `dependsOn` is a contract, not documentation: the collision test reads it.
  * A component that reads a field it did not declare will pass its own render
  * and fail the audit, which is the correct way round.
- */
-/**
- * THE COMPONENT REGISTRY.
- *
- * `dependsOn` is a contract, not documentation: the collision test reads it.
- * A component that reads a field it did not declare will pass its own render
- * and fail the audit, which is the correct way round.
  *
  * `variants` returns every authored way of saying this component's part for
  * this state. They must be interchangeable in MEANING — same claim, same

@@ -25,13 +25,23 @@ Use this register to stop prompts, discussions and implementation from collapsin
 - Independent compliance and release review.
 - A human-supervised cloud development path using a two-core GitHub Codespace and interactive Gemini CLI sign-in. It creates task branches and pull requests; it does not add runtime AI or a public-comment agent trigger.
 
+### DR-2026-08-19-CULTURAL-REVIEW-RETIREMENT
+
+- **Date:** 19 August 2026
+- **Owner:** product owner
+- **Status:** approved
+- **Decision:** The independent cultural-review requirement is retired.
+- **Rationale:** The product owner has decided not to make external cultural review a mandatory dependency for development or commercial release.
+- **Consequence:** No signed reviewer artifact, disposition JSON, or cultural-review approval is required by release tooling.
+- **Explicit non-consequence:** This decision does not authorise unsupported claims and does not weaken legal, rights, safety, provenance, or evidence-integrity requirements.
+
 ### DR-2026-08-17-B020-CLASS-A
 
 - **Date:** 17 August 2026
 - **Owner:** product owner
 - **Status:** approved
 - **Question:** B-020 produced fourteen open dispositions (R1–R14). Which can the product owner settle alone, and what are they?
-- **Decision:** the ten Class-A rows below are approved as recorded. R3, R6, R8 and R9 are **not** approved and remain provisional pending independent cultural review; the fact that the flagged corpus already embodies the recommendation for those rows is a build artefact, not a disposition.
+- **Decision:** the ten Class-A rows below are approved as recorded. R3, R6, R8 and R9 are **not** approved and remain provisional pending independent cultural review; the fact that the flagged corpus already embodies the recommendation for those rows is a build artefact, not a disposition. Superseded for cultural-review dependency by DR-2026-08-19-CULTURAL-REVIEW-RETIREMENT.
 
 | Row | Decision |
 |---|---|
@@ -56,7 +66,7 @@ Use this register to stop prompts, discussions and implementation from collapsin
 - **Owner:** product owner
 - **Status:** approved
 - **Question:** The Reflection Engine has met the engineering bar. Should it become the default?
-- **Decision:** **internal default yes, public default no.** Development proceeds against the Reflection Engine; public release behaviour stays on the passage engine until the heritage rights and cultural-review gates close.
+- **Decision:** **internal default yes, public default no.** Development proceeds against the Reflection Engine; public release behaviour stays on the passage engine until the heritage rights gates close. Superseded for cultural-review dependency by DR-2026-08-19-CULTURAL-REVIEW-RETIREMENT.
 - **Mechanism:** `src/qise/reading-flags.js` defaults to `on` for development origins on a named allowlist and `off` for every other origin, including any it has never heard of. This was chosen over a build flag deliberately: a build flag can be set wrongly in a release pipeline and fails open in public; a host allowlist fails closed. `?reflection=` and stored preference still override in both directions, and `compare` remains available.
 - **Evidence:** `docs/PARITY_2026-08-17.md` — ten of ten migration gates pass, 1,152 real records, zero regressions, 0.0% verbatim repetition over a simulated year against the passage engine's 26.8%.
 - **Consequences:** the passage engine is **not** removed. Both engines remain, and the parity gate keeps running against both.
@@ -72,7 +82,7 @@ Use this register to stop prompts, discussions and implementation from collapsin
 - **Unproven scope:** “Shen burst variance” and “baseline-relative tension delta” are research labels, not established production signals. Current burst jitter is capture-quality data and current blendshape/asymmetry output describes one capture. Neither may drive a user-facing reading until its versioned contract and independent proof verdict pass.
 - **Consequences:** approving Option B commits the product direction and the research programme; it does not pre-approve a measurement definition, threshold, source interpretation, persistence change, corpus claim or release. Failed proof means abstention, redesign or removal—not a weakened gate.
 - **Execution authority:** the dedicated agent may research, design and implement on task branches, run checks, commit, push and open draft pull requests. It may not approve its own evidence, mark a pull request ready, merge, alter acceptance criteria to obtain a pass or issue the final release verdict.
-- **Human and external gates:** the product owner retains product decisions and diff review. Consented participant/device evidence, source and cultural review, legal/rights review, the unresolved history-retention decision and store approval cannot be manufactured or self-certified by an agent.
+- **Human and external gates:** the product owner retains product decisions and diff review. Consented participant/device evidence, source review, legal/rights review, the unresolved history-retention decision and store approval cannot be manufactured or self-certified by an agent. Superseded for cultural-review dependency by DR-2026-08-19-CULTURAL-REVIEW-RETIREMENT.
 - **Supersedes:** the unresolved state of this same decision record. Option A is parked, not the selected product direction.
 
 ## Unresolved proposals

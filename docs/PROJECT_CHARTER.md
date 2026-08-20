@@ -107,6 +107,8 @@ emotion or named-condition output.
 ### Engine posture
 
 The Reflection Engine is the **internal development default**. Public release
-behaviour remains the passage engine until the heritage rights and cultural
-review gates close. The split is enforced by origin allowlist so that a
-misconfigured build fails closed.
+behaviour remains the passage engine until the heritage rights and legal gates
+close: source edition and precise locator, translation/publication rights or a
+recorded public-domain determination, signed contributor agreement for modern
+commentary, written legal approval, and evidence hashed into the manifest. The
+split is enforced by origin allowlist so that a misconfigured build fails closed.

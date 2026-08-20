@@ -9,8 +9,8 @@ The current application contains six governed content families:
 | Family | Current coverage | Provenance ID |
 |---|---:|---|
 | Five Elements | five elements mapped across six face-shape classes | `five-elements-v1` |
-| Three Courts | three courts; the upper boundary substitutes the face oval for the unmeasured hairline | `three-courts-v1` |
-| Twelve Palaces | twelve listed, six sampled from the current regions | `twelve-palaces-v1` |
+| Three Sections | three sections; the upper boundary substitutes the face oval for the unmeasured hairline | `three-courts-v1` |
+| Twelve Palaces | twelve listed, twelve sampled; bilateral regions required | `twelve-palaces-v2` |
 | Qi Se reading | three bands over measured colour signals | `qi-se-reading-v1` |
 | Proportion harmony | four possible components, with unavailable components dropped | `harmony-v1` |
 | Qi Se passages | 12,000 theoretical compositions from the current keyed fragments | `qise-passages-v1` |
@@ -34,7 +34,7 @@ An item in that queue is not permission to infer it. Each addition needs:
 3. a named source and precise locator;
 4. edition or translation rights review;
 5. contributor attribution and an agreement on file;
-6. cultural review, including contested interpretations;
+6. legal approval;
 7. bounded entertainment copy that does not become identity, demographic,
    attractiveness, health, personality or future-event profiling.
 
@@ -42,7 +42,7 @@ An item in that queue is not permission to infer it. Each addition needs:
 
 `auditContentProvenance()` is intentionally red for all existing families. The
 repository currently records unresolved source references, unverified rights
-and pending cultural review. No content family may be described as commercially
+and pending legal approval. No content family may be described as commercially
 cleared until those states are replaced with evidence and the repository's
 commercial-rights audit exists.
 

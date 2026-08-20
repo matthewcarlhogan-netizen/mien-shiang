@@ -1,3 +1,7 @@
+Status: SUPERSEDED — historical record only.
+
+The independent cultural-review dependency described in this document was retired by DR-2026-08-19-CULTURAL-REVIEW-RETIREMENT. Reviewer-dependent classes and approval requirements below are retained only as historical context and are not active release requirements.
+
 # B-020 — R1–R14 disposition package
 
 **Status: awaiting disposition. Nothing here is approved.**
@@ -18,7 +22,7 @@ sizes.
 | Class | Rows | Who |
 |---|---|---|
 | **A — product owner alone** | R1, R2, R4, R5, R7, R10, R11, R12, R13, R14 | You. Naming, scope, engineering and safety-posture decisions. |
-| **B — needs an independent cultural reviewer** | R3, R6, R8, R9 | A named, qualified Mian Xiang reviewer. These are claims about what a tradition says, or about representing it. |
+| **B — previously required reviewer** | R3, R6, R8, R9 | A named, qualified Mian Xiang reviewer. These are claims about what a tradition says, or about representing it. |
 | **C — needs legal review before any paid build** | R8, R9, R11 (in part) | R8 touches representation; R9 and R11 touch EU AI Act Art. 5(1)(g) and FDA/FTC exposure. |
 
 R8 and R9 appear in more than one class deliberately: each needs both a cultural
@@ -66,7 +70,7 @@ and a legal view, and neither substitutes for the other.
 - **Evidence:** dossier §6 — 神相全編 and 人倫大統賦 both give 頦; 太清神鑑 gives 頷; the 神異賦 commentary gives 地閣, defined as a region. Majority reading, and the only one that is a single point.
 - **Risk if accepted:** we adopt the majority over the earliest witness.
 - **Risk if rejected:** a zone or contour target that cannot be tested for accuracy.
-- **Class:** A (engineering), with a note to the cultural reviewer.
+- **Class:** A (engineering).
 
 ### R5 — 中岳: 鼻 (whole nose) or 準頭 (pronasale)?
 
@@ -126,7 +130,7 @@ and a legal view, and neither substitutes for the other.
 - **Evidence:** dossier §6 — no retrieved source states whether 左/右 means the subject's side or the viewer's, and the gendered rule is unattested in every text retrieved.
 - **Risk if accepted:** we adopt a convention the sources do not state, and say so.
 - **Risk if rejected:** output depends on declared gender — a fairness problem we would be inventing.
-- **Class:** A, with a note to the cultural reviewer that the convention is undocumented.
+- **Class:** A.
 
 ### R11 — Accept all 14 prohibited inferences as absolute constraints?
 
