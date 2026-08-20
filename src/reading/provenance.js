@@ -8,6 +8,63 @@
  * verified or commercially cleared source.
  */
 
+/*
+ * PROVENANCE STATUS TAXONOMY.
+ *
+ * These are rungs on a ladder, not synonyms. Recording which edition a text is
+ * does not mean its locator has been checked against that text, and recording a
+ * public-domain determination does not mean the commercial gate has been
+ * satisfied. Only the top rung of each ladder satisfies the release contract.
+ * The rungs below exist so that a partial result can be stated precisely
+ * instead of collapsing into an undifferentiated "not verified" — and so that
+ * nothing is ever promoted by relabelling it.
+ */
+export const CITATION_STATUS = Object.freeze({
+  /** No source has been identified for the claim. */
+  SOURCE_REQUIRED: "source-required",
+  /** Edition and locator recorded. Not yet checked against the actual source. */
+  EDITION_RECORDED: "edition-recorded",
+  /** Locator independently checked against the actual source. Release-satisfying. */
+  VERIFIED: "verified",
+});
+
+export const RIGHTS_STATUS = Object.freeze({
+  /** No rights basis recorded. */
+  UNVERIFIED: "unverified",
+  /** A public-domain determination is recorded. This is a basis, not a clearance. */
+  PUBLIC_DOMAIN_BY_AGE: "public-domain-by-age",
+  /** The commercial rights and legal approval gate has been satisfied. Release-satisfying. */
+  CLEARED: "cleared",
+});
+
+/** The release contract accepts these and nothing weaker. */
+export const CITATION_RELEASE_STATUS = CITATION_STATUS.VERIFIED;
+export const RIGHTS_RELEASE_STATUS = RIGHTS_STATUS.CLEARED;
+
+/** Why a source does not yet meet the gate, in words rather than a bare negation. */
+export const PROVENANCE_BLOCKER_DETAIL = Object.freeze({
+  "rights-not-cleared":
+    "family rights determination is not cleared",
+  "citation-source-required":
+    "no source identified for the claim",
+  "citation-recorded-not-verified":
+    "citation recorded but not independently verified against the source",
+  "citation-status-unrecognised":
+    "citation status is outside the recorded taxonomy",
+  "source-rights-unverified":
+    "no rights basis recorded",
+  "source-rights-public-domain-not-cleared":
+    "public-domain basis recorded but commercial/legal clearance not complete",
+  "source-rights-status-unrecognised":
+    "rights status is outside the recorded taxonomy",
+});
+
+/** Expands `code:sourceId` into the sentence a reader can act on. */
+export function explainProvenanceIssue(issue) {
+  const detail = PROVENANCE_BLOCKER_DETAIL[String(issue).split(":")[0]];
+  return detail ? `${issue} — ${detail}` : String(issue);
+}
+
 export const CONTRIBUTOR_REGISTRY = Object.freeze({
   "repository-editorial": Object.freeze({
     displayName: "Repository editorial copy",
@@ -30,23 +87,23 @@ export const SOURCE_REGISTRY = Object.freeze({
     kind: "historical-primary-text",
     edition: "四庫全書 recension; received text per the 王冰 762 CE arrangement",
     locator: "素問 卷五·脈要精微論第十七",
-    citationStatus: "edition-recorded",
-    rightsStatus: "public-domain-by-age",
+    citationStatus: CITATION_STATUS.EDITION_RECORDED,
+    rightsStatus: RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE,
     translationStatus: "original-to-this-project",
   }),
   "mianxiang-unspecified": Object.freeze({
     title: "Mian Xiang tradition referenced by existing application copy",
     kind: "unresolved-tradition-source",
     locator: null,
-    citationStatus: "source-required",
-    rightsStatus: "unverified",
+    citationStatus: CITATION_STATUS.SOURCE_REQUIRED,
+    rightsStatus: RIGHTS_STATUS.UNVERIFIED,
   }),
   "neoclassical-canons-unspecified": Object.freeze({
     title: "Neoclassical proportion canons referenced by existing application copy",
     kind: "unresolved-historical-source",
     locator: null,
-    citationStatus: "source-required",
-    rightsStatus: "unverified",
+    citationStatus: CITATION_STATUS.SOURCE_REQUIRED,
+    rightsStatus: RIGHTS_STATUS.UNVERIFIED,
   }),
 });
 
@@ -121,15 +178,40 @@ export function validateProvenanceEntry(id, entry) {
   return issues;
 }
 
+/*
+ * The gate is unchanged and deliberately strict: only `verified` and `cleared`
+ * pass. What each helper adds is the reason. "Edition recorded but not checked"
+ * and "no source at all" are different states of the world, and reporting both
+ * as `citation-not-verified` made a recorded edition look like a missing one —
+ * which is the reading that invites someone to "fix" it by relabelling the
+ * evidence. Naming the actual shortfall keeps the record honest and keeps the
+ * remaining work legible.
+ */
+const citationBlocker = (status) => {
+  if (status === CITATION_RELEASE_STATUS) return null;
+  if (status === CITATION_STATUS.EDITION_RECORDED) return "citation-recorded-not-verified";
+  if (status === CITATION_STATUS.SOURCE_REQUIRED) return "citation-source-required";
+  return "citation-status-unrecognised";
+};
+
+const sourceRightsBlocker = (status) => {
+  if (status === RIGHTS_RELEASE_STATUS) return null;
+  if (status === RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE) return "source-rights-public-domain-not-cleared";
+  if (status === RIGHTS_STATUS.UNVERIFIED) return "source-rights-unverified";
+  return "source-rights-status-unrecognised";
+};
+
 export function auditContentProvenance() {
   const results = {};
   for (const [id, entry] of Object.entries(CONTENT_PROVENANCE)) {
     const issues = validateProvenanceEntry(id, entry);
-    if (entry.rightsStatus !== "cleared") issues.push("rights-not-cleared");
+    if (entry.rightsStatus !== RIGHTS_RELEASE_STATUS) issues.push("rights-not-cleared");
     for (const sourceId of entry.sourceIds) {
       const source = SOURCE_REGISTRY[sourceId];
-      if (source.citationStatus !== "verified") issues.push(`citation-not-verified:${sourceId}`);
-      if (source.rightsStatus !== "cleared") issues.push(`source-rights-not-cleared:${sourceId}`);
+      const citation = citationBlocker(source.citationStatus);
+      if (citation) issues.push(`${citation}:${sourceId}`);
+      const sourceRights = sourceRightsBlocker(source.rightsStatus);
+      if (sourceRights) issues.push(`${sourceRights}:${sourceId}`);
     }
     results[id] = { ready: issues.length === 0, issues: [...new Set(issues)] };
   }

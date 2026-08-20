@@ -9,8 +9,8 @@ The current application contains six governed content families:
 | Family | Current coverage | Provenance ID |
 |---|---:|---|
 | Five Elements | five elements mapped across six face-shape classes | `five-elements-v1` |
-| Three Courts | three courts; the upper boundary substitutes the face oval for the unmeasured hairline | `three-courts-v1` |
-| Twelve Palaces | twelve listed, six sampled from the current regions | `twelve-palaces-v1` |
+| Three Sections | three sections; the upper boundary substitutes the face oval for the unmeasured hairline | `three-courts-v1` |
+| Twelve Palaces | twelve listed, twelve sampled; bilateral regions required | `twelve-palaces-v2` |
 | Qi Se reading | three bands over measured colour signals | `qi-se-reading-v1` |
 | Proportion harmony | four possible components, with unavailable components dropped | `harmony-v1` |
 | Qi Se passages | 12,000 theoretical compositions from the current keyed fragments | `qise-passages-v1` |

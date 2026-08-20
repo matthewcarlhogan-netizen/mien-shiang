@@ -12,7 +12,7 @@ remain pending.
 | Content family | Translation/edition rights | Legal approval | Release |
 |---|---|---|---|
 | Five Elements | Evidence required | Evidence required | Blocked |
-| Three Courts | Evidence required | Evidence required | Blocked |
+| Three Sections | Evidence required | Evidence required | Blocked |
 | Twelve Palaces | Evidence required | Evidence required | Blocked |
 | Qi Se reading | Evidence required | Evidence required | Blocked |
 | Proportion harmony | Evidence required | Evidence required | Blocked |

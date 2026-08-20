@@ -3,7 +3,9 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { auditContentProvenance, CONTENT_PROVENANCE } from "../src/reading/provenance.js";
+import {
+  auditContentProvenance, CONTENT_PROVENANCE, explainProvenanceIssue,
+} from "../src/reading/provenance.js";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
 const rights = JSON.parse(readFileSync(join(REPO, "docs", "commercial-rights-manifest.json"), "utf8"));
@@ -22,7 +24,17 @@ for (const id of Object.keys(CONTENT_PROVENANCE)) {
     issues.push(`${id}: missing commercial-rights manifest record`);
     continue;
   }
-  if (!provenanceAudit[id]?.ready) issues.push(`${id}: provenance is not cleared`);
+  const provenance = provenanceAudit[id];
+  if (!provenance) issues.push(`${id}: provenance audit produced no result`);
+  else if (!provenance.ready) {
+    // Name each shortfall. "Not cleared" alone cannot distinguish a source that
+    // was never identified from one whose edition is recorded and still needs
+    // an independent check, and that ambiguity is what makes a relabelling of
+    // the evidence look like a fix.
+    for (const issue of provenance.issues) {
+      issues.push(`${id}: ${explainProvenanceIssue(issue)}`);
+    }
+  }
   if (record.status !== "cleared") issues.push(`${id}: manifest status is ${record.status || "missing"}`);
   if (record.status === "cleared") {
     for (const kind of ["sourceEdition", "translationRights", "contributorAgreement", "legalApproval"]) {
