@@ -326,6 +326,18 @@ export function readingScreenModel(reading, history, options = {}) {
     calibration,
     composition: compositionStrip(reading),
     integrated: integratedReadingModel(reading),
+    /*
+     * First reading on this device. `history` is oldest-first and INCLUDES
+     * today, so the first-ever reading has length 1, not 0 — testing for empty
+     * means the onboarding line never renders once, which is a failure that
+     * looks exactly like the feature being switched off.
+     *
+     * Derived from stored history rather than a "seen" flag: the app has no
+     * account and the store is the only durable state, so a separate flag
+     * would be a second source of truth for a question the history already
+     * answers. Clearing site data resets both together, which is correct.
+     */
+    firstReading: (Array.isArray(history) ? history.length : 0) <= 1,
     gauges: [
       gaugeModel(history, metricOf(reading, "ming"), "ming", "明 lustre"),
       gaugeModel(history, metricOf(reading, "run"), "run", "潤 moisture"),

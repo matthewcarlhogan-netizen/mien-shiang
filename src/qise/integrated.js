@@ -87,8 +87,14 @@ const projectPalaces = (value) => value ? {
     tone: palace?.tone ?? null,
     toneGloss: palace?.toneGloss ?? null,
     reading: palace?.reading ?? null,
+    keynote: palace?.keynote ?? null,
     translationNote: palace?.translationNote ?? null,
     notMeasuredNote: palace?.notMeasuredNote ?? null,
+    // The marked palace, carried as the flag the reading layer resolved.
+    // `deltaMi` is deliberately NOT listed: the distance is what produced this
+    // boolean and has no consumer past it, so the record holds the decision
+    // and not the measurement behind it.
+    furthestFromBaseline: palace?.furthestFromBaseline === true,
   })),
 } : null;
 

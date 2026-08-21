@@ -1455,6 +1455,75 @@ changed, and item 18's rule applies: do not compare across it.
 measured under two illuminants. The defect was never that the lock existed, it
 was when it was taken.
 
+### 54. The marked palace, and the two rules whose CASCADE was the bug
+
+The twelve-card grid marks exactly one palace — the one furthest from the
+subject's own baseline by `|deltaMi|` — with a cinnabar left border, a small
+node beside its number, and a keynote set at 1.5rem italic. The selection is
+resolved in `reading/twelve-palaces.js`, where `deltaMi` already lives, and
+only a boolean (`furthestFromBaseline`) crosses out. `projectPalaces` carries
+the flag and deliberately does NOT carry the distance: item 39's argument
+applies, and the record holds the decision rather than the measurement behind
+it.
+
+Four things that look like detail and are not:
+
+- **The distance is ABSOLUTE.** A palace measuring well below baseline has
+  moved exactly as far as one measuring above it. Ranking on the signed value
+  marks the most shadowed palace instead of the furthest one — correct-looking
+  on any fixture whose deltas are all positive, wrong on half of real captures.
+- **`even` palaces are eligible.** The tone bands are a coarse cut at
+  ±`PALACE_TONE_DELTA`, so on a face where nothing crosses the band every
+  palace reads `even`. Restricting selection to graded palaces loses the grid's
+  focal point on exactly the ordinary captures that make up most of them.
+- **Ties break to the earlier palace** (`>`, never `>=`), so one frame always
+  marks one card.
+- **An unmeasured palace is never marked.** `null` is not a small number —
+  the same distinction as `basis` on `glowIndex` (item 18).
+
+**The defect worth remembering is the cascade, not either rule.** The keynote
+is a `<p>` inside `.palace-reveal`, and the locked body rule `.palace-reveal p`
+has specificity (0,1,1) against a bare `.palace-keynote`'s (0,1,0). So the
+1.5rem display line rendered at .86rem — pixel-identical to the paragraph
+beneath it, which is precisely the sameness the treatment exists to break.
+
+**Symptom:** the marked card looks like every other card apart from its border.
+Nothing is missing from the DOM and both CSS rules read as correct in
+isolation.
+**Cause:** two individually correct rules, one of which quietly outranks the
+other. No test that reads either rule on its own can see it.
+**Found by:** rendering the grid in headless Chromium and reading
+`getComputedStyle`, which is the only thing that evaluates a cascade. Neither
+`qise.html` nor `ui/qise/app.js` can be imported under `node --test` (item 44),
+so the unit layer could not have caught it in any form.
+**Pinned by:** `the keynote outranks the locked body rule instead of losing to
+it` in `tests/palace-mark.test.js`, which asserts the qualifying `p` survives —
+dropping it as redundant reintroduces the bug in full and in silence.
+
+Two constraints on the surrounding aesthetic, both pinned in the same file:
+
+- **The seal accent is not a sixth measurement colour.** `--accent-cinnabar`
+  lives in `qise.html` chrome, never in `palette.js`. The five there are Su Wen
+  colours and each means "this showed in the face"; cinnabar here marks a UI
+  selection, and giving it a referent it does not have is what that file's "no
+  sixth accent" note forbids.
+- **The reveal's easing IS the spring**, sampled from the analytic solution of
+  `m·x" + c·x' + k·x = 0` at stiffness 120, damping 25, mass 1.5 — ζ = 0.9317,
+  ω₀ = 8.944 rad/s, displacement below 1/1000 at **779 ms**, which is where the
+  duration comes from. Rounding it to 750 ms or substituting a `cubic-bezier`
+  produces something that merely looks similar; the mass is the point.
+
+**Still no webfont.** The two ritual roles name Cormorant Garamond and
+JetBrains Mono first in their stacks and fall back to system serif/mono. No
+`@font-face` is emitted and Google Fonts is still not an option — it is a
+third-party request on every load for a product whose claim is that nothing
+leaves the device, and both entry points record that removal deliberately.
+`no webfont is fetched for any of this` scans both pages **with comments
+stripped first**: each file explains why there is no webfont, and those
+explanations necessarily contain `@font-face` and `fonts.googleapis.com`, so a
+raw scan reports the note as the violation it exists to prevent — item 22's
+defect exactly.
+
 
 ### 24. The summary may only repeat what was measured
 

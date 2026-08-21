@@ -34,6 +34,13 @@ html,body{margin:0;min-height:100%}
   --qise-track:rgba(27,25,23,.10);--qise-band:rgba(27,25,23,.22);
   --qise-selected:var(--bai);--qise-shadow:rgba(27,25,23,.12);
   --qise-link:#294F48;--qise-danger:var(--chi);
+  /* The seal accent. Deliberately NOT a sixth entry in palette.js: the five
+     there are Su Wen measurement colours and each one means "this showed in
+     the face". Cinnabar here is chrome — seal ink marking which card the
+     measurement picked — and giving it a referent it does not have is exactly
+     what that file's "no sixth accent" note forbids. It is theme-independent
+     because a seal impression is the same pigment on any paper. */
+  --accent-cinnabar:#E34234;
 }
 @media (prefers-color-scheme:dark){
   html:not([data-theme]){
@@ -134,6 +141,13 @@ button[disabled]{opacity:.45;cursor:not-allowed}
   .ring-fill{transition:none}
   .illumination-wash{transition:none}
   .reading-hero::before,.reading-aura::before,.reading-aura::after,.palace-stars span,.palace-card,.palace-burst i,.exposure-halo[data-state="perfect"] .halo-track,.exposure-halo[data-state="perfect"] .halo-progress{animation:none}
+  /* The seal break and its staggered keynote are motion, not meaning: the
+     thread, the node and the grain all still mark the card. A clip-path
+     animation left running here would be the one piece of this treatment that
+     ignores the preference. */
+  .palace-card[data-selected="true"] .palace-reveal,
+  .palace-card[data-selected="true"] .palace-keynote,
+  .onboarding-terminal-text{animation:none}
   *{scroll-behavior:auto}
 }
 .qise-seal[data-reduced-motion="true"] [data-dot]{animation:none}
@@ -229,7 +243,84 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .palace-arrow{color:var(--palace-accent);transition:transform .25s ease}
 .palace-card[data-open="true"] .palace-arrow{transform:rotate(90deg)}
 .palace-reveal{padding:0 .8rem .8rem;animation:palace-reveal .3s ease-out both}
-.palace-reveal p{font-size:.8rem;line-height:1.55;margin:.5rem 0 0}
+/* Locked baseline measurements for grid body copy. Both values are set here
+   rather than inherited so a change to the page default cannot drift them. */
+.palace-reveal p{font-size:.86rem;line-height:1.65;margin:.5rem 0 0}
+
+/* ── The Cinnabar Thread ──────────────────────────────────────────────────
+   Applied to the one palace furthest from the subject's own baseline. The
+   grid is twelve near-identical cards and the measurement has an answer about
+   which of them moved; without a mark, that answer is not on screen at all. */
+.palace-card[data-selected="true"]{border-left:2px solid var(--accent-cinnabar)}
+/* Ink bleed: the thread fades out at the foot rather than stopping square, so
+   the border reads as a brush stroke lifting rather than a UI rule. Painted in
+   the CARD's own background, not the page's — the card sits on a tinted
+   surface, so fading to --ground would end the stroke in a pale band that is
+   visible against it. z-index keeps it under .palace-burst (z-index 4). */
+.palace-card[data-selected="true"]::after{
+  content:"";position:absolute;left:-2px;bottom:0;width:2px;height:30%;z-index:1;
+  background:linear-gradient(to bottom,transparent,var(--qise-surface));
+  pointer-events:none;
+}
+/* Paper grain, on its own layer so `filter` never reaches the card's text.
+   feTurbulence ignores SourceGraphic, so this span needs no background of its
+   own — the filter output IS the render. */
+.palace-grain{position:absolute;inset:0;z-index:0;pointer-events:none;filter:url(#paper-noise)}
+.acupuncture-node{
+  display:inline-block;width:4px;height:4px;border-radius:50%;
+  background-color:var(--accent-cinnabar);margin-left:8px;vertical-align:middle;
+}
+/* The palace number and arrow keep --palace-accent. Their contrast against the
+   card was resolved once already; re-pointing them at cinnabar would reopen it
+   on twelve cards to decorate one. */
+/* Selector carries `p` DELIBERATELY. The keynote is a <p> inside
+   .palace-reveal, so the locked body rule `.palace-reveal p` (0,1,1) outranks
+   a bare `.palace-keynote` (0,1,0) and silently renders the display line at
+   .86rem — identical to the paragraph beneath it, which is the exact
+   sameness this treatment exists to break. Caught in a browser, not by a
+   unit test: both rules are individually correct and the cascade is the bug.
+   Do not "simplify" this back to a single class. */
+.palace-reveal p.palace-keynote{
+  font-family:var(--font-ritual);font-size:1.5rem;font-weight:600;font-style:italic;
+  line-height:1.25;margin:.55rem 0 0;color:var(--qise-ink);
+}
+.palace-anatomy{
+  display:block;font-family:var(--font-terminal);font-size:.75rem;font-weight:400;
+  letter-spacing:.04em;opacity:.72;margin-top:.35rem;
+}
+
+/* ── Seal break ───────────────────────────────────────────────────────────
+   The reveal opens from the midline under a spring, rather than sliding.
+
+   THE EASING IS THE SPRING, NOT A CURVE THAT RESEMBLES ONE. `linear()` stops
+   sampled from the analytic solution of m·x" + c·x' + k·x = 0 at stiffness
+   120, damping 25, mass 1.5 — so zeta = 0.9317, omega_0 = 8.944 rad/s, and the
+   displacement is below 1/1000 at 779ms, which is where the duration comes
+   from. Peak overshoot is 1.0003: heavy and near-critically damped, which is
+   the "solemn, non-bouncy stop" this is for. Do not round the duration to
+   750ms or swap the stops for a cubic-bezier — both change the physics into
+   something that merely looks similar, and the mass is the point.
+   A browser without linear() falls back to the declared ease-out. */
+.palace-card[data-selected="true"] .palace-reveal{
+  animation:seal-break 779ms both;
+  animation-timing-function:ease-out;
+  animation-timing-function:linear(0, 0.0352, 0.1181, 0.2234, 0.3348, 0.4427,
+    0.5416, 0.6288, 0.7035, 0.7662, 0.8178, 0.8596, 0.893, 0.9194, 0.94,
+    0.9558, 0.9679, 0.977, 0.9838, 0.9888, 0.9924, 0.995, 0.9969, 0.9982, 1);
+}
+@keyframes seal-break{from{clip-path:inset(50% 0 50% 0);opacity:.8}to{clip-path:inset(0 0 0 0);opacity:1}}
+/* The keynote is held back until the seal is most of the way open, so the line
+   arrives as a consequence of the opening rather than alongside it. The
+   anatomical detail above it is NOT delayed. */
+.palace-card[data-selected="true"] .palace-keynote{animation:keynote-rise .6s ease-out .35s both}
+@keyframes keynote-rise{from{opacity:0;transform:translateY(10px)}}
+
+.onboarding-terminal-text{
+  font-family:var(--font-terminal);font-size:.75rem;text-transform:uppercase;
+  letter-spacing:.05em;text-align:center;margin-top:2rem;opacity:.6;
+  animation:onboarding-fade .8s ease-out both;
+}
+@keyframes onboarding-fade{from{opacity:0}to{opacity:.6}}
 .palace-tone{display:inline-block;margin:.3rem 0;padding:.16rem .45rem;border-radius:999px;background:var(--qise-track);font-size:.68rem;text-transform:uppercase;letter-spacing:.06em}
 .palace-tone[data-contextual="true"]{border:1px solid var(--qise-border);background:transparent}
 .palace-delight{width:100%;margin-top:.8rem;border-color:color-mix(in srgb,var(--chi) 48%,var(--qise-border));border-radius:14px;background:color-mix(in srgb,var(--chi) 9%,transparent)}
@@ -339,6 +430,20 @@ html[data-screen-flash="true"] .capture-badge span{background:#FFFDF5;box-shadow
 </style>
 </head>
 <body>
+<!-- Paper grain for the marked palace card. Inline and local: an SVG filter
+     referenced by url(#id) resolves against the current document, so this
+     cannot be moved to an external file without becoming a request — and a
+     request is the one thing this product does not make. Rendered into a
+     zero-size, display:none host so it occupies no layout and is never read
+     out; the filter is still resolvable from CSS while the host is hidden. -->
+<svg width="0" height="0" style="position:absolute;display:none" aria-hidden="true" focusable="false">
+  <filter id="paper-noise">
+    <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch" />
+    <!-- Alpha to 0.04. Grain that is legible as grain is louder than the
+         cinnabar thread it sits behind, and the thread is the signal. -->
+    <feColorMatrix type="matrix" values="1 0 0 0 0, 0 1 0 0 0, 0 0 1 0 0, 0 0 0 0.04 0" />
+  </filter>
+</svg>
 <div class="wrap">
 <header class="app-head">
   <div class="wordmark">Mien Shiang · 面相</div>
