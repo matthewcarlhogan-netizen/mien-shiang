@@ -46,9 +46,10 @@ import {
 import {
   ASCENDANT_SUBJECT, REGION_PLACE, DIRECTION_VERB, MAGNITUDE_QUALIFIER,
   HEADLINE, HISTORY_LINE, CONFIDENCE_VOICE, AVAILABILITY_LINE, OBSERVATION_SHAPES,
-  HERITAGE, BRIDGE_OPENER, BRIDGE_ABSTAINED, REFLECTION, ROTATION_DISCLOSURE,
+  HERITAGE as LEGACY_HERITAGE, BRIDGE_OPENER, BRIDGE_ABSTAINED, REFLECTION, ROTATION_DISCLOSURE,
   SELF_REPORT_BRIDGE,
 } from "./reflection-corpus.js";
+import { HERITAGE_REGISTRY } from "../heritage/registry.js";
 import { seededIndex } from "./passages.js";
 
 export const LAYERS = Object.freeze(["observation", "heritage", "reflection"]);
@@ -140,30 +141,26 @@ export const COMPONENTS = Object.freeze([
   {
     id: "heritage",
     layer: "heritage",
-    dependsOn: ["heritageConstruct", "sourceLineage"],
-    /*
-     * DELIBERATELY SINGLE-VARIANT.
-     *
-     * Every other component may be re-angled. This one may not: it is a
-     * paraphrase of a named source with a recorded edition, and rewording it
-     * on the second viewing would make the app's account of what a Ming text
-     * says depend on how often the user has opened it. Provenance is not a
-     * surface to vary.
-     */
+    dependsOn: ["heritageConstruct", "sourceLineage", "availability"],
     variants(s) {
-      const construct = HERITAGE[s.heritageConstruct] || HERITAGE.threeSections;
-      return [(construct[s.sourceLineage] || construct.primary).text];
+      const registryEntry = HERITAGE_REGISTRY[s.heritageConstruct] || HERITAGE_REGISTRY.threeSections;
+      const lineage = registryEntry.lineages[s.sourceLineage] || Object.values(registryEntry.lineages)[0];
+      if (lineage.availability === "abstention") return [null];
+      return [lineage.definition];
     },
   },
   {
     id: "heritageNote",
     layer: "heritage",
-    dependsOn: ["heritageConstruct", "sourceLineage"],
+    dependsOn: ["heritageConstruct", "sourceLineage", "availability"],
     variants(s) {
-      const construct = HERITAGE[s.heritageConstruct] || HERITAGE.threeSections;
-      return [(construct[s.sourceLineage] || construct.primary).note];
+      const registryEntry = HERITAGE_REGISTRY[s.heritageConstruct] || HERITAGE_REGISTRY.threeSections;
+      const lineage = registryEntry.lineages[s.sourceLineage] || Object.values(registryEntry.lineages)[0];
+      if (lineage.availability === "abstention") return [null];
+      return [lineage.note];
     },
   },
+
   {
     id: "bridge",
     layer: "reflection",
