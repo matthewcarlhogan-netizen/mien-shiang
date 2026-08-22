@@ -140,3 +140,22 @@ test("every fixture is valid and contains no placeholder provenance", () => {
     }
   }
 });
+
+
+test("validator accepts explicitly sourced combinations and disagreements", () => {
+  const record = validRecord();
+  record.lineages.primary.attestedCombinations = [{
+    combinationId: "three-sections-example",
+    sourceId: "heritage-three-sections",
+    preciseLocator: null,
+    note: null,
+  }];
+  record.lineages.primary.disagreements = [{
+    disagreementId: "example-disagreement",
+    positionId: "alternate-position",
+    sourceId: "heritage-three-sections",
+    summary: "An attributed alternate position retained for research review.",
+  }];
+  const result = validateHeritageRecord(record);
+  assert.equal(result.valid, true, result.errors.join("; "));
+});

@@ -1,10 +1,16 @@
-import { HERITAGE_FIELD_MANIFEST } from "./schema.js";
+import {
+  HERITAGE_COMBINATION_FIELDS,
+  HERITAGE_DISAGREEMENT_FIELDS,
+  HERITAGE_FIELD_MANIFEST,
+} from "./schema.js";
 import { SOURCE_REGISTRY } from "../reading/provenance.js";
 
 const hasValue = (value) => value !== undefined && value !== null && value !== "";
 const typeMatches = (value, type) => {
   if (type === "string") return typeof value === "string" && value.length > 0;
-  if (type === "string|null") return value === null || (typeof value === "string" && value.length > 0);
+  if (type === "string|null") {
+    return value === null || (typeof value === "string" && value.length > 0);
+  }
   if (type === "boolean") return typeof value === "boolean";
   if (type === "array") return Array.isArray(value);
   return true;
@@ -23,11 +29,27 @@ function validateFields(value, manifest, prefix, errors) {
     if (field.type === "enum" && current !== undefined && !field.values.includes(current)) {
       errors.push(prefix + name + " has invalid value: " + current);
     }
-    if (field.type === "array" && current !== undefined
-      && (!Array.isArray(current) || current.some((item) => typeof item !== "string"))) {
+    if (field.type === "array" && current !== undefined && Array.isArray(current)
+      && field.items === "string"
+      && current.some((item) => typeof item !== "string")) {
       errors.push(prefix + name + " has invalid array format");
     }
   }
+}
+
+function validateObjectArray(value, manifest, prefix, errors) {
+  if (!Array.isArray(value)) return;
+  value.forEach((item, index) => {
+    const itemPrefix = prefix + "[" + index + "].";
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      errors.push(itemPrefix + "must be an object");
+      return;
+    }
+    validateFields(item, manifest, itemPrefix, errors);
+    if (item.sourceId && !SOURCE_REGISTRY[item.sourceId]) {
+      errors.push(itemPrefix + "sourceId references unknown sourceId " + item.sourceId);
+    }
+  });
 }
 
 export function validateHeritageRecord(record) {
@@ -37,29 +59,36 @@ export function validateHeritageRecord(record) {
   }
 
   if (!hasValue(record.constructId)) errors.push("Missing constructId");
-  if (record.canonicalChineseName === undefined) errors.push("Missing canonicalChineseName");
+  if (record.canonicalChineseName === undefined) {
+    errors.push("Missing canonicalChineseName");
+  }
   validateFields(record, HERITAGE_FIELD_MANIFEST.record, "", errors);
 
-  if (record.canonicalChineseName === null && record.canonicalNameStatus !== "NOT_RECORDED") {
+  if (record.canonicalChineseName === null
+    && record.canonicalNameStatus !== "NOT_RECORDED") {
     errors.push("Null canonicalChineseName requires canonicalNameStatus NOT_RECORDED");
   }
-  if (record.canonicalChineseName !== null && record.canonicalNameStatus === "NOT_RECORDED") {
+  if (record.canonicalChineseName !== null
+    && record.canonicalNameStatus === "NOT_RECORDED") {
     errors.push("Non-null canonicalChineseName cannot have canonicalNameStatus NOT_RECORDED");
   }
 
-  if (!record.lineages || typeof record.lineages !== "object" || Array.isArray(record.lineages)) {
+  if (!record.lineages || typeof record.lineages !== "object"
+    || Array.isArray(record.lineages)) {
     errors.push("Missing or invalid lineages");
     return { valid: false, errors };
   }
+
   const lineageEntries = Object.entries(record.lineages);
   if (lineageEntries.length === 0) errors.push("At least one lineage is required");
 
   for (const [key, lineage] of lineageEntries) {
     const prefix = "Lineage " + key + " ";
-    if (!lineage || typeof lineage !== "object") {
+    if (!lineage || typeof lineage !== "object" || Array.isArray(lineage)) {
       errors.push(prefix + "must be an object");
       continue;
     }
+
     if (!hasValue(lineage.lineageId)) errors.push(prefix + "missing lineageId");
     if (!hasValue(lineage.definition)) errors.push(prefix + "missing definition");
     if (!hasValue(lineage.source)) errors.push(prefix + "missing source");
@@ -74,6 +103,19 @@ export function validateHeritageRecord(record) {
     if (lineage.attestedCombinations && !lineage.sourceId) {
       errors.push(prefix + "has attestedCombinations but missing sourceId");
     }
+    validateObjectArray(
+      lineage.attestedCombinations,
+      HERITAGE_COMBINATION_FIELDS,
+      prefix + "attestedCombinations",
+      errors,
+    );
+    validateObjectArray(
+      lineage.disagreements,
+      HERITAGE_DISAGREEMENT_FIELDS,
+      prefix + "disagreements",
+      errors,
+    );
+
     if (lineage.preciseLocator !== null && lineage.locatorStatus === "NOT_RECORDED") {
       errors.push(prefix + "has preciseLocator without a recorded locator status");
     }
@@ -92,9 +134,11 @@ export function validateHeritageRecord(record) {
     if (lineage.availability === "abstention" && lineage.terminationState !== "abstain") {
       errors.push(prefix + "abstention availability requires terminationState abstain");
     }
-    if (lineage.safetyStatus === "prohibited" && lineage.prohibitedForUserInference !== true) {
+    if (lineage.safetyStatus === "prohibited"
+      && lineage.prohibitedForUserInference !== true) {
       errors.push(prefix + "prohibited safety status requires prohibitedForUserInference");
     }
   }
+
   return { valid: errors.length === 0, errors };
 }
