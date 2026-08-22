@@ -125,7 +125,8 @@ export const SOURCE_REGISTRY = Object.freeze({
     locator: null,
     citationStatus: CITATION_STATUS.SOURCE_REQUIRED,
     rightsStatus: RIGHTS_STATUS.UNVERIFIED,
-  }),  "heritage-four-rivers": Object.freeze({
+  }),
+  "heritage-four-rivers": Object.freeze({
     title: "太清神鑑 and 神相全編 material used by the existing Four Rivers corpus entry",
     kind: "unresolved-tradition-source",
     locator: null,
