@@ -115,6 +115,16 @@ export function validateHeritageRecord(record) {
       prefix + "disagreements",
       errors,
     );
+    if (lineage.attestedCombinationsStatus === "NONE_ATTESTED"
+      && Array.isArray(lineage.attestedCombinations)
+      && lineage.attestedCombinations.length > 0) {
+      errors.push(prefix + "NONE_ATTESTED cannot contain attestedCombinations");
+    }
+    if (lineage.attestedCombinationsStatus === "RECORDED"
+      && Array.isArray(lineage.attestedCombinations)
+      && lineage.attestedCombinations.length === 0) {
+      errors.push(prefix + "RECORDED requires at least one attested combination");
+    }
 
     if (lineage.preciseLocator !== null && lineage.locatorStatus === "NOT_RECORDED") {
       errors.push(prefix + "has preciseLocator without a recorded locator status");

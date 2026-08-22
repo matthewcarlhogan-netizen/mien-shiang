@@ -4,7 +4,6 @@ import { validateHeritageRecord } from "../../src/heritage/validator.js";
 import { heritageFixtures } from "../../src/heritage/fixtures.js";
 import {
   HERITAGE_MEASUREMENT_AVAILABILITY,
-  RUNTIME_TO_MEASUREMENT_AVAILABILITY,
 } from "../../src/heritage/schema.js";
 
 const baseLineage = (overrides = {}) => ({
@@ -18,6 +17,8 @@ const baseLineage = (overrides = {}) => ({
   locatorStatus: "NOT_RECORDED",
   citationStatus: "source-required",
   rightsStatus: "unverified",
+  workRightsStatus: "unverified",
+  editionRightsStatus: "unverified",
   measurementAvailability: "MODERN_MAPPING_UNSUPPORTED",
   terminationState: "continue",
   availability: "available",
@@ -28,6 +29,7 @@ const baseLineage = (overrides = {}) => ({
   prohibitedInference: "Do not infer a user trait from this source claim.",
   translationProvenance: "repository-editorial",
   attestedCombinations: [],
+  attestedCombinationsStatus: "NONE_ATTESTED",
   disagreements: [],
   negativeFinding: null,
   note: null,
@@ -48,7 +50,7 @@ const validRecord = (overrides = {}) => ({
 test("the machine-readable manifest exposes the required measurement states", () => {
   assert.ok(HERITAGE_MEASUREMENT_AVAILABILITY.includes("SUPPORTED_2D"));
   assert.ok(HERITAGE_MEASUREMENT_AVAILABILITY.includes("PERMANENTLY_ABSTAIN"));
-  assert.equal(RUNTIME_TO_MEASUREMENT_AVAILABILITY.read, "SUPPORTED_2D");
+  assert.ok(HERITAGE_MEASUREMENT_AVAILABILITY.includes("NOT_RECORDED"));
 });
 
 test("validator accepts a complete attributed record", () => {
@@ -141,6 +143,19 @@ test("every fixture is valid and contains no placeholder provenance", () => {
   }
 });
 
+
+test("validator rejects a non-empty combination list marked NONE_ATTESTED", () => {
+  const record = validRecord();
+  record.lineages.primary.attestedCombinations = [{
+    combinationId: "three-sections-example",
+    sourceId: "heritage-three-sections",
+    preciseLocator: null,
+    note: null,
+  }];
+  const result = validateHeritageRecord(record);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((error) => /NONE_ATTESTED|combination/i.test(error)));
+});
 
 test("validator accepts explicitly sourced combinations and disagreements", () => {
   const record = validRecord();

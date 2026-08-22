@@ -235,7 +235,9 @@ test("every declared dependency actually moves the component that declares it", 
           if (!isReachable(candidate)) continue;
           const other = byKey.get(stateKey(candidate));
           if (!other) continue;
-          if (c.render(state) !== c.render(other)) { moved = true; break outer; }
+          const first = JSON.stringify(c.render(state));
+          const second = JSON.stringify(c.render(other));
+          if (first !== second) { moved = true; break outer; }
         }
       }
 

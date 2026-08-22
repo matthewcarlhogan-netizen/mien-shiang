@@ -1,6 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { HERITAGE_REGISTRY } from "../../src/heritage/registry.js";
+import {
+  HERITAGE_REGISTRY,
+  createHeritageRegistry,
+} from "../../src/heritage/registry.js";
+import { HERITAGE } from "../../src/qise/reflection-corpus.js";
 import { composeReading } from "../../src/qise/reflection.js";
 
 const readState = (overrides = {}) => ({
@@ -25,6 +29,8 @@ test("registry exposes the canonical constructs and their lineages", () => {
   assert.ok(HERITAGE_REGISTRY.fiveOfficers);
   assert.ok(HERITAGE_REGISTRY.fourRivers.lineages.primary);
   assert.ok(HERITAGE_REGISTRY.fourRivers.lineages.variant);
+  assert.equal(Object.isFrozen(HERITAGE_REGISTRY), true);
+  assert.equal(Object.isFrozen(HERITAGE_REGISTRY.threeSections.lineages.primary), true);
 });
 
 test("every registry lineage carries provenance and has no placeholder source", () => {
@@ -56,28 +62,31 @@ test("measurement abstention is explicit and never becomes observation prose", (
   assert.equal(reading.parts.some((part) => part.id === "magnitude"), false);
   assert.equal(reading.heritageAbstentions.length, 1);
   assert.deepEqual(reading.heritageAbstentions[0], {
-    layer: "heritage",
+    layer: "reflection",
     terminationState: "abstain",
     reasonCode: "abstained_confidence",
-    provenanceId: "heritage-abstention",
-    measurementAvailability: "UNMEASURABLE",
+    provenanceId: "heritage-join-abstention",
   });
   assert.match(reading.text, /did not|cannot|incomplete|no reading/i);
 });
 
 test("a source lineage marked abstention does not emit its definition", () => {
-  const construct = HERITAGE_REGISTRY.threeSections;
-  const original = construct.lineages.primary;
-  construct.lineages.primary = {
-    ...original,
-    availability: "abstention",
-    abstentionReason: "Source boundary not resolved.",
-    terminationState: "abstain",
+  const corpus = {
+    ...HERITAGE,
+    threeSections: {
+      ...HERITAGE.threeSections,
+      primary: {
+        ...HERITAGE.threeSections.primary,
+        availability: "abstention",
+        abstentionReason: "Source boundary not resolved.",
+        terminationState: "abstain",
+      },
+    },
   };
-  try {
-    const reading = composeReading(readState(), { includeSelfReport: false });
-    assert.equal(reading.parts.some((part) => part.id === "heritage"), false);
-  } finally {
-    construct.lineages.primary = original;
-  }
+  const testRegistry = createHeritageRegistry(corpus);
+  const reading = composeReading(readState(), {
+    includeSelfReport: false,
+    registry: testRegistry,
+  });
+  assert.equal(reading.parts.some((part) => part.id === "heritage"), false);
 });

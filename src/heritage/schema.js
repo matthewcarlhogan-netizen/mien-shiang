@@ -10,16 +10,9 @@ export const HERITAGE_MEASUREMENT_AVAILABILITY = Object.freeze([
   "UNSUPPORTED",
   "UNMEASURABLE",
   "MODERN_MAPPING_UNSUPPORTED",
+  "NOT_RECORDED",
   "PERMANENTLY_ABSTAIN",
 ]);
-
-export const RUNTIME_TO_MEASUREMENT_AVAILABILITY = Object.freeze({
-  read: "SUPPORTED_2D",
-  abstained_capture: "CAMERA_GEOMETRY_INSUFFICIENT",
-  abstained_anatomy: "CAMERA_GEOMETRY_INSUFFICIENT",
-  abstained_confidence: "UNMEASURABLE",
-  abstained_calibrating: "MODERN_MAPPING_UNSUPPORTED",
-});
 
 const stringField = (required = false) => ({ type: "string", required });
 const nullableStringField = (required = false) => ({ type: "string|null", required });
@@ -94,6 +87,16 @@ export const HERITAGE_FIELD_MANIFEST = Object.freeze({
       "public-domain-by-age",
       "cleared",
     ], true),
+    workRightsStatus: enumField([
+      "unverified",
+      "public-domain-by-age",
+      "cleared",
+    ], true),
+    editionRightsStatus: enumField([
+      "unverified",
+      "public-domain-by-age",
+      "cleared",
+    ], true),
     measurementAvailability: enumField(
       HERITAGE_MEASUREMENT_AVAILABILITY,
       true,
@@ -110,6 +113,11 @@ export const HERITAGE_FIELD_MANIFEST = Object.freeze({
       HERITAGE_COMBINATION_FIELDS,
       true,
     ),
+    attestedCombinationsStatus: enumField([
+      "NONE_ATTESTED",
+      "RECORDED",
+      "NOT_RECORDED",
+    ], true),
     disagreements: objectArrayField(
       HERITAGE_DISAGREEMENT_FIELDS,
       true,

@@ -14,7 +14,6 @@ import {
   SELF_REPORT_BRIDGE,
 } from "./reflection-corpus.js";
 import { HERITAGE_REGISTRY } from "../heritage/registry.js";
-import { RUNTIME_TO_MEASUREMENT_AVAILABILITY } from "../heritage/schema.js";
 import { seededIndex } from "./passages.js";
 
 export const LAYERS = Object.freeze(["observation", "heritage", "reflection"]);
@@ -23,14 +22,37 @@ export const ENGINE_VERSION = "reflection-engine-v1";
 
 const read = (s) => s.availability === "read";
 
-function lineageFor(s) {
-  const registryEntry = HERITAGE_REGISTRY[s.heritageConstruct]
-    || HERITAGE_REGISTRY.threeSections;
+function lineageFor(s, registry = HERITAGE_REGISTRY) {
+  const registryEntry = registry[s.heritageConstruct]
+    || registry.threeSections;
   return {
     entry: registryEntry,
     lineage: registryEntry.lineages[s.sourceLineage]
       || Object.values(registryEntry.lineages)[0],
   };
+}
+
+/*
+ * A component declares every state field it consumes. The collision audit tests
+ * both directions: undeclared reads fail, and decorative dependencies fail.
+ * The optional registry argument is test-only dependency injection; it keeps
+ * runtime heritage data immutable while making abstention paths reachable.
+ */
+const HERITAGE_JOIN_ABSTENTION_CACHE = new Map();
+
+function heritageJoinAbstentionFor(reasonCode) {
+  if (!HERITAGE_JOIN_ABSTENTION_CACHE.has(reasonCode)) {
+    HERITAGE_JOIN_ABSTENTION_CACHE.set(reasonCode, Object.freeze({
+      text: null,
+      abstention: Object.freeze({
+        layer: "reflection",
+        terminationState: "abstain",
+        reasonCode,
+        provenanceId: "heritage-join-abstention",
+      }),
+    }));
+  }
+  return HERITAGE_JOIN_ABSTENTION_CACHE.get(reasonCode);
 }
 
 export const COMPONENTS = Object.freeze([
@@ -101,8 +123,8 @@ export const COMPONENTS = Object.freeze([
     id: "heritage",
     layer: "heritage",
     dependsOn: ["heritageConstruct", "sourceLineage"],
-    variants(s) {
-      const lineage = lineageFor(s).lineage;
+    variants(s, registry) {
+      const lineage = lineageFor(s, registry).lineage;
       if (lineage.availability === "abstention") return [null];
       return [lineage.definition];
     },
@@ -111,29 +133,19 @@ export const COMPONENTS = Object.freeze([
     id: "heritageNote",
     layer: "heritage",
     dependsOn: ["heritageConstruct", "sourceLineage"],
-    variants(s) {
-      const lineage = lineageFor(s).lineage;
+    variants(s, registry) {
+      const lineage = lineageFor(s, registry).lineage;
       if (lineage.availability === "abstention") return [null];
       return [lineage.note];
     },
   },
   {
-    id: "heritageAbstention",
-    layer: "heritage",
+    id: "heritageJoinAbstention",
+    layer: "reflection",
     dependsOn: ["availability"],
     variants(s) {
       if (read(s)) return [null];
-      return [{
-        text: null,
-        abstention: Object.freeze({
-          layer: "heritage",
-          terminationState: "abstain",
-          reasonCode: s.availability,
-          provenanceId: "heritage-abstention",
-          measurementAvailability: RUNTIME_TO_MEASUREMENT_AVAILABILITY[s.availability]
-            || "PERMANENTLY_ABSTAIN",
-        }),
-      }];
+      return [heritageJoinAbstentionFor(s.availability)];
     },
   },
   {
@@ -155,17 +167,25 @@ export const COMPONENTS = Object.freeze([
   },
 ].map((component) => Object.freeze({
   ...component,
-  render: (s, i = 0) => component.variants(s)[i] ?? null,
+  render: (s, i = 0, registry = HERITAGE_REGISTRY) => component.variants(s, registry)[i] ?? null,
 })));
 
-export function variationCycle(state) {
+/*
+ * Variants are a mixed-radix odometer. It exhausts declared combinations
+ * deterministically before the coprime walk begins another pass.
+ */
+export function variationCycle(state, registry = HERITAGE_REGISTRY) {
   return COMPONENTS.reduce((total, component) => (
-    total * Math.max(1, component.variants(state).length)
+    total * Math.max(1, component.variants(state, registry).length)
   ), 1);
 }
 
 const gcd = (a, b) => (b ? gcd(b, a % b) : a);
 
+/*
+ * A coprime stride visits every combination in the cycle while avoiding the
+ * visual rhythm of simple sequential rotation.
+ */
 function coprimeStride(total) {
   if (total <= 2) return 1;
   let step = Math.max(1, Math.round(total * 0.6180339887));
@@ -173,9 +193,9 @@ function coprimeStride(total) {
   return step;
 }
 
-export function variantIndices(state, occurrence = 0) {
+export function variantIndices(state, occurrence = 0, registry = HERITAGE_REGISTRY) {
   const radices = COMPONENTS.map((component) => (
-    Math.max(1, component.variants(state).length)
+    Math.max(1, component.variants(state, registry).length)
   ));
   const total = radices.reduce((a, b) => a * b, 1);
   const offset = seededIndex(stateKey(state), total);
@@ -204,17 +224,18 @@ export function consumedFields() {
 export function composeReading(state, options = {}) {
   if (!state) throw new TypeError("composeReading needs an interpreted reading state");
 
+  const registry = options.registry || HERITAGE_REGISTRY;
   const key = stateKey(state);
   const occurrence = Number.isFinite(options.occurrence)
     ? Math.max(0, options.occurrence | 0)
     : 0;
-  const indices = variantIndices(state, occurrence);
+  const indices = variantIndices(state, occurrence, registry);
   const parts = [];
   const trace = [];
   const abstentions = [];
 
   COMPONENTS.forEach((component, i) => {
-    const set = component.variants(state);
+    const set = component.variants(state, registry);
     const index = Math.min(indices[i], set.length - 1);
     const output = set[index];
     const structured = output && typeof output === "object" && output.abstention;
@@ -269,7 +290,7 @@ export function composeReading(state, options = {}) {
   return Object.freeze({
     stateKey: key,
     occurrence,
-    variationCycle: variationCycle(state),
+    variationCycle: variationCycle(state, registry),
     parts,
     layers: byLayer,
     heritageAbstentions: Object.freeze(abstentions),
