@@ -165,6 +165,7 @@ test("validator accepts explicitly sourced combinations and disagreements", () =
     preciseLocator: null,
     note: null,
   }];
+  record.lineages.primary.attestedCombinationsStatus = "RECORDED";
   record.lineages.primary.disagreements = [{
     disagreementId: "example-disagreement",
     positionId: "alternate-position",
