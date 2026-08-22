@@ -1,43 +1,7 @@
 /*
- * THE REFLECTION ENGINE.
- *
- * Contract §7 — three epistemic layers, kept apart in the data model and not
- * merely in the styling:
- *
- *   OBSERVATION  what the camera and the personal baseline can actually support
- *   HERITAGE     what a named source says, attributed, about a region
- *   REFLECTION   the deliberate placing of one beside the other
- *
- * The join is symbolic and the prose says so out loud. Nothing here infers a
- * heritage meaning from a measurement.
- *
- * ── WHY THE COMPONENTS ARE A REGISTRY AND NOT A FUNCTION BODY ──────────────
- * The obvious implementation is one `composeReading()` that reaches for
- * whatever it needs. It works, and it rots: the day someone adds a dimension —
- * season, capture streak, a second measured axis — they add it to the state,
- * forget one branch of the prose, and the new dimension is computed and
- * discarded. That is the exact defect this module was built to remove, so the
- * engine must not be able to be extended carelessly.
- *
- * Instead every component DECLARES the state fields it reads. That gives three
- * properties nothing else does:
- *
- *   1. `reading-collision.test.js` can prove, mechanically, that every field in
- *      READING_AFFECTING is consumed by at least one component AND that
- *      changing it actually moves the rendered text. A dimension that is
- *      computed but inert fails the build.
- *   2. Adding a dimension is adding a registry entry. The engine is untouched.
- *   3. `explain()` is free: the trace of which component produced which
- *      sentence, and which state fields drove it, is the registry itself. The
- *      product owes the user an answer to "why am I seeing this", and an
- *      answer assembled by hand would drift from the code within a release.
- *
- * ── WHY ABSTENTION SHORT-CIRCUITS RATHER THAN DEGRADES ─────────────────────
- * A component is allowed to return null. Every component that assumes the
- * observation succeeded returns null when `availability !== "read"`, so an
- * abstained reading cannot pick up a sentence that quietly presumes a
- * measurement happened. Contract §4 item 6 makes that a build failure, and it
- * is easier to make it structurally impossible than to test for it after.
+ * Reflection Engine: Observation, Heritage, Reflection.
+ * Heritage text is always source-attributed; it is never inferred from a
+ * measurement. The component registry makes every state dependency auditable.
  */
 
 import {
@@ -46,34 +10,29 @@ import {
 import {
   ASCENDANT_SUBJECT, REGION_PLACE, DIRECTION_VERB, MAGNITUDE_QUALIFIER,
   HEADLINE, HISTORY_LINE, CONFIDENCE_VOICE, AVAILABILITY_LINE, OBSERVATION_SHAPES,
-  HERITAGE as LEGACY_HERITAGE, BRIDGE_OPENER, BRIDGE_ABSTAINED, REFLECTION, ROTATION_DISCLOSURE,
+  BRIDGE_OPENER, BRIDGE_ABSTAINED, REFLECTION, ROTATION_DISCLOSURE,
   SELF_REPORT_BRIDGE,
 } from "./reflection-corpus.js";
 import { HERITAGE_REGISTRY } from "../heritage/registry.js";
+import { RUNTIME_TO_MEASUREMENT_AVAILABILITY } from "../heritage/schema.js";
 import { seededIndex } from "./passages.js";
 
 export const LAYERS = Object.freeze(["observation", "heritage", "reflection"]);
-
 export const CORPUS_VERSION = "reflection-corpus-v1";
 export const ENGINE_VERSION = "reflection-engine-v1";
 
 const read = (s) => s.availability === "read";
 
-/**
- * THE COMPONENT REGISTRY.
- *
- * `dependsOn` is a contract, not documentation: the collision test reads it.
- * A component that reads a field it did not declare will pass its own render
- * and fail the audit, which is the correct way round.
- *
- * `variants` returns every authored way of saying this component's part for
- * this state. They must be interchangeable in MEANING — same claim, same
- * confidence, same abstention, same relationship to the source — and different
- * in framing, cadence or angle. `reading-variation.test.js` enforces both
- * halves of that: equivalence within a set, distinctness between states.
- *
- * `render(s, i)` remains for callers that want one specific variant.
- */
+function lineageFor(s) {
+  const registryEntry = HERITAGE_REGISTRY[s.heritageConstruct]
+    || HERITAGE_REGISTRY.threeSections;
+  return {
+    entry: registryEntry,
+    lineage: registryEntry.lineages[s.sourceLineage]
+      || Object.values(registryEntry.lineages)[0],
+  };
+}
+
 export const COMPONENTS = Object.freeze([
   {
     id: "headline",
@@ -141,10 +100,9 @@ export const COMPONENTS = Object.freeze([
   {
     id: "heritage",
     layer: "heritage",
-    dependsOn: ["heritageConstruct", "sourceLineage", "availability"],
+    dependsOn: ["heritageConstruct", "sourceLineage"],
     variants(s) {
-      const registryEntry = HERITAGE_REGISTRY[s.heritageConstruct] || HERITAGE_REGISTRY.threeSections;
-      const lineage = registryEntry.lineages[s.sourceLineage] || Object.values(registryEntry.lineages)[0];
+      const lineage = lineageFor(s).lineage;
       if (lineage.availability === "abstention") return [null];
       return [lineage.definition];
     },
@@ -152,15 +110,32 @@ export const COMPONENTS = Object.freeze([
   {
     id: "heritageNote",
     layer: "heritage",
-    dependsOn: ["heritageConstruct", "sourceLineage", "availability"],
+    dependsOn: ["heritageConstruct", "sourceLineage"],
     variants(s) {
-      const registryEntry = HERITAGE_REGISTRY[s.heritageConstruct] || HERITAGE_REGISTRY.threeSections;
-      const lineage = registryEntry.lineages[s.sourceLineage] || Object.values(registryEntry.lineages)[0];
+      const lineage = lineageFor(s).lineage;
       if (lineage.availability === "abstention") return [null];
       return [lineage.note];
     },
   },
-
+  {
+    id: "heritageAbstention",
+    layer: "heritage",
+    dependsOn: ["availability"],
+    variants(s) {
+      if (read(s)) return [null];
+      return [{
+        text: null,
+        abstention: Object.freeze({
+          layer: "heritage",
+          terminationState: "abstain",
+          reasonCode: s.availability,
+          provenanceId: "heritage-abstention",
+          measurementAvailability: RUNTIME_TO_MEASUREMENT_AVAILABILITY[s.availability]
+            || "PERMANENTLY_ABSTAIN",
+        }),
+      }];
+    },
+  },
   {
     id: "bridge",
     layer: "reflection",
@@ -178,43 +153,19 @@ export const COMPONENTS = Object.freeze([
       return byConstruct[s.ascendant] || byConstruct.ping;
     },
   },
-].map((c) => Object.freeze({ ...c, render: (s, i = 0) => c.variants(s)[i] ?? null })));
+].map((component) => Object.freeze({
+  ...component,
+  render: (s, i = 0) => component.variants(s)[i] ?? null,
+})));
 
-/**
- * THE ODOMETER.
- *
- * Variation is indexed, not sampled. Component i takes its variant from the
- * digit of `occurrence` in a mixed-radix number whose digits are the components'
- * variant counts — so occurrence 0, 1, 2 … walks every combination exactly once
- * before any repeats, and the number of readings a state can produce before it
- * must repeat is the product of its variant counts. That is a proof rather than
- * a measurement, which is what a hash-based pick could never give: a hash
- * repeats by the birthday bound long before the space is exhausted.
- *
- * The phase offset is seeded from the state key so two states with the same
- * shape do not march in lockstep through their variants.
- */
 export function variationCycle(state) {
-  return COMPONENTS.reduce((n, c) => n * Math.max(1, c.variants(state).length), 1);
+  return COMPONENTS.reduce((total, component) => (
+    total * Math.max(1, component.variants(state).length)
+  ), 1);
 }
 
 const gcd = (a, b) => (b ? gcd(b, a % b) : a);
 
-/**
- * A stride co-prime with the cycle, near the golden section of it.
- *
- * Walking the odometer one step at a time turns the lowest digit first, so
- * three consecutive occurrences changed only the headline and left four
- * sentences identical — technically non-repeating and obviously mechanical,
- * which is the failure mode the variation layer exists to avoid rather than
- * to satisfy on a technicality.
- *
- * Any stride co-prime with the cycle still visits every combination exactly
- * once before repeating, so the guarantee is untouched. Choosing one near
- * 0.618 of the cycle is the standard low-discrepancy trick: successive
- * occurrences land far apart, so several components move at once and two
- * consecutive readings differ in framing throughout rather than in one line.
- */
 function coprimeStride(total) {
   if (total <= 2) return 1;
   let step = Math.max(1, Math.round(total * 0.6180339887));
@@ -223,11 +174,13 @@ function coprimeStride(total) {
 }
 
 export function variantIndices(state, occurrence = 0) {
-  const radices = COMPONENTS.map((c) => Math.max(1, c.variants(state).length));
+  const radices = COMPONENTS.map((component) => (
+    Math.max(1, component.variants(state).length)
+  ));
   const total = radices.reduce((a, b) => a * b, 1);
   const offset = seededIndex(stateKey(state), total);
-  const n = (((occurrence | 0) % total) + total) % total;
-  const walk = (offset + n * coprimeStride(total)) % total;
+  const normalizedOccurrence = (((occurrence | 0) % total) + total) % total;
+  const walk = (offset + normalizedOccurrence * coprimeStride(total)) % total;
 
   const out = [];
   let place = 1;
@@ -238,76 +191,79 @@ export function variantIndices(state, occurrence = 0) {
   return out;
 }
 
-/**
- * DECLARED EQUIVALENCES.
- *
- * Contract §4: intentional collisions may exist, but they must be explicit.
- * Each entry names the pair of state keys allowed to share a reading and the
- * reason. An accidental collision is a defect; a declared one is a decision
- * with an author. Empty by design — nothing has earned an exemption yet.
- *
- * @type {ReadonlyArray<{a:string,b:string,sharedReadingReason:string}>}
- */
 export const DECLARED_EQUIVALENCES = Object.freeze([]);
 
-/** Fields consumed by at least one component. */
 export function consumedFields() {
   const seen = new Set();
-  for (const c of COMPONENTS) for (const f of c.dependsOn) seen.add(f);
+  for (const component of COMPONENTS) {
+    for (const field of component.dependsOn) seen.add(field);
+  }
   return seen;
 }
 
-/**
- * Assemble a reading.
- *
- * Returns the layered parts, the flat text, the state key that produced it, and
- * the trace. The trace is the product feature "why am I seeing this", not a
- * debug aid — contract §15 tier 3 and §16 both require the system to be able to
- * answer it from the same data that produced the reading.
- */
 export function composeReading(state, options = {}) {
   if (!state) throw new TypeError("composeReading needs an interpreted reading state");
 
   const key = stateKey(state);
-  const occurrence = Number.isFinite(options.occurrence) ? Math.max(0, options.occurrence | 0) : 0;
+  const occurrence = Number.isFinite(options.occurrence)
+    ? Math.max(0, options.occurrence | 0)
+    : 0;
   const indices = variantIndices(state, occurrence);
   const parts = [];
   const trace = [];
+  const abstentions = [];
 
   COMPONENTS.forEach((component, i) => {
     const set = component.variants(state);
     const index = Math.min(indices[i], set.length - 1);
-    const text = set[index];
+    const output = set[index];
+    const structured = output && typeof output === "object" && output.abstention;
+    const text = structured ? output.text : output;
+
+    if (structured) {
+      abstentions.push(output.abstention);
+      trace.push({
+        id: component.id,
+        layer: component.layer,
+        drivenBy: component.dependsOn.map((field) => field + "=" + state[field]),
+        variant: "abstained",
+        abstention: output.abstention,
+      });
+    }
     if (text === null || text === undefined || text === "") return;
+
     parts.push({ id: component.id, layer: component.layer, text });
-    trace.push({
-      id: component.id,
-      layer: component.layer,
-      drivenBy: component.dependsOn.map((f) => `${f}=${state[f]}`),
-      // The variant is part of the answer to "why this wording", and it is
-      // reproducible: same state, same occurrence, same index, always.
-      variant: set.length > 1 ? `${index + 1} of ${set.length}` : "only",
-    });
+    if (!structured) {
+      trace.push({
+        id: component.id,
+        layer: component.layer,
+        drivenBy: component.dependsOn.map((field) => field + "=" + state[field]),
+        variant: set.length > 1 ? (index + 1) + " of " + set.length : "only",
+      });
+    }
   });
 
-  // §14 — self-report is additive, user-reported, and never part of identity.
   if (options.includeSelfReport !== false && state.selfReport) {
     const marks = Object.entries(state.selfReport)
-      .filter(([k, v]) => SELF_REPORT_BRIDGE[k] && v)
-      .map(([k, v]) => `${SELF_REPORT_BRIDGE[k]} as ${v}`);
+      .filter(([keyName, value]) => SELF_REPORT_BRIDGE[keyName] && value)
+      .map(([keyName, value]) => SELF_REPORT_BRIDGE[keyName] + " as " + value);
     if (marks.length) {
       parts.push({
         id: "selfReport",
         layer: "observation",
-        text: `${marks.join(", and ")} today. That is your own note, not something the camera found.`,
+        text: marks.join(", and ") + " today. That is your own note, not something the camera found.",
       });
-      trace.push({ id: "selfReport", layer: "observation", drivenBy: ["selfReport (non-identity)"] });
+      trace.push({
+        id: "selfReport",
+        layer: "observation",
+        drivenBy: ["selfReport (non-identity)"],
+      });
     }
   }
 
   const byLayer = {};
   for (const layer of LAYERS) {
-    byLayer[layer] = parts.filter((p) => p.layer === layer).map((p) => p.text);
+    byLayer[layer] = parts.filter((part) => part.layer === layer).map((part) => part.text);
   }
 
   return Object.freeze({
@@ -316,10 +272,9 @@ export function composeReading(state, options = {}) {
     variationCycle: variationCycle(state),
     parts,
     layers: byLayer,
-    // The rotation disclosure sits outside the prose so a surface cannot drop
-    // it while keeping the heritage passage. §13.
+    heritageAbstentions: Object.freeze(abstentions),
     rotationDisclosure: ROTATION_DISCLOSURE,
-    text: parts.map((p) => p.text).join(" "),
+    text: parts.map((part) => part.text).join(" "),
     provenance: Object.freeze({
       engine: ENGINE_VERSION,
       corpus: CORPUS_VERSION,
@@ -330,17 +285,19 @@ export function composeReading(state, options = {}) {
   });
 }
 
-/** The user-facing answer to "why am I seeing this?". Contract §15, §16. */
 export function explainReading(composed) {
   if (!composed) return [];
-  return composed.trace.map((t) => ({
-    sentence: (composed.parts.find((p) => p.id === t.id) || {}).text || "",
-    layer: t.layer,
-    because: t.drivenBy,
+  return composed.trace.map((trace) => ({
+    sentence: (composed.parts.find((part) => part.id === trace.id) || {}).text
+      || (trace.abstention
+        ? "Heritage material remains source-attributed; measurement-derived joining abstained because "
+          + trace.abstention.reasonCode + "."
+        : ""),
+    layer: trace.layer,
+    because: trace.drivenBy,
   }));
 }
 
-/** Split a state key back into its fields. Used by the collision report. */
 export function parseStateKey(key) {
   const out = {};
   for (const pair of String(key).split(STATE_KEY_SEPARATOR)) {

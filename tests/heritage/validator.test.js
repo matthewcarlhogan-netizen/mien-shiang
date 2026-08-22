@@ -1,124 +1,142 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { validateHeritageRecord } from "../../src/heritage/validator.js";
+import { heritageFixtures } from "../../src/heritage/fixtures.js";
+import {
+  HERITAGE_MEASUREMENT_AVAILABILITY,
+  RUNTIME_TO_MEASUREMENT_AVAILABILITY,
+} from "../../src/heritage/schema.js";
 
-test("Validator detects missing constructId", () => {
-  const record = {
-    canonicalChineseName: "test",
-    lineages: {}
-  };
-  const { valid, errors } = validateHeritageRecord(record);
-  assert.strictEqual(valid, false);
-  assert.ok(errors.includes("Missing constructId"));
+const baseLineage = (overrides = {}) => ({
+  lineageId: "primary",
+  definition: "An attributed source definition.",
+  source: "An existing source record.",
+  sourceId: "heritage-three-sections",
+  evidenceKind: "POSITIVE_CLAIM",
+  evidenceStrength: "RECORDED_NOT_VERIFIED",
+  preciseLocator: null,
+  locatorStatus: "NOT_RECORDED",
+  citationStatus: "source-required",
+  rightsStatus: "unverified",
+  measurementAvailability: "MODERN_MAPPING_UNSUPPORTED",
+  terminationState: "continue",
+  availability: "available",
+  abstentionReason: null,
+  abstentionReasonCode: null,
+  safetyStatus: "safe",
+  permittedHeritageSemantics: "Report the source claim as attributed.",
+  prohibitedInference: "Do not infer a user trait from this source claim.",
+  translationProvenance: "repository-editorial",
+  attestedCombinations: [],
+  disagreements: [],
+  negativeFinding: null,
+  note: null,
+  ...overrides,
 });
 
-test("Validator detects missing lineageId", () => {
-  const record = {
-    constructId: "test",
-    canonicalChineseName: "test",
-    lineages: {
-      primary: {
-        definition: "def",
-        source: "src"
-      }
-    }
-  };
-  const { valid, errors } = validateHeritageRecord(record);
-  assert.strictEqual(valid, false);
-  assert.ok(errors.includes("Lineage primary missing lineageId"));
+const validRecord = (overrides = {}) => ({
+  constructId: "test-construct",
+  canonicalChineseName: "三停",
+  canonicalNameStatus: "RECORDED_NOT_VERIFIED",
+  aliases: [],
+  verificationStatus: "RECORDED_NOT_VERIFIED",
+  prohibitedForUserInference: true,
+  lineages: { primary: baseLineage() },
+  ...overrides,
 });
 
-test("Validator detects missing availability/safety", () => {
-  const record = {
-    constructId: "test",
-    canonicalChineseName: "test",
-    lineages: {
-      primary: {
-        lineageId: "primary",
-        definition: "def",
-        source: "src"
-      }
-    }
-  };
-  const { valid, errors } = validateHeritageRecord(record);
-  assert.strictEqual(valid, false);
-  assert.ok(errors.includes("Lineage primary missing availability"));
-  assert.ok(errors.includes("Lineage primary missing safetyStatus"));
+test("the machine-readable manifest exposes the required measurement states", () => {
+  assert.ok(HERITAGE_MEASUREMENT_AVAILABILITY.includes("SUPPORTED_2D"));
+  assert.ok(HERITAGE_MEASUREMENT_AVAILABILITY.includes("PERMANENTLY_ABSTAIN"));
+  assert.equal(RUNTIME_TO_MEASUREMENT_AVAILABILITY.read, "SUPPORTED_2D");
 });
 
-test("Validator accepts valid record", () => {
-  const record = {
-    constructId: "test",
-    canonicalChineseName: "test",
-    lineages: {
-      primary: {
-        lineageId: "primary",
-        definition: "def",
-        source: "src",
-        availability: "available",
-        safetyStatus: "safe",
-        disagreements: ["scholarly position A"]
-      }
-    }
-  };
-  const { valid, errors } = validateHeritageRecord(record);
-  assert.strictEqual(valid, true);
-  assert.strictEqual(errors.length, 0);
+test("validator accepts a complete attributed record", () => {
+  const result = validateHeritageRecord(validRecord());
+  assert.equal(result.valid, true, result.errors.join("; "));
+  assert.deepEqual(result.errors, []);
 });
 
-test("Validator detects invalid disagreements format", () => {
-  const record = {
-    constructId: "test",
-    canonicalChineseName: "test",
-    lineages: {
-      primary: {
-        lineageId: "primary",
-        definition: "def",
-        source: "src",
-        availability: "available",
-        safetyStatus: "safe",
-        disagreements: "not-an-array"
-      }
-    }
-  };
-  const { valid, errors } = validateHeritageRecord(record);
-  assert.strictEqual(valid, false);
-  assert.ok(errors.includes("Lineage primary has invalid disagreements format"));
+test("validator rejects missing top-level identity and safety boundary", () => {
+  const record = validRecord();
+  delete record.constructId;
+  delete record.prohibitedForUserInference;
+  const result = validateHeritageRecord(record);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((error) => error.includes("constructId")));
+  assert.ok(result.errors.some((error) => /prohibitedForUserInference/.test(error)));
 });
 
-test("Validator enforces new constraints", () => {
-  const record = {
-    constructId: "test",
-    canonicalChineseName: "test",
-    lineages: {
-      bad: {
-        lineageId: "bad",
-        definition: "def",
-        source: "src",
-        availability: "unknown",
-        safetyStatus: "unknown"
-      },
-      abstention: {
-        lineageId: "abstention",
-        definition: "def",
-        source: "src",
-        availability: "abstention",
-        safetyStatus: "safe"
-      },
-      attested: {
-        lineageId: "attested",
-        definition: "def",
-        source: "",
-        availability: "available",
-        safetyStatus: "safe",
-        attestedCombinations: ["a", "b"]
-      }
+test("validator rejects missing lineage identity", () => {
+  const record = validRecord();
+  delete record.lineages.primary.lineageId;
+  const result = validateHeritageRecord(record);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((error) => error.includes("lineageId")));
+});
+
+test("validator rejects an unknown provenance source", () => {
+  const record = validRecord();
+  record.lineages.primary.sourceId = "source-does-not-exist";
+  const result = validateHeritageRecord(record);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((error) => /sourceId|source registry|provenance/i.test(error)));
+});
+
+test("validator rejects an invalid measurement availability state", () => {
+  const record = validRecord();
+  record.lineages.primary.measurementAvailability = "NOT_A_CANONICAL_STATE";
+  const result = validateHeritageRecord(record);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((error) => error.includes("measurementAvailability")));
+});
+
+test("validator rejects source-attested combinations without their own source", () => {
+  const record = validRecord();
+  record.lineages.primary.attestedCombinations = [{ combinationId: "three-sections", sourceId: null }];
+  const result = validateHeritageRecord(record);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((error) => /attestedCombinations|combination.*source/i.test(error)));
+});
+
+test("validator preserves disagreements but rejects malformed disagreement records", () => {
+  const record = validRecord();
+  record.lineages.primary.disagreements = [{ positionId: "other-lineage" }];
+  const result = validateHeritageRecord(record);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((error) => /disagreement/i.test(error)));
+});
+
+test("validator requires an abstention reason and terminating state", () => {
+  const record = validRecord();
+  record.lineages.primary.availability = "abstention";
+  record.lineages.primary.terminationState = "continue";
+  record.lineages.primary.abstentionReason = null;
+  record.lineages.primary.abstentionReasonCode = null;
+  const result = validateHeritageRecord(record);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((error) => /abstention|terminationState/i.test(error)));
+});
+
+test("validator will not call an unlocated claim verified", () => {
+  const record = validRecord();
+  record.lineages.primary.citationStatus = "verified";
+  record.lineages.primary.evidenceStrength = "VERIFIED";
+  record.lineages.primary.locatorStatus = "NOT_RECORDED";
+  record.lineages.primary.preciseLocator = null;
+  const result = validateHeritageRecord(record);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((error) => /locator|verified|citation/i.test(error)));
+});
+
+test("every fixture is valid and contains no placeholder provenance", () => {
+  assert.ok(heritageFixtures.length >= 6);
+  for (const fixture of heritageFixtures) {
+    const result = validateHeritageRecord(fixture);
+    assert.equal(result.valid, true, fixture.constructId + ": " + result.errors.join("; "));
+    for (const lineage of Object.values(fixture.lineages)) {
+      assert.ok(lineage.sourceId);
+      assert.doesNotMatch(lineage.source, /pending-/i);
     }
-  };
-  const { valid, errors } = validateHeritageRecord(record);
-  assert.strictEqual(valid, false);
-  assert.ok(errors.find(e => e.includes("invalid availability")));
-  assert.ok(errors.find(e => e.includes("invalid safetyStatus")));
-  assert.ok(errors.find(e => e.includes("abstention requires abstentionReason")));
-  assert.ok(errors.find(e => e.includes("attestedCombinations but missing source")));
+  }
 });
