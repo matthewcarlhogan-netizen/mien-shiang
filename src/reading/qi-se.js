@@ -33,21 +33,21 @@ export const BANDS = [
   {
     min: 75, key: "bright",
     reading:
-      "In Mian Xiang, qi se (氣色) is the reading of complexion rather than structure — the weather of a " +
+      "In Mian Xiang, qi se is the reading of complexion rather than structure — the weather of a " +
       "face rather than its architecture. The classical texts read a bright, settled complexion as qi " +
       "moving freely, and they regard it as the reading of a particular day rather than of a person.",
   },
   {
     min: 55, key: "steady",
     reading:
-      "In Mian Xiang, qi se (氣色) reads the weather of a face rather than its architecture. The classical " +
+      "In Mian Xiang, qi se reads the weather of a face rather than its architecture. The classical " +
       "texts read a steady, even complexion as qi moving without hurry — the ordinary and unremarkable " +
       "case, which the texts rate more kindly than the striking one.",
   },
   {
     min: 0, key: "quiet",
     reading:
-      "In Mian Xiang, qi se (氣色) reads the weather of a face rather than its architecture. The classical " +
+      "In Mian Xiang, qi se reads the weather of a face rather than its architecture. The classical " +
       "texts read a quieter complexion as qi gathered inward rather than spent outward, and they are " +
       "explicit that this is a passing season — qi se is the one part of the reading they expect to change " +
       "week to week.",

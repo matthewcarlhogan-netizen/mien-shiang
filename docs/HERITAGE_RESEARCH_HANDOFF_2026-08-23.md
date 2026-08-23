@@ -4,8 +4,9 @@
 
 Encode the source-side review of the canonical heritage library without
 inventing content, resolving scholarly disagreements, changing Qi Se
-measurement logic, changing locked product decisions or rewriting the runtime
-heritage prose.
+measurement logic or changing locked product decisions. After Claude identified
+runtime leaks, the scope was expanded to remove disputed prose and Chinese
+display fields from reader-facing surfaces.
 
 Acceptance criteria:
 
@@ -52,17 +53,18 @@ runtime join before encoding.
 ## Research decisions encoded
 
 - Promoted to `VERIFIED_PRIMARY`: Five Elements chapter-level typology, the
-  太清神鑑 Five Mountains lineage, the Four Rivers primary lineage and the Five
-  Officers set.
+  Taiqing Shenjian Five Mountains lineage, the Four Rivers primary lineage and
+  the Five Officers set. Runtime eligibility remains a separate decision.
 - Held at `RECORDED_NOT_VERIFIED`: Three Sections and Twelve Palaces.
 - Held the 神相全編 Four Rivers reversal at `VERIFIED_SECONDARY`; it is not
   promoted until the separate 卷二 section is checked.
 - Removed 五行 from Five Elements aliases and recorded it as a related but
   distinct system.
 - Recorded 鑒察官 / 監察官 as orthographic aliases, not a disagreement.
-- Preserved separate lineages for Three Sections boundaries, the 太清神鑑
+- Preserved separate lineages for Three Sections boundaries, the Taiqing
   Twelve Palaces assignment, mountain-name versus directional Five Mountains,
-  Four Rivers eye/mouth reversal and eyebrow versus philtrum Five Officers.
+  Four Rivers eye/mouth reversal and the unattested philtrum claim. The latter
+  is `SOURCE_REQUIRED` / `NONE_ATTESTED`, not a scholarly disagreement.
 - Recorded the 太清神鑑 structure-and-Qi-Se interaction as source-attested,
   heritage-only and non-operational.
 - Reclassified neoclassical canons as modern negative evidence rather than a
@@ -79,15 +81,19 @@ runtime join before encoding.
 - `src/heritage/fixtures.js`: canonical record, cross-family and field-finding
   fixtures.
 - `src/reading/provenance.js`: corrected source records and citation taxonomy.
-- `src/qise/reflection.js`: runtime-use gate only; no prose or measurement
-  change.
+- `src/qise/reflection.js`: runtime-use gate plus explicit source-review
+  abstention, so held material produces an explained gap rather than a blank
+  layer or disputed interpretation.
+- Reader-facing reading, Qi Se, summary, share and UI surfaces: English-only
+  labels; disputed Three Sections and Twelve Palaces heritage prose withheld.
 - `scripts/lint-bundle.js`: exact JSON Schema metadata-URI exception.
 - Heritage, provenance and bundle-lint tests.
 - `docs/commercial-rights-audit.md`: current rights defects and negative-evidence
   posture.
 
-No file in `src/qise/reflection-corpus.js`, the Qi Se measurement pipeline or
-the visual interface was changed.
+The Qi Se measurement pipeline and its thresholds were not changed. The copy
+corpus and visual interface were changed only where needed to enforce the
+source hold and English-only reader boundary.
 
 ## Verification evidence
 
@@ -95,23 +101,24 @@ Environment used here: Windows NT 10.0.26200.0, PowerShell 7.6.4, Node
 24.19.0, npm 11.17.0, clean local clone. This is not the Linux Codespace, so
 the same commands must be rerun there or in required Linux CI before merge.
 
-- Baseline: `tests 812`, `pass 812`, `fail 0`.
-- Targeted heritage/provenance and Reflection Engine checks: `tests 80`,
-  `pass 79`, `fail 1` exposed a test-message mismatch; after correction the
-  focused heritage suite reported `tests 27`, `pass 27`, `fail 0`.
-- Full suite after correction: `tests 822`, `pass 822`, `fail 0`.
+- Validator falsification sweep: 29 destructive mutations, all caught by the
+  named rule tests in `tests/heritage/falsification.test.js`.
+- English-only boundary: all reader-facing literals, every reachable Reflection
+  Engine state, runtime lineage and legacy display-field leak test pass.
+- Full suite after correction: `tests 870`, `pass 870`, `fail 0`.
 - Build: `83 files copied`; `6 pinned MediaPipe assets copied`.
-- Bundle lint: `84 files scanned`; `1302 user-facing strings extracted`;
+- Bundle lint: `84 files scanned`; `1350 user-facing strings extracted`;
   copy, attractiveness, egress and biometric-egress gates all `ok`.
+- Browser suite: `7 passed`, covering consent renewal, colour check,
+  accepted-frame processing, cleanup paths, Twelve Palaces navigation,
+  desktop layout and same-origin inference dependencies.
 - Release audit: command completed and correctly reported `Release gate:
   BLOCKED` for pending content rights, legal/store and real-device evidence.
 - New swallowed errors: none found in the patch.
 
-The Windows GitHub credential lacked the `codespace` scope. Its device-flow
-refresh was cancelled before any one-time code was transmitted, and no secret
-was copied from the Codespace. Gemini Flash Lite therefore did not author this
-patch; an independent Gemini/Codespace rerun remains possible after the product
-owner approves that narrow scope.
+The open Codespace checkpoint was preserved as commit `eb05c94` on
+`feature/heritage-infrastructure` before this review branch was updated. No
+credentials or secrets were moved between environments.
 
 ## Unresolved research and release risks
 
@@ -122,7 +129,8 @@ owner approves that narrow scope.
 3. Compare 神相全編 首卷 and 卷二 Four Rivers text before promoting the variant.
 4. Resolve whether 人倫風鑑 and 人倫大統賦 are distinct witnesses in this chain.
 5. Add folio/page locators where only juan and section are known.
-6. Locate the source for the Five Officers philtrum variant.
+6. Do not record a Five Officers philtrum disagreement unless a witness is
+   located; the current state is explicitly none attested/source required.
 7. Resolve the directional Five Mountains runtime wording to an edition-level
    麻衣-lineage source.
 8. Record stable source URLs or evidence files and hashes; web surrogates have

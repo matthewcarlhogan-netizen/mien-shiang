@@ -57,12 +57,12 @@ const lede = (text) => `<p class="lede">${esc(text)}</p>`;
 function renderFiveElements(fe, openDiffer) {
   if (!fe) return "";
   if (!fe.available) {
-    return section("Five Elements 五行", "Not available in this photo",
+    return section("Five Elements", "Not available in this photo",
       `<p class="muted">${esc(fe.note)}</p>`, SECTION_IDS.fiveElements);
   }
-  const alts = fe.alternates.map((a) => `${esc(a.name)} ${esc(a.hanzi)}`).join(" or ");
-  return section("Five Elements 五行",
-    `${esc(fe.name)} <span class="hanzi">${esc(fe.hanzi)}</span>`,
+  const alts = fe.alternates.map((a) => esc(a.name)).join(" or ");
+  return section("Five Elements",
+    esc(fe.name),
     `${lede(`The tradition types this face shape as ${fe.name}.`)}
      <p>${esc(fe.reading)}</p>
      ${fe.residualShape ? `<p class="muted small">This face didn't match any of the
@@ -90,9 +90,9 @@ function renderThreeCourts(tc, openDiffer) {
   const pct = (v) => `${(v * 100).toFixed(1)}%`;
   const order = ["upper", "middle", "lower"];
   const NAMES = {
-    upper: { name: "Upper Court", hanzi: "上停" },
-    middle: { name: "Middle Court", hanzi: "中停" },
-    lower: { name: "Lower Court", hanzi: "下停" },
+    upper: { name: "Upper Section" },
+    middle: { name: "Middle Section" },
+    lower: { name: "Lower Section" },
   };
 
   const alt = order
@@ -107,18 +107,17 @@ function renderThreeCourts(tc, openDiffer) {
   const legend = order.map((k) => `
     <li class="court-key">
       <span class="court-swatch court-${k}" aria-hidden="true"></span>
-      <span class="court-name">${esc(NAMES[k].name)}
-        <span class="hanzi">${esc(NAMES[k].hanzi)}</span></span>
+      <span class="court-name">${esc(NAMES[k].name)}</span>
       <span class="court-pct">${pct(tc.fractions[k])}</span>
       ${tc.dominant === k ? `<span class="tag">dominant</span>` : ""}
     </li>`).join("");
 
   const title = tc.balanced
-    ? "Balanced" : `${esc(tc.court.name)} <span class="hanzi">${esc(tc.court.hanzi)}</span>`;
+    ? "Balanced" : esc(tc.court.name);
 
-  const readingText = tc.balanced ? tc.heritageReading : tc.measurementObservation;
+  const readingText = tc.measurementObservation;
 
-  return section("Three Courts 三停", title,
+  return section("Three Sections", title,
     `${lede(tc.balanced
         ? "The three courts came out near equal in this photo."
         : `The ${NAMES[tc.dominant].name.toLowerCase()} is the longest of the three in this photo.`)}
@@ -134,10 +133,10 @@ function renderThreeCourts(tc, openDiffer) {
 function renderQiSe(q, openDiffer) {
   if (!q) return "";
   if (!q.available) {
-    return section("Qi se 氣色", "Not available in this photo",
+    return section("Qi se", "Not available in this photo",
       `<p class="muted">${esc(q.note)}</p>`, SECTION_IDS.qiSe);
   }
-  return section("Qi se 氣色", `Glow ${q.glowIndex}`,
+  return section("Qi se", `Glow ${q.glowIndex}`,
     `${lede("Qi se reads the complexion of a day rather than the structure of a face.")}
      ${q.basisNote
         ? `<p class="basis-note">${esc(q.basisNote)}</p>`
@@ -156,20 +155,22 @@ function renderQiSe(q, openDiffer) {
  */
 export const PALACE_SCOPE_NOTE =
   "A single front-on photo doesn't isolate the brows, eyelids, temples and outer eye corners as " +
-  "separate areas to read. This scanner supports six palaces; the other six are listed with their " +
-  "traditional meaning and left unmeasured rather than guessed at.";
+  "separate areas to read. Unclear regions stay unmeasured, and heritage interpretations remain " +
+  "withheld while the source chapter is under review.";
 
 function renderPalaces(tp, openDiffer) {
   if (!tp) return "";
   const row = (p) => `
     <details class="palace">
-      <summary><span class="hanzi">${esc(p.hanzi)}</span> ${esc(p.name)}
-        <span class="muted small">— ${esc(p.location)}</span>
+      <summary>${esc(p.name)}
+        ${p.heritageStatus === "RUNTIME_PROSE"
+          ? `<span class="muted small">— ${esc(p.location)}</span>`
+          : ""}
         ${p.measured ? "" : `<span class="tag">not read</span>`}</summary>
-      <p>${esc(p.reading)}</p>
+      ${p.reading ? `<p>${esc(p.reading)}</p>` : ""}
       ${p.translationNote ? `<p class="muted small">${esc(p.translationNote)}</p>` : ""}
       ${p.measured
-        ? `<p class="muted small">${esc(p.toneGloss)}</p>`
+        ? ""
         : `<p class="muted small">${esc(p.notMeasuredNote)}</p>`}
     </details>`;
 
@@ -185,11 +186,12 @@ function renderPalaces(tp, openDiffer) {
        ${items.map(row).join("")}`
     : "";
 
-  return section("Twelve Palaces 十二宮",
+  return section("Twelve Palaces",
     complete
       ? `Complete scan · all ${supportedCount} supported palace regions available`
       : `Partial scan · ${tp.measuredCount} of ${supportedCount} supported palace regions available`,
-    `${lede("The twelve palaces map areas of the face to areas of a life.")}
+    `${lede("The Twelve Palaces layout is retained for source study. Its heritage interpretations are withheld until the chapter evidence is verified.")}
+     ${tp.sourceReviewNote ? `<p class="source-review-note">${esc(tp.sourceReviewNote)}</p>` : ""}
      ${group("Available in this photo", read)}
      ${group("Supported, but not clear in this photo", missed)}
      ${group("Listed for context — not sampled", contextual)}
@@ -356,7 +358,7 @@ export function renderSummary(reading, opts = {}) {
 
   const headline = s.headline.length
     ? s.headline.map((h) =>
-        `<span class="summary-term">${esc(h.label)}<span class="hanzi">${esc(h.hanzi)}</span></span>`)
+        `<span class="summary-term">${esc(h.label)}</span>`)
         .join(`<span class="summary-sep" aria-hidden="true">·</span>`)
     : "";
 

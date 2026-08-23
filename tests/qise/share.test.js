@@ -77,6 +77,6 @@ test("today's share card carries the joined structural reading without raw geome
     twelvePalaces: { measuredCount: 5, supportedCount: 6 },
   };
   const model = shareCardModel([reading(9, "chi", { integrated })], "today");
-  assert.equal(model.structureLine, "土 Earth structure · square geometry · 5/6 supported palaces read");
+  assert.equal(model.structureLine, "Earth structure · square geometry · 5/6 supported palaces read");
   assert.doesNotMatch(JSON.stringify(model), /landmark|coordinate|embedding/i);
 });

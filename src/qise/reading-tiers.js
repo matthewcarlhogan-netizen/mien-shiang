@@ -14,8 +14,7 @@
  * parts.
  */
 
-import { LAYERS } from "./reflection.js";
-import { HERITAGE } from "./reflection-corpus.js";
+import { LAYERS, heritageMaterialFor } from "./reflection.js";
 import { READING_AFFECTING, NON_READING_AFFECTING } from "./reading-state.js";
 
 const textsFor = (composed, ids) => composed.parts
@@ -36,12 +35,12 @@ export function tierOne(state, composed) {
 
 /** Tier 2 — Reading. Heritage, then the bridge and the question. */
 export function tierTwo(state, composed) {
-  const entry = (HERITAGE[state.heritageConstruct] || {})[state.sourceLineage]
-    || (HERITAGE[state.heritageConstruct] || {}).primary
-    || null;
+  const material = heritageMaterialFor(state);
   return {
     passage: composed.layers.heritage.join(" "),
-    attribution: entry ? entry.source : "",
+    attribution: material.attribution,
+    sourceStatus: material.abstained ? "WITHHELD_PENDING_SOURCE_REVIEW" : "RUNTIME_PROSE",
+    sourceAbstained: material.abstained,
     // §13 — carried as its own field so a surface cannot keep the passage and
     // drop the disclosure that the passage was rotated rather than chosen.
     rotationDisclosure: composed.rotationDisclosure,

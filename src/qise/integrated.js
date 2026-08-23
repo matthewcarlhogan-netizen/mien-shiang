@@ -53,7 +53,7 @@ export function assertCompletePalaceStructure(palaceReading) {
 
   // 6, 7. Required identity/location metadata exists.
   const missingMetadata = palaces
-    .filter((p) => !p.key || !p.name || !p.hanzi || !p.location)
+    .filter((p) => !p.key || !p.name || !p.location)
     .map((p) => p.name || "Unnamed Palace");
 
   if (missingMetadata.length > 0) {
@@ -67,13 +67,11 @@ const projectFiveElements = (value) => value ? {
   note: value.note ?? null,
   shape: value.shape ?? null,
   element: value.element ?? null,
-  hanzi: value.hanzi ?? null,
   name: value.name ?? null,
   reading: value.reading ?? null,
   alternates: (Array.isArray(value.alternates) ? value.alternates : []).map((item) => ({
     element: item?.element ?? null,
     name: item?.name ?? null,
-    hanzi: item?.hanzi ?? null,
   })),
   sourcesDiffer: value.sourcesDiffer ?? null,
   residualShape: value.residualShape === true,
@@ -89,7 +87,6 @@ const projectThreeCourts = (value) => value ? {
   },
   dominant: value.dominant ?? null,
   court: value.court ? {
-    hanzi: value.court.hanzi ?? null,
     name: value.court.name ?? null,
     span: value.court.span ?? null,
   } : null,
@@ -107,7 +104,6 @@ const projectPalaces = (value) => value ? {
   sourcesDiffer: value.sourcesDiffer ?? null,
   palaces: (Array.isArray(value.palaces) ? value.palaces : []).map((palace) => ({
     key: palace?.key ?? null,
-    hanzi: palace?.hanzi ?? null,
     name: palace?.name ?? null,
     location: palace?.location ?? null,
     supported: palace?.supported === true,
@@ -155,7 +151,7 @@ const projectHarmony = (value) => value ? {
 export function projectIntegratedReading(reading) {
   if (!reading) return null;
   return {
-    version: 1,
+    version: 2,
     provenanceIds: Object.fromEntries(Object.entries(reading.provenanceIds || {})
       .filter(([, value]) => typeof value === "string")),
     fiveElements: projectFiveElements(reading.fiveElements),

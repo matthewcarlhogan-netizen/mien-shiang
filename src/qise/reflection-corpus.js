@@ -212,51 +212,72 @@ export const AVAILABILITY_LINE = Object.freeze({
 
 /* ── LAYER 2 — HERITAGE. Attributed, sourced, never about the user. ──────── */
 
+export const HERITAGE_CONSTRUCT_LABEL = Object.freeze({
+  threeSections: "Three Sections",
+  fiveElements: "Five Elements",
+  twelvePalaces: "Twelve Palaces",
+  fiveMountains: "Five Mountains",
+  fourRivers: "Four Rivers",
+  fiveOfficers: "Five Officers",
+});
+
+/*
+ * A missing source clearance is rendered as a deliberate gap, not as a blank
+ * card and never as the disputed heritage prose. These strings describe the
+ * project's source-review decision; they do not paraphrase the tradition.
+ */
+export const HERITAGE_REVIEW_COPY = Object.freeze({
+  passage: (label) => `${label} stays in the research ledger, not in this reading: its source record has not cleared verification for reader-facing interpretation.`,
+  attribution: (label) => `Mien Shiang source review ledger — ${label}`,
+  bridge: (label) => `There is no ${label} passage to place beside today's observation. The gap is deliberate: unresolved source work remains unresolved.`,
+  question: "What is protected by leaving an old claim unanswered until its source can be checked?",
+});
+
 export const HERITAGE = Object.freeze({
   threeSections: {
     primary: {
       text: "The face was divided into three sections, upper, middle and lower. One much-quoted line — eight characters, from a text whose authorship is disputed — holds that when the three stand equal, the reading is auspicious.",
-      source: "麻衣神相, attributed to 麻衣道者; attribution legendary",
+      source: "Received Ma Yi material; attribution and predicate are contested",
       note: "That single line is the whole basis for the balanced-thirds idea. It is a maxim, not a system.",
     },
   },
   fiveElements: {
     primary: {
       text: "The Inner Classic sets out five forms — wood, fire, earth, metal, water — and gives each a face: long, tapering, round, square, uneven.",
-      source: "黃帝內經·靈樞·陰陽二十五人, anonymous, Han-period composite",
+      source: "Huangdi Neijing, Lingshu, Yin-Yang Twenty-Five Types; anonymous composite text",
       note: "The source actually divides these five again into twenty-five. Almost every modern retelling, including this one, keeps the five and drops the rest.",
     },
   },
   twelvePalaces: {
     primary: {
       text: "Twelve regions of the face were named as palaces, each given a domain of life to preside over.",
-      source: "神相全編, chapter 十二宮相論; compiled 袁忠徹, early Ming",
+      source: "Shenxiang Quanbian; the exact Twelve Palaces body locator remains unresolved",
       note: "The same twelve names belong to an entirely different astrological system, so the labels travel further than the physiognomy does.",
     },
   },
   fiveMountains: {
     primary: {
       text: "Five peaks were mapped onto the face: the forehead in the south, the chin in the north, the two cheekbones east and west, and the nose at the centre. The centre was where the others were said to find their balance.",
-      source: "太清神鑑, anonymous Song compilation; the 王朴 attribution was struck out by the 四庫 editors",
+      source: "Taiqing Shenjian, a Song-era text attributed to Wang Pu; the attribution was rejected by the Siku editors",
       note: "The sources agree on the cheekbones and disagree on the chin — jaw, chin point, or a whole lower-face zone, depending which you read.",
     },
   },
   fourRivers: {
     primary: {
       text: "Four waterways were mapped onto the face: the ears, the eyes, the mouth and the nose, each asked to be deep, broad and clear.",
-      source: "太清神鑑; ears 江, eyes 淮, mouth 河, nose 濟",
+      source: "Taiqing Shenjian; ears, eyes, mouth and nose are assigned to four named waterways",
       note: "Two lineages disagree about the eyes and the mouth. This is the first of them.",
     },
     variant: {
       text: "Four waterways were mapped onto the face — but in this line of transmission the eye is the Yellow River and the mouth is the Huai, the reverse of the other reading.",
-      source: "神相全編, via 欽定古今圖書集成 vol. 632",
+      source: "Shenxiang Quanbian head-volume Xiangshuo witness",
       note: "Neither reading is a corruption of the other. Both are reinforced elsewhere in their own texts. The disagreement is a thousand years old and unresolved.",
     },
   },
   fiveOfficers: {
     primary: {
       text: "Five features were given official titles, as though the face were a small government: the ear gathers word, the eye inspects, the nose discerns, the mouth keeps the accounts.",
-      source: "神相全編; the classical wording of the formula could not be verified against a primary edition",
+      source: "Shenxiang Quanbian; the formula wording was not verified against a primary edition",
       note: "A fifth officer, the eyebrow, was titled for longevity. That part is left out here, and deliberately.",
     },
   },

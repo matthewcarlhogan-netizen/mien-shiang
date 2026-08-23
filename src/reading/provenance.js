@@ -26,6 +26,8 @@ export const CITATION_STATUS = Object.freeze({
   WORK_RECORDED: "work-recorded",
   /** Edition and locator recorded. Not yet checked against the actual source. */
   EDITION_RECORDED: "edition-recorded",
+  /** A received attribution or predicate is contradicted by the inspected witness. */
+  ATTRIBUTION_CONTRADICTED: "attribution-contradicted",
   /** Locator independently checked against the actual source. Release-satisfying. */
   VERIFIED: "verified",
 });
@@ -53,6 +55,8 @@ export const PROVENANCE_BLOCKER_DETAIL = Object.freeze({
     "source work identified but edition-level locator not recorded",
   "citation-recorded-not-verified":
     "citation recorded but not independently verified against the source",
+  "citation-attribution-contradicted":
+    "the inspected witness contradicts the received attribution or predicate",
   "citation-status-unrecognised":
     "citation status is outside the recorded taxonomy",
   "source-rights-unverified":
@@ -77,7 +81,38 @@ export const CONTRIBUTOR_REGISTRY = Object.freeze({
   }),
 });
 
-export const SOURCE_REGISTRY = Object.freeze({
+function sourceRecord(value) {
+  const sectionLocator = value.sectionLocator ?? value.locator ?? null;
+  const sectionLocatorStatus = value.sectionLocatorStatus
+    ?? (value.citationStatus === CITATION_STATUS.VERIFIED
+      ? "VERIFIED" : sectionLocator ? "RECORDED" : "NOT_RECORDED");
+  const folioLocator = value.folioLocator ?? null;
+  const folioLocatorStatus = value.folioLocatorStatus
+    ?? (folioLocator ? "RECORDED" : "NOT_RECORDED");
+
+  return Object.freeze({
+    edition: null,
+    sourceAccess: "NOT_RECORDED",
+    sourceUrl: null,
+    sha256: null,
+    retrievedAt: null,
+    editionFingerprint: null,
+    surrogateRights: "UNREVIEWED",
+    authorshipStatus: "NOT_RECORDED",
+    authorshipNote: null,
+    translationStatus: null,
+    ...value,
+    sectionLocator,
+    sectionLocatorStatus,
+    folioLocator,
+    folioLocatorStatus,
+    // Deprecated compatibility alias. New heritage code keeps section and
+    // folio evidence separate and never treats this as a folio locator.
+    locator: sectionLocator,
+  });
+}
+
+const RAW_SOURCE_REGISTRY = {
   /*
    * RESOLVED 17 August 2026 — DR-2026-08-17-SU-WEN-EDITION.
    *
@@ -103,11 +138,14 @@ export const SOURCE_REGISTRY = Object.freeze({
     rightsStatus: RIGHTS_STATUS.UNVERIFIED,
   }),
   "heritage-three-sections": Object.freeze({
-    title: "Received 麻衣神相 material used by the existing Three Sections corpus entry",
-    kind: "unresolved-tradition-source",
+    title: "Received Ma Yi material formerly used by the Three Sections corpus entry",
+    kind: "contested-attribution-witness",
+    edition: "Late blockprint and stone-print transmission; no stable critical edition identified",
     locator: null,
-    citationStatus: CITATION_STATUS.SOURCE_REQUIRED,
-    rightsStatus: RIGHTS_STATUS.UNVERIFIED,
+    citationStatus: CITATION_STATUS.ATTRIBUTION_CONTRADICTED,
+    rightsStatus: RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE,
+    authorshipStatus: "ATTRIBUTED_AND_CONTESTED",
+    authorshipNote: "The received witness contradicts the fortune predicate formerly attached to it; no stable folio is recorded.",
   }),
   "heritage-three-sections-sxqb": Object.freeze({
     title: "神相全編 Three Sections material",
@@ -116,6 +154,19 @@ export const SOURCE_REGISTRY = Object.freeze({
     locator: "卷一「面三停」; 卷二「三才三停論」「相身三停」「六府三才三停之圖」",
     citationStatus: CITATION_STATUS.EDITION_RECORDED,
     rightsStatus: RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE,
+    translationStatus: "original-to-this-project",
+  }),
+  "heritage-three-sections-taiqing": Object.freeze({
+    title: "Taiqing Shenjian Three Sections section",
+    kind: "historical-primary-text-section-heading",
+    edition: "Siku Quanshu Wenyuange recension",
+    sectionLocator: "Juan 6, Three Sections section",
+    citationStatus: CITATION_STATUS.EDITION_RECORDED,
+    rightsStatus: RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE,
+    sourceAccess: "REFERENCE_ONLY",
+    surrogateRights: "PUBLIC_DOMAIN_TAGGED",
+    authorshipStatus: "ATTRIBUTED_AND_CONTESTED",
+    authorshipNote: "A Song-era text attributed in later witnesses to Wang Pu; the Siku editors rejected that attribution.",
     translationStatus: "original-to-this-project",
   }),
   "heritage-five-elements": Object.freeze({
@@ -128,12 +179,14 @@ export const SOURCE_REGISTRY = Object.freeze({
     translationStatus: "original-to-this-project",
   }),
   "heritage-five-elements-taiqing": Object.freeze({
-    title: "太清神鑑 Five Forms material",
+    title: "Taiqing Shenjian Five Forms material",
     kind: "historical-primary-text",
     edition: "欽定四庫全書文淵閣本",
     locator: "卷四「五形」",
     citationStatus: CITATION_STATUS.VERIFIED,
     rightsStatus: RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE,
+    authorshipStatus: "ATTRIBUTED_AND_CONTESTED",
+    authorshipNote: "A Song-era text attributed in later witnesses to Wang Pu; the Siku editors rejected that attribution.",
     translationStatus: "original-to-this-project",
   }),
   "heritage-twelve-palaces": Object.freeze({
@@ -146,22 +199,52 @@ export const SOURCE_REGISTRY = Object.freeze({
     translationStatus: "original-to-this-project",
   }),
   "heritage-twelve-palaces-taiqing": Object.freeze({
-    title: "太清神鑑 Twelve Palaces assignment attributed to 玉管照神論",
+    title: "Taiqing Shenjian Twelve Palaces assignment attributed within the text to Yuguan Zhaoshen Lun",
     kind: "historical-primary-text",
     edition: "欽定四庫全書文淵閣本",
     locator: "卷一·成和子統論（末段）",
     citationStatus: CITATION_STATUS.EDITION_RECORDED,
     rightsStatus: RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE,
+    authorshipStatus: "ATTRIBUTED_AND_CONTESTED",
+    authorshipNote: "A Song-era text attributed in later witnesses to Wang Pu; the Siku editors rejected that attribution.",
     translationStatus: "original-to-this-project",
   }),
+  "heritage-twelve-palaces-discovery-surrogate": Object.freeze({
+    title: "Discovery-only surrogate of the Shenxiang Quanbian Twelve Palaces body",
+    kind: "discovery-only-secondary-surrogate",
+    edition: null,
+    sectionLocator: "Twelve Palaces body; wealth palace assigns the nose",
+    citationStatus: CITATION_STATUS.WORK_RECORDED,
+    rightsStatus: RIGHTS_STATUS.UNVERIFIED,
+    sourceAccess: "DISCOVERY_ONLY",
+    surrogateRights: "UNREVIEWED",
+    authorshipStatus: "NOT_RECORDED",
+    authorshipNote: "The body was observed through a Baidu-hosted surrogate and cannot support promotion or quotation.",
+  }),
   "heritage-five-mountains": Object.freeze({
-    title: "太清神鑑 Five Mountains material",
+    title: "Taiqing Shenjian Five Mountains material",
     kind: "historical-primary-text",
-    edition: "欽定四庫全書文淵閣本; Shidian Guji witness recorded separately",
-    locator: "「五嶽」; 卷二 (Siku), 卷一 (Shidian Guji)",
+    edition: "Siku Quanshu Wenyuange recension",
+    locator: "Five Mountains section, juan 2",
     citationStatus: CITATION_STATUS.VERIFIED,
     rightsStatus: RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE,
+    sourceAccess: "REFERENCE_ONLY",
+    surrogateRights: "PUBLIC_DOMAIN_TAGGED",
+    authorshipStatus: "ATTRIBUTED_AND_CONTESTED",
+    authorshipNote: "A Song-era text attributed in later witnesses to Wang Pu; the Siku editors rejected that attribution.",
     translationStatus: "original-to-this-project",
+  }),
+  "heritage-taiqing-shidian-discovery": Object.freeze({
+    title: "Shidian Guji discovery copy of Taiqing Shenjian",
+    kind: "discovery-only-secondary-surrogate",
+    edition: null,
+    sectionLocator: null,
+    citationStatus: CITATION_STATUS.WORK_RECORDED,
+    rightsStatus: RIGHTS_STATUS.UNVERIFIED,
+    sourceAccess: "DISCOVERY_ONLY",
+    surrogateRights: "UNREVIEWED",
+    authorshipStatus: "ATTRIBUTED_AND_CONTESTED",
+    authorshipNote: "A Song-era text attributed in later witnesses to Wang Pu; the Siku editors rejected that attribution. This copy is a discovery aid only.",
   }),
   "heritage-five-mountains-mayi": Object.freeze({
     title: "麻衣-lineage directional Five Mountains form used by existing corpus wording",
@@ -169,6 +252,29 @@ export const SOURCE_REGISTRY = Object.freeze({
     locator: null,
     citationStatus: CITATION_STATUS.SOURCE_REQUIRED,
     rightsStatus: RIGHTS_STATUS.UNVERIFIED,
+  }),
+  "heritage-five-mountains-sxqb": Object.freeze({
+    title: "Shenxiang Quanbian Five Mountains witness",
+    kind: "historical-primary-text-secondary-witness",
+    edition: "Ming Zhihetang blockprint, twelve juan plus head volume",
+    sectionLocator: "Five Mountains passage witnessed through Gujin Tushu Jicheng, art canon volume 632",
+    citationStatus: CITATION_STATUS.EDITION_RECORDED,
+    rightsStatus: RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE,
+    sourceAccess: "REFERENCE_ONLY",
+    surrogateRights: "HOST_TERMS_SEPARATE",
+    authorshipStatus: "ATTRIBUTED_AND_CONTESTED",
+    authorshipNote: "Compilation witness; traditional attributions are not treated as authorship.",
+    translationStatus: "original-to-this-project",
+  }),
+  "heritage-five-mountains-shenyi": Object.freeze({
+    title: "Shenyi Fu commentary Five Mountains witness",
+    kind: "historical-primary-text-secondary-witness",
+    edition: null,
+    sectionLocator: null,
+    citationStatus: CITATION_STATUS.WORK_RECORDED,
+    rightsStatus: RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE,
+    authorshipStatus: "NOT_RECORDED",
+    translationStatus: "original-to-this-project",
   }),
   "heritage-four-rivers": Object.freeze({
     title: "太清神鑑 and 神相全編 material used by the existing Four Rivers corpus entry",
@@ -178,25 +284,55 @@ export const SOURCE_REGISTRY = Object.freeze({
     rightsStatus: RIGHTS_STATUS.UNVERIFIED,
   }),
   "heritage-four-rivers-primary": Object.freeze({
-    title: "太清神鑑 Four Rivers primary lineage",
+    title: "Taiqing Shenjian Four Rivers primary lineage",
     kind: "historical-primary-text",
-    edition: "欽定四庫全書文淵閣本; Shidian Guji witness recorded separately",
-    locator: "「四瀆」; 卷二 (Siku), 卷一 (Shidian Guji)",
+    edition: "Siku Quanshu Wenyuange recension",
+    locator: "Four Rivers section, juan 2",
     citationStatus: CITATION_STATUS.VERIFIED,
     rightsStatus: RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE,
+    sourceAccess: "REFERENCE_ONLY",
+    surrogateRights: "PUBLIC_DOMAIN_TAGGED",
+    authorshipStatus: "ATTRIBUTED_AND_CONTESTED",
+    authorshipNote: "A Song-era text attributed in later witnesses to Wang Pu; the Siku editors rejected that attribution.",
     translationStatus: "original-to-this-project",
   }),
-  "heritage-four-rivers-variant": Object.freeze({
-    title: "神相全編 Four Rivers eye/mouth variant",
+  "heritage-four-rivers-sxqb-shoujuan-xiangshuo": Object.freeze({
+    title: "Shenxiang Quanbian head-volume Xiangshuo Four Rivers witness",
     kind: "historical-primary-text-secondary-witness",
     edition: "致和堂藏板明刊本; wording currently checked through a web reproduction",
-    locator: "首卷·相說; 卷二「四瀆」still requires comparison",
+    locator: "Head volume, Xiangshuo section",
     citationStatus: CITATION_STATUS.EDITION_RECORDED,
     rightsStatus: RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE,
+    sourceAccess: "REFERENCE_ONLY",
+    surrogateRights: "HOST_TERMS_SEPARATE",
+    authorshipStatus: "ATTRIBUTED_AND_CONTESTED",
+    translationStatus: "original-to-this-project",
+  }),
+  "heritage-four-rivers-sxqb-juan2": Object.freeze({
+    title: "Shenxiang Quanbian juan 2 Four Rivers section",
+    kind: "historical-primary-text-uncompared-section",
+    edition: "Ming Zhihetang blockprint, twelve juan plus head volume",
+    sectionLocator: "Juan 2, Four Rivers section",
+    citationStatus: CITATION_STATUS.EDITION_RECORDED,
+    rightsStatus: RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE,
+    sourceAccess: "REFERENCE_ONLY",
+    surrogateRights: "HOST_TERMS_SEPARATE",
+    authorshipStatus: "ATTRIBUTED_AND_CONTESTED",
+    authorshipNote: "The section is recorded but its body has not been compared with the head-volume Xiangshuo witness.",
+    translationStatus: "original-to-this-project",
+  }),
+  "heritage-four-rivers-renlun-fengjian": Object.freeze({
+    title: "Renlun Fengjian provisional Four Rivers witness",
+    kind: "historical-primary-text-provisional-witness",
+    edition: null,
+    sectionLocator: null,
+    citationStatus: CITATION_STATUS.WORK_RECORDED,
+    rightsStatus: RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE,
+    authorshipStatus: "NOT_RECORDED",
     translationStatus: "original-to-this-project",
   }),
   "heritage-four-rivers-renlun-datong": Object.freeze({
-    title: "人倫大統賦, 薛延年注 Four Rivers witness",
+    title: "Renlun Datong Fu, Xue Yannian commentary, provisional Four Rivers witness",
     kind: "historical-primary-text-secondary-witness",
     locator: null,
     citationStatus: CITATION_STATUS.WORK_RECORDED,
@@ -204,12 +340,16 @@ export const SOURCE_REGISTRY = Object.freeze({
     translationStatus: "original-to-this-project",
   }),
   "heritage-five-officers": Object.freeze({
-    title: "太清神鑑 Five Officers material",
+    title: "Taiqing Shenjian Five Officers material",
     kind: "historical-primary-text",
-    edition: "欽定四庫全書文淵閣本; Shidian Guji witness recorded separately",
-    locator: "「五官」; 卷二 (Siku), 卷一 (Shidian Guji)",
+    edition: "Siku Quanshu Wenyuange recension",
+    locator: "Five Officers section, juan 2",
     citationStatus: CITATION_STATUS.VERIFIED,
     rightsStatus: RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE,
+    sourceAccess: "REFERENCE_ONLY",
+    surrogateRights: "PUBLIC_DOMAIN_TAGGED",
+    authorshipStatus: "ATTRIBUTED_AND_CONTESTED",
+    authorshipNote: "A Song-era text attributed in later witnesses to Wang Pu; the Siku editors rejected that attribution.",
     translationStatus: "original-to-this-project",
   }),
   "heritage-five-officers-sxqb": Object.freeze({
@@ -221,13 +361,26 @@ export const SOURCE_REGISTRY = Object.freeze({
     rightsStatus: RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE,
     translationStatus: "original-to-this-project",
   }),
+  "heritage-five-officers-medical": Object.freeze({
+    title: "Huangdi Neijing Lingshu, Five Inspections and Five Messengers",
+    kind: "historical-medical-text-related-system",
+    edition: null,
+    sectionLocator: "Five Inspections and Five Messengers section",
+    citationStatus: CITATION_STATUS.WORK_RECORDED,
+    rightsStatus: RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE,
+    authorshipStatus: "ANONYMOUS",
+    authorshipNote: "A distinct tongue-including five-feature construct from another source family, not a physiognomic Five Officers lineage.",
+    translationStatus: "original-to-this-project",
+  }),
   "heritage-taiqing-form-qise-interaction": Object.freeze({
-    title: "太清神鑑 structure-and-Qi-Se interaction",
+    title: "Taiqing Shenjian structure-and-Qi-Se interaction",
     kind: "historical-primary-text",
     edition: "欽定四庫全書文淵閣本",
     locator: "卷四「論看形神體像」",
     citationStatus: CITATION_STATUS.VERIFIED,
     rightsStatus: RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE,
+    authorshipStatus: "ATTRIBUTED_AND_CONTESTED",
+    authorshipNote: "A Song-era text attributed in later witnesses to Wang Pu; the Siku editors rejected that attribution.",
     translationStatus: "original-to-this-project",
   }),
   "xunzi-feixiang": Object.freeze({
@@ -266,7 +419,11 @@ export const SOURCE_REGISTRY = Object.freeze({
     citationStatus: CITATION_STATUS.VERIFIED,
     rightsStatus: RIGHTS_STATUS.UNVERIFIED,
   }),
-});
+};
+
+export const SOURCE_REGISTRY = Object.freeze(Object.fromEntries(
+  Object.entries(RAW_SOURCE_REGISTRY).map(([id, value]) => [id, sourceRecord(value)]),
+));
 
 const profile = (value) => Object.freeze({
   tradition: "Mian Xiang",
@@ -356,6 +513,9 @@ export function validateProvenanceEntry(id, entry) {
 const citationBlocker = (status) => {
   if (status === CITATION_RELEASE_STATUS) return null;
   if (status === CITATION_STATUS.EDITION_RECORDED) return "citation-recorded-not-verified";
+  if (status === CITATION_STATUS.ATTRIBUTION_CONTRADICTED) {
+    return "citation-attribution-contradicted";
+  }
   if (status === CITATION_STATUS.WORK_RECORDED) return "citation-work-recorded";
   if (status === CITATION_STATUS.SOURCE_REQUIRED) return "citation-source-required";
   return "citation-status-unrecognised";

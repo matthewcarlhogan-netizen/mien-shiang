@@ -13,11 +13,11 @@ import { isLowConfidence } from "../../qise/baseline.js";
 import { compositionOf, COMPOSITION_COLOURS } from "../../qise/composition.js";
 
 export const COMPOSITION_LABELS = Object.freeze({
-  chi: Object.freeze({ cjk: "赤", name: "chi", note: "warm note" }),
-  huang: Object.freeze({ cjk: "黃", name: "huang", note: "earth note" }),
-  qing: Object.freeze({ cjk: "青", name: "qing", note: "cool note" }),
-  bai: Object.freeze({ cjk: "白", name: "bai", note: "light note" }),
-  hei: Object.freeze({ cjk: "黑", name: "hei", note: "deep note" }),
+  chi: Object.freeze({ name: "chi", note: "warm note" }),
+  huang: Object.freeze({ name: "huang", note: "earth note" }),
+  qing: Object.freeze({ name: "qing", note: "cool note" }),
+  bai: Object.freeze({ name: "bai", note: "light note" }),
+  hei: Object.freeze({ name: "hei", note: "deep note" }),
 });
 
 /** The reading screen, top to bottom. Asserted as a list, not as a layout. */
@@ -27,9 +27,9 @@ export const READING_SCREEN_ORDER = Object.freeze([
 
 /** The three courts, top to bottom, with the regions each covers. */
 export const THREE_COURTS = Object.freeze([
-  { key: "upper", label: "Upper court", cjk: "上停", rois: ["tian", "yintang"] },
-  { key: "middle", label: "Middle court", cjk: "中停", rois: ["shangen", "zhuntou", "quan_l", "quan_r"] },
-  { key: "lower", label: "Lower court", cjk: "下停", rois: ["dige"] },
+  { key: "upper", label: "Upper section", rois: ["tian", "yintang"] },
+  { key: "middle", label: "Middle section", rois: ["shangen", "zhuntou", "quan_l", "quan_r"] },
+  { key: "lower", label: "Lower section", rois: ["dige"] },
 ]);
 
 const quantile = (xs, q) => {
@@ -138,9 +138,9 @@ export function sparklineModel(history, key = "ming", days = 30) {
 /** One sentence addressed to the reader, without turning it into a trait. */
 export function verdictFor(compass) {
   const ascendant = (compass && compass.ascendant) || "ping";
-  if (ascendant === "ping") return "Today, your reading is level — 平.";
+  if (ascendant === "ping") return "Today, your reading is level.";
   const colour = PALETTE[ascendant];
-  if (!colour) return "Today, your reading is level — 平.";
+  if (!colour) return "Today, your reading is level.";
   const band = compass.band ? `${compass.band} ` : "";
   return `Today, your reading shows ${band}${ascendant} — ${colour.simile.split(",")[0]}.`;
 }
@@ -220,10 +220,39 @@ export function integratedReadingModel(reading) {
 
   const composition = compositionStrip(reading);
   const lead = composition.leadLabel;
+  const publicElement = {
+    available: element.available,
+    element: element.element,
+    name: element.name,
+    shape: element.shape,
+    reading: element.reading,
+    sourcesDiffer: element.sourcesDiffer,
+    residualShape: element.residualShape === true,
+    alternates: (element.alternates || []).map((alternate) => ({
+      name: alternate.name,
+      element: alternate.element,
+    })),
+  };
+  const publicCourt = courts.court ? {
+    name: courts.court.name,
+    span: courts.court.span,
+  } : null;
   const courtLabel = courts.balanced
-    ? "Three Courts in near-equal measure"
-    : `${courts.court?.hanzi || ""} ${courts.court?.name || courts.dominant}`.trim();
-  const allPalaces = palaceSource?.palaces || [];
+    ? "Three Sections in near-equal measure"
+    : (publicCourt?.name || courts.dominant);
+  const allPalaces = (palaceSource?.palaces || []).map((palace) => ({
+    key: palace.key,
+    name: palace.name,
+    location: palace.location,
+    measured: palace.measured === true,
+    supported: palace.supported === true,
+    notMeasuredNote: palace.notMeasuredNote || null,
+    heritageStatus: palace.heritageStatus || palaceSource?.heritageStatus || null,
+    sourceReviewNote: palace.sourceReviewNote || palaceSource?.sourceReviewNote || null,
+    reading: (palace.heritageStatus || palaceSource?.heritageStatus) === "RUNTIME_PROSE"
+      ? palace.reading || null
+      : null,
+  }));
   const measuredPalaces = allPalaces.filter((palace) => palace.measured);
   const harmonyComponents = (harmony?.components || []).map((component) => ({
     ...component,
@@ -232,14 +261,22 @@ export function integratedReadingModel(reading) {
 
   return {
     available: true,
-    headline: `${lead.cjk} today, over ${element.hanzi} ${element.name}`,
+    headline: `${lead.name} today, over ${publicElement.name}`,
     synthesis:
       `The changing colour layer leads with ${lead.name}; the accepted face map reads as `
-      + `${element.name} structure in the Mian Xiang Five Elements tradition.`,
-    frameLine: `${element.shape} geometry · ${courtLabel}`,
-    element,
+      + `${publicElement.name} structure in the Mian Xiang Five Elements tradition.`,
+    frameLine: `${publicElement.shape} geometry · ${courtLabel}`,
+    element: publicElement,
     courts: {
-      ...courts,
+      available: courts.available,
+      balanced: courts.balanced,
+      dominant: courts.dominant,
+      court: publicCourt,
+      fractions: courts.fractions,
+      measurementObservation: courts.measurementObservation,
+      measurementCaveat: courts.measurementCaveat,
+      sourcesDiffer: courts.sourcesDiffer,
+      heritageReading: null,
       label: courtLabel,
       percentages: Object.fromEntries(Object.entries(courts.fractions || {}).map(
         ([key, value]) => [key, Number.isFinite(value) ? Math.round(value * 100) : null],
@@ -253,6 +290,8 @@ export function integratedReadingModel(reading) {
       measuredCount: palaceSource?.measuredCount || 0,
       supportedCount: palaceSource?.supportedCount || 0,
       totalCount: palaceSource?.totalCount || 12,
+      heritageStatus: palaceSource?.heritageStatus || null,
+      sourceReviewNote: palaceSource?.sourceReviewNote || null,
       sourcesDiffer: palaceSource?.sourcesDiffer || null,
     },
     harmony: harmony ? {
@@ -327,8 +366,8 @@ export function readingScreenModel(reading, history, options = {}) {
     composition: compositionStrip(reading),
     integrated: integratedReadingModel(reading),
     gauges: [
-      gaugeModel(history, metricOf(reading, "ming"), "ming", "明 lustre"),
-      gaugeModel(history, metricOf(reading, "run"), "run", "潤 moisture"),
+      gaugeModel(history, metricOf(reading, "ming"), "ming", "Ming — lustre"),
+      gaugeModel(history, metricOf(reading, "run"), "run", "Run — moisture"),
     ],
     courts: courtsStrip(reading.roiValidity),
     passage: calibration.active

@@ -48,7 +48,7 @@ const SOURCE_ID_BY_CONSTRUCT = Object.freeze({
 const SOURCE_ID_BY_LINEAGE = Object.freeze({
   fourRivers: Object.freeze({
     primary: "heritage-four-rivers-primary",
-    variant: "heritage-four-rivers-variant",
+    variant: "heritage-four-rivers-sxqb-shoujuan-xiangshuo",
   }),
 });
 
@@ -89,8 +89,11 @@ export function createHeritageRegistry(corpus = HERITAGE) {
       const combinations = lineageEvidence.attestedCombinations
         ?? lineageData.attestedCombinations
         ?? [];
-      const preciseLocator = lineageEvidence.preciseLocator
-        ?? source?.locator
+      const sectionLocator = lineageEvidence.sectionLocator
+        ?? source?.sectionLocator
+        ?? null;
+      const folioLocator = lineageEvidence.folioLocator
+        ?? source?.folioLocator
         ?? null;
 
       acc[lineageId] = {
@@ -101,11 +104,14 @@ export function createHeritageRegistry(corpus = HERITAGE) {
         supportingSourceIds: lineageEvidence.supportingSourceIds || [],
         evidenceKind: lineageEvidence.evidenceKind || "POSITIVE_CLAIM",
         evidenceStrength: lineageEvidence.evidenceStrength || "RECORDED_NOT_VERIFIED",
-        preciseLocator,
-        locatorStatus: lineageEvidence.locatorStatus
-          || (source?.citationStatus === "verified"
-            ? "VERIFIED"
-            : preciseLocator ? "RECORDED" : "NOT_RECORDED"),
+        sectionLocator,
+        sectionLocatorStatus: lineageEvidence.sectionLocatorStatus
+          || source?.sectionLocatorStatus
+          || "NOT_RECORDED",
+        folioLocator,
+        folioLocatorStatus: lineageEvidence.folioLocatorStatus
+          || source?.folioLocatorStatus
+          || "NOT_RECORDED",
         citationStatus: lineageEvidence.citationStatus
           || source?.citationStatus
           || "source-required",
@@ -138,7 +144,9 @@ export function createHeritageRegistry(corpus = HERITAGE) {
         prohibitedInference: lineageEvidence.prohibitedInference ||
           "Do not infer health, identity, character, fate, status, or outcome from this construct.",
         translationProvenance: lineageEvidence.translationProvenance
-          || "repository-editorial",
+          || "PROJECT_ORIGINAL",
+        translationAgentId: lineageEvidence.translationAgentId
+          ?? "repository-editorial",
         constituents: lineageEvidence.constituents || [],
         relatedSystems: lineageEvidence.relatedSystems || [],
         attestedCombinations: combinations,
@@ -146,6 +154,9 @@ export function createHeritageRegistry(corpus = HERITAGE) {
           || lineageData.attestedCombinationsStatus
           || (combinations.length ? "RECORDED" : "NONE_ATTESTED"),
         disagreements: lineageEvidence.disagreements || lineageData.disagreements || [],
+        unverifiedClaims: lineageEvidence.unverifiedClaims
+          || lineageData.unverifiedClaims
+          || [],
         negativeFinding: lineageEvidence.negativeFinding
           ?? lineageData.negativeFinding
           ?? null,

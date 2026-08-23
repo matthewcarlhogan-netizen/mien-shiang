@@ -4,6 +4,7 @@ import {
   validateHeritageCombination,
   validateHeritageFieldFinding,
   validateHeritageRecord,
+  validateHeritageSourceRecord,
 } from "../../src/heritage/validator.js";
 import {
   heritageCombinationFixtures,
@@ -12,7 +13,9 @@ import {
 } from "../../src/heritage/fixtures.js";
 import {
   HERITAGE_MEASUREMENT_AVAILABILITY,
+  HERITAGE_TRANSLATION_PROVENANCE,
 } from "../../src/heritage/schema.js";
+import { SOURCE_REGISTRY } from "../../src/reading/provenance.js";
 
 const baseLineage = (overrides = {}) => ({
   lineageId: "primary",
@@ -22,8 +25,10 @@ const baseLineage = (overrides = {}) => ({
   supportingSourceIds: [],
   evidenceKind: "POSITIVE_CLAIM",
   evidenceStrength: "RECORDED_NOT_VERIFIED",
-  preciseLocator: null,
-  locatorStatus: "NOT_RECORDED",
+  sectionLocator: null,
+  sectionLocatorStatus: "NOT_RECORDED",
+  folioLocator: null,
+  folioLocatorStatus: "NOT_RECORDED",
   citationStatus: "source-required",
   rightsStatus: "unverified",
   workRightsStatus: "unverified",
@@ -38,12 +43,14 @@ const baseLineage = (overrides = {}) => ({
   prohibitedForUserInference: true,
   permittedHeritageSemantics: "Report the source claim as attributed.",
   prohibitedInference: "Do not infer a user trait from this source claim.",
-  translationProvenance: "repository-editorial",
+  translationProvenance: "PROJECT_ORIGINAL",
+  translationAgentId: "repository-editorial",
   constituents: [],
   relatedSystems: [],
   attestedCombinations: [],
   attestedCombinationsStatus: "NONE_ATTESTED",
   disagreements: [],
+  unverifiedClaims: [],
   negativeFinding: null,
   note: null,
   ...overrides,
@@ -112,7 +119,8 @@ test("validator rejects source-attested combinations without their own source", 
     combinationId: "three-sections",
     constructIds: ["test-construct"],
     sourceId: null,
-    preciseLocator: null,
+    sectionLocator: null,
+    folioLocator: null,
     combinationScope: "WITHIN_CONSTRUCT",
     renderPolicy: "RESEARCH_ONLY",
     measurementAvailability: "NOT_RECORDED",
@@ -147,8 +155,8 @@ test("validator will not call an unlocated claim verified", () => {
   const record = validRecord();
   record.lineages.primary.citationStatus = "verified";
   record.lineages.primary.evidenceStrength = "VERIFIED_PRIMARY";
-  record.lineages.primary.locatorStatus = "NOT_RECORDED";
-  record.lineages.primary.preciseLocator = null;
+  record.lineages.primary.sectionLocatorStatus = "NOT_RECORDED";
+  record.lineages.primary.sectionLocator = null;
   const result = validateHeritageRecord(record);
   assert.equal(result.valid, false);
   assert.ok(result.errors.some((error) => /locator|verified|citation/i.test(error)));
@@ -173,7 +181,8 @@ test("validator rejects a non-empty combination list marked NONE_ATTESTED", () =
     combinationId: "three-sections-example",
     constructIds: ["test-construct"],
     sourceId: "heritage-three-sections",
-    preciseLocator: null,
+    sectionLocator: null,
+    folioLocator: null,
     combinationScope: "WITHIN_CONSTRUCT",
     renderPolicy: "RESEARCH_ONLY",
     measurementAvailability: "NOT_RECORDED",
@@ -191,7 +200,8 @@ test("validator accepts explicitly sourced combinations and disagreements", () =
     combinationId: "three-sections-example",
     constructIds: ["test-construct"],
     sourceId: "heritage-three-sections",
-    preciseLocator: null,
+    sectionLocator: null,
+    folioLocator: null,
     combinationScope: "WITHIN_CONSTRUCT",
     renderPolicy: "RESEARCH_ONLY",
     measurementAvailability: "NOT_RECORDED",
@@ -205,10 +215,19 @@ test("validator accepts explicitly sourced combinations and disagreements", () =
     sourceId: "heritage-three-sections",
     summary: "An attributed alternate position retained for research review.",
     status: "PARALLEL",
+    disagreementNature: "INTER_TEXT",
     note: null,
   }];
   const result = validateHeritageRecord(record);
   assert.equal(result.valid, true, result.errors.join("; "));
+});
+
+test("translation provenance is a closed enum", () => {
+  assert.deepEqual(HERITAGE_TRANSLATION_PROVENANCE, [
+    "PROJECT_ORIGINAL",
+    "PUBLIC_DOMAIN_TRANSLATION",
+    "NOT_TRANSLATED_HERITAGE_ONLY",
+  ]);
 });
 
 test("cross-family combinations are sourced, heritage-only and non-operational", () => {
@@ -238,7 +257,8 @@ test("validator refuses to operationalise prohibited or unmeasurable combination
     combinationId: "unsafe-example",
     constructIds: ["threeSections"],
     sourceId: "heritage-three-sections",
-    preciseLocator: null,
+    sectionLocator: null,
+    folioLocator: null,
     combinationScope: "WITHIN_CONSTRUCT",
     renderPolicy: "RUNTIME_ALLOWED",
     measurementAvailability: "CAMERA_GEOMETRY_INSUFFICIENT",
@@ -256,9 +276,11 @@ test("validator rejects duplicate member IDs and alias-related-system contradict
     constituentId: "wood",
     canonicalChineseName: "木形",
     aliases: [],
+    aliasWitnesses: [],
     definition: "A named member.",
     sourceId: "heritage-five-elements",
-    preciseLocator: "靈樞 第六十四·陰陽二十五人",
+    sectionLocator: "靈樞 第六十四·陰陽二十五人",
+    folioLocator: null,
     evidenceStrength: "VERIFIED_PRIMARY",
     measurementAvailability: "MODERN_MAPPING_UNSUPPORTED",
     prohibitedForUserInference: true,
@@ -276,4 +298,62 @@ test("validator rejects duplicate member IDs and alias-related-system contradict
   assert.equal(result.valid, false);
   assert.ok(result.errors.some((error) => /constituentId.*duplicate/i.test(error)));
   assert.ok(result.errors.some((error) => /cannot also be a construct alias/i.test(error)));
+});
+
+test("every source record preserves independent section and folio states", () => {
+  for (const [sourceId, source] of Object.entries(SOURCE_REGISTRY)) {
+    const result = validateHeritageSourceRecord(source);
+    assert.equal(result.valid, true, sourceId + ": " + result.errors.join("; "));
+    assert.ok(source.sectionLocatorStatus);
+    assert.ok(source.folioLocatorStatus);
+  }
+  const taiqing = SOURCE_REGISTRY["heritage-five-mountains"];
+  assert.equal(taiqing.sectionLocatorStatus, "VERIFIED");
+  assert.equal(taiqing.folioLocatorStatus, "NOT_RECORDED");
+  assert.equal(taiqing.folioLocator, null);
+});
+
+test("validator rejects malformed source integrity and discovery promotion", () => {
+  const source = {
+    ...SOURCE_REGISTRY["heritage-taiqing-shidian-discovery"],
+    sourceAccess: "STABLE_REMOTE",
+    sourceUrl: "http://example.test/source",
+    sha256: "not-a-hash",
+    citationStatus: "verified",
+  };
+  const result = validateHeritageSourceRecord(source);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((error) => /HTTPS/i.test(error)));
+  assert.ok(result.errors.some((error) => /sha256/i.test(error)));
+  assert.ok(result.errors.some((error) => /verified|stable source/i.test(error)));
+});
+
+test("runtime prose requires declared translation provenance and an agent", () => {
+  const record = validRecord();
+  record.lineages.primary.translationProvenance = "NOT_TRANSLATED_HERITAGE_ONLY";
+  record.lineages.primary.translationAgentId = null;
+  const result = validateHeritageRecord(record);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((error) => /runtime prose.*translation provenance/i.test(error)));
+});
+
+test("constituent aliases require source-witness provenance", () => {
+  const record = validRecord();
+  record.lineages.primary.constituents = [{
+    constituentId: "inspection",
+    canonicalChineseName: "鑒察官",
+    aliases: ["監察官"],
+    aliasWitnesses: [],
+    definition: "Eye.",
+    sourceId: "heritage-five-officers",
+    sectionLocator: "Five Officers section, juan 2",
+    folioLocator: null,
+    evidenceStrength: "VERIFIED_PRIMARY",
+    measurementAvailability: "CONDITIONALLY_SUPPORTED",
+    prohibitedForUserInference: true,
+    note: null,
+  }];
+  const result = validateHeritageRecord(record);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((error) => /alias.*witness provenance/i.test(error)));
 });

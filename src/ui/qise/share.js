@@ -34,7 +34,7 @@ const ascendantOf = (reading) => {
 const readingLine = (reading) => {
   if (!reading?.compass) return "Today’s five-colour impression";
   const ascendant = ascendantOf(reading);
-  if (ascendant === "ping") return "Your reading is level — 平.";
+  if (ascendant === "ping") return "Your reading is level.";
   const band = reading.compass && reading.compass.band;
   return `Your reading shows ${band ? `${band} ` : ""}${ascendant}.`;
 };
@@ -51,7 +51,7 @@ function columnSummary(readings) {
     return `Across these ${readings.length} scans, no single showing appears most often.`;
   }
   const [name, count] = orderedCounts[0];
-  const showing = name === "ping" ? "level — 平" : name;
+  const showing = name === "ping" ? "level" : name;
   return `Across these ${readings.length} scans, ${showing} appears most often (${count}).`;
 }
 
@@ -62,7 +62,7 @@ function structuralShareLine(reading) {
   const palaceLine = palaces?.supportedCount
     ? ` · ${palaces.measuredCount}/${palaces.supportedCount} supported palaces read`
     : "";
-  return `${element.hanzi} ${element.name} structure · ${element.shape} geometry${palaceLine}`;
+  return `${element.name} structure · ${element.shape} geometry${palaceLine}`;
 }
 
 /**

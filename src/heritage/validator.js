@@ -1,12 +1,18 @@
 import {
+  HERITAGE_ALIAS_WITNESS_FIELDS,
   HERITAGE_COMBINATION_FIELDS,
   HERITAGE_CONSTITUENT_FIELDS,
   HERITAGE_DISAGREEMENT_FIELDS,
   HERITAGE_FIELD_FINDING_FIELDS,
   HERITAGE_FIELD_MANIFEST,
   HERITAGE_RELATED_SYSTEM_FIELDS,
+  HERITAGE_SOURCE_FIELDS,
+  HERITAGE_UNVERIFIED_CLAIM_FIELDS,
 } from "./schema.js";
-import { SOURCE_REGISTRY } from "../reading/provenance.js";
+import {
+  CONTRIBUTOR_REGISTRY,
+  SOURCE_REGISTRY,
+} from "../reading/provenance.js";
 
 const hasValue = (value) => value !== undefined && value !== null && value !== "";
 const typeMatches = (value, type) => {
@@ -87,6 +93,61 @@ function validateUniqueObjectIds(values, idField, prefix, errors) {
   if (!Array.isArray(values)) return;
   const ids = values.map((value) => value?.[idField]).filter(hasValue);
   validateUniqueValues(ids, prefix + idField + " ", errors);
+}
+
+export function validateHeritageSourceRecord(source) {
+  const errors = [];
+  if (!source || typeof source !== "object" || Array.isArray(source)) {
+    return { valid: false, errors: ["Source record must be an object"] };
+  }
+
+  validateFields(source, HERITAGE_SOURCE_FIELDS, "Source ", errors);
+  const checkLocator = (name, statusName) => {
+    const locator = source[name];
+    const status = source[statusName];
+    if (locator === null && status !== "NOT_RECORDED") {
+      errors.push(`Source ${statusName} ${status} requires ${name}`);
+    }
+    if (locator !== null && status === "NOT_RECORDED") {
+      errors.push(`Source ${name} requires a recorded ${statusName}`);
+    }
+  };
+  checkLocator("sectionLocator", "sectionLocatorStatus");
+  checkLocator("folioLocator", "folioLocatorStatus");
+
+  if (source.citationStatus === "verified"
+    && source.sectionLocatorStatus !== "VERIFIED") {
+    errors.push("Verified source requires a verified section locator");
+  }
+  if (source.citationStatus === "attribution-contradicted"
+    && source.authorshipStatus !== "ATTRIBUTED_AND_CONTESTED") {
+    errors.push("Contradicted attribution requires contested authorship metadata");
+  }
+  if (source.sourceAccess === "DISCOVERY_ONLY"
+    && source.citationStatus === "verified") {
+    errors.push("Discovery-only source cannot be verified");
+  }
+  if (source.sourceUrl !== null && !/^https:\/\/[^\s]+$/u.test(source.sourceUrl)) {
+    errors.push("Source sourceUrl must be an HTTPS URL");
+  }
+  if (source.sha256 !== null && !/^[a-f0-9]{64}$/u.test(source.sha256)) {
+    errors.push("Source sha256 must be 64 lowercase hexadecimal characters");
+  }
+  if (source.retrievedAt !== null
+    && !/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z)?$/u.test(source.retrievedAt)) {
+    errors.push("Source retrievedAt must be an ISO date or UTC timestamp");
+  }
+  if (source.sha256 !== null
+    && [source.sourceUrl, source.retrievedAt, source.editionFingerprint]
+      .some((value) => value === null)) {
+    errors.push("Hashed source requires sourceUrl, retrievedAt and editionFingerprint");
+  }
+  if (["LOCAL_ARTIFACT", "STABLE_REMOTE"].includes(source.sourceAccess)
+    && source.sha256 === null) {
+    errors.push("Stable source access requires a sha256 artifact hash");
+  }
+
+  return { valid: errors.length === 0, errors };
 }
 
 export function validateHeritageCombination(combination, constructId = null) {
@@ -223,6 +284,12 @@ export function validateHeritageRecord(record) {
       errors,
     );
     validateObjectArray(
+      lineage.unverifiedClaims,
+      HERITAGE_UNVERIFIED_CLAIM_FIELDS,
+      prefix + "unverifiedClaims",
+      errors,
+    );
+    validateObjectArray(
       lineage.constituents,
       HERITAGE_CONSTITUENT_FIELDS,
       prefix + "constituents",
@@ -234,6 +301,34 @@ export function validateHeritageRecord(record) {
       prefix + "relatedSystems",
       errors,
     );
+    for (const [index, member] of (lineage.constituents || []).entries()) {
+      const memberPrefix = prefix + `constituents[${index}].`;
+      validateObjectArray(
+        member.aliasWitnesses,
+        HERITAGE_ALIAS_WITNESS_FIELDS,
+        memberPrefix + "aliasWitnesses",
+        errors,
+      );
+      validateUniqueObjectIds(
+        member.aliasWitnesses,
+        "alias",
+        memberPrefix + "aliasWitnesses ",
+        errors,
+      );
+      const witnessedAliases = new Set(
+        (member.aliasWitnesses || []).map((witness) => witness.alias),
+      );
+      for (const alias of member.aliases || []) {
+        if (!witnessedAliases.has(alias)) {
+          errors.push(memberPrefix + `alias ${alias} requires witness provenance`);
+        }
+      }
+      for (const alias of witnessedAliases) {
+        if (!member.aliases?.includes(alias)) {
+          errors.push(memberPrefix + `alias witness ${alias} is not declared in aliases`);
+        }
+      }
+    }
     validateUniqueObjectIds(
       lineage.attestedCombinations,
       "combinationId",
@@ -250,6 +345,12 @@ export function validateHeritageRecord(record) {
       lineage.relatedSystems,
       "relatedSystemId",
       prefix + "relatedSystems ",
+      errors,
+    );
+    validateUniqueObjectIds(
+      lineage.unverifiedClaims,
+      "claimId",
+      prefix + "unverifiedClaims ",
       errors,
     );
     for (const relatedSystem of lineage.relatedSystems || []) {
@@ -272,11 +373,19 @@ export function validateHeritageRecord(record) {
       errors.push(prefix + "RECORDED requires at least one attested combination");
     }
 
-    if (lineage.preciseLocator !== null && lineage.locatorStatus === "NOT_RECORDED") {
-      errors.push(prefix + "has preciseLocator without a recorded locator status");
-    }
-    if (lineage.citationStatus === "verified" && lineage.locatorStatus !== "VERIFIED") {
-      errors.push(prefix + "verified citation requires locatorStatus VERIFIED");
+    const validateLineageLocator = (name, statusName) => {
+      if (lineage[name] !== null && lineage[statusName] === "NOT_RECORDED") {
+        errors.push(prefix + `has ${name} without a recorded ${statusName}`);
+      }
+      if (lineage[name] === null && lineage[statusName] !== "NOT_RECORDED") {
+        errors.push(prefix + `${statusName} ${lineage[statusName]} requires ${name}`);
+      }
+    };
+    validateLineageLocator("sectionLocator", "sectionLocatorStatus");
+    validateLineageLocator("folioLocator", "folioLocatorStatus");
+    if (lineage.citationStatus === "verified"
+      && lineage.sectionLocatorStatus !== "VERIFIED") {
+      errors.push(prefix + "verified citation requires sectionLocatorStatus VERIFIED");
     }
     if (lineage.evidenceStrength === "VERIFIED_PRIMARY"
       && lineage.citationStatus !== "verified") {
@@ -286,9 +395,26 @@ export function validateHeritageRecord(record) {
       && !["edition-recorded", "verified"].includes(lineage.citationStatus)) {
       errors.push(prefix + "verified secondary evidence requires a recorded citation");
     }
+    if (lineage.citationStatus === "attribution-contradicted"
+      && ["VERIFIED_PRIMARY", "VERIFIED_SECONDARY"].includes(lineage.evidenceStrength)) {
+      errors.push(prefix + "contradicted attribution cannot carry verified evidence");
+    }
     if (["VERIFIED_PRIMARY", "VERIFIED_SECONDARY"].includes(lineage.evidenceStrength)
-      && lineage.preciseLocator === null) {
-      errors.push(prefix + "verified evidence requires a preciseLocator");
+      && lineage.sectionLocator === null) {
+      errors.push(prefix + "verified evidence requires a sectionLocator");
+    }
+    if (lineage.translationProvenance === "PROJECT_ORIGINAL") {
+      if (!hasValue(lineage.translationAgentId)
+        || !CONTRIBUTOR_REGISTRY[lineage.translationAgentId]) {
+        errors.push(prefix + "project-original translation requires a registered translationAgentId");
+      }
+    } else if (lineage.translationAgentId !== null
+      && lineage.translationAgentId !== undefined) {
+      errors.push(prefix + "translationAgentId is only valid for PROJECT_ORIGINAL copy");
+    }
+    if (lineage.runtimeStatus === "RUNTIME_PROSE"
+      && lineage.translationProvenance === "NOT_TRANSLATED_HERITAGE_ONLY") {
+      errors.push(prefix + "runtime prose requires translation provenance");
     }
     if (lineage.availability === "abstention" && !hasValue(lineage.abstentionReason)) {
       errors.push(prefix + "abstention requires abstentionReason");

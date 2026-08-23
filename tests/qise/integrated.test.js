@@ -91,7 +91,7 @@ test("storage preserves the joined reading and still contains no biometric templ
 test("the screen model makes one synthesis from colour, geometry and palaces", () => {
   const model = integratedReadingModel(colourReading(integratedReadingFromScalars(face(), raw())));
   assert.equal(model.available, true);
-  assert.match(model.headline, /赤 today, over 土 Earth/);
+  assert.match(model.headline, /chi today, over Earth/);
   assert.match(model.synthesis, /changing colour layer/i);
   assert.equal(model.palaces.measuredCount, 12);
   assert.equal(model.palaces.supportedCount, 12);

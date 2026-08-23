@@ -20,8 +20,8 @@ test("Twelve Palaces heritage readings must not change based on pigment measurem
 test("Three Sections dominance produces neutral measurement observation and no heritage interpretation", () => {
   const geometry1 = { thirds: { upperFraction: 0.8, middleFraction: 0.1, lowerFraction: 0.1, maxDeviation: 0.5 } };
   const r1 = readThreeCourts(geometry1);
-  
-  assert.ok(r1.measurementObservation.includes("Upper Court is the largest section"));
+
+  assert.ok(r1.measurementObservation.includes("Upper Section is the largest section"));
   assert.equal(r1.heritageReading, null);
 });
 

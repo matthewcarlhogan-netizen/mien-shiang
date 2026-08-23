@@ -182,7 +182,7 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .today-next p{margin:0;font-size:.82rem;line-height:1.45}
 .today-next button{border:0;background:var(--qise-ink);color:var(--qise-action-fg);font-size:.78rem;white-space:nowrap}
 .today-ritual{position:relative;padding:1.15rem;margin:1rem 0;border:1px solid var(--qise-border);border-radius:24px;background:linear-gradient(120deg,color-mix(in srgb,var(--huang) 12%,var(--qise-surface)),var(--qise-surface));overflow:hidden}
-.today-ritual::after{content:"今日";position:absolute;right:-.25rem;bottom:-1.8rem;font-family:var(--cjk);font-size:6rem;line-height:1;opacity:.045;pointer-events:none}
+.today-ritual::after{content:"TODAY";position:absolute;right:-.25rem;bottom:-.4rem;font-family:var(--numeric);font-size:2.4rem;line-height:1;letter-spacing:.16em;opacity:.045;pointer-events:none}
 .today-ritual h2{font-family:var(--passage);font-size:1.45rem}
 .today-ritual p{max-width:30rem}
 .today-shortcuts{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-top:.9rem}
@@ -341,7 +341,7 @@ html[data-screen-flash="true"] .capture-badge span{background:#FFFDF5;box-shadow
 <body>
 <div class="wrap">
 <header class="app-head">
-  <div class="wordmark">Mien Shiang · 面相</div>
+  <div class="wordmark">Mien Shiang</div>
   <div class="head-actions">
     <div class="privacy-mark">On-device face scanner</div>
     <button class="theme-toggle" id="theme-toggle" type="button" aria-pressed="false">Dark mode</button>
@@ -357,7 +357,7 @@ html[data-screen-flash="true"] .capture-badge span{background:#FFFDF5;box-shadow
     <div class="consent-step" id="consent-step-purpose">
       <p class="consent-progress">1 of 2 · Welcome</p>
       <div class="welcome-hero">
-        <div class="welcome-mark" aria-hidden="true">相</div>
+        <div class="welcome-mark" aria-hidden="true">M/S</div>
         <p class="eyebrow">A private face reading</p>
         <h1 id="consent-h">See what today’s face is quietly showing.</h1>
         <p class="welcome-lede">One guided scan turns the colours in your face into a short reflection rooted in Mien Shiang tradition — written to be felt, not decoded.</p>

@@ -46,16 +46,31 @@ test("every registry lineage carries provenance and has no placeholder source", 
   }
 });
 
-test("engine reads attributed heritage prose from the canonical registry", () => {
-  const reading = composeReading(readState(), { includeSelfReport: false });
+test("engine reads only runtime-eligible attributed heritage prose", () => {
+  const held = composeReading(readState(), { includeSelfReport: false });
+  const heldPart = held.parts.find((part) => part.id === "heritage");
+  assert.ok(heldPart, "a held source should render an explicit gap, not a blank layer");
+  assert.match(heldPart.text, /research ledger.*not in this reading/i);
+  assert.doesNotMatch(heldPart.text, /stand equal.*auspicious/i);
+  assert.ok(held.heritageAbstentions.some((entry) =>
+    entry.reasonCode === "HERITAGE_RESEARCH_ONLY"));
+
+  const reading = composeReading(readState({
+    heritageConstruct: "fourRivers",
+    sourceLineage: "primary",
+  }), { includeSelfReport: false });
   const heritagePart = reading.parts.find((part) => part.id === "heritage");
   assert.ok(heritagePart);
-  assert.ok(heritagePart.text.includes("divided into three sections"));
+  assert.ok(heritagePart.text.includes("Four waterways"));
   assert.equal(reading.heritageAbstentions.length, 0);
 });
 
 test("measurement abstention is explicit and never becomes observation prose", () => {
-  const reading = composeReading(readState({ availability: "abstained_confidence" }), {
+  const reading = composeReading(readState({
+    availability: "abstained_confidence",
+    heritageConstruct: "fourRivers",
+    sourceLineage: "primary",
+  }), {
     includeSelfReport: false,
   });
   assert.ok(reading.parts.some((part) => part.id === "heritage"));
@@ -89,7 +104,12 @@ test("a source lineage marked abstention does not emit its definition", () => {
     includeSelfReport: false,
     registry: testRegistry,
   });
-  assert.equal(reading.parts.some((part) => part.id === "heritage"), false);
+  const heritage = reading.parts.find((part) => part.id === "heritage");
+  assert.ok(heritage, "source abstention should remain visible as a deliberate gap");
+  assert.doesNotMatch(heritage.text, /eight characters|stand equal|auspicious/i);
+  assert.match(heritage.text, /research ledger/i);
+  assert.ok(reading.heritageAbstentions.some((entry) =>
+    entry.reasonCode === "HERITAGE_SOURCE_ABSTENTION"));
 });
 
 test("五行 is related to 五形 but is not accepted as its alias", () => {
@@ -119,7 +139,13 @@ test("parallel source assignments remain distinct machine-readable lineages", ()
   assert.ok(HERITAGE_REGISTRY.threeSections.lineages["common-transmitted"]);
   assert.ok(HERITAGE_REGISTRY.twelvePalaces.lineages["taiqing-yuguan"]);
   assert.ok(HERITAGE_REGISTRY.fiveMountains.lineages["taiqing-siku"]);
-  assert.ok(HERITAGE_REGISTRY.fiveOfficers.lineages["philtrum-variant"]);
+  assert.ok(HERITAGE_REGISTRY.fiveMountains.lineages["sxqb-chin"]);
+  assert.ok(HERITAGE_REGISTRY.fiveMountains.lineages["shenyi-lower-face-zone"]);
+  assert.equal(HERITAGE_REGISTRY.fiveOfficers.lineages["philtrum-variant"], undefined);
+  assert.equal(
+    HERITAGE_REGISTRY.fiveOfficers.lineages.primary.unverifiedClaims[0].attestationStatus,
+    "NONE_ATTESTED",
+  );
   assert.equal(
     HERITAGE_REGISTRY.twelvePalaces.lineages["taiqing-yuguan"].constituents
       .some((member) => member.canonicalChineseName === "田宅宮"),
@@ -127,12 +153,44 @@ test("parallel source assignments remain distinct machine-readable lineages", ()
   );
 });
 
-test("source corrections carry locators while edition-dependent juan stays explicit", () => {
-  assert.match(SOURCE_REGISTRY["heritage-five-mountains"].locator, /卷二.*Siku.*卷一.*Shidian/);
-  assert.match(SOURCE_REGISTRY["heritage-four-rivers-primary"].locator, /「四瀆」/);
-  assert.match(SOURCE_REGISTRY["heritage-five-officers"].locator, /「五官」/);
-  assert.match(SOURCE_REGISTRY["heritage-twelve-palaces"].locator, /十二宮訣.*十二宮絡/);
+test("source corrections keep section and folio evidence independent", () => {
+  assert.match(SOURCE_REGISTRY["heritage-five-mountains"].sectionLocator, /Five Mountains.*juan 2/i);
+  assert.match(SOURCE_REGISTRY["heritage-four-rivers-primary"].sectionLocator, /Four Rivers.*juan 2/i);
+  assert.match(SOURCE_REGISTRY["heritage-five-officers"].sectionLocator, /Five Officers.*juan 2/i);
+  assert.match(SOURCE_REGISTRY["heritage-twelve-palaces"].sectionLocator, /十二宮訣.*十二宮絡/);
+  assert.equal(SOURCE_REGISTRY["heritage-five-mountains"].folioLocator, null);
+  assert.equal(SOURCE_REGISTRY["heritage-five-mountains"].folioLocatorStatus, "NOT_RECORDED");
   assert.doesNotMatch(SOURCE_REGISTRY["heritage-twelve-palaces"].title, /十二宮相論/);
+});
+
+test("Claude corrections preserve contested attribution and distinct witnesses", () => {
+  assert.equal(
+    SOURCE_REGISTRY["heritage-three-sections"].citationStatus,
+    "attribution-contradicted",
+  );
+  assert.match(
+    SOURCE_REGISTRY["heritage-three-sections"].authorshipNote,
+    /contradicts.*predicate/i,
+  );
+  assert.ok(SOURCE_REGISTRY["heritage-four-rivers-sxqb-shoujuan-xiangshuo"]);
+  assert.ok(SOURCE_REGISTRY["heritage-four-rivers-sxqb-juan2"]);
+  assert.ok(SOURCE_REGISTRY["heritage-four-rivers-renlun-fengjian"]);
+  assert.ok(SOURCE_REGISTRY["heritage-four-rivers-renlun-datong"]);
+  assert.equal(
+    SOURCE_REGISTRY["heritage-taiqing-shidian-discovery"].sourceAccess,
+    "DISCOVERY_ONLY",
+  );
+});
+
+test("Taiqing is described as a contested attribution, never as Wang Pu authorship", () => {
+  const taiqingSources = Object.values(SOURCE_REGISTRY)
+    .filter((source) => /Taiqing Shenjian/i.test(source.title));
+  assert.ok(taiqingSources.length >= 5);
+  for (const source of taiqingSources) {
+    assert.equal(source.authorshipStatus, "ATTRIBUTED_AND_CONTESTED");
+    assert.match(source.authorshipNote, /Song-era text attributed.*Wang Pu.*rejected/i);
+    assert.doesNotMatch(source.title, /by Wang Pu/i);
+  }
 });
 
 test("heritage-only and research-only lineages cannot enter runtime prose", () => {
@@ -140,6 +198,8 @@ test("heritage-only and research-only lineages cannot enter runtime prose", () =
     heritageConstruct: "fiveMountains",
     sourceLineage: "taiqing-siku",
   }), { includeSelfReport: false });
-  assert.equal(reading.parts.some((part) => part.id === "heritage"), false);
+  const heritage = reading.parts.find((part) => part.id === "heritage");
+  assert.ok(heritage, "a held lineage must be explained instead of disappearing");
+  assert.match(heritage.text, /research ledger/i);
   assert.equal(reading.text.includes("太清神鑑 Five Mountains assignment"), false);
 });

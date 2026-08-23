@@ -11,7 +11,7 @@ import {
   ASCENDANT_SUBJECT, REGION_PLACE, DIRECTION_VERB, MAGNITUDE_QUALIFIER,
   HEADLINE, HISTORY_LINE, CONFIDENCE_VOICE, AVAILABILITY_LINE, OBSERVATION_SHAPES,
   BRIDGE_OPENER, BRIDGE_ABSTAINED, REFLECTION, ROTATION_DISCLOSURE,
-  SELF_REPORT_BRIDGE,
+  SELF_REPORT_BRIDGE, HERITAGE_CONSTRUCT_LABEL, HERITAGE_REVIEW_COPY,
 } from "./reflection-corpus.js";
 import { HERITAGE_REGISTRY } from "../heritage/registry.js";
 import { seededIndex } from "./passages.js";
@@ -22,17 +22,44 @@ export const ENGINE_VERSION = "reflection-engine-v1";
 
 const read = (s) => s.availability === "read";
 
-function lineageFor(s, registry = HERITAGE_REGISTRY) {
+export function heritageMaterialFor(s, registry = HERITAGE_REGISTRY) {
   const registryEntry = registry[s.heritageConstruct]
     || registry.threeSections;
   const requested = registryEntry.lineages[s.sourceLineage];
-  return {
+  const lineage = requested
+    ? requested.runtimeStatus === "RUNTIME_PROSE" ? requested : null
+    : Object.values(registryEntry.lineages)
+      .find((candidate) => candidate.runtimeStatus === "RUNTIME_PROSE") || null;
+
+  if (lineage && lineage.availability !== "abstention") {
+    return Object.freeze({
+      entry: registryEntry,
+      lineage,
+      passage: lineage.definition,
+      note: lineage.note || null,
+      attribution: lineage.source,
+      abstained: false,
+      reasonCode: null,
+      provenanceId: lineage.sourceId,
+    });
+  }
+
+  const label = HERITAGE_CONSTRUCT_LABEL[registryEntry.constructId]
+    || HERITAGE_CONSTRUCT_LABEL.threeSections;
+  const blocked = requested || lineage || null;
+  return Object.freeze({
     entry: registryEntry,
-    lineage: requested
-      ? requested.runtimeStatus === "RUNTIME_PROSE" ? requested : null
-      : Object.values(registryEntry.lineages)
-        .find((lineage) => lineage.runtimeStatus === "RUNTIME_PROSE") || null,
-  };
+    lineage: null,
+    passage: HERITAGE_REVIEW_COPY.passage(label),
+    note: null,
+    attribution: HERITAGE_REVIEW_COPY.attribution(label),
+    abstained: true,
+    reasonCode: blocked?.availability === "abstention"
+      ? "HERITAGE_SOURCE_ABSTENTION"
+      : blocked ? `HERITAGE_${blocked.runtimeStatus}`
+      : "HERITAGE_SOURCE_UNAVAILABLE",
+    provenanceId: blocked?.sourceId || "heritage-source-review",
+  });
 }
 
 /*
@@ -127,9 +154,17 @@ export const COMPONENTS = Object.freeze([
     layer: "heritage",
     dependsOn: ["heritageConstruct", "sourceLineage"],
     variants(s, registry) {
-      const lineage = lineageFor(s, registry).lineage;
-      if (!lineage || lineage.availability === "abstention") return [null];
-      return [lineage.definition];
+      const material = heritageMaterialFor(s, registry);
+      if (!material.abstained) return [material.passage];
+      return [{
+        text: material.passage,
+        abstention: Object.freeze({
+          layer: "heritage",
+          terminationState: "abstain",
+          reasonCode: material.reasonCode,
+          provenanceId: material.provenanceId,
+        }),
+      }];
     },
   },
   {
@@ -137,9 +172,9 @@ export const COMPONENTS = Object.freeze([
     layer: "heritage",
     dependsOn: ["heritageConstruct", "sourceLineage"],
     variants(s, registry) {
-      const lineage = lineageFor(s, registry).lineage;
-      if (!lineage || lineage.availability === "abstention") return [null];
-      return [lineage.note];
+      const material = heritageMaterialFor(s, registry);
+      if (material.abstained) return [null];
+      return [material.note];
     },
   },
   {
@@ -154,16 +189,25 @@ export const COMPONENTS = Object.freeze([
   {
     id: "bridge",
     layer: "reflection",
-    dependsOn: ["availability"],
-    variants(s) {
+    dependsOn: ["availability", "heritageConstruct", "sourceLineage"],
+    variants(s, registry) {
+      const material = heritageMaterialFor(s, registry);
+      if (material.abstained) {
+        const label = HERITAGE_CONSTRUCT_LABEL[material.entry.constructId]
+          || HERITAGE_CONSTRUCT_LABEL.threeSections;
+        return [HERITAGE_REVIEW_COPY.bridge(label)];
+      }
       return read(s) ? BRIDGE_OPENER : BRIDGE_ABSTAINED;
     },
   },
   {
     id: "reflection",
     layer: "reflection",
-    dependsOn: ["heritageConstruct", "ascendant"],
-    variants(s) {
+    dependsOn: ["heritageConstruct", "sourceLineage", "ascendant"],
+    variants(s, registry) {
+      if (heritageMaterialFor(s, registry).abstained) {
+        return [HERITAGE_REVIEW_COPY.question];
+      }
       const byConstruct = REFLECTION[s.heritageConstruct] || REFLECTION.threeSections;
       return byConstruct[s.ascendant] || byConstruct.ping;
     },

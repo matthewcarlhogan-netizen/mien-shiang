@@ -940,11 +940,11 @@ function correctLab(lab, gains) {
 
 function compositionMarkup(composition, { compact = false } = {}) {
   const bar = `<div class="${compact ? "history-mini-bar" : "composition-bar"}" aria-label="Five-colour composition">${composition.items.map((item) =>
-    `<span class="composition-segment" style="width:${item.value.toFixed(1)}%;background:${item.colour}" title="${esc(item.cjk)} ${esc(item.name)} ${item.value.toFixed(1)}%"></span>`).join("")}</div>`;
+    `<span class="composition-segment" style="width:${item.value.toFixed(1)}%;background:${item.colour}" title="${esc(item.name)} ${item.value.toFixed(1)}%"></span>`).join("")}</div>`;
   if (compact) return bar;
   const featured = [composition.lead, composition.support].map((key, index) => {
     const item = composition.items.find((entry) => entry.key === key);
-    return `<div class="composition-note"><strong><span class="cjk">${esc(item.cjk)}</span> ${esc(item.name)}</strong><span>${index ? "supporting" : "leading"} ${esc(item.note)} · ${item.value.toFixed(0)}%</span></div>`;
+    return `<div class="composition-note"><strong>${esc(item.name)}</strong><span>${index ? "supporting" : "leading"} ${esc(item.note)} · ${item.value.toFixed(0)}%</span></div>`;
   }).join("");
   return `${bar}<div class="composition-lead">${featured}</div>`;
 }
@@ -955,7 +955,7 @@ function integratedTodayMarkup(model) {
     <h2 id="integrated-h">${esc(model.headline)}</h2>
     <p>${esc(model.synthesis)}</p>
     <div class="integrated-mark">
-      <div class="integrated-glyph" aria-hidden="true">${esc(model.element.hanzi)}</div>
+      <div class="integrated-glyph" aria-hidden="true">${esc(model.element.name.slice(0, 2).toUpperCase())}</div>
       <div><strong>${esc(model.element.name)} frame</strong>
       <div class="integrated-frame">${esc(model.frameLine)}</div></div>
     </div>`;
@@ -973,22 +973,24 @@ function integratedStoryMarkup(model) {
       <span class="num">${value ?? "—"}%</span></div>`).join("");
   const palaceAccents = ["chi", "huang", "qing", "bai", "hei"];
   const palaceList = model.palaces.all || model.palaces.measured;
-  const allMeasured = model.palaces.measuredCount === model.palaces.totalCount;
   const palaces = palaceList.map((palace, index) => {
     const revealId = `palace-reveal-${esc(palace.key)}`;
     const status = palace.measured ? "region available" : "region unavailable";
     const reading = palace.reading;
+    const sourceHeld = palace.heritageStatus !== "RUNTIME_PROSE";
     return `<article class="palace-card" data-open="false" data-palace="${esc(palace.key)}"
         style="--palace-index:${index};--palace-accent:var(--${palaceAccents[index % palaceAccents.length]})">
       <button class="palace-enter" type="button" aria-expanded="false" aria-controls="${revealId}">
         <span class="palace-number num">${String(index + 1).padStart(2, "0")}</span>
-        <span class="palace-title"><strong>${esc(palace.hanzi)} ${esc(palace.name)}</strong>
-          <span class="muted">${esc(palace.location)}</span></span>
+        <span class="palace-title"><strong>${esc(palace.name)}</strong>
+          ${sourceHeld ? "" : `<span class="muted">${esc(palace.location)}</span>`}</span>
         <span class="palace-arrow" aria-hidden="true">↗</span>
       </button>
       <div class="palace-reveal" id="${revealId}" hidden>
         <span class="palace-tone" data-contextual="${!palace.measured}">${esc(status)}</span>
-        <p>${esc(reading)}</p>
+        ${reading
+          ? `<p>${esc(reading)}</p>`
+          : `<p class="source-note">${esc(palace.sourceReviewNote || "Heritage interpretation withheld pending source review.")}</p>`}
         ${palace.measured ? "" : `<p class="source-note">${esc(palace.notMeasuredNote)}</p>`}
       </div>
     </article>`;
@@ -997,27 +999,26 @@ function integratedStoryMarkup(model) {
     `<span class="harmony-part">${esc(component.key)}${component.percent === null ? "" : ` · ${component.percent}%`}</span>`).join("");
 
   return `<section class="structure-section">
-      <p class="eyebrow">Five Elements · 五行</p>
-      <h2>${esc(model.element.hanzi)} ${esc(model.element.name)} · ${esc(model.element.shape)} geometry</h2>
+      <p class="eyebrow">Five Elements</p>
+      <h2>${esc(model.element.name)} · ${esc(model.element.shape)} geometry</h2>
       <p class="structure-reading">${esc(model.element.reading)}</p>
       <details class="source-note"><summary>Where sources differ</summary><p>${esc(model.element.sourcesDiffer)}</p></details>
     </section>
     <section class="structure-section">
-      <p class="eyebrow">Three Courts · 三停</p>
+      <p class="eyebrow">Three Sections</p>
       <h2>${esc(model.courts.label)}</h2>
       <div class="court-bars">${courtBars}</div>
-      <p class="structure-reading">${esc(model.courts.reading)}</p>
+      <p class="structure-reading">${esc(model.courts.measurementObservation)}</p>
       <p class="source-note">${esc(model.courts.measurementCaveat)}</p>
     </section>
     <section class="structure-section palace-collection" id="palace-collection">
-      <p class="eyebrow">Twelve Palaces · 十二宮</p>
-      <div class="palace-heading"><div><h2>All 12 palaces are open</h2>
-      <p class="muted">${allMeasured
-    ? "12 of 12 measured from this scan. Tap a palace to enter."
-    : `${model.palaces.measuredCount} read from this older scan · ${model.palaces.totalCount - model.palaces.measuredCount} preserved as traditional context.`}</p></div>
-      <div class="palace-count" aria-label="12 of 12 palaces revealed"><strong>12</strong><span>/ 12</span></div></div>
+      <p class="eyebrow">Twelve Palaces</p>
+      <div class="palace-heading"><div><h2>Measured regions, interpretation withheld</h2>
+      <p class="muted">${model.palaces.measuredCount} of ${model.palaces.totalCount} regions were available in this scan. The chapter evidence is still under review.</p></div>
+      <div class="palace-count" aria-label="${model.palaces.measuredCount} of ${model.palaces.totalCount} regions measured"><strong>${model.palaces.measuredCount}</strong><span>/ ${model.palaces.totalCount}</span></div></div>
       <div class="palace-grid">${palaces}</div>
-      <button class="palace-delight" type="button" data-delight="palaces">This speaks to me · Share the moment</button>
+      <button class="palace-delight" type="button" data-delight="palaces">Save this reading</button>
+      ${model.palaces.sourceReviewNote ? `<p class="source-note">${esc(model.palaces.sourceReviewNote)}</p>` : ""}
       <details class="source-note"><summary>Placement note</summary><p>${esc(model.palaces.sourcesDiffer)}</p></details>
     </section>
     ${model.harmony ? `<section class="structure-section">
@@ -1177,8 +1178,7 @@ async function renderReading(reading) {
     : `<div class="gauge"><div class="gauge-label"><span>${esc(g.label)}</span><span class="muted">${esc(g.relativeLabel)} (${g.n}/4)</span></div></div>`).join("");
 
   $("reading-courts").innerHTML = m.courts.map((c) =>
-    `<div class="court"><div class="cjk">${esc(c.cjk)}</div>
-     <div class="muted">${esc(c.label)}</div>
+    `<div class="court"><div>${esc(c.label)}</div>
      <div class="num">${c.read}/${c.total} read</div></div>`).join("");
 
   $("reading-passage").textContent = m.passage.text;

@@ -53,8 +53,7 @@ export const NOTHING_AVAILABLE =
 export const EMPHASIS_LEAD = "In Mian Xiang, this photo read most clearly on";
 
 /** Court names are needed for the headline without importing the readings. */
-const COURT_LABEL = { upper: "Upper Court", middle: "Middle Court", lower: "Lower Court" };
-const COURT_HANZI = { upper: "上停", middle: "中停", lower: "下停" };
+const COURT_LABEL = { upper: "Upper Section", middle: "Middle Section", lower: "Lower Section" };
 
 const NUMBER_WORD = ["zero", "one", "two", "three"];
 
@@ -74,13 +73,13 @@ export function buildSummary(reading) {
   // Only constructs that were actually read. Order is most-structural first;
   // qi se comes last because the tradition itself treats it as the passing one.
   const headline = [];
-  if (fe?.available) headline.push({ key: "fiveElements", label: fe.name, hanzi: fe.hanzi });
+  if (fe?.available) headline.push({ key: "fiveElements", label: fe.name });
   if (tc?.available) {
     headline.push(tc.balanced
-      ? { key: "threeCourts", label: "Courts balanced", hanzi: "三停" }
-      : { key: "threeCourts", label: COURT_LABEL[tc.dominant], hanzi: COURT_HANZI[tc.dominant] });
+      ? { key: "threeCourts", label: "Sections balanced" }
+      : { key: "threeCourts", label: COURT_LABEL[tc.dominant] });
   }
-  if (q?.available) headline.push({ key: "qiSe", label: `Glow ${q.glowIndex}`, hanzi: "氣色" });
+  if (q?.available) headline.push({ key: "qiSe", label: `Glow ${q.glowIndex}` });
 
   // ── coverage ────────────────────────────────────────────────────────────
   // Scope, stated in the same numbers the detailed sections use. Partial
@@ -105,20 +104,20 @@ export function buildSummary(reading) {
 
   // ── chips ───────────────────────────────────────────────────────────────
   const chips = [
-    chip("qiSe", "Qi se 氣色", q?.available ? `Glow ${q.glowIndex}` : null),
-    chip("fiveElements", "Five Elements 五行",
-      fe?.available ? `${fe.name} ${fe.hanzi}` : null),
-    chip("threeCourts", "Three Courts 三停", tc?.available
+    chip("qiSe", "Qi se", q?.available ? `Glow ${q.glowIndex}` : null),
+    chip("fiveElements", "Five Elements",
+      fe?.available ? fe.name : null),
+    chip("threeCourts", "Three Sections", tc?.available
       ? (tc.balanced ? "Balanced" : COURT_LABEL[tc.dominant]) : null),
     // The palaces are never "unread" as a construct — partial coverage IS the
     // result, so this chip carries the count rather than a not-read state.
     tp
-      ? { key: "twelvePalaces", label: "Twelve Palaces 十二宮", href: `#${SECTION_IDS.twelvePalaces}`,
+      ? { key: "twelvePalaces", label: "Twelve Palaces", href: `#${SECTION_IDS.twelvePalaces}`,
           value: tp.measuredCount === supportedPalaces
             ? `Complete · ${supportedPalaces} supported`
             : `${tp.measuredCount} of ${supportedPalaces} supported`,
           available: true, partial: tp.measuredCount < supportedPalaces }
-      : chip("twelvePalaces", "Twelve Palaces 十二宮", null),
+      : chip("twelvePalaces", "Twelve Palaces", null),
   ];
 
   // ── emphasis ────────────────────────────────────────────────────────────

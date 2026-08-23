@@ -146,15 +146,13 @@ test("palace pigment measurement is abstained", () => {
   assert.equal(siblings.measured, true);
 });
 
-test("the illness palace is rendered as trials, and the narrowing is declared", () => {
+test("the trials label remains English while unverified heritage prose stays withheld", () => {
   const trials = PALACES.find((p) => p.key === "trials");
-  assert.equal(trials.hanzi, "疾厄宮");
+  assert.equal(trials.hanzi, undefined);
   assert.equal(trials.name, "Palace of Trials");
-  // The classical name carries a health sense this build does not use. Saying
-  // so openly is the point; performing the narrowing silently is not.
-  assert.match(trials.translationNote, /Health Palace/);
-  assert.match(trials.translationNote, /adversity/i);
-  assert.doesNotMatch(trials.reading, /health|illness|disease/i);
+  assert.equal(trials.reading, null);
+  assert.equal(trials.heritageStatus, "WITHHELD_PENDING_SOURCE_REVIEW");
+  assert.match(trials.sourceReviewNote, /chapter body.*source review/i);
 });
 
 test("palace pigment measurement is abstained regardless of input", () => {

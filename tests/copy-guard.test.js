@@ -24,7 +24,7 @@ import { RULES_B, MODULE_B_DISCLAIMER } from "../src/rules-b.js";
 import { ELEMENTS, SHAPE_TO_ELEMENT } from "../src/reading/five-elements.js";
 import { COURTS, BALANCED_READING, SOURCES_DIFFER as COURTS_DIFFER }
   from "../src/reading/three-courts.js";
-import { PALACES, SOURCES_DIFFER as PALACE_DIFFER }
+import { PALACES, PALACE_SOURCE_REVIEW_NOTE, SOURCES_DIFFER as PALACE_DIFFER }
   from "../src/reading/twelve-palaces.js";
 import { BANDS, SOURCES_DIFFER as QISE_DIFFER } from "../src/reading/qi-se.js";
 import { SCIENCE_POINTS, SCIENCE_INTRO } from "../src/reading/science.js";
@@ -40,7 +40,7 @@ const MODULE_A_COPY = {
   RULES_A, ZONE_READINGS,
   ELEMENTS, SHAPE_TO_ELEMENT,
   COURTS, BALANCED_READING, COURTS_DIFFER,
-  PALACES, PALACE_DIFFER,
+  PALACES, PALACE_SOURCE_REVIEW_NOTE, PALACE_DIFFER,
   BANDS, QISE_DIFFER,
   // The reading receipt and the palace scope note are user-facing Module A
   // copy too. Registered here so they are scanned rather than trusted —
