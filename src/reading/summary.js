@@ -42,6 +42,13 @@ export const NOTHING_READ =
   "Nothing in this photo could be read closely enough to summarise. The sections below say " +
   "which part fell short and why, rather than offering a reading built on it.";
 
+/** Shown on a chip whose construct could not be available in this photo. */
+export const NOT_AVAILABLE_LABEL = "not available in this photo";
+
+export const NOTHING_AVAILABLE =
+  "Nothing in this photo could be read closely enough to summarise. The sections below say " +
+  "which part fell short and why, rather than offering a reading built on it.";
+
 /** Lead-in for the emphasis line. Attributed, and about the reading. */
 export const EMPHASIS_LEAD = "In Mian Xiang, this photo read most clearly on";
 
@@ -80,8 +87,8 @@ export function buildSummary(reading) {
   // coverage is a fact about the photo, not a failure to hide.
   const coverage = [];
   if (tp) coverage.push(tp.measuredCount === supportedPalaces
-    ? `all ${supportedPalaces} supported palaces read`
-    : `${tp.measuredCount} of ${supportedPalaces} supported palaces read`);
+    ? `all ${supportedPalaces} supported palace regions available`
+    : `${tp.measuredCount} of ${supportedPalaces} supported palace regions available`);
   if (q?.available) {
     const used = q.signalsUsed?.length ?? 0;
     const total = used + (q.signalsMissing?.length ?? 0);
@@ -89,12 +96,12 @@ export function buildSummary(reading) {
     // Name the missing signal rather than only counting it — "2 of 3" alone
     // does not tell the reader WHICH part of the complexion went unmeasured.
     for (const s of q.signalsMissing ?? []) {
-      coverage.push(`${SIGNAL_LABEL[s] ?? s} not measurable in this light`);
+      coverage.push(`${SIGNAL_LABEL[s] ?? s} not available in this photo`);
     }
   } else if (q && !q.available) {
-    coverage.push("complexion not read from this photo");
+    coverage.push("complexion not available in this photo");
   }
-  if (fe && !fe.available) coverage.push("face shape not read from this photo");
+  if (fe && !fe.available) coverage.push("face shape not available in this photo");
 
   // ── chips ───────────────────────────────────────────────────────────────
   const chips = [
@@ -139,7 +146,7 @@ function chip(key, label, value) {
   return {
     key, label,
     href: `#${SECTION_IDS[key]}`,
-    value: value ?? NOT_READ_LABEL,
+    value: value ?? NOT_AVAILABLE_LABEL,
     available: value !== null,
     partial: false,
   };

@@ -39,10 +39,9 @@ import { canonMatch, CANON } from "../geometry.js";
  * rather than buried in an expression.
  */
 export const HARMONY_WEIGHTS = {
-  canon: 0.40,
-  symmetry: 0.30,
-  jaw: 0.20,
-  cheekbones: 0.10,
+  canon: 4 / 9,
+  symmetry: 3 / 9,
+  jaw: 2 / 9,
 };
 
 /**
@@ -114,7 +113,6 @@ export function readHarmony(geometry, raw) {
       value: canonParts.reduce((a, p) => a + p.match, 0) / canonParts.length,
       weight: HARMONY_WEIGHTS.canon,
       parts: canonParts,
-      reads: "Measured against the proportions named below, each from its own tradition.",
     });
   }
 
@@ -125,11 +123,10 @@ export function readHarmony(geometry, raw) {
       key: "symmetry",
       value: clamp01(sym.value),
       weight: HARMONY_WEIGHTS.symmetry,
-      reads: "Both Chinese and Western traditions regard evenness about the midline as a mark of balance.",
     });
   }
 
-  // ── jaw and cheekbones ─────────────────────────────────────────────────
+  // ── jaw ─────────────────────────────────────────────────
   if (Number.isFinite(geometry.jaw?.degrees)) {
     const d = geometry.jaw.degrees;
     components.push({
@@ -137,17 +134,6 @@ export function readHarmony(geometry, raw) {
       value: clamp01((JAW_ANGLE_SOFT - d) / (JAW_ANGLE_SOFT - JAW_ANGLE_SHARP)),
       weight: HARMONY_WEIGHTS.jaw,
       degrees: d,
-      reads: "In Mian Xiang a defined jaw is classically associated with the later years of life.",
-    });
-  }
-  if (Number.isFinite(geometry.cheekbones?.value)) {
-    const v = geometry.cheekbones.value;
-    components.push({
-      key: "cheekbones",
-      value: clamp01((v - CHEEKBONE_FLAT) / (CHEEKBONE_HIGH - CHEEKBONE_FLAT)),
-      weight: HARMONY_WEIGHTS.cheekbones,
-      ratio: v,
-      reads: "Classical Chinese face reading regards the cheekbones as the seat of standing among others.",
     });
   }
 

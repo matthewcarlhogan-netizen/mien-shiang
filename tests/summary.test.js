@@ -13,7 +13,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { buildSummary, NOT_READ_LABEL, SECTION_IDS } from "../src/reading/summary.js";
+import { buildSummary, NOT_AVAILABLE_LABEL, SECTION_IDS } from "../src/reading/summary.js";
 import { renderSummary, renderReading, sourcesNote, PALACE_SCOPE_NOTE } from "../src/readingview.js";
 import { buildShareModel, chooseDelivery, wrapText, SIZES } from "../src/sharecard.js";
 
@@ -47,7 +47,7 @@ const full = () => ({
     palaces: [
       { key: "life", hanzi: "命宮", name: "Life Palace", location: "between the brows",
         supported: true, measured: true, reading: "In Mian Xiang the Life Palace is the gate.",
-        toneGloss: "The texts read this palace as even in this photo." },
+        notMeasuredNote: null },
       { key: "siblings", hanzi: "兄弟宮", name: "Siblings Palace", location: "the eyebrows",
         supported: false, measured: false, reading: "In Mian Xiang the brows are the Siblings Palace.",
         notMeasuredNote: "This palace sits on a part of the face this reading doesn't sample." },
@@ -75,7 +75,7 @@ test("an unread construct gets a neutral not-read chip, never a value", () => {
   const chip = buildSummary(r).chips.find((c) => c.key === "qiSe");
 
   assert.equal(chip.available, false);
-  assert.equal(chip.value, NOT_READ_LABEL);
+  assert.equal(chip.value, NOT_AVAILABLE_LABEL);
   assert.ok(!/\d/.test(chip.value), "a not-read chip must carry no number to mistake for a result");
 });
 
@@ -88,13 +88,13 @@ test("a partial colour basis is stated as scope, never rounded up", () => {
 
   assert.ok(s.coverage.includes("2 of 3 colour signals"),
     `coverage must state the partial basis, got ${JSON.stringify(s.coverage)}`);
-  assert.ok(s.coverage.some((c) => /complexion warmth not measurable/.test(c)),
+  assert.ok(s.coverage.some((c) => /complexion warmth not available in this photo/.test(c)),
     "the MISSING signal must be named, not just counted");
 });
 
 test("palace coverage in the summary matches the section exactly", () => {
   const s = buildSummary(full());
-  assert.ok(s.coverage.includes("5 of 6 supported palaces read"));
+  assert.ok(s.coverage.includes("5 of 6 supported palace regions available"));
   const chip = s.chips.find((c) => c.key === "twelvePalaces");
   assert.equal(chip.value, "5 of 6 supported");
   assert.equal(chip.partial, true, "partial coverage must be marked as partial");
@@ -209,7 +209,7 @@ test("the Three Courts bar keeps the exact percentages and works without colour"
 
 test("palaces are grouped as scope, with a reason, and none are fabricated", () => {
   const html = renderReading(full());
-  assert.ok(html.includes("Read from this photo (1)"));
+  assert.ok(html.includes("Available in this photo (1)"));
   assert.ok(html.includes("Listed for context — not sampled (1)"));
   assert.ok(html.includes(PALACE_SCOPE_NOTE), "the six contextual palaces must be explained");
   // The unread palace keeps its name, hanzi and location, and gains no reading.
@@ -226,7 +226,7 @@ test("the share card carries the caveat and only measured values", () => {
 
   assert.equal(m.caveat, "Entertainment, not diagnosis.");
   assert.ok(!m.headline.some((h) => /Metal/.test(h)), "unread construct on the share image");
-  assert.ok(m.coverage.includes("5 of 6 supported palaces read"));
+  assert.ok(m.coverage.includes("5 of 6 supported palace regions available"));
   assert.equal(m.wordmark, "面相");
 });
 
