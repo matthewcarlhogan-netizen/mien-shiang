@@ -1,7 +1,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { validateHeritageRecord } from "../../src/heritage/validator.js";
-import { heritageFixtures } from "../../src/heritage/fixtures.js";
+import {
+  validateHeritageCombination,
+  validateHeritageFieldFinding,
+  validateHeritageRecord,
+} from "../../src/heritage/validator.js";
+import {
+  heritageCombinationFixtures,
+  heritageFieldFindingFixtures,
+  heritageFixtures,
+} from "../../src/heritage/fixtures.js";
 import {
   HERITAGE_MEASUREMENT_AVAILABILITY,
 } from "../../src/heritage/schema.js";
@@ -11,6 +19,7 @@ const baseLineage = (overrides = {}) => ({
   definition: "An attributed source definition.",
   source: "An existing source record.",
   sourceId: "heritage-three-sections",
+  supportingSourceIds: [],
   evidenceKind: "POSITIVE_CLAIM",
   evidenceStrength: "RECORDED_NOT_VERIFIED",
   preciseLocator: null,
@@ -20,14 +29,18 @@ const baseLineage = (overrides = {}) => ({
   workRightsStatus: "unverified",
   editionRightsStatus: "unverified",
   measurementAvailability: "MODERN_MAPPING_UNSUPPORTED",
+  runtimeStatus: "RUNTIME_PROSE",
   terminationState: "continue",
   availability: "available",
   abstentionReason: null,
   abstentionReasonCode: null,
   safetyStatus: "safe",
+  prohibitedForUserInference: true,
   permittedHeritageSemantics: "Report the source claim as attributed.",
   prohibitedInference: "Do not infer a user trait from this source claim.",
   translationProvenance: "repository-editorial",
+  constituents: [],
+  relatedSystems: [],
   attestedCombinations: [],
   attestedCombinationsStatus: "NONE_ATTESTED",
   disagreements: [],
@@ -95,7 +108,17 @@ test("validator rejects an invalid measurement availability state", () => {
 
 test("validator rejects source-attested combinations without their own source", () => {
   const record = validRecord();
-  record.lineages.primary.attestedCombinations = [{ combinationId: "three-sections", sourceId: null }];
+  record.lineages.primary.attestedCombinations = [{
+    combinationId: "three-sections",
+    constructIds: ["test-construct"],
+    sourceId: null,
+    preciseLocator: null,
+    combinationScope: "WITHIN_CONSTRUCT",
+    renderPolicy: "RESEARCH_ONLY",
+    measurementAvailability: "NOT_RECORDED",
+    prohibitedForUserInference: true,
+    note: null,
+  }];
   const result = validateHeritageRecord(record);
   assert.equal(result.valid, false);
   assert.ok(result.errors.some((error) => /attestedCombinations|combination.*source/i.test(error)));
@@ -123,7 +146,7 @@ test("validator requires an abstention reason and terminating state", () => {
 test("validator will not call an unlocated claim verified", () => {
   const record = validRecord();
   record.lineages.primary.citationStatus = "verified";
-  record.lineages.primary.evidenceStrength = "VERIFIED";
+  record.lineages.primary.evidenceStrength = "VERIFIED_PRIMARY";
   record.lineages.primary.locatorStatus = "NOT_RECORDED";
   record.lineages.primary.preciseLocator = null;
   const result = validateHeritageRecord(record);
@@ -148,8 +171,13 @@ test("validator rejects a non-empty combination list marked NONE_ATTESTED", () =
   const record = validRecord();
   record.lineages.primary.attestedCombinations = [{
     combinationId: "three-sections-example",
+    constructIds: ["test-construct"],
     sourceId: "heritage-three-sections",
     preciseLocator: null,
+    combinationScope: "WITHIN_CONSTRUCT",
+    renderPolicy: "RESEARCH_ONLY",
+    measurementAvailability: "NOT_RECORDED",
+    prohibitedForUserInference: true,
     note: null,
   }];
   const result = validateHeritageRecord(record);
@@ -161,8 +189,13 @@ test("validator accepts explicitly sourced combinations and disagreements", () =
   const record = validRecord();
   record.lineages.primary.attestedCombinations = [{
     combinationId: "three-sections-example",
+    constructIds: ["test-construct"],
     sourceId: "heritage-three-sections",
     preciseLocator: null,
+    combinationScope: "WITHIN_CONSTRUCT",
+    renderPolicy: "RESEARCH_ONLY",
+    measurementAvailability: "NOT_RECORDED",
+    prohibitedForUserInference: true,
     note: null,
   }];
   record.lineages.primary.attestedCombinationsStatus = "RECORDED";
@@ -171,7 +204,76 @@ test("validator accepts explicitly sourced combinations and disagreements", () =
     positionId: "alternate-position",
     sourceId: "heritage-three-sections",
     summary: "An attributed alternate position retained for research review.",
+    status: "PARALLEL",
+    note: null,
   }];
   const result = validateHeritageRecord(record);
   assert.equal(result.valid, true, result.errors.join("; "));
+});
+
+test("cross-family combinations are sourced, heritage-only and non-operational", () => {
+  assert.ok(heritageCombinationFixtures.length > 0);
+  for (const fixture of heritageCombinationFixtures) {
+    const result = validateHeritageCombination(fixture);
+    assert.equal(result.valid, true, result.errors.join("; "));
+    assert.equal(fixture.combinationScope, "CROSS_CONSTRUCT");
+    assert.equal(fixture.renderPolicy, "HERITAGE_ONLY");
+    assert.equal(fixture.prohibitedForUserInference, true);
+  }
+});
+
+test("field-level negative findings stay outside construct lineages", () => {
+  assert.ok(heritageFieldFindingFixtures.length >= 3);
+  for (const fixture of heritageFieldFindingFixtures) {
+    const result = validateHeritageFieldFinding(fixture);
+    assert.equal(result.valid, true, result.errors.join("; "));
+    assert.equal(fixture.evidenceKind, "NEGATIVE_FINDING");
+  }
+  assert.ok(heritageFieldFindingFixtures.some((finding) =>
+    finding.findingId === "xunzi-rejects-physiognomic-inference"));
+});
+
+test("validator refuses to operationalise prohibited or unmeasurable combinations", () => {
+  const prohibited = {
+    combinationId: "unsafe-example",
+    constructIds: ["threeSections"],
+    sourceId: "heritage-three-sections",
+    preciseLocator: null,
+    combinationScope: "WITHIN_CONSTRUCT",
+    renderPolicy: "RUNTIME_ALLOWED",
+    measurementAvailability: "CAMERA_GEOMETRY_INSUFFICIENT",
+    prohibitedForUserInference: true,
+    note: null,
+  };
+  const result = validateHeritageCombination(prohibited, "threeSections");
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((error) => /RUNTIME_ALLOWED|measurable/i.test(error)));
+});
+
+test("validator rejects duplicate member IDs and alias-related-system contradictions", () => {
+  const record = validRecord({ aliases: ["五行"] });
+  const member = {
+    constituentId: "wood",
+    canonicalChineseName: "木形",
+    aliases: [],
+    definition: "A named member.",
+    sourceId: "heritage-five-elements",
+    preciseLocator: "靈樞 第六十四·陰陽二十五人",
+    evidenceStrength: "VERIFIED_PRIMARY",
+    measurementAvailability: "MODERN_MAPPING_UNSUPPORTED",
+    prohibitedForUserInference: true,
+    note: null,
+  };
+  record.lineages.primary.constituents = [member, { ...member }];
+  record.lineages.primary.relatedSystems = [{
+    relatedSystemId: "five-phases",
+    canonicalChineseName: "五行",
+    relationship: "A related but distinct system.",
+    sourceId: "heritage-five-elements-taiqing",
+    note: null,
+  }];
+  const result = validateHeritageRecord(record);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((error) => /constituentId.*duplicate/i.test(error)));
+  assert.ok(result.errors.some((error) => /cannot also be a construct alias/i.test(error)));
 });

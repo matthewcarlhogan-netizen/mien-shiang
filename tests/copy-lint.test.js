@@ -19,6 +19,7 @@ import {
   BLOCKLIST, DISEASE_TERMS, extractJsProse, extractHtmlCopy, findTerms,
   findAssertive, assertCanary, CANARY_FAILURE, CANARY_TERM, isProse,
 } from "../scripts/copy-scan.js";
+import { IDENTIFIER_URI_ALLOWLIST } from "../scripts/lint-bundle.js";
 
 const SRC = fileURLToPath(new URL("../src", import.meta.url));
 
@@ -190,4 +191,12 @@ test("isProse keeps sentences and rejects code-shaped strings", () => {
   assert.equal(isProse("application/manifest+json"), false);
   assert.equal(isProse("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision"), false);
   assert.equal(isProse("./reading/five-elements.js"), false);
+});
+
+test("the JSON Schema URI exception is an exact metadata identifier", () => {
+  const allowed = (url) => IDENTIFIER_URI_ALLOWLIST.some((pattern) => pattern.test(url));
+  assert.equal(allowed("https://json-schema.org/draft/2020-12/schema"), true);
+  assert.equal(allowed("https://json-schema.org/draft/2020-12/schema?reading=1"), false);
+  assert.equal(allowed("https://json-schema.org/draft/2020-12/schema#face"), false);
+  assert.equal(allowed("https://json-schema.org/draft/2019-09/schema"), false);
 });

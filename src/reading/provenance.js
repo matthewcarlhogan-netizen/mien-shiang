@@ -22,6 +22,8 @@
 export const CITATION_STATUS = Object.freeze({
   /** No source has been identified for the claim. */
   SOURCE_REQUIRED: "source-required",
+  /** A work or witness is identified, but no edition-level locator is recorded. */
+  WORK_RECORDED: "work-recorded",
   /** Edition and locator recorded. Not yet checked against the actual source. */
   EDITION_RECORDED: "edition-recorded",
   /** Locator independently checked against the actual source. Release-satisfying. */
@@ -47,6 +49,8 @@ export const PROVENANCE_BLOCKER_DETAIL = Object.freeze({
     "family rights determination is not cleared",
   "citation-source-required":
     "no source identified for the claim",
+  "citation-work-recorded":
+    "source work identified but edition-level locator not recorded",
   "citation-recorded-not-verified":
     "citation recorded but not independently verified against the source",
   "citation-status-unrecognised":
@@ -98,29 +102,69 @@ export const SOURCE_REGISTRY = Object.freeze({
     citationStatus: CITATION_STATUS.SOURCE_REQUIRED,
     rightsStatus: RIGHTS_STATUS.UNVERIFIED,
   }),
-    "heritage-three-sections": Object.freeze({
-    title: "麻衣神相 material used by the existing Three Sections corpus entry",
+  "heritage-three-sections": Object.freeze({
+    title: "Received 麻衣神相 material used by the existing Three Sections corpus entry",
     kind: "unresolved-tradition-source",
     locator: null,
     citationStatus: CITATION_STATUS.SOURCE_REQUIRED,
     rightsStatus: RIGHTS_STATUS.UNVERIFIED,
+  }),
+  "heritage-three-sections-sxqb": Object.freeze({
+    title: "神相全編 Three Sections material",
+    kind: "historical-primary-text-secondary-witness",
+    edition: "致和堂藏板明刊本, 十二卷首一卷",
+    locator: "卷一「面三停」; 卷二「三才三停論」「相身三停」「六府三才三停之圖」",
+    citationStatus: CITATION_STATUS.EDITION_RECORDED,
+    rightsStatus: RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE,
+    translationStatus: "original-to-this-project",
   }),
   "heritage-five-elements": Object.freeze({
-    title: "黃帝內經·靈樞·陰陽二十五人 material used by the existing Five Elements corpus entry",
+    title: "黃帝內經·靈樞·陰陽二十五人",
     kind: "historical-primary-text",
-    locator: null,
-    citationStatus: CITATION_STATUS.SOURCE_REQUIRED,
-    rightsStatus: RIGHTS_STATUS.UNVERIFIED,
+    edition: "篇次 citation; juan is edition-dependent",
+    locator: "靈樞 第六十四·陰陽二十五人",
+    citationStatus: CITATION_STATUS.VERIFIED,
+    rightsStatus: RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE,
+    translationStatus: "original-to-this-project",
+  }),
+  "heritage-five-elements-taiqing": Object.freeze({
+    title: "太清神鑑 Five Forms material",
+    kind: "historical-primary-text",
+    edition: "欽定四庫全書文淵閣本",
+    locator: "卷四「五形」",
+    citationStatus: CITATION_STATUS.VERIFIED,
+    rightsStatus: RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE,
+    translationStatus: "original-to-this-project",
   }),
   "heritage-twelve-palaces": Object.freeze({
-    title: "神相全編·十二宮相論 material used by the existing Twelve Palaces corpus entry",
-    kind: "unresolved-tradition-source",
-    locator: null,
-    citationStatus: CITATION_STATUS.SOURCE_REQUIRED,
-    rightsStatus: RIGHTS_STATUS.UNVERIFIED,
+    title: "神相全編 Twelve Palaces material",
+    kind: "historical-primary-text-secondary-witness",
+    edition: "致和堂藏板明刊本, 十二卷首一卷",
+    locator: "卷一「十二宮訣」「十二宮絡」; no「十二宮相論」title in this edition",
+    citationStatus: CITATION_STATUS.EDITION_RECORDED,
+    rightsStatus: RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE,
+    translationStatus: "original-to-this-project",
+  }),
+  "heritage-twelve-palaces-taiqing": Object.freeze({
+    title: "太清神鑑 Twelve Palaces assignment attributed to 玉管照神論",
+    kind: "historical-primary-text",
+    edition: "欽定四庫全書文淵閣本",
+    locator: "卷一·成和子統論（末段）",
+    citationStatus: CITATION_STATUS.EDITION_RECORDED,
+    rightsStatus: RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE,
+    translationStatus: "original-to-this-project",
   }),
   "heritage-five-mountains": Object.freeze({
-    title: "太清神鑑 material used by the existing Five Mountains corpus entry",
+    title: "太清神鑑 Five Mountains material",
+    kind: "historical-primary-text",
+    edition: "欽定四庫全書文淵閣本; Shidian Guji witness recorded separately",
+    locator: "「五嶽」; 卷二 (Siku), 卷一 (Shidian Guji)",
+    citationStatus: CITATION_STATUS.VERIFIED,
+    rightsStatus: RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE,
+    translationStatus: "original-to-this-project",
+  }),
+  "heritage-five-mountains-mayi": Object.freeze({
+    title: "麻衣-lineage directional Five Mountains form used by existing corpus wording",
     kind: "unresolved-tradition-source",
     locator: null,
     citationStatus: CITATION_STATUS.SOURCE_REQUIRED,
@@ -134,31 +178,92 @@ export const SOURCE_REGISTRY = Object.freeze({
     rightsStatus: RIGHTS_STATUS.UNVERIFIED,
   }),
   "heritage-four-rivers-primary": Object.freeze({
-    title: "太清神鑑 material used by the existing Four Rivers primary corpus entry",
-    kind: "unresolved-tradition-source",
-    locator: null,
-    citationStatus: CITATION_STATUS.SOURCE_REQUIRED,
-    rightsStatus: RIGHTS_STATUS.UNVERIFIED,
+    title: "太清神鑑 Four Rivers primary lineage",
+    kind: "historical-primary-text",
+    edition: "欽定四庫全書文淵閣本; Shidian Guji witness recorded separately",
+    locator: "「四瀆」; 卷二 (Siku), 卷一 (Shidian Guji)",
+    citationStatus: CITATION_STATUS.VERIFIED,
+    rightsStatus: RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE,
+    translationStatus: "original-to-this-project",
   }),
   "heritage-four-rivers-variant": Object.freeze({
-    title: "神相全編 material used by the existing Four Rivers variant corpus entry",
-    kind: "unresolved-tradition-source",
+    title: "神相全編 Four Rivers eye/mouth variant",
+    kind: "historical-primary-text-secondary-witness",
+    edition: "致和堂藏板明刊本; wording currently checked through a web reproduction",
+    locator: "首卷·相說; 卷二「四瀆」still requires comparison",
+    citationStatus: CITATION_STATUS.EDITION_RECORDED,
+    rightsStatus: RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE,
+    translationStatus: "original-to-this-project",
+  }),
+  "heritage-four-rivers-renlun-datong": Object.freeze({
+    title: "人倫大統賦, 薛延年注 Four Rivers witness",
+    kind: "historical-primary-text-secondary-witness",
     locator: null,
-    citationStatus: CITATION_STATUS.SOURCE_REQUIRED,
-    rightsStatus: RIGHTS_STATUS.UNVERIFIED,
+    citationStatus: CITATION_STATUS.WORK_RECORDED,
+    rightsStatus: RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE,
+    translationStatus: "original-to-this-project",
   }),
   "heritage-five-officers": Object.freeze({
-    title: "神相全編 material used by the existing Five Officers corpus entry",
-    kind: "unresolved-tradition-source",
-    locator: null,
-    citationStatus: CITATION_STATUS.SOURCE_REQUIRED,
+    title: "太清神鑑 Five Officers material",
+    kind: "historical-primary-text",
+    edition: "欽定四庫全書文淵閣本; Shidian Guji witness recorded separately",
+    locator: "「五官」; 卷二 (Siku), 卷一 (Shidian Guji)",
+    citationStatus: CITATION_STATUS.VERIFIED,
+    rightsStatus: RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE,
+    translationStatus: "original-to-this-project",
+  }),
+  "heritage-five-officers-sxqb": Object.freeze({
+    title: "神相全編 expanded Five Officers account",
+    kind: "historical-primary-text-secondary-witness",
+    edition: "致和堂藏板明刊本, 十二卷首一卷",
+    locator: "卷二「五官總論」「五官說」及各官分論",
+    citationStatus: CITATION_STATUS.EDITION_RECORDED,
+    rightsStatus: RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE,
+    translationStatus: "original-to-this-project",
+  }),
+  "heritage-taiqing-form-qise-interaction": Object.freeze({
+    title: "太清神鑑 structure-and-Qi-Se interaction",
+    kind: "historical-primary-text",
+    edition: "欽定四庫全書文淵閣本",
+    locator: "卷四「論看形神體像」",
+    citationStatus: CITATION_STATUS.VERIFIED,
+    rightsStatus: RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE,
+    translationStatus: "original-to-this-project",
+  }),
+  "xunzi-feixiang": Object.freeze({
+    title: "荀子·非相",
+    kind: "historical-primary-text-negative-finding",
+    locator: "非相篇",
+    citationStatus: CITATION_STATUS.WORK_RECORDED,
+    rightsStatus: RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE,
+    translationStatus: "original-to-this-project",
+  }),
+  "farkas-1985-neoclassical-canons": Object.freeze({
+    title: "Farkas et al. (1985), revision of neoclassical facial canons",
+    kind: "modern-anthropometry-negative-evidence",
+    locator: "Plastic and Reconstructive Surgery 75(3):328–338; PMID 3883374",
+    citationStatus: CITATION_STATUS.VERIFIED,
     rightsStatus: RIGHTS_STATUS.UNVERIFIED,
   }),
-"neoclassical-canons-unspecified": Object.freeze({
-    title: "Neoclassical proportion canons referenced by existing application copy",
-    kind: "unresolved-historical-source",
-    locator: null,
-    citationStatus: CITATION_STATUS.SOURCE_REQUIRED,
+  "farkas-2000-afro-american-canons": Object.freeze({
+    title: "Farkas, Forrest & Litsas (2000), neoclassical canons in an Afro-American cohort",
+    kind: "modern-anthropometry-negative-evidence",
+    locator: "Aesthetic Plastic Surgery 24(3):179–184",
+    citationStatus: CITATION_STATUS.VERIFIED,
+    rightsStatus: RIGHTS_STATUS.UNVERIFIED,
+  }),
+  "jayaratne-2012-southern-chinese-canons": Object.freeze({
+    title: "Jayaratne et al. (2012), neoclassical canons in Southern Chinese faces",
+    kind: "modern-anthropometry-negative-evidence",
+    locator: "PLoS ONE 7(12):e52593",
+    citationStatus: CITATION_STATUS.VERIFIED,
+    rightsStatus: RIGHTS_STATUS.UNVERIFIED,
+  }),
+  "neoclassical-canons-unspecified": Object.freeze({
+    title: "Modern neoclassical proportion canons and their empirical refutation",
+    kind: "modern-anthropometry-negative-evidence",
+    locator: "Farkas 1985; Farkas et al. 2000; Jayaratne et al. 2012",
+    citationStatus: CITATION_STATUS.VERIFIED,
     rightsStatus: RIGHTS_STATUS.UNVERIFIED,
   }),
 });
@@ -197,7 +302,12 @@ export const CONTENT_PROVENANCE = Object.freeze({
   }),
   "harmony-v1": profile({
     family: "proportion-harmony",
-    sourceIds: ["mianxiang-unspecified", "neoclassical-canons-unspecified"],
+    sourceIds: [
+      "mianxiang-unspecified",
+      "farkas-1985-neoclassical-canons",
+      "farkas-2000-afro-american-canons",
+      "jayaratne-2012-southern-chinese-canons",
+    ],
     measurementCoverage: { components: 4 },
   }),
   "qise-passages-v1": profile({
@@ -246,6 +356,7 @@ export function validateProvenanceEntry(id, entry) {
 const citationBlocker = (status) => {
   if (status === CITATION_RELEASE_STATUS) return null;
   if (status === CITATION_STATUS.EDITION_RECORDED) return "citation-recorded-not-verified";
+  if (status === CITATION_STATUS.WORK_RECORDED) return "citation-work-recorded";
   if (status === CITATION_STATUS.SOURCE_REQUIRED) return "citation-source-required";
   return "citation-status-unrecognised";
 };

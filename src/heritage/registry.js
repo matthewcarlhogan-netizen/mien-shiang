@@ -9,6 +9,7 @@
 import { HERITAGE } from "../qise/reflection-corpus.js";
 import { validateHeritageRecord } from "./validator.js";
 import { SOURCE_REGISTRY } from "../reading/provenance.js";
+import { HERITAGE_EVIDENCE } from "./evidence.js";
 
 function deepFreeze(value) {
   if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
@@ -28,7 +29,7 @@ export const CANONICAL_CHINESE_NAMES = Object.freeze({
 
 const CANONICAL_ALIASES = Object.freeze({
   threeSections: Object.freeze([]),
-  fiveElements: Object.freeze(["五行", "五形人"]),
+  fiveElements: Object.freeze(["五形人"]),
   twelvePalaces: Object.freeze([]),
   fiveMountains: Object.freeze(["五嶽"]),
   fourRivers: Object.freeze([]),
@@ -67,50 +68,87 @@ export function createHeritageRegistry(corpus = HERITAGE) {
   const registry = {};
 
   Object.entries(corpus).forEach(([constructId, data]) => {
+    const constructEvidence = HERITAGE_EVIDENCE[constructId] || {};
     const constructSourceId = SOURCE_ID_BY_CONSTRUCT[constructId]
       || SOURCE_CITATION_FALLBACK;
 
-    const lineages = Object.entries(data).reduce((acc, [lineageId, lineageData]) => {
-      const sourceId = SOURCE_ID_BY_LINEAGE[constructId]?.[lineageId]
+    const lineageIds = new Set([
+      ...Object.keys(data),
+      ...Object.keys(constructEvidence.lineages || {}),
+    ]);
+
+    const lineages = [...lineageIds].reduce((acc, lineageId) => {
+      const lineageData = data[lineageId] || {};
+      const lineageEvidence = constructEvidence.lineages?.[lineageId] || {};
+      const sourceId = lineageEvidence.sourceId
+        || SOURCE_ID_BY_LINEAGE[constructId]?.[lineageId]
         || constructSourceId;
       const source = SOURCE_REGISTRY[sourceId]
         || SOURCE_REGISTRY[constructSourceId]
         || SOURCE_REGISTRY[SOURCE_CITATION_FALLBACK];
-      const combinations = lineageData.attestedCombinations || [];
+      const combinations = lineageEvidence.attestedCombinations
+        ?? lineageData.attestedCombinations
+        ?? [];
+      const preciseLocator = lineageEvidence.preciseLocator
+        ?? source?.locator
+        ?? null;
 
       acc[lineageId] = {
         lineageId,
-        definition: lineageData.text || "",
-        source: lineageData.source || "",
+        definition: lineageEvidence.definition || lineageData.text || "",
+        source: lineageEvidence.source || lineageData.source || source?.title || "",
         sourceId,
-        evidenceKind: "POSITIVE_CLAIM",
-        evidenceStrength: "RECORDED_NOT_VERIFIED",
-        preciseLocator: source?.locator ?? null,
-        locatorStatus: source?.locator ? "RECORDED" : "NOT_RECORDED",
-        citationStatus: source?.citationStatus || "source-required",
-        rightsStatus: source?.rightsStatus || "unverified",
-        workRightsStatus: lineageData.workRightsStatus
+        supportingSourceIds: lineageEvidence.supportingSourceIds || [],
+        evidenceKind: lineageEvidence.evidenceKind || "POSITIVE_CLAIM",
+        evidenceStrength: lineageEvidence.evidenceStrength || "RECORDED_NOT_VERIFIED",
+        preciseLocator,
+        locatorStatus: lineageEvidence.locatorStatus
+          || (source?.citationStatus === "verified"
+            ? "VERIFIED"
+            : preciseLocator ? "RECORDED" : "NOT_RECORDED"),
+        citationStatus: lineageEvidence.citationStatus
+          || source?.citationStatus
+          || "source-required",
+        rightsStatus: lineageEvidence.rightsStatus
           || source?.rightsStatus
           || "unverified",
-        editionRightsStatus: lineageData.editionRightsStatus || "unverified",
-        measurementAvailability: MEASUREMENT_AVAILABILITY_BY_CONSTRUCT[constructId]
+        workRightsStatus: lineageEvidence.workRightsStatus
+          || lineageData.workRightsStatus
+          || source?.rightsStatus
+          || "unverified",
+        editionRightsStatus: lineageEvidence.editionRightsStatus
+          || lineageData.editionRightsStatus
+          || (source?.rightsStatus === "public-domain-by-age"
+            ? "surrogate-terms-separate"
+            : "unverified"),
+        measurementAvailability: lineageEvidence.measurementAvailability
+          || MEASUREMENT_AVAILABILITY_BY_CONSTRUCT[constructId]
           || "NOT_RECORDED",
+        runtimeStatus: lineageEvidence.runtimeStatus
+          || (data[lineageId] ? "RUNTIME_PROSE" : "HERITAGE_ONLY"),
         terminationState: lineageData.terminationState || "continue",
-        note: lineageData.note || "",
+        note: lineageEvidence.note ?? lineageData.note ?? null,
         availability: lineageData.availability || "available",
         abstentionReason: lineageData.abstentionReason ?? null,
         abstentionReasonCode: lineageData.abstentionReasonCode ?? null,
-        safetyStatus: lineageData.safetyStatus || "safe",
-        permittedHeritageSemantics:
+        safetyStatus: lineageEvidence.safetyStatus || lineageData.safetyStatus || "safe",
+        prohibitedForUserInference: true,
+        permittedHeritageSemantics: lineageEvidence.permittedHeritageSemantics ||
           "Report the named source's claim as attributed; do not convert it into a claim about the user.",
-        prohibitedInference:
+        prohibitedInference: lineageEvidence.prohibitedInference ||
           "Do not infer health, identity, character, fate, status, or outcome from this construct.",
-        translationProvenance: "repository-editorial",
+        translationProvenance: lineageEvidence.translationProvenance
+          || "repository-editorial",
+        constituents: lineageEvidence.constituents || [],
+        relatedSystems: lineageEvidence.relatedSystems || [],
         attestedCombinations: combinations,
-        attestedCombinationsStatus: lineageData.attestedCombinationsStatus
+        attestedCombinationsStatus: lineageEvidence.attestedCombinationsStatus
+          || lineageData.attestedCombinationsStatus
           || (combinations.length ? "RECORDED" : "NONE_ATTESTED"),
-        disagreements: lineageData.disagreements || [],
-        negativeFinding: lineageData.negativeFinding ?? null,
+        disagreements: lineageEvidence.disagreements || lineageData.disagreements || [],
+        negativeFinding: lineageEvidence.negativeFinding
+          ?? lineageData.negativeFinding
+          ?? null,
       };
       return acc;
     }, {});
@@ -119,9 +157,10 @@ export function createHeritageRegistry(corpus = HERITAGE) {
       constructId,
       canonicalChineseName: CANONICAL_CHINESE_NAMES[constructId] || null,
       canonicalNameStatus: CANONICAL_CHINESE_NAMES[constructId]
-        ? "RECORDED_NOT_VERIFIED" : "NOT_RECORDED",
-      aliases: CANONICAL_ALIASES[constructId] || [],
-      verificationStatus: "RECORDED_NOT_VERIFIED",
+        ? "VERIFIED" : "NOT_RECORDED",
+      aliases: constructEvidence.aliases || CANONICAL_ALIASES[constructId] || [],
+      verificationStatus: constructEvidence.verificationStatus
+        || "RECORDED_NOT_VERIFIED",
       prohibitedForUserInference: true,
       lineages,
     };

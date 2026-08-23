@@ -24,7 +24,7 @@ test("the registry does not claim unfinished rights are complete", () => {
     assert.ok(result.issues.includes("rights-not-cleared"), `${id} hides its rights gap`);
     assert.ok(
       result.issues.some((issue) =>
-        /^citation-(source-required|recorded-not-verified|status-unrecognised):/.test(issue)),
+        /^citation-(source-required|work-recorded|recorded-not-verified|status-unrecognised):/.test(issue)),
       `${id} hides its citation gap`);
   }
 });
@@ -50,6 +50,14 @@ test("a weaker provenance status never satisfies the stronger gate", () => {
   // flattened into the same reason as one that is recorded but unchecked.
   assert.ok(result.issues.includes("citation-source-required:mianxiang-unspecified"));
   assert.ok(result.issues.includes("source-rights-unverified:mianxiang-unspecified"));
+
+  const identifiedWork = SOURCE_REGISTRY["heritage-four-rivers-renlun-datong"];
+  assert.equal(identifiedWork.citationStatus, CITATION_STATUS.WORK_RECORDED);
+  assert.notEqual(CITATION_STATUS.WORK_RECORDED, CITATION_STATUS.EDITION_RECORDED);
+  assert.match(
+    explainProvenanceIssue("citation-work-recorded:heritage-four-rivers-renlun-datong"),
+    /edition-level locator not recorded/,
+  );
 });
 
 test("every provenance blocker explains itself", () => {

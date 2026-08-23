@@ -25,10 +25,13 @@ const read = (s) => s.availability === "read";
 function lineageFor(s, registry = HERITAGE_REGISTRY) {
   const registryEntry = registry[s.heritageConstruct]
     || registry.threeSections;
+  const requested = registryEntry.lineages[s.sourceLineage];
   return {
     entry: registryEntry,
-    lineage: registryEntry.lineages[s.sourceLineage]
-      || Object.values(registryEntry.lineages)[0],
+    lineage: requested
+      ? requested.runtimeStatus === "RUNTIME_PROSE" ? requested : null
+      : Object.values(registryEntry.lineages)
+        .find((lineage) => lineage.runtimeStatus === "RUNTIME_PROSE") || null,
   };
 }
 
@@ -125,7 +128,7 @@ export const COMPONENTS = Object.freeze([
     dependsOn: ["heritageConstruct", "sourceLineage"],
     variants(s, registry) {
       const lineage = lineageFor(s, registry).lineage;
-      if (lineage.availability === "abstention") return [null];
+      if (!lineage || lineage.availability === "abstention") return [null];
       return [lineage.definition];
     },
   },
@@ -135,7 +138,7 @@ export const COMPONENTS = Object.freeze([
     dependsOn: ["heritageConstruct", "sourceLineage"],
     variants(s, registry) {
       const lineage = lineageFor(s, registry).lineage;
-      if (lineage.availability === "abstention") return [null];
+      if (!lineage || lineage.availability === "abstention") return [null];
       return [lineage.note];
     },
   },

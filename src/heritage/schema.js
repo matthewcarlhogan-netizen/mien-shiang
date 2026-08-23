@@ -14,6 +14,14 @@ export const HERITAGE_MEASUREMENT_AVAILABILITY = Object.freeze([
   "PERMANENTLY_ABSTAIN",
 ]);
 
+export const HERITAGE_VERIFICATION_STATUSES = Object.freeze([
+  "RECORDED_NOT_VERIFIED",
+  "CORROBORATED_NOT_VERIFIED",
+  "VERIFIED_SECONDARY",
+  "VERIFIED_PRIMARY",
+  "ABSTAINED",
+]);
+
 const stringField = (required = false) => ({ type: "string", required });
 const nullableStringField = (required = false) => ({ type: "string|null", required });
 const enumField = (values, required = false) => ({ type: "enum", values, required });
@@ -26,8 +34,13 @@ const objectArrayField = (items, required = false) => ({
 
 export const HERITAGE_COMBINATION_FIELDS = Object.freeze({
   combinationId: stringField(true),
+  constructIds: arrayField(true),
   sourceId: stringField(true),
   preciseLocator: nullableStringField(true),
+  combinationScope: enumField(["WITHIN_CONSTRUCT", "CROSS_CONSTRUCT"], true),
+  renderPolicy: enumField(["RUNTIME_ALLOWED", "HERITAGE_ONLY", "RESEARCH_ONLY"], true),
+  measurementAvailability: enumField(HERITAGE_MEASUREMENT_AVAILABILITY, true),
+  prohibitedForUserInference: { type: "boolean", required: true },
   note: nullableStringField(true),
 });
 
@@ -36,6 +49,40 @@ export const HERITAGE_DISAGREEMENT_FIELDS = Object.freeze({
   positionId: stringField(true),
   sourceId: stringField(true),
   summary: stringField(true),
+  status: enumField(["OPEN", "PARALLEL", "RESOLVED"], true),
+  note: nullableStringField(true),
+});
+
+export const HERITAGE_CONSTITUENT_FIELDS = Object.freeze({
+  constituentId: stringField(true),
+  canonicalChineseName: nullableStringField(true),
+  aliases: arrayField(true),
+  definition: stringField(true),
+  sourceId: stringField(true),
+  preciseLocator: nullableStringField(true),
+  evidenceStrength: enumField(HERITAGE_VERIFICATION_STATUSES, true),
+  measurementAvailability: enumField(HERITAGE_MEASUREMENT_AVAILABILITY, true),
+  prohibitedForUserInference: { type: "boolean", required: true },
+  note: nullableStringField(true),
+});
+
+export const HERITAGE_RELATED_SYSTEM_FIELDS = Object.freeze({
+  relatedSystemId: stringField(true),
+  canonicalChineseName: nullableStringField(true),
+  relationship: stringField(true),
+  sourceId: stringField(true),
+  note: nullableStringField(true),
+});
+
+export const HERITAGE_FIELD_FINDING_FIELDS = Object.freeze({
+  findingId: stringField(true),
+  scope: enumField(["FIELD", "MODERN_CANON", "MODERN_TAXONOMY"], true),
+  evidenceKind: enumField(["NEGATIVE_FINDING"], true),
+  evidenceStrength: enumField(HERITAGE_VERIFICATION_STATUSES, true),
+  sourceIds: arrayField(true),
+  summary: stringField(true),
+  productConsequence: stringField(true),
+  note: nullableStringField(true),
 });
 
 export const HERITAGE_FIELD_MANIFEST = Object.freeze({
@@ -49,9 +96,7 @@ export const HERITAGE_FIELD_MANIFEST = Object.freeze({
     ], true),
     aliases: arrayField(true),
     verificationStatus: enumField([
-      "VERIFIED",
-      "RECORDED_NOT_VERIFIED",
-      "ABSTAINED",
+      ...HERITAGE_VERIFICATION_STATUSES,
     ], true),
     prohibitedForUserInference: { type: "boolean", required: true },
     lineages: { type: "lineage-map", required: true },
@@ -61,16 +106,13 @@ export const HERITAGE_FIELD_MANIFEST = Object.freeze({
     definition: stringField(true),
     source: stringField(true),
     sourceId: stringField(true),
+    supportingSourceIds: arrayField(true),
     evidenceKind: enumField([
       "POSITIVE_CLAIM",
       "DISAGREEMENT",
       "NEGATIVE_FINDING",
     ], true),
-    evidenceStrength: enumField([
-      "RECORDED_NOT_VERIFIED",
-      "CORROBORATED_NOT_VERIFIED",
-      "VERIFIED",
-    ], true),
+    evidenceStrength: enumField(HERITAGE_VERIFICATION_STATUSES, true),
     preciseLocator: nullableStringField(true),
     locatorStatus: enumField([
       "VERIFIED",
@@ -79,6 +121,7 @@ export const HERITAGE_FIELD_MANIFEST = Object.freeze({
     ], true),
     citationStatus: enumField([
       "source-required",
+      "work-recorded",
       "edition-recorded",
       "verified",
     ], true),
@@ -95,20 +138,35 @@ export const HERITAGE_FIELD_MANIFEST = Object.freeze({
     editionRightsStatus: enumField([
       "unverified",
       "public-domain-by-age",
+      "surrogate-terms-separate",
       "cleared",
     ], true),
     measurementAvailability: enumField(
       HERITAGE_MEASUREMENT_AVAILABILITY,
       true,
     ),
+    runtimeStatus: enumField([
+      "RUNTIME_PROSE",
+      "HERITAGE_ONLY",
+      "RESEARCH_ONLY",
+    ], true),
     terminationState: enumField(["continue", "abstain"], true),
     availability: enumField(["available", "abstention"], true),
     abstentionReason: nullableStringField(true),
     abstentionReasonCode: nullableStringField(true),
     safetyStatus: enumField(["safe", "prohibited"], true),
+    prohibitedForUserInference: { type: "boolean", required: true },
     permittedHeritageSemantics: stringField(true),
     prohibitedInference: stringField(true),
     translationProvenance: nullableStringField(true),
+    constituents: objectArrayField(
+      HERITAGE_CONSTITUENT_FIELDS,
+      true,
+    ),
+    relatedSystems: objectArrayField(
+      HERITAGE_RELATED_SYSTEM_FIELDS,
+      true,
+    ),
     attestedCombinations: objectArrayField(
       HERITAGE_COMBINATION_FIELDS,
       true,

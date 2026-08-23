@@ -83,6 +83,15 @@ export const DOC_LINK_ALLOWLIST = [
   /^https:\/\/www\.revenuecat\.com\/privacy$/,
 ];
 
+/**
+ * Metadata identifiers that are URIs by specification but are never fetched or
+ * offered as links. Keep these exact: a query or fragment would be data, not an
+ * identifier, and a different schema version needs its own review.
+ */
+export const IDENTIFIER_URI_ALLOWLIST = [
+  /^https:\/\/json-schema\.org\/draft\/2020-12\/schema$/,
+];
+
 import {
   BLOCKLIST, DISEASE_TERMS, extractJsProse, extractHtmlCopy, findTerms,
   findAssertive, stripComments as sharedStrip, assertCanary, CANARY_FAILURE,
@@ -236,6 +245,7 @@ function guardEgress(file, text) {
     const url = m[0];
     if (/^https?:\/\/(localhost|127\.0\.0\.1)/.test(url)) continue;
     if (url.startsWith("http://www.w3.org")) continue;              // XML namespace, not a fetch
+    if (IDENTIFIER_URI_ALLOWLIST.some((p) => p.test(url))) continue;
     if (EGRESS_ALLOWLIST.some((a) => a.pattern.test(url))) continue;
     if (SENTRY_DSN_PATTERN.test(url)) continue;
     if (url.includes(REVENUECAT_HOST)) continue;
