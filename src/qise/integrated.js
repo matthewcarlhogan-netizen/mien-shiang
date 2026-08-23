@@ -7,30 +7,58 @@ import { geometryReport } from "../geometry.js";
 import { rawScalars, shadesOfGray } from "../engine.js";
 import { composeReading } from "../reading/index.js";
 import { extractRegions, eraseExtractedRegions } from "../region-extractor.js";
+import { PALACES } from "../reading/twelve-palaces.js";
 
 const scalar = (value) => (Number.isFinite(value) ? value : null);
 
-export class IncompletePalaceMeasurementError extends Error {
+// ...
+
+export class IncompletePalaceStructureError extends Error {
   constructor(missingPalaces) {
     const missing = Array.isArray(missingPalaces) ? missingPalaces : [];
     super(
-      `All 12 palace regions need a clear view. Retry with your forehead, temples, eyes and chin fully visible${
+      `Palace definitions are incomplete. Required: identity and location metadata${
         missing.length ? ` (missing: ${missing.join(", ")})` : ""
       }.`,
     );
-    this.name = "IncompletePalaceMeasurementError";
-    this.code = "INCOMPLETE_PALACE_MEASUREMENT";
+    this.name = "IncompletePalaceStructureError";
+    this.code = "INCOMPLETE_PALACE_STRUCTURE";
     this.missingPalaces = missing;
   }
 }
 
-export function assertCompletePalaceMeasurement(palaceReading) {
-  if (palaceReading?.measuredCount === palaceReading?.totalCount
-      && palaceReading?.totalCount === 12) return;
-  const missing = (palaceReading?.palaces || [])
-    .filter((palace) => !palace.measured)
-    .map((palace) => palace.name);
-  throw new IncompletePalaceMeasurementError(missing);
+export function assertCompletePalaceStructure(palaceReading) {
+  const palaces = palaceReading?.palaces || [];
+
+  // 1. exactly 12 palace records
+  if (palaces.length !== 12) {
+    throw new IncompletePalaceStructureError(["Palace count mismatch"]);
+  }
+
+  // 2, 3, 4, 5. Validate keys against canonical PALACES
+  const palaceKeys = palaces.map(p => p.key);
+  const canonicalKeys = PALACES.map(p => p.key);
+
+  const missingKeys = canonicalKeys.filter(key => !palaceKeys.includes(key));
+  const extraKeys = palaceKeys.filter(key => !canonicalKeys.includes(key));
+  const duplicateKeys = palaceKeys.filter((key, index) => palaceKeys.indexOf(key) !== index);
+
+  if (missingKeys.length > 0 || extraKeys.length > 0 || duplicateKeys.length > 0) {
+    throw new IncompletePalaceStructureError([
+      ...missingKeys.map(k => `missing: ${k}`),
+      ...extraKeys.map(k => `unexpected: ${k}`),
+      ...duplicateKeys.map(k => `duplicate: ${k}`)
+    ]);
+  }
+
+  // 6, 7. Required identity/location metadata exists.
+  const missingMetadata = palaces
+    .filter((p) => !p.key || !p.name || !p.hanzi || !p.location)
+    .map((p) => p.name || "Unnamed Palace");
+
+  if (missingMetadata.length > 0) {
+    throw new IncompletePalaceStructureError(missingMetadata);
+  }
 }
 
 const projectFiveElements = (value) => value ? {
@@ -64,9 +92,9 @@ const projectThreeCourts = (value) => value ? {
     hanzi: value.court.hanzi ?? null,
     name: value.court.name ?? null,
     span: value.court.span ?? null,
-    reading: value.court.reading ?? null,
   } : null,
-  reading: value.reading ?? null,
+  measurementObservation: value.measurementObservation ?? null,
+  heritageReading: value.heritageReading ?? null,
   sourcesDiffer: value.sourcesDiffer ?? null,
   measurementCaveat: value.measurementCaveat ?? null,
   dominanceMargin: scalar(value.dominanceMargin),
@@ -155,7 +183,7 @@ export function measureIntegratedReading(image, points, documentRef = document, 
       balanced, image.width, image.height, points, documentRef,
     ));
     const reading = projectIntegratedReading(composeReading(geometry, null, rawScalars(regions)));
-    assertCompletePalaceMeasurement(reading?.twelvePalaces);
+    assertCompletePalaceStructure(reading?.twelvePalaces);
     return reading;
   } finally {
     balanced?.fill?.(0);

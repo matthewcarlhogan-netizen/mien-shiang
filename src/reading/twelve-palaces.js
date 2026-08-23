@@ -115,50 +115,14 @@ export const PALACES = [
   },
 ];
 
-/**
- * How the tradition reads a palace's appearance.
- *
- * Deliberately warm and non-fatalistic on every branch. The classical texts
- * are often blunt about a "dark" palace; a shadowed reading here describes a
- * season, never a verdict on a person or their future.
- */
-export const TONE_GLOSS = {
-  clear:
-    "The texts read this palace as clear in this photo, which they associate with the area running easily " +
-    "at the moment.",
-  even:
-    "The texts read this palace as even in this photo — neither prominent nor shadowed, which they regard " +
-    "as the ordinary and unremarkable case.",
-  shadowed:
-    "The texts read this palace as shadowed in this photo, which they associate with attention having been " +
-    "elsewhere lately. Classical writers read this as a season rather than a fixed state, and expect it to move.",
-};
-
 export const SOURCES_DIFFER =
   "Sources differ on this — the number and placement of the palaces is not settled. Twelve is the common " +
   "arrangement, but some Mian Xiang texts work with thirteen and others place the Partner and Travel " +
   "palaces on the same stretch of temple, which changes what each one reads.";
 
-/** Shadow/clarity thresholds on the zone's pigment difference from baseline. */
-export const PALACE_TONE_DELTA = 1.5;
-
 function zoneKeysFor(palace) {
   if (Array.isArray(palace.zones)) return palace.zones;
   return palace.zone ? [palace.zone] : [];
-}
-
-function aggregateDeltaMi(zoneScalars) {
-  if (!zoneScalars.length || zoneScalars.some((zone) => !Number.isFinite(zone?.deltaMi))) {
-    return null;
-  }
-  return zoneScalars.reduce((sum, zone) => sum + zone.deltaMi, 0) / zoneScalars.length;
-}
-
-function toneFor(deltaMi) {
-  if (!Number.isFinite(deltaMi)) return null;
-  if (deltaMi > PALACE_TONE_DELTA) return "shadowed";
-  if (deltaMi < -PALACE_TONE_DELTA) return "clear";
-  return "even";
 }
 
 /**
@@ -172,19 +136,14 @@ export function readTwelvePalaces(raw) {
     const zoneKeys = zoneKeysFor(p);
     const samples = zoneKeys.map((key) => zones[key]);
     const supported = zoneKeys.length > 0;
-    const deltaMi = supported && samples.every(Boolean) ? aggregateDeltaMi(samples) : null;
-    const measured = supported && Number.isFinite(deltaMi);
-    const tone = measured ? toneFor(deltaMi) : null;
+    const measured = supported && samples.every(Boolean);
     return {
       ...p,
       supported,
       measured,
-      tone,
-      toneGloss: tone ? TONE_GLOSS[tone] : null,
-      /** Stated for every unmeasured palace, every time. */
       notMeasuredNote: measured
         ? null
-        : "This palace could not be measured clearly enough in this photo, so no reading is guessed for it.",
+        : "Region not available in this photo.",
     };
   });
 

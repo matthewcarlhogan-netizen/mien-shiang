@@ -976,8 +976,8 @@ function integratedStoryMarkup(model) {
   const allMeasured = model.palaces.measuredCount === model.palaces.totalCount;
   const palaces = palaceList.map((palace, index) => {
     const revealId = `palace-reveal-${esc(palace.key)}`;
-    const status = palace.measured ? `${palace.tone} · read today` : "traditional context";
-    const reading = palace.measured ? palace.toneGloss : palace.reading;
+    const status = palace.measured ? "region available" : "region unavailable";
+    const reading = palace.reading;
     return `<article class="palace-card" data-open="false" data-palace="${esc(palace.key)}"
         style="--palace-index:${index};--palace-accent:var(--${palaceAccents[index % palaceAccents.length]})">
       <button class="palace-enter" type="button" aria-expanded="false" aria-controls="${revealId}">

@@ -17,28 +17,16 @@ export const COURTS = {
     hanzi: "上停",
     name: "Upper Court",
     span: "hairline to brow",
-    reading:
-      "In Mian Xiang the upper court is read as the early years and what was inherited rather than chosen — " +
-      "the classical texts associate a dominant upper court with people who think before they move, and who " +
-      "were shaped early by what was expected of them.",
   },
   middle: {
     hanzi: "中停",
     name: "Middle Court",
     span: "brow to the base of the nose",
-    reading:
-      "Classical Chinese face reading gives the middle court the middle years and the part of a life a " +
-      "person drives themselves. A dominant middle court is associated in the texts with self-direction — " +
-      "getting on with it rather than waiting to be asked.",
   },
   lower: {
     hanzi: "下停",
     name: "Lower Court",
     span: "base of the nose to the chin",
-    reading:
-      "In Mian Xiang the lower court is read as the later years, and as resolve and closeness to others. " +
-      "The texts associate a dominant lower court with warmth that shows late rather than early, and with " +
-      "people who become more themselves as they go on.",
   },
 };
 
@@ -79,15 +67,9 @@ export function readThreeCourts(geometry) {
     },
     dominant: balanced ? null : topKey,
     court: balanced ? null : COURTS[topKey],
-    reading: balanced ? BALANCED_READING : COURTS[topKey].reading,
+    measurementObservation: `The ${balanced ? "face is balanced" : COURTS[topKey].name + " is the largest section"}.`,
+    heritageReading: balanced ? BALANCED_READING : null,
     sourcesDiffer: SOURCES_DIFFER,
-    /**
-     * Passed straight through from the measurement layer. The upper court is
-     * measured from the top of the face oval rather than the hairline, so it
-     * reads short — which makes a "dominant upper court" harder to reach than
-     * it should be, and a dominant lower court easier. Anyone reading this
-     * result is entitled to know that before they read the meaning.
-     */
     measurementCaveat: t.caveat,
     dominanceMargin: topFrac - entries[1][1],
   };

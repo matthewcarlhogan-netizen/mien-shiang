@@ -57,7 +57,7 @@ const lede = (text) => `<p class="lede">${esc(text)}</p>`;
 function renderFiveElements(fe, openDiffer) {
   if (!fe) return "";
   if (!fe.available) {
-    return section("Five Elements 五行", "Not read from this photo",
+    return section("Five Elements 五行", "Not available in this photo",
       `<p class="muted">${esc(fe.note)}</p>`, SECTION_IDS.fiveElements);
   }
   const alts = fe.alternates.map((a) => `${esc(a.name)} ${esc(a.hanzi)}`).join(" or ");
@@ -116,6 +116,8 @@ function renderThreeCourts(tc, openDiffer) {
   const title = tc.balanced
     ? "Balanced" : `${esc(tc.court.name)} <span class="hanzi">${esc(tc.court.hanzi)}</span>`;
 
+  const readingText = tc.balanced ? tc.heritageReading : tc.measurementObservation;
+
   return section("Three Courts 三停", title,
     `${lede(tc.balanced
         ? "The three courts came out near equal in this photo."
@@ -124,7 +126,7 @@ function renderThreeCourts(tc, openDiffer) {
           aria-label="Facial thirds by proportion: ${esc(alt)}">${segments}</div>
      <ul class="court-legend">${legend}</ul>
      <p class="muted small">${esc(tc.measurementCaveat)}</p>
-     <p>${esc(tc.reading)}</p>
+     <p>${esc(readingText)}</p>
      ${sourcesNote(tc.sourcesDiffer, { expanded: openDiffer() })}`,
     SECTION_IDS.threeCourts);
 }
@@ -132,7 +134,7 @@ function renderThreeCourts(tc, openDiffer) {
 function renderQiSe(q, openDiffer) {
   if (!q) return "";
   if (!q.available) {
-    return section("Qi se 氣色", "Not read from this photo",
+    return section("Qi se 氣色", "Not available in this photo",
       `<p class="muted">${esc(q.note)}</p>`, SECTION_IDS.qiSe);
   }
   return section("Qi se 氣色", `Glow ${q.glowIndex}`,
@@ -185,10 +187,10 @@ function renderPalaces(tp, openDiffer) {
 
   return section("Twelve Palaces 十二宮",
     complete
-      ? `Complete scan · all ${supportedCount} supported palaces read`
-      : `Partial scan · ${tp.measuredCount} of ${supportedCount} supported palaces read`,
+      ? `Complete scan · all ${supportedCount} supported palace regions available`
+      : `Partial scan · ${tp.measuredCount} of ${supportedCount} supported palace regions available`,
     `${lede("The twelve palaces map areas of the face to areas of a life.")}
-     ${group("Read from this photo", read)}
+     ${group("Available in this photo", read)}
      ${group("Supported, but not clear in this photo", missed)}
      ${group("Listed for context — not sampled", contextual)}
      <p class="muted small palace-scope">${esc(PALACE_SCOPE_NOTE)}</p>
