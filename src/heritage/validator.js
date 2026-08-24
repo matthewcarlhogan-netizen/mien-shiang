@@ -467,7 +467,7 @@ const DIRECTION_KIND_BY_RELATIONSHIP_TYPE = Object.freeze({
   // DIRECTED where source semantics require it — both are legal.
 });
 
-const participantRefId = (participant) => {
+export const participantRefId = (participant) => {
   if (participant.nodeType === "CONSTRUCT") return participant.constructId ?? participant.participantId;
   if (participant.nodeType === "CONSTITUENT") return participant.constituentId;
   if (participant.nodeType === "HERITAGE_CONCEPT") return participant.conceptId ?? participant.participantId;
@@ -482,7 +482,7 @@ const participantRefId = (participant) => {
  * over free-text fromRef/toRef names would be unverifiable in itself; a
  * fixed, named check per rule is the one that can actually be tested.
  */
-function checkNegativeRelationshipInvariants(connector, errors) {
+export function checkNegativeRelationshipInvariants(connector, errors) {
   const participants = Array.isArray(connector.participants) ? connector.participants : [];
   const hasConstruct = (id) => participants.some((p) => p.nodeType === "CONSTRUCT"
     && (p.constructId ?? p.participantId) === id);
