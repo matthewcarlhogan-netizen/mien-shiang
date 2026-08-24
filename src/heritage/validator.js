@@ -1,6 +1,5 @@
 import {
   HERITAGE_ALIAS_WITNESS_FIELDS,
-  HERITAGE_COMBINATION_FIELDS,
   HERITAGE_CONSTITUENT_FIELDS,
   HERITAGE_DISAGREEMENT_FIELDS,
   HERITAGE_FIELD_FINDING_FIELDS,
@@ -150,43 +149,6 @@ export function validateHeritageSourceRecord(source) {
   return { valid: errors.length === 0, errors };
 }
 
-export function validateHeritageCombination(combination, constructId = null) {
-  const errors = [];
-  validateFields(combination, HERITAGE_COMBINATION_FIELDS, "Combination ", errors);
-  if (combination?.sourceId && !SOURCE_REGISTRY[combination.sourceId]) {
-    errors.push("Combination references unknown sourceId " + combination.sourceId);
-  }
-  if (Array.isArray(combination?.constructIds)) {
-    validateUniqueValues(combination.constructIds, "Combination constructIds ", errors);
-    if (combination.constructIds.length === 0) {
-      errors.push("Combination constructIds requires at least one constructId");
-    }
-    if (combination.combinationScope === "WITHIN_CONSTRUCT"
-      && combination.constructIds.length !== 1) {
-      errors.push("WITHIN_CONSTRUCT combination requires exactly one constructId");
-    }
-    if (combination.combinationScope === "CROSS_CONSTRUCT"
-      && combination.constructIds.length < 2) {
-      errors.push("CROSS_CONSTRUCT combination requires at least two constructIds");
-    }
-    if (constructId && combination.combinationScope === "WITHIN_CONSTRUCT"
-      && combination.constructIds[0] !== constructId) {
-      errors.push("WITHIN_CONSTRUCT combination contradicts parent constructId " + constructId);
-    }
-  }
-  if (combination?.renderPolicy === "RUNTIME_ALLOWED"
-    && combination.prohibitedForUserInference === true) {
-    errors.push("RUNTIME_ALLOWED combination cannot be prohibited for user inference");
-  }
-  if (combination?.renderPolicy === "RUNTIME_ALLOWED"
-    && ["CAMERA_GEOMETRY_INSUFFICIENT", "UNSUPPORTED", "UNMEASURABLE",
-      "MODERN_MAPPING_UNSUPPORTED", "NOT_RECORDED", "PERMANENTLY_ABSTAIN"]
-      .includes(combination.measurementAvailability)) {
-    errors.push("RUNTIME_ALLOWED combination requires measurable evidence");
-  }
-  return { valid: errors.length === 0, errors };
-}
-
 export function validateHeritageFieldFinding(finding) {
   const errors = [];
   if (!finding || typeof finding !== "object" || Array.isArray(finding)) {
@@ -267,16 +229,7 @@ export function validateHeritageRecord(record) {
     if (lineage.attestedCombinations && !lineage.sourceId) {
       errors.push(prefix + "has attestedCombinations but missing sourceId");
     }
-    validateObjectArray(
-      lineage.attestedCombinations,
-      HERITAGE_COMBINATION_FIELDS,
-      prefix + "attestedCombinations",
-      errors,
-    );
-    for (const combination of lineage.attestedCombinations || []) {
-      const result = validateHeritageCombination(combination, record.constructId);
-      errors.push(...result.errors.map((error) => prefix + error));
-    }
+
     validateObjectArray(
       lineage.disagreements,
       HERITAGE_DISAGREEMENT_FIELDS,

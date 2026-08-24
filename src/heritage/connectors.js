@@ -1,0 +1,55 @@
+
+import { HERITAGE_MEASUREMENT_AVAILABILITY, HERITAGE_VERIFICATION_STATUSES, HERITAGE_LOCATOR_STATUSES } from "./constants.js";
+import { stringField, nullableStringField, enumField, arrayField, objectArrayField } from "./schema-helpers.js";
+
+export const HERITAGE_CONNECTOR_FIELDS = Object.freeze({
+  connectorId: stringField(true),
+  relationshipType: enumField(["CORRESPONDS_TO", "CONJUNCTIVE_CONFIGURATION", "REQUIRES", "MODIFIES", "SEQUENTIAL_RELATION", "COLLECTIVE_RULE"], true),
+  relationshipDirection: objectArrayField({
+    kind: enumField(["UNDIRECTED", "DIRECTED", "ORDERED"], true),
+    from: arrayField(false),
+    to: arrayField(false),
+    sequence: arrayField(false),
+  }, true),
+  collectiveMode: enumField(["ALL_MEMBERS", "ANY_MEMBER", "SYSTEM_AS_WHOLE"], false),
+  graphScope: enumField(["CORE_HERITAGE", "ADJACENT_HISTORICAL_SYSTEM"], true),
+  participants: objectArrayField({
+    participantId: stringField(true),
+    nodeType: enumField(["CONSTRUCT", "CONSTITUENT", "HERITAGE_CONCEPT", "RELATED_SYSTEM"], true),
+    constructId: nullableStringField(false),
+    lineageId: nullableStringField(false),
+    constituentId: nullableStringField(false),
+    conceptId: nullableStringField(false),
+    relatedSystemId: nullableStringField(false),
+    memberScope: enumField(["NODE", "ALL_MEMBERS"], true),
+  }, true),
+  evidenceClass: enumField(["EXPLICITLY_ATTESTED", "STRUCTURALLY_IMPLIED"], true),
+  evidenceStrength: enumField(HERITAGE_VERIFICATION_STATUSES, true),
+  sourceId: stringField(true),
+  supportingSourceIds: arrayField(false),
+  textualLayer: enumField(["BASE_TEXT", "COMMENTARY", "QUOTED_SOURCE", "COLLATION_NOTE", "LATER_EDITION", "RECONSTRUCTED_TEXT", "EMBEDDED_LOST_WORK_EXCERPT"], true),
+  sourceText: nullableStringField(true),
+  sourceTextStatus: enumField(["VERIFIED", "RECORDED", "NOT_RECORDED"], true),
+  sectionLocator: nullableStringField(true),
+  sectionLocatorStatus: enumField(HERITAGE_LOCATOR_STATUSES, true),
+  folioLocator: nullableStringField(true),
+  folioLocatorStatus: enumField(HERITAGE_LOCATOR_STATUSES, true),
+  folioLocatorKind: enumField(["WYG_PB", "FOLIO", "PAGE", "OTHER"], false),
+  historicalStates: objectArrayField({
+    stateId: stringField(true),
+    participantId: stringField(true),
+    gloss: nullableStringField(true),
+    measurementAvailability: enumField(HERITAGE_MEASUREMENT_AVAILABILITY, true),
+  }, true),
+  // Simplified conditionExpression for validation:
+  conditionExpression: { type: "object", required: false },
+  relationshipPredicate: nullableStringField(false),
+  historicalPredicateCategories: arrayField(false),
+  measurementAvailability: enumField(HERITAGE_MEASUREMENT_AVAILABILITY, true),
+  runtimePolicy: enumField(["HERITAGE_PRESENTATION_ALLOWED", "SOURCE_PANEL_ONLY", "RESEARCH_ONLY"], true),
+  prohibitedForUserInference: { type: "boolean", required: true },
+  sourceRuleGroupId: nullableStringField(false),
+  disagreementIds: arrayField(false),
+  alternateConnectorIds: arrayField(false),
+  note: nullableStringField(false),
+});

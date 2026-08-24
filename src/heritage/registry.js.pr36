@@ -86,7 +86,9 @@ export function createHeritageRegistry(corpus = HERITAGE) {
       const source = SOURCE_REGISTRY[sourceId]
         || SOURCE_REGISTRY[constructSourceId]
         || SOURCE_REGISTRY[SOURCE_CITATION_FALLBACK];
-      
+      const combinations = lineageEvidence.attestedCombinations
+        ?? lineageData.attestedCombinations
+        ?? [];
       const sectionLocator = lineageEvidence.sectionLocator
         ?? source?.sectionLocator
         ?? null;
@@ -147,6 +149,10 @@ export function createHeritageRegistry(corpus = HERITAGE) {
           ?? "repository-editorial",
         constituents: lineageEvidence.constituents || [],
         relatedSystems: lineageEvidence.relatedSystems || [],
+        attestedCombinations: combinations,
+        attestedCombinationsStatus: lineageEvidence.attestedCombinationsStatus
+          || lineageData.attestedCombinationsStatus
+          || (combinations.length ? "RECORDED" : "NONE_ATTESTED"),
         disagreements: lineageEvidence.disagreements || lineageData.disagreements || [],
         unverifiedClaims: lineageEvidence.unverifiedClaims
           || lineageData.unverifiedClaims
@@ -183,154 +189,3 @@ export function createHeritageRegistry(corpus = HERITAGE) {
 }
 
 export const HERITAGE_REGISTRY = createHeritageRegistry();
-
-// New Connector Registry
-export const HERITAGE_CONNECTOR_REGISTRY = deepFreeze({
-  "three-sections-equality-mayi-received": {
-    connectorId: "three-sections-equality-mayi-received",
-    relationshipType: "COLLECTIVE_RULE",
-    relationshipDirection: { kind: "UNDIRECTED" },
-    collectiveMode: "SYSTEM_AS_WHOLE",
-    graphScope: "CORE_HERITAGE",
-    participants: [{ participantId: "threeSections", nodeType: "CONSTRUCT", memberScope: "ALL_MEMBERS" }],
-    evidenceClass: "STRUCTURALLY_IMPLIED",
-    evidenceStrength: "RECORDED_NOT_VERIFIED",
-    sourceId: "heritage-three-sections",
-    textualLayer: "BASE_TEXT",
-    sourceTextStatus: "RECORDED",
-    measurementAvailability: "SUPPORTED_2D",
-    runtimePolicy: "RESEARCH_ONLY",
-    prohibitedForUserInference: true,
-    note: "Contested/unverified; research-only.",
-  },
-  "five-mountains-mutual-facing-fullness": {
-    connectorId: "five-mountains-mutual-facing-fullness",
-    relationshipType: "COLLECTIVE_RULE",
-    relationshipDirection: { kind: "UNDIRECTED" },
-    collectiveMode: "ALL_MEMBERS",
-    graphScope: "CORE_HERITAGE",
-    participants: [{ participantId: "fiveMountains", nodeType: "CONSTRUCT", memberScope: "ALL_MEMBERS" }],
-    evidenceClass: "EXPLICITLY_ATTESTED",
-    evidenceStrength: "RECORDED_NOT_VERIFIED",
-    sourceId: "heritage-five-mountains",
-    textualLayer: "BASE_TEXT",
-    sourceTextStatus: "VERIFIED",
-    sectionLocator: "「五嶽」; 卷二 (Siku)",
-    sectionLocatorStatus: "VERIFIED",
-    measurementAvailability: "CAMERA_GEOMETRY_INSUFFICIENT",
-    runtimePolicy: "HERITAGE_PRESENTATION_ALLOWED",
-    prohibitedForUserInference: true,
-    note: "Historical fullness/mutual-facing only; no modern capture support.",
-  },
-  "four-rivers-flow-and-banks": {
-    connectorId: "four-rivers-flow-and-banks",
-    relationshipType: "COLLECTIVE_RULE",
-    relationshipDirection: { kind: "UNDIRECTED" },
-    collectiveMode: "ALL_MEMBERS",
-    graphScope: "CORE_HERITAGE",
-    participants: [{ participantId: "fourRivers", nodeType: "CONSTRUCT", memberScope: "ALL_MEMBERS" }],
-    evidenceClass: "EXPLICITLY_ATTESTED",
-    evidenceStrength: "RECORDED_NOT_VERIFIED",
-    sourceId: "heritage-four-rivers-primary",
-    textualLayer: "BASE_TEXT",
-    sourceTextStatus: "VERIFIED",
-    sectionLocator: "「四瀆」; 卷二 (Siku)",
-    sectionLocatorStatus: "VERIFIED",
-    measurementAvailability: "CAMERA_GEOMETRY_INSUFFICIENT",
-    runtimePolicy: "HERITAGE_PRESENTATION_ALLOWED",
-    prohibitedForUserInference: true,
-    note: "Mutual flow/banks only; no modern measurement support.",
-  },
-  "five-officers-one-good-office-ten-years": {
-    connectorId: "five-officers-one-good-office-ten-years",
-    relationshipType: "COLLECTIVE_RULE",
-    relationshipDirection: { kind: "UNDIRECTED" },
-    collectiveMode: "ANY_MEMBER",
-    graphScope: "CORE_HERITAGE",
-    participants: [{ participantId: "fiveOfficers", nodeType: "CONSTRUCT", memberScope: "ALL_MEMBERS" }],
-    evidenceClass: "EXPLICITLY_ATTESTED",
-    evidenceStrength: "RECORDED_NOT_VERIFIED",
-    sourceId: "heritage-five-officers",
-    textualLayer: "BASE_TEXT",
-    sourceTextStatus: "VERIFIED",
-    sectionLocator: "「五官」; 卷二 (Siku)",
-    sectionLocatorStatus: "VERIFIED",
-    measurementAvailability: "CONDITIONALLY_SUPPORTED",
-    runtimePolicy: "HERITAGE_ONLY",
-    prohibitedForUserInference: true,
-    note: "Fortune-typed heritage; never operationalised as a user-facing inference.",
-  },
-  "five-mountains-four-rivers-corresponds": {
-    connectorId: "five-mountains-four-rivers-corresponds",
-    relationshipType: "CORRESPONDS_TO",
-    relationshipDirection: { kind: "UNDIRECTED" },
-    graphScope: "CORE_HERITAGE",
-    participants: [
-      { participantId: "fiveMountains", nodeType: "CONSTRUCT", memberScope: "ALL_MEMBERS" },
-      { participantId: "fourRivers", nodeType: "CONSTRUCT", memberScope: "ALL_MEMBERS" },
-    ],
-    evidenceClass: "EXPLICITLY_ATTESTED",
-    evidenceStrength: "RECORDED_NOT_VERIFIED",
-    sourceId: "heritage-taiqing-form-qise-interaction",
-    textualLayer: "BASE_TEXT",
-    sourceTextStatus: "VERIFIED",
-    measurementAvailability: "CAMERA_GEOMETRY_INSUFFICIENT",
-    runtimePolicy: "RESEARCH_ONLY",
-    prohibitedForUserInference: true,
-    note: "Decomposed from legacy Taiqing flat record.",
-  },
-  "four-rivers-shen-corresponds": {
-    connectorId: "four-rivers-shen-corresponds",
-    relationshipType: "CORRESPONDS_TO",
-    relationshipDirection: { kind: "DIRECTED", from: ["fourRivers"], to: ["shen"] },
-    graphScope: "CORE_HERITAGE",
-    participants: [
-      { participantId: "fourRivers", nodeType: "CONSTRUCT", memberScope: "ALL_MEMBERS" },
-      { participantId: "shen", nodeType: "HERITAGE_CONCEPT", memberScope: "NODE" },
-    ],
-    evidenceClass: "EXPLICITLY_ATTESTED",
-    evidenceStrength: "RECORDED_NOT_VERIFIED",
-    sourceId: "heritage-taiqing-form-qise-interaction",
-    textualLayer: "BASE_TEXT",
-    sourceTextStatus: "VERIFIED",
-    measurementAvailability: "UNMEASURABLE",
-    runtimePolicy: "RESEARCH_ONLY",
-    prohibitedForUserInference: true,
-    note: "Decomposed from legacy Taiqing flat record. Shen is unmeasurable.",
-  },
-});
-
-export const HERITAGE_DISAGREEMENT_REGISTRY = deepFreeze({
-  "three-sections-boundaries": {
-    disagreementId: "three-sections-boundaries",
-    nature: "MAPPING",
-    target: { targetType: "CONSTRUCT", targetRef: "threeSections" },
-    status: "OPEN",
-    positions: [
-      {
-        positionId: "sxqb-mingdu",
-        sourceId: "heritage-three-sections-sxqb",
-        summary: "神相全編 boundary scheme distinct from common transmitted form",
-        note: "Records a distinct boundary scheme.",
-      },
-      {
-        positionId: "common-transmitted",
-        sourceId: "mianxiang-unspecified",
-        summary: "Common transmitted boundary form begins middle section at brow centre",
-        note: "Starts middle section at brow centre.",
-      },
-      {
-        positionId: "mayi-ten-observations",
-        sourceId: "heritage-three-sections",
-        summary: "麻衣十觀 names three points rather than boundary intervals",
-        note: "Names points, not intervals.",
-      },
-      {
-        positionId: "received-mayi-contradiction",
-        sourceId: "heritage-three-sections",
-        summary: "Received Ma Yi witness contradicts attributed auspiciousness predicate",
-        note: "Contradiction found.",
-      },
-    ],
-  },
-});

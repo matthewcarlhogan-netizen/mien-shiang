@@ -1,79 +1,39 @@
+
 /*
  * Canonical heritage data is more explicit than the prose corpus.
  * The manifest below is the source of truth for validation and JSON Schema.
  */
 
-export const HERITAGE_MEASUREMENT_AVAILABILITY = Object.freeze([
-  "SUPPORTED_2D",
-  "CONDITIONALLY_SUPPORTED",
-  "CAMERA_GEOMETRY_INSUFFICIENT",
-  "UNSUPPORTED",
-  "UNMEASURABLE",
-  "MODERN_MAPPING_UNSUPPORTED",
-  "NOT_RECORDED",
-  "PERMANENTLY_ABSTAIN",
-]);
+import { HERITAGE_CONNECTOR_FIELDS } from "./connectors.js";
+import { HERITAGE_DISAGREEMENT_FIELDS } from "./disagreements.js";
+import { HERITAGE_NEGATIVE_RULE_FIELDS } from "./negative-relationships.js";
+import { HERITAGE_COMPOSITION_POLICY_FIELDS } from "./composition-policy.js";
+import {
+  stringField,
+  nullableStringField,
+  enumField,
+  arrayField,
+  objectArrayField,
+} from "./schema-helpers.js";
+import {
+  HERITAGE_MEASUREMENT_AVAILABILITY,
+  HERITAGE_CITATION_STATUSES,
+  HERITAGE_LOCATOR_STATUSES,
+  HERITAGE_VERIFICATION_STATUSES,
+  HERITAGE_TRANSLATION_PROVENANCE,
+} from "./constants.js";
 
-export const HERITAGE_VERIFICATION_STATUSES = Object.freeze([
-  "RECORDED_NOT_VERIFIED",
-  "CORROBORATED_NOT_VERIFIED",
-  "VERIFIED_SECONDARY",
-  "VERIFIED_PRIMARY",
-  "ABSTAINED",
-]);
-
-export const HERITAGE_CITATION_STATUSES = Object.freeze([
-  "source-required",
-  "work-recorded",
-  "edition-recorded",
-  "attribution-contradicted",
-  "verified",
-]);
-
-export const HERITAGE_LOCATOR_STATUSES = Object.freeze([
-  "VERIFIED",
-  "RECORDED",
-  "NOT_RECORDED",
-]);
-
-export const HERITAGE_TRANSLATION_PROVENANCE = Object.freeze([
-  "PROJECT_ORIGINAL",
-  "PUBLIC_DOMAIN_TRANSLATION",
-  "NOT_TRANSLATED_HERITAGE_ONLY",
-]);
-
-const stringField = (required = false) => ({ type: "string", required });
-const nullableStringField = (required = false) => ({ type: "string|null", required });
-const enumField = (values, required = false) => ({ type: "enum", values, required });
-const arrayField = (required = false) => ({ type: "array", items: "string", required });
-const objectArrayField = (items, required = false) => ({
-  type: "array",
-  items,
-  required,
-});
-
-export const HERITAGE_COMBINATION_FIELDS = Object.freeze({
-  combinationId: stringField(true),
-  constructIds: arrayField(true),
-  sourceId: stringField(true),
-  sectionLocator: nullableStringField(true),
-  folioLocator: nullableStringField(true),
-  combinationScope: enumField(["WITHIN_CONSTRUCT", "CROSS_CONSTRUCT"], true),
-  renderPolicy: enumField(["RUNTIME_ALLOWED", "HERITAGE_ONLY", "RESEARCH_ONLY"], true),
-  measurementAvailability: enumField(HERITAGE_MEASUREMENT_AVAILABILITY, true),
-  prohibitedForUserInference: { type: "boolean", required: true },
-  note: nullableStringField(true),
-});
-
-export const HERITAGE_DISAGREEMENT_FIELDS = Object.freeze({
-  disagreementId: stringField(true),
-  positionId: stringField(true),
-  sourceId: stringField(true),
-  summary: stringField(true),
-  status: enumField(["OPEN", "PARALLEL", "RESOLVED"], true),
-  disagreementNature: enumField(["INTRA_TEXT", "INTER_TEXT", "UNRESOLVED"], true),
-  note: nullableStringField(true),
-});
+export {
+  HERITAGE_CONNECTOR_FIELDS,
+  HERITAGE_DISAGREEMENT_FIELDS,
+  HERITAGE_NEGATIVE_RULE_FIELDS,
+  HERITAGE_COMPOSITION_POLICY_FIELDS,
+  HERITAGE_MEASUREMENT_AVAILABILITY,
+  HERITAGE_CITATION_STATUSES,
+  HERITAGE_LOCATOR_STATUSES,
+  HERITAGE_VERIFICATION_STATUSES,
+  HERITAGE_TRANSLATION_PROVENANCE,
+};
 
 export const HERITAGE_ALIAS_WITNESS_FIELDS = Object.freeze({
   alias: stringField(true),
@@ -134,6 +94,27 @@ export const HERITAGE_SOURCE_FIELDS = Object.freeze({
   sectionLocatorStatus: enumField(HERITAGE_LOCATOR_STATUSES, true),
   folioLocator: nullableStringField(true),
   folioLocatorStatus: enumField(HERITAGE_LOCATOR_STATUSES, true),
+  folioLocatorKind: enumField([
+    "WYG_PB",
+    "FOLIO",
+    "PAGE",
+    "OTHER",
+  ], false),
+  bibliographicIdentityStatus: enumField([
+    "UNRESOLVED",
+    "RECORDED_IN_BIBLIOGRAPHY",
+    "WORK_IDENTIFIED",
+  ], true),
+  independentWitnessStatus: enumField([
+    "UNRESOLVED",
+    "IDENTIFIED",
+    "ACQUIRED",
+    "VERIFIED",
+  ], true),
+  repository: nullableStringField(false),
+  repositoryCommit: nullableStringField(false),
+  repositoryFile: nullableStringField(false),
+  juan: nullableStringField(false),
   citationStatus: enumField(HERITAGE_CITATION_STATUSES, true),
   rightsStatus: enumField([
     "unverified",
@@ -246,15 +227,6 @@ export const HERITAGE_FIELD_MANIFEST = Object.freeze({
       HERITAGE_RELATED_SYSTEM_FIELDS,
       true,
     ),
-    attestedCombinations: objectArrayField(
-      HERITAGE_COMBINATION_FIELDS,
-      true,
-    ),
-    attestedCombinationsStatus: enumField([
-      "NONE_ATTESTED",
-      "RECORDED",
-      "NOT_RECORDED",
-    ], true),
     disagreements: objectArrayField(
       HERITAGE_DISAGREEMENT_FIELDS,
       true,

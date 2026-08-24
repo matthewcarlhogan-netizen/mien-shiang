@@ -42,20 +42,16 @@ const constituent = ({
 
 const disagreement = ({
   disagreementId,
-  positionId,
-  sourceId,
-  summary,
-  status = "PARALLEL",
-  disagreementNature = "INTER_TEXT",
-  note = null,
+  nature,
+  target,
+  status = "OPEN",
+  positions = [],
 }) => ({
   disagreementId,
-  positionId,
-  sourceId,
-  summary,
+  nature,
+  target,
   status,
-  disagreementNature,
-  note,
+  positions,
 });
 
 const withinCombination = ({
@@ -109,44 +105,34 @@ export const HERITAGE_EVIDENCE = deepFreeze({
         measurementAvailability: "SUPPORTED_2D",
         constituents: [],
         relatedSystems: [],
-        attestedCombinations: [withinCombination({
-          combinationId: "three-sections-equality-mayi-received",
-          constructId: "threeSections",
-          sourceId: "heritage-three-sections",
-          sectionLocator: null,
-          measurementAvailability: "SUPPORTED_2D",
-          renderPolicy: "RESEARCH_ONLY",
-          note: "An equal-sections rule is transmitted, but its wording and boundary lineage are not edition-verified; no fortune predicate may be operationalised. The only edition-read source in this project for a differently-scoped 三停 rule (太清神鑑 卷六, 身三停) describes body proportions with a differential, ranked primary predicate and a 相稱 — not 平等 — secondary predicate; it does not corroborate an equal-thirds facial reading.",
-        })],
         disagreements: [
           disagreement({
             disagreementId: "three-sections-boundaries",
-            positionId: "sxqb-mingdu",
-            sourceId: "heritage-three-sections-sxqb",
-            summary: "神相全編, quoting 冥度經, records a boundary scheme distinct from the common transmitted form.",
-          }),
-          disagreement({
-            disagreementId: "three-sections-boundaries",
-            positionId: "common-transmitted",
-            sourceId: "mianxiang-unspecified",
-            summary: "The common transmitted boundary form begins its middle section at the brow centre rather than the nose root.",
+            nature: "MAPPING",
+            target: { targetType: "CONSTRUCT", targetRef: "threeSections" },
             status: "OPEN",
-          }),
-          disagreement({
-            disagreementId: "three-sections-boundaries",
-            positionId: "mayi-ten-observations",
-            sourceId: "heritage-three-sections",
-            summary: "The received 麻衣 十觀 passage names three points rather than the same three boundary intervals.",
-            status: "OPEN",
-          }),
-          disagreement({
-            disagreementId: "three-sections-received-predicate",
-            positionId: "received-mayi-contradiction",
-            sourceId: "heritage-three-sections",
-            summary: "The inspected received Ma Yi witness contradicts the auspiciousness predicate formerly attributed to it.",
-            status: "OPEN",
-            disagreementNature: "INTRA_TEXT",
-            note: "Keep the former predicate out of runtime copy unless a stable edition and exact folio support it.",
+            positions: [
+              {
+                positionId: "sxqb-mingdu",
+                sourceId: "heritage-three-sections-sxqb",
+                summary: "神相全編, quoting 冥度經, records a boundary scheme distinct from the common transmitted form.",
+              },
+              {
+                positionId: "common-transmitted",
+                sourceId: "mianxiang-unspecified",
+                summary: "The common transmitted boundary form begins its middle section at the brow centre rather than the nose root.",
+              },
+              {
+                positionId: "mayi-ten-observations",
+                sourceId: "heritage-three-sections",
+                summary: "The received 麻衣 十觀 passage names three points rather than the same three boundary intervals.",
+              },
+              {
+                positionId: "received-mayi-contradiction",
+                sourceId: "heritage-three-sections",
+                summary: "The inspected received Ma Yi witness contradicts the auspiciousness predicate formerly attributed to it.",
+              },
+            ],
           }),
         ],
         note: "The received attribution is contradicted and has no stable critical edition or folio; this lineage is research-only.",
@@ -279,15 +265,29 @@ export const HERITAGE_EVIDENCE = deepFreeze({
         disagreements: [
           disagreement({
             disagreementId: "twelve-palaces-constituents",
-            positionId: "taiqing-yuguan",
-            sourceId: "heritage-twelve-palaces-taiqing",
-            summary: "太清神鑑 records a parallel palace assignment with no 田宅宮 and with 財帛宮 away from the nose.",
+            nature: "CONSTITUENT_MEMBERSHIP",
+            target: { targetType: "CONSTRUCT", targetRef: "twelvePalaces" },
+            status: "OPEN",
+            positions: [
+              {
+                positionId: "taiqing-yuguan",
+                sourceId: "heritage-twelve-palaces-taiqing",
+                summary: "太清神鑑 records a parallel palace assignment with no 田宅宮 and with 財帛宮 away from the nose.",
+              },
+            ],
           }),
           disagreement({
             disagreementId: "twelve-palaces-twelfth-slot",
-            positionId: "appearance-palace",
-            sourceId: "heritage-twelve-palaces-taiqing",
-            summary: "The 太清神鑑 sequence closes with 相貌 rather than silently normalising the twelfth slot to another lineage.",
+            nature: "PREDICATE",
+            target: { targetType: "CONSTRUCT", targetRef: "twelvePalaces" },
+            status: "OPEN",
+            positions: [
+              {
+                positionId: "appearance-palace",
+                sourceId: "heritage-twelve-palaces-taiqing",
+                summary: "The 太清神鑑 sequence closes with 相貌 rather than silently normalising the twelfth slot to another lineage.",
+              },
+            ],
           }),
         ],
         note: "The Zhihetang table of contents has adjacent Twelve Palaces Formula and Twelve Palaces Network entries. They must not be collapsed, and the previously claimed Twelve Palaces Discussion locator is absent.",
@@ -361,35 +361,44 @@ export const HERITAGE_EVIDENCE = deepFreeze({
         disagreements: [
           disagreement({
             disagreementId: "five-mountains-membership",
-            positionId: "taiqing-mountain-names",
-            sourceId: "heritage-five-mountains",
-            summary: "太清神鑑 names the five individual mountains rather than only directional positions.",
-          }),
-          disagreement({
-            disagreementId: "five-mountains-northern-region",
-            positionId: "taiqing-han",
-            sourceId: "heritage-five-mountains",
-            summary: "太清神鑑 assigns 恆嶽 to 頷; other lineages use the chin point or a broader lower-face zone.",
-          }),
-          disagreement({
-            disagreementId: "five-mountains-northern-region",
-            positionId: "sxqb-chin",
-            sourceId: "heritage-five-mountains-sxqb",
-            summary: "The Shenxiang Quanbian witness assigns the northern mountain to the chin point.",
-          }),
-          disagreement({
-            disagreementId: "five-mountains-northern-region",
-            positionId: "shenyi-lower-face-zone",
-            sourceId: "heritage-five-mountains-shenyi",
-            summary: "The Shenyi Fu commentary uses a broader lower-face zone for the northern mountain.",
-          }),
-          disagreement({
-            disagreementId: "five-mountains-northern-region",
-            positionId: "renlun-datong-chin",
-            sourceId: "heritage-five-mountains-renlun-datong",
-            summary: "人倫大統賦 witnesses the northern mountain as 頦 (chin), distinguished from 太清's 頷 (jaw / broader lower-face) term.",
+            nature: "CONSTITUENT_MEMBERSHIP",
+            target: { targetType: "CONSTRUCT", targetRef: "fiveMountains" },
             status: "OPEN",
-            disagreementNature: "INTER_TEXT",
+            positions: [
+              {
+                positionId: "taiqing-mountain-names",
+                sourceId: "heritage-five-mountains",
+                summary: "太清神鑑 names the five individual mountains rather than only directional positions.",
+              },
+            ],
+          }),
+          disagreement({
+            disagreementId: "five-mountains-northern-region",
+            nature: "MAPPING",
+            target: { targetType: "CONSTRUCT", targetRef: "fiveMountains" },
+            status: "OPEN",
+            positions: [
+              {
+                positionId: "taiqing-han",
+                sourceId: "heritage-five-mountains",
+                summary: "太清神鑑 assigns 恆嶽 to 頷.",
+              },
+              {
+                positionId: "sxqb-chin",
+                sourceId: "heritage-five-mountains-sxqb",
+                summary: "The Shenxiang Quanbian witness assigns the northern mountain to the chin point.",
+              },
+              {
+                positionId: "shenyi-lower-face-zone",
+                sourceId: "heritage-five-mountains-shenyi",
+                summary: "The Shenyi Fu commentary uses a broader lower-face zone for the northern mountain.",
+              },
+              {
+                positionId: "renlun-datong-chin",
+                sourceId: "heritage-five-mountains-renlun-datong",
+                summary: "人倫大統賦 witnesses the northern mountain as 頦 (chin), distinguished from 太清's 頷 term.",
+              },
+            ],
           }),
         ],
         note: "Directional naming (南/北/東/西/中) is witnessed by 人倫大統賦 (薛延年注) — the best-attested authorship in this corpus — not by a generic 麻衣-lineage source as previously recorded here. The edition is identified but its section-level locator has not yet been read by this project, so directional runtime wording remains held.",
@@ -495,17 +504,22 @@ export const HERITAGE_EVIDENCE = deepFreeze({
         disagreements: [
           disagreement({
             disagreementId: "four-rivers-eye-mouth",
-            positionId: "primary-eye-huai-mouth-he",
-            sourceId: "heritage-four-rivers-primary",
-            summary: "Primary position: eye is 淮 and mouth is 河.",
-          }),
-          disagreement({
-            disagreementId: "four-rivers-eye-mouth",
-            positionId: "variant-eye-he-mouth-huai",
-            sourceId: "heritage-four-rivers-sxqb-shoujuan-xiangshuo",
-            summary: "Variant position: eye is 河 and mouth is 淮.",
-            disagreementNature: "UNRESOLVED",
-            note: "The separate Shenxiang Quanbian juan 2 section is not yet compared, so intra-text variation cannot be ruled out.",
+            nature: "MAPPING",
+            target: { targetType: "CONSTRUCT", targetRef: "fourRivers" },
+            status: "OPEN",
+            positions: [
+              {
+                positionId: "primary-eye-huai-mouth-he",
+                sourceId: "heritage-four-rivers-primary",
+                summary: "Primary position: eye is 淮 and mouth is 河.",
+              },
+              {
+                positionId: "variant-eye-he-mouth-huai",
+                sourceId: "heritage-four-rivers-sxqb-shoujuan-xiangshuo",
+                summary: "Variant position: eye is 河 and mouth is 淮.",
+                note: "The separate Shenxiang Quanbian juan 2 section is not yet compared, so intra-text variation cannot be ruled out.",
+              },
+            ],
           }),
         ],
       },
@@ -526,11 +540,17 @@ export const HERITAGE_EVIDENCE = deepFreeze({
         disagreements: [
           disagreement({
             disagreementId: "four-rivers-eye-mouth",
-            positionId: "variant-eye-he-mouth-huai",
-            sourceId: "heritage-four-rivers-sxqb-shoujuan-xiangshuo",
-            summary: "Variant position retained without promotion until the separate 卷二 四瀆 section is checked.",
+            nature: "MAPPING",
+            target: { targetType: "CONSTRUCT", targetRef: "fourRivers" },
             status: "OPEN",
-            disagreementNature: "UNRESOLVED",
+            positions: [
+              {
+                positionId: "variant-eye-he-mouth-huai",
+                sourceId: "heritage-four-rivers-sxqb-shoujuan-xiangshuo",
+                summary: "Variant position: eye is 河 and mouth is 淮.",
+                note: "The separate Shenxiang Quanbian juan 2 section is not yet compared, so intra-text variation cannot be ruled out.",
+              },
+            ],
           }),
         ],
         note: "The Zhihetang juan 2 section still needs comparison; do not decide whether this is intra-text variation or an inter-text lineage split.",

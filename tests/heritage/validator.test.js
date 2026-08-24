@@ -47,15 +47,12 @@ const baseLineage = (overrides = {}) => ({
   translationAgentId: "repository-editorial",
   constituents: [],
   relatedSystems: [],
-  attestedCombinations: [],
-  attestedCombinationsStatus: "NONE_ATTESTED",
   disagreements: [],
   unverifiedClaims: [],
   negativeFinding: null,
   note: null,
   ...overrides,
-});
-
+  });
 const validRecord = (overrides = {}) => ({
   constructId: "test-construct",
   canonicalChineseName: "三停",
@@ -171,73 +168,6 @@ test("every fixture is valid and contains no placeholder provenance", () => {
       assert.ok(lineage.sourceId);
       assert.doesNotMatch(lineage.source, /pending-/i);
     }
-  }
-});
-
-
-test("validator rejects a non-empty combination list marked NONE_ATTESTED", () => {
-  const record = validRecord();
-  record.lineages.primary.attestedCombinations = [{
-    combinationId: "three-sections-example",
-    constructIds: ["test-construct"],
-    sourceId: "heritage-three-sections",
-    sectionLocator: null,
-    folioLocator: null,
-    combinationScope: "WITHIN_CONSTRUCT",
-    renderPolicy: "RESEARCH_ONLY",
-    measurementAvailability: "NOT_RECORDED",
-    prohibitedForUserInference: true,
-    note: null,
-  }];
-  const result = validateHeritageRecord(record);
-  assert.equal(result.valid, false);
-  assert.ok(result.errors.some((error) => /NONE_ATTESTED|combination/i.test(error)));
-});
-
-test("validator accepts explicitly sourced combinations and disagreements", () => {
-  const record = validRecord();
-  record.lineages.primary.attestedCombinations = [{
-    combinationId: "three-sections-example",
-    constructIds: ["test-construct"],
-    sourceId: "heritage-three-sections",
-    sectionLocator: null,
-    folioLocator: null,
-    combinationScope: "WITHIN_CONSTRUCT",
-    renderPolicy: "RESEARCH_ONLY",
-    measurementAvailability: "NOT_RECORDED",
-    prohibitedForUserInference: true,
-    note: null,
-  }];
-  record.lineages.primary.attestedCombinationsStatus = "RECORDED";
-  record.lineages.primary.disagreements = [{
-    disagreementId: "example-disagreement",
-    positionId: "alternate-position",
-    sourceId: "heritage-three-sections",
-    summary: "An attributed alternate position retained for research review.",
-    status: "PARALLEL",
-    disagreementNature: "INTER_TEXT",
-    note: null,
-  }];
-  const result = validateHeritageRecord(record);
-  assert.equal(result.valid, true, result.errors.join("; "));
-});
-
-test("translation provenance is a closed enum", () => {
-  assert.deepEqual(HERITAGE_TRANSLATION_PROVENANCE, [
-    "PROJECT_ORIGINAL",
-    "PUBLIC_DOMAIN_TRANSLATION",
-    "NOT_TRANSLATED_HERITAGE_ONLY",
-  ]);
-});
-
-test("cross-family combinations are sourced, heritage-only and non-operational", () => {
-  assert.ok(heritageCombinationFixtures.length > 0);
-  for (const fixture of heritageCombinationFixtures) {
-    const result = validateHeritageCombination(fixture);
-    assert.equal(result.valid, true, result.errors.join("; "));
-    assert.equal(fixture.combinationScope, "CROSS_CONSTRUCT");
-    assert.equal(fixture.renderPolicy, "HERITAGE_ONLY");
-    assert.equal(fixture.prohibitedForUserInference, true);
   }
 });
 
