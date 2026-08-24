@@ -2,7 +2,7 @@
 
 Status: **BLOCKED — not commercially cleared**
 
-Last reviewed: 11 August 2026
+Last reviewed: 23 August 2026
 
 This document is the release record, not an assertion that unfinished work is
 complete. No paid build or store submission may describe the six reading
@@ -36,8 +36,14 @@ word without supplying the signed evidence does not open the gate.
 ## Current source defects
 
 - The Mian Xiang source is unspecified.
-- The Su Wen chapter reference has no recorded edition or translation.
-- The neoclassical proportion source is unspecified.
+- The Su Wen edition is recorded, but the citation has not been independently
+  verified and its public-domain basis is not commercial/legal clearance.
+- The neoclassical proportion record now points to modern anthropometric studies
+  that challenge the canons as population norms. Those studies are negative
+  evidence, not a heritage source or a publication-rights clearance.
+- Four classical construct records now have source-level public-domain-by-age
+  evidence, but scan/surrogate terms, project translation rights, contributor
+  agreements and written legal approval remain separate gates.
 - Repository editorial copy has no recorded contributor agreement.
 
 

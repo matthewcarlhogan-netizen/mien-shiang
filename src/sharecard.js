@@ -70,11 +70,11 @@ export function buildShareModel(reading, caveatText, opts = {}) {
     : null;
 
   return {
-    wordmark: "面相",
+    wordmark: "MIEN SHIANG",
     mode: unlocked ? "unlocked" : "locked",
     shapeLine: fe?.available ? `${titleCase(fe.shape)} — ${fe.name} Element` : null,
     canon,
-    headline: s.headline.map((x) => `${x.label} ${x.hanzi}`),
+    headline: s.headline.map((x) => x.label),
     coverage: s.coverage,
     emphasis: s.emphasis,
     /* WHOLE attributed strings, never excerpts.

@@ -14,6 +14,7 @@ Use this register to stop prompts, discussions and implementation from collapsin
 - Five Mountains and Twelve Palaces are separate systems; the nose/central mountain maps to Earth in the Five Mountains model.
 - Exact geometry with insufficient evidence is marked `needsVerification: true` and is not shipped as fact.
 - Current history/baseline behaviour and limits remain as implemented until deliberately migrated.
+- Heritage connector architecture Stages 1 (data spine) and 2 (deterministic resolver) are approved and frozen; see `docs/HERITAGE_CONNECTOR_STAGE_STATUS.md` for the frozen code baseline, verification counts and architectural locks. Stage 3 (prose/Reflection Engine integration) has not started.
 
 ## Approved direction, not necessarily complete
 
@@ -24,6 +25,17 @@ Use this register to stop prompts, discussions and implementation from collapsin
 - No ads and no weekly subscription.
 - Independent compliance and release review.
 - A human-supervised cloud development path using a two-core GitHub Codespace and interactive Gemini CLI sign-in. It creates task branches and pull requests; it does not add runtime AI or a public-comment agent trigger.
+
+### DR-2026-08-24-HERITAGE-CONNECTOR-STAGES-1-2-FREEZE
+
+- **Date:** 24 August 2026
+- **Owner:** product owner
+- **Status:** approved
+- **Decision:** Heritage connector architecture Stage 1 (the typed connector-graph data spine — `HERITAGE_REGISTRY`, `HERITAGE_CONNECTOR_REGISTRY`, and the surrounding Stage 1 registries/schema/validator) and Stage 2 (the deterministic, pure `resolveHeritageConnections` resolver in `src/heritage/resolver.js`) are both APPROVED and FROZEN.
+- **Frozen Stage-2 code baseline:** `df8cf22b9257c2a7fb75affd30b5e7dc6d15caa0` on `feature/heritage-connectors`, full detail in `docs/HERITAGE_CONNECTOR_STAGE_STATUS.md`.
+- **Rationale:** Both stages went through repeated, specific correction rounds against detailed review, ending in a resolver whose finite/fail-closed contracts, condition-AST semantics, and Stage 1/Module boundaries are all pinned by named tests. Freezing establishes a stable base for Stage 3 (prose/Reflection Engine integration) rather than leaving Stage 2 as an indefinite moving target.
+- **Consequence:** `src/heritage/resolver.js` and its Stage 1 registries are not to be modified without a demonstrated regression against one of the architectural locks recorded in `docs/HERITAGE_CONNECTOR_STAGE_STATUS.md`. Stage 3 branches from `main` after this freeze, not from `feature/heritage-connectors`.
+- **Explicit non-consequence:** This freeze does not itself authorise Stage 3 work to begin; Stage 3 remains a separate, not-yet-started decision.
 
 ### DR-2026-08-19-CULTURAL-REVIEW-RETIREMENT
 

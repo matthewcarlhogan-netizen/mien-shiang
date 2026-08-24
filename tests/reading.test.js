@@ -107,12 +107,12 @@ test("near-equal courts read as balanced rather than picking a winner", () => {
   const r = readThreeCourts(geometryReport(pts));
   assert.equal(r.balanced, true);
   assert.equal(r.dominant, null);
-  assert.match(r.reading, /balance/i);
+  assert.match(r.measurementObservation, /balanced/i);
 });
 
 // ───────────────────────────────────────────────────────── Twelve Palaces ───
 
-test("all twelve palaces have real region mappings and are measured", () => {
+test("all twelve palaces have real region mappings and are supported", () => {
   const r = readTwelvePalaces(makeRaw());
   assert.equal(r.totalCount, 12);
   assert.equal(r.supportedCount, 12);
@@ -121,8 +121,8 @@ test("all twelve palaces have real region mappings and are measured", () => {
   assert.equal(PALACES.every((palace) => palace.zone || palace.zones?.length), true);
   for (const p of r.palaces) {
     assert.equal(p.measured, true, `${p.key}: must be measured`);
-    assert.ok(["clear", "even", "shadowed"].includes(p.tone));
-    assert.ok(p.toneGloss.length > 0);
+    assert.equal(p.tone, undefined);
+    assert.equal(p.toneGloss, undefined);
   }
 });
 
@@ -133,37 +133,34 @@ test("a missing bilateral sample refuses that palace instead of averaging one si
   const travel = r.palaces.find((palace) => palace.key === "travel");
   assert.equal(r.measuredCount, 11);
   assert.equal(travel.measured, false);
-  assert.equal(travel.tone, null);
-  assert.match(travel.notMeasuredNote, /could not be measured/i);
+  assert.equal(travel.tone, undefined);
+  assert.match(travel.notMeasuredNote, /Region not available in this photo/i);
 });
 
-test("bilateral palace tones deterministically combine both sides", () => {
+test("palace pigment measurement is abstained", () => {
   const raw = makeRaw();
   raw.zones.eyebrow_right.deltaMi = 5;
   raw.zones.eyebrow_left.deltaMi = -1;
   const siblings = readTwelvePalaces(raw).palaces.find((palace) => palace.key === "siblings");
-  assert.equal(siblings.tone, "shadowed");
+  assert.equal(siblings.tone, undefined);
+  assert.equal(siblings.measured, true);
 });
 
-test("the illness palace is rendered as trials, and the narrowing is declared", () => {
+test("the trials label remains English while unverified heritage prose stays withheld", () => {
   const trials = PALACES.find((p) => p.key === "trials");
-  assert.equal(trials.hanzi, "疾厄宮");
+  assert.equal(trials.hanzi, undefined);
   assert.equal(trials.name, "Palace of Trials");
-  // The classical name carries a health sense this build does not use. Saying
-  // so openly is the point; performing the narrowing silently is not.
-  assert.match(trials.translationNote, /Health Palace/);
-  assert.match(trials.translationNote, /adversity/i);
-  assert.doesNotMatch(trials.reading, /health|illness|disease/i);
+  assert.equal(trials.reading, null);
+  assert.equal(trials.heritageStatus, "WITHHELD_PENDING_SOURCE_REVIEW");
+  assert.match(trials.sourceReviewNote, /chapter body.*source review/i);
 });
 
-test("palace tone tracks the measured pigment difference", () => {
+test("palace pigment measurement is abstained regardless of input", () => {
   const shadowed = readTwelvePalaces(makeRaw({ deltaMi: 5 }));
   const clear = readTwelvePalaces(makeRaw({ deltaMi: -5 }));
-  const even = readTwelvePalaces(makeRaw({ deltaMi: 0 }));
   const toneOf = (r) => r.palaces.find((p) => p.key === "life").tone;
-  assert.equal(toneOf(shadowed), "shadowed");
-  assert.equal(toneOf(clear), "clear");
-  assert.equal(toneOf(even), "even");
+  assert.equal(toneOf(shadowed), undefined);
+  assert.equal(toneOf(clear), undefined);
 });
 
 // ────────────────────────────────────────────────────────────────── qi se ───

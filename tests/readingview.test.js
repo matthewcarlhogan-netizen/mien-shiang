@@ -164,7 +164,7 @@ test("renderReadingGated locked=false produces the same structure as renderReadi
   const gated   = renderReadingGated(reading, { locked: false });
   const plain   = renderReading(reading);
   // Both must include all four section IDs.
-  for (const phrase of ["Five Elements", "Three Courts", "Twelve Palaces", "Qi se"]) {
+  for (const phrase of ["Five Elements", "Three Sections", "Twelve Palaces", "Qi se"]) {
     assert.ok(gated.includes(phrase), `gated unlocked missing: ${phrase}`);
     assert.ok(plain.includes(phrase), `plain missing: ${phrase}`);
   }
@@ -191,7 +191,7 @@ test("renderReadingGated locked=true still contains gated section text (for sear
   const reading = fullReading();
   const html = renderReadingGated(reading, { locked: true, overlayHtml: "" });
   // Content is in the DOM (aria-hidden blur layer) even when visually obscured.
-  assert.ok(html.includes("Three Courts") || html.includes("Twelve Palaces"),
+  assert.ok(html.includes("Three Sections") || html.includes("Twelve Palaces"),
     "gated section text present in the DOM even when locked");
 });
 

@@ -281,9 +281,9 @@ test("the verdict speaks to the reader but makes no claim about their traits", (
   assert.match(v, /chi/);
   assert.match(v, /your reading/i);
   assert.doesNotMatch(v, /personality|health|future|will happen/i);
-  assert.equal(verdictFor({ ascendant: "ping" }), "Today, your reading is level — 平.");
-  assert.equal(verdictFor(null), "Today, your reading is level — 平.");
-  assert.equal(verdictFor({ ascendant: "nonsense" }), "Today, your reading is level — 平.");
+  assert.equal(verdictFor({ ascendant: "ping" }), "Today, your reading is level.");
+  assert.equal(verdictFor(null), "Today, your reading is level.");
+  assert.equal(verdictFor({ ascendant: "nonsense" }), "Today, your reading is level.");
 });
 
 test("every compass point has a concise hook and reflection prompt", () => {

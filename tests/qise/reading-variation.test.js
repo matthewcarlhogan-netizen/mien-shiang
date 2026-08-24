@@ -33,8 +33,8 @@ import { fileURLToPath } from "node:url";
 import { enumerateReachableStates, stateKey } from "../../src/qise/reading-state.js";
 import {
   composeReading, COMPONENTS, variationCycle, variantIndices, LAYERS,
+  heritageMaterialFor,
 } from "../../src/qise/reflection.js";
-import { HERITAGE } from "../../src/qise/reflection-corpus.js";
 
 const STATES = enumerateReachableStates();
 const READ = STATES.filter((s) => s.availability === "read");
@@ -55,13 +55,16 @@ const profileOf = (composed) => ({
 
 test("every state can say itself many ways before it must repeat", () => {
   // A year of daily scans on one persistent state is the worst case a real user
-  // can present. The cycle must clear it comfortably.
+  // can present. Verified passages clear it comfortably. A source-review gap
+  // stays fixed by design, but the observation still has useful variation.
   for (const s of READ.filter((_, i) => i % 401 === 0)) {
-    assert.ok(variationCycle(s) >= 365,
+    const minimum = heritageMaterialFor(s).abstained ? 24 : 365;
+    assert.ok(variationCycle(s) >= minimum,
       `a read state exhausts its wordings in ${variationCycle(s)} occurrences: ${stateKey(s)}`);
   }
   for (const s of ABSTAINED.filter((_, i) => i % 401 === 0)) {
-    assert.ok(variationCycle(s) >= 24,
+    const minimum = heritageMaterialFor(s).abstained ? 12 : 24;
+    assert.ok(variationCycle(s) >= minimum,
       `an abstained state exhausts its wordings in ${variationCycle(s)} occurrences: ${stateKey(s)}`);
   }
 });
@@ -119,7 +122,7 @@ test("no wording of any state carries a claim the others avoid", () => {
   }
 });
 
-test("the source passage and its attribution never vary", () => {
+test("the source passage or explicit source-review gap never varies", () => {
   // Provenance is not a surface to re-angle. What a Ming text says must not
   // depend on how many times the app has been opened.
   const heritage = COMPONENTS.find((c) => c.id === "heritage");
@@ -127,11 +130,11 @@ test("the source passage and its attribution never vary", () => {
   for (const s of STATES.filter((_, i) => i % 97 === 0)) {
     assert.equal(heritage.variants(s).length, 1, "the heritage passage has more than one wording");
     assert.equal(note.variants(s).length, 1, "the heritage note has more than one wording");
-    const entry = (HERITAGE[s.heritageConstruct] || {})[s.sourceLineage]
-      || HERITAGE[s.heritageConstruct].primary;
+    const material = heritageMaterialFor(s);
     for (let o = 0; o < 6; o++) {
-      assert.ok(composeReading(s, { occurrence: o }).text.includes(entry.text),
+      assert.ok(composeReading(s, { occurrence: o }).text.includes(material.passage),
         `the source passage changed at occurrence ${o}`);
+      assert.equal(heritageMaterialFor(s).attribution, material.attribution);
     }
   }
 });
@@ -210,7 +213,8 @@ test("the trace records which wording was used, and the occurrence", () => {
   const composed = composeReading(s, { occurrence: 5 });
   assert.equal(composed.occurrence, 5);
   assert.equal(composed.variationCycle, variationCycle(s));
-  const varied = composed.trace.filter((t) => t.variant !== "only");
+  const varied = composed.trace.filter((t) =>
+    t.variant !== "only" && t.variant !== "abstained");
   assert.ok(varied.length >= 3, "the trace does not say which wording was chosen");
   for (const t of varied) assert.match(t.variant, /^\d+ of \d+$/);
 });

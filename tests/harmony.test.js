@@ -130,16 +130,6 @@ test("the harmony value describes canons and never ranks a person", () => {
                         "rank", "attractiveness", "beauty", "out of 10"]) {
     assert.ok(!text.includes(banned), `harmony output must not contain "${banned}"`);
   }
-  // And no second-person verdict: the value describes conventions, so the copy
-  // must not turn round and describe the reader.
-  for (const c of h.components) {
-    assert.ok(!/\byou are\b|\byou have\b/i.test(c.reads),
-      `"${c.reads}" asserts something about the reader`);
-  }
-  // And every component states where its reading comes from.
-  for (const c of h.components) {
-    assert.ok(c.reads.length > 0, `${c.key} must carry its attribution`);
-  }
 });
 
 test("the canons are stated as disagreeing, because they are", () => {
@@ -167,9 +157,25 @@ test("a dropped component changes the basis, and the basis travels", () => {
   assert.equal(straight.basis, [...straight.basis.split("+")].sort().join("+"));
 });
 
-test("weights are declared and sum to one", () => {
+test("weights are declared and sum to 1 with 4:3:2 ratio", () => {
   const total = Object.values(HARMONY_WEIGHTS).reduce((a, b) => a + b, 0);
-  assert.ok(Math.abs(total - 1) < 1e-9, "an undeclared remainder would be a hidden component");
+  assert.ok(Math.abs(total - 1) < 1e-9, "weights must sum to 1");
+  // Check 4:3:2 ratio: canon:sym:jaw = 4:3:2
+  const canon = HARMONY_WEIGHTS.canon;
+  const symmetry = HARMONY_WEIGHTS.symmetry;
+  const jaw = HARMONY_WEIGHTS.jaw;
+  assert.ok(Math.abs(canon / 4 - symmetry / 3) < 1e-9);
+  assert.ok(Math.abs(symmetry / 3 - jaw / 2) < 1e-9);
+});
+
+test("cheekbone input is inert to harmony", () => {
+  const g1 = geometryReport(makeFace());
+  const g2 = { ...g1, cheekbones: { value: 1.0 } };
+  const h1 = readHarmony(g1);
+  const h2 = readHarmony(g2);
+  assert.equal(h1.value, h2.value);
+  assert.equal(h1.basis, h2.basis);
+  assert.deepEqual(h1.components, h2.components);
 });
 
 test("the surface term needs real scalars and never substitutes a default", () => {

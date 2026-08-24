@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 
 import {
   integratedReadingFromScalars, projectIntegratedReading, measureIntegratedReading,
-  assertCompletePalaceMeasurement,
+  assertCompletePalaceStructure,
 } from "../../src/qise/integrated.js";
 import { extractRegions } from "../../src/region-extractor.js";
 import { canonicalFace } from "../fixtures/canonical-face.js";
@@ -91,7 +91,7 @@ test("storage preserves the joined reading and still contains no biometric templ
 test("the screen model makes one synthesis from colour, geometry and palaces", () => {
   const model = integratedReadingModel(colourReading(integratedReadingFromScalars(face(), raw())));
   assert.equal(model.available, true);
-  assert.match(model.headline, /赤 today, over 土 Earth/);
+  assert.match(model.headline, /chi today, over Earth/);
   assert.match(model.synthesis, /changing colour layer/i);
   assert.equal(model.palaces.measuredCount, 12);
   assert.equal(model.palaces.supportedCount, 12);
@@ -100,16 +100,39 @@ test("the screen model makes one synthesis from colour, geometry and palaces", (
   assert.ok(model.harmony.label.includes("named canons"));
 });
 
-test("the accepted-frame boundary refuses an incomplete twelve-palace result with a targeted retry", () => {
+test("the accepted-frame boundary refuses structurally incomplete twelve-palace results", () => {
+  const incompleteReading = { palaces: [{ key: "life" }] };
+  assert.throws(
+    () => assertCompletePalaceStructure(incompleteReading),
+    (error) => error.code === "INCOMPLETE_PALACE_STRUCTURE",
+  );
+});
+
+test("structural validation fails when a palace is missing", () => {
+  const reading = integratedReadingFromScalars(face(), raw());
+  reading.twelvePalaces.palaces = reading.twelvePalaces.palaces.slice(0, 11);
+  assert.throws(() => assertCompletePalaceStructure(reading.twelvePalaces), /Palace count mismatch/);
+});
+
+test("structural validation fails when a palace is duplicated", () => {
+  const reading = integratedReadingFromScalars(face(), raw());
+  reading.twelvePalaces.palaces[0] = reading.twelvePalaces.palaces[1];
+  assert.throws(() => assertCompletePalaceStructure(reading.twelvePalaces), /duplicate/);
+});
+
+test("structural validation fails when metadata is missing", () => {
+  const reading = integratedReadingFromScalars(face(), raw());
+  delete reading.twelvePalaces.palaces[0].location;
+  assert.throws(() => assertCompletePalaceStructure(reading.twelvePalaces), /Life Palace/);
+});
+
+test("a missing capture region is allowed and results in an unmeasured palace", () => {
   const incompleteRaw = raw();
   delete incompleteRaw.zones.temple_left;
   const reading = integratedReadingFromScalars(face(), incompleteRaw);
-  assert.throws(
-    () => assertCompletePalaceMeasurement(reading.twelvePalaces),
-    (error) => error.code === "INCOMPLETE_PALACE_MEASUREMENT"
-      && error.missingPalaces.includes("Travel Palace")
-      && /forehead, temples, eyes and chin/i.test(error.message),
-  );
+  const travel = reading.twelvePalaces.palaces.find((p) => p.key === "travel");
+  assert.equal(travel.measured, false);
+  assert.match(travel.notMeasuredNote, /Region not available in this photo/i);
 });
 
 test("the accepted frame reaches integration before capture teardown erases it", () => {

@@ -1,0 +1,54 @@
+
+export const HERITAGE_MEASUREMENT_AVAILABILITY = Object.freeze([
+  "SUPPORTED_2D",
+  "CONDITIONALLY_SUPPORTED",
+  "CAMERA_GEOMETRY_INSUFFICIENT",
+  "UNSUPPORTED",
+  "UNMEASURABLE",
+  "MODERN_MAPPING_UNSUPPORTED",
+  "NOT_RECORDED",
+  "PERMANENTLY_ABSTAIN",
+]);
+
+export const HERITAGE_VERIFICATION_STATUSES = Object.freeze([
+  "RECORDED_NOT_VERIFIED",
+  "CORROBORATED_NOT_VERIFIED",
+  "VERIFIED_SECONDARY",
+  "VERIFIED_PRIMARY",
+  "ABSTAINED",
+]);
+
+export const HERITAGE_CITATION_STATUSES = Object.freeze([
+  "source-required",
+  "work-recorded",
+  "edition-recorded",
+  "attribution-contradicted",
+  "verified",
+]);
+
+export const HERITAGE_LOCATOR_STATUSES = Object.freeze([
+  "VERIFIED",
+  "RECORDED",
+  "NOT_RECORDED",
+]);
+
+export const HERITAGE_TRANSLATION_PROVENANCE = Object.freeze([
+  "PROJECT_ORIGINAL",
+  "PUBLIC_DOMAIN_TRANSLATION",
+  "NOT_TRANSLATED_HERITAGE_ONLY",
+]);
+
+/*
+ * The six enduring constructs (CLAUDE.md, DR-2026-08-17-B020-CLASS-A). A
+ * shared constant here — rather than importing HERITAGE_REGISTRY — is what
+ * lets validator.js check connector construct references without a circular
+ * import back through registry.js.
+ */
+export const HERITAGE_CONSTRUCT_IDS = Object.freeze([
+  "threeSections",
+  "fiveElements",
+  "twelvePalaces",
+  "fiveMountains",
+  "fourRivers",
+  "fiveOfficers",
+]);

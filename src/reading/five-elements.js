@@ -20,7 +20,6 @@
 /** The five types. Readings are of the TYPE, never of the reader. */
 export const ELEMENTS = {
   wood: {
-    hanzi: "木",
     name: "Wood",
     reading:
       "In Mian Xiang the Wood type is read through the upright and the long — trees rather than stones. " +
@@ -28,7 +27,6 @@ export const ELEMENTS = {
       "rather grow something slowly than force it, and who feel the strain most when they are made to rush.",
   },
   fire: {
-    hanzi: "火",
     name: "Fire",
     reading:
       "Classical Chinese face reading gives Fire the tapering face — broad above and narrowing below, " +
@@ -36,7 +34,6 @@ export const ELEMENTS = {
       "fast, interest that catches easily, and a preference for beginnings over middles.",
   },
   earth: {
-    hanzi: "土",
     name: "Earth",
     reading:
       "In Mian Xiang, Earth is read through breadth and squareness — ground rather than weather. The " +
@@ -44,7 +41,6 @@ export const ELEMENTS = {
       "things to, who would rather be dependable than dazzling.",
   },
   metal: {
-    hanzi: "金",
     name: "Metal",
     reading:
       "In Mian Xiang the Metal type is read through clear edges and defined structure. The texts associate " +
@@ -52,7 +48,6 @@ export const ELEMENTS = {
       "reserve that the classical writers read as discipline rather than coldness.",
   },
   water: {
-    hanzi: "水",
     name: "Water",
     reading:
       "Classical Chinese face reading gives Water the full and rounded face — pooling rather than cutting. " +
@@ -140,12 +135,11 @@ export function readFiveElements(geometry) {
     available: true,
     shape,
     element: mapping.primary,
-    hanzi: primary.hanzi,
     name: primary.name,
     reading: primary.reading,
     /** Named, not hidden. Instruction of the tradition, not of this build. */
     alternates: mapping.alternates.map((k) => ({
-      element: k, name: ELEMENTS[k].name, hanzi: ELEMENTS[k].hanzi,
+      element: k, name: ELEMENTS[k].name,
     })),
     sourcesDiffer: mapping.sourcesDiffer,
     /** Oval is geometry's residual class, so the typing built on it is the

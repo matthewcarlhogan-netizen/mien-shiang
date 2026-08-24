@@ -19,7 +19,7 @@
  * the term once so the two spellings are not read as two different things.
  */
 export const READING_LEAD =
-  "Read in the Mian Xiang (面相) tradition — classical Chinese face reading. " +
+  "Read in the Mian Xiang tradition — classical Chinese face reading. " +
   "Everything below describes what a tradition says, not what is true of you.";
 
 import { readFiveElements } from "./five-elements.js";
