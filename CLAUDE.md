@@ -1,5 +1,47 @@
 # CLAUDE.md
 
+COST CONTROL: Claude is the repository's research/review specialist, not the default implementation worker. Before beginning work, classify the task. If the specification is already settled and the remaining work is primarily mechanical implementation, testing, repository administration, or repetitive toil, STOP and hand execution to Gemini 2.5 Flash.
+
+## AI Context / Cost Control — Mandatory
+
+See `docs/AI_CONTEXT_BUDGET.md` for full policy details.
+
+On 2026-08-24 the Claude usage panel reported that 98% of measured usage was from sessions above 150k context. Oversized persistent conversations are therefore an identified project cost/rate-limit failure mode.
+
+Rules:
+
+1. Claude is a scarce research/review resource.
+
+2. Do not keep one Claude session alive across materially different tasks.
+
+3. When switching to a different task:
+   - checkpoint the completed work into repository state;
+   - use `/clear`;
+   - start the next task from Git + canonical docs + a compact handoff.
+
+4. During a genuinely long single task:
+   - use `/compact` before context becomes very large;
+   - do not repeatedly paste entire conversation histories;
+   - retrieve the smallest relevant repo/source subset instead.
+
+5. Do not spend Claude context on work Gemini 2.5 Flash can execute from a bounded approved specification.
+
+6. Once Claude has determined WHAT should be done and the remaining work is straightforward implementation:
+   STOP CLAUDE WORK.
+   Produce a bounded Gemini 2.5 Flash execution prompt instead.
+
+7. A new agent should normally be able to reconstruct current work from:
+   - current Git state;
+   - canonical repository docs;
+   - one concise task checkpoint.
+   It should NOT require a 100k–150k+ token conversation transcript.
+
+8. Large Claude context is allowed only where the task genuinely requires it, for example:
+   - cross-comparison of many primary historical sources;
+   - difficult architecture reasoning;
+   - investigation where conclusions cannot yet be checkpointed.
+   Even then, checkpoint conclusions between phases and clear context when the research question materially changes.
+
 Context for working on this repo. Read before changing anything in `src/`.\n\n## Canonical operating documents\n\nRead `AGENTS.md`, `docs/PROJECT_CHARTER.md`, `docs/DECISION_REGISTER.md`,\n`docs/AGENT_OPERATING_MODEL.md`, `docs/INTERPRETATION_SYSTEM.md` and the\nrelevant brief under `docs/agents/`. These files distinguish implemented facts\nfrom approved direction and unresolved proposals; chat prompts do not override them.
 
 ## What this is

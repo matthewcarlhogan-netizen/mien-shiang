@@ -16,6 +16,19 @@ Use this register to stop prompts, discussions and implementation from collapsin
 - Current history/baseline behaviour and limits remain as implemented until deliberately migrated.
 - Heritage connector architecture Stages 1 (data spine) and 2 (deterministic resolver) are approved and frozen; see `docs/HERITAGE_CONNECTOR_STAGE_STATUS.md` for the frozen code baseline, verification counts and architectural locks. Stage 3 (prose/Reflection Engine integration) has not started.
 
+### DR-2026-08-25-AI-CONTEXT-MODEL-ROUTING
+
+- **Date:** 25 August 2026
+- **Owner:** product owner
+- **Status:** approved
+- **Decision:**
+    - Claude is reserved primarily for research, source adjudication, architecture and difficult semantic/safety review.
+    - Gemini Flash is the default worker for bounded implementation, repetitive coding, repository administration and mechanical verification.
+    - /compact is required during genuinely long same-task Claude sessions.
+    - /clear is required when switching materially different tasks.
+    - Repository checkpoints/canonical docs are persistent project memory; large chat histories are not.
+    - This routing changes development workflow only and does not weaken provenance, safety, heritage freezes, release gates or product contracts.
+
 ## Approved direction, not necessarily complete
 
 - Scanner-first Android TWA route and GitHub-hosted HTTPS deployment.
