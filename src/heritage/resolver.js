@@ -140,6 +140,20 @@ const MEASUREMENT_CLASS = Object.freeze({
 const classifyMeasurement = (value) => MEASUREMENT_CLASS[value] || "unknown";
 
 /**
+ * Item 3 (Stage 2 review, round 4): a connector with NO CONSTRUCT participant
+ * at all is not scoped to any construct's lineage — it is only ever a
+ * candidate via the explicit concept-anchor mechanism (see
+ * `conceptOnlyCandidates`), independent of which primary construct happens
+ * to be selected. Used both to decide candidacy and, per-connector in the
+ * main loop, to decide whether the SELECTED primary lineage may gate it at
+ * all — it must not, since that lineage belongs to an unrelated construct.
+ */
+const isConceptOnlyConnector = (connector) => {
+  const participants = connector.participants || [];
+  return participants.length > 0 && participants.every((p) => p.nodeType !== "CONSTRUCT");
+};
+
+/**
  * The static measurement signal for one connector participant. This is
  * ALWAYS a registry fact (question 1 in the file header) — never runtime
  * evidence. CONSTITUENT and RELATED_SYSTEM participants carry no measurement
@@ -258,7 +272,18 @@ const strengthToEligibility = (strength) => (strength <= 0 ? "BLOCKED" : strengt
  * the injected registry must not receive ACTIVE eligibility on the strength
  * of that unverifiable claim alone.
  */
+/**
+ * Item 3 (Stage 2 review, round 4): `lineageRecord === undefined` means "not
+ * applicable" — this connector is not scoped to any particular construct's
+ * lineage at all (a concept-only connector like shen-requires-form, whose
+ * candidacy comes from an explicit concept anchor, not from the primary
+ * construct). That must not restrict eligibility at all, so it contributes
+ * no ceiling (+Infinity is absorbed by the Math.min below). `null` (or any
+ * other falsy, non-undefined value) means "applicable, but genuinely
+ * missing/unresolved" and still fails closed to 0, per item 1.
+ */
 function lineageSourceStrength(lineageRecord, sourceRegistry) {
+  if (lineageRecord === undefined) return Number.POSITIVE_INFINITY;
   if (!lineageRecord) return 0;
   const citationStrength = CITATION_STRENGTH[lineageRecord.citationStatus] ?? 0;
   const evidenceStrength = EVIDENCE_STRENGTH_LEVEL[lineageRecord.evidenceStrength] ?? 1;
@@ -492,45 +517,131 @@ export function negativeRuleViolations(connector, negativeRelationshipRegistry) 
  *
  * — a finite, typed statement of intent ("something is asking whether
  * fromRef currently classifies/determines toRef"), never an inference this
- * function makes on its own. A rule fires only when BOTH are true: the
- * connector structurally involves the rule's (canonicalised) fromRef/toRef
- * pair, AND that exact pair appears in `attemptedBindings`. With no
- * `runtimeBindingContext` (or an empty `attemptedBindings`), this function
- * always returns `[]` — a historical connector's mere existence never
- * triggers it.
+ * function makes on its own.
+ *
+ * Two corrections from round 3 (Stage 2 review, round 4):
+ *
+ * 1. SENTINEL DESTINATIONS. `shen-unmeasurable`'s toRef is
+ *    "measurementBinding" — a governance sentinel naming an abstract
+ *    RUNTIME OPERATION ("acquire a measurement binding"), not a heritage
+ *    graph node. No connector could ever declare a "measurementBinding"
+ *    participant, so requiring it to appear as one (as `fromRef` correctly
+ *    must) made this rule permanently unreachable through this function.
+ *    RUNTIME_BINDING_SENTINEL_REFS names the finite set of toRefs exempt
+ *    from the structural-participant requirement; `fromRef` is NOT exempt —
+ *    the connector must still genuinely involve the heritage node the
+ *    operation would apply to (e.g. "shen").
+ * 2. FAIL CLOSED ON MALFORMED INPUT. A `runtimeBindingContext` that IS
+ *    supplied but is malformed (`attemptedBindings` not an array, or
+ *    containing an entry that is not a well-formed `{fromRef, toRef}` pair
+ *    of non-empty strings) must not silently behave like "no attempt was
+ *    made" — that would let a broken caller accidentally promote a
+ *    forbidden binding to ordinary presentation. Instead, every ACTIVE
+ *    FORBID_RUNTIME_BINDING rule whose `fromRef` the connector structurally
+ *    involves is treated as blocked (`contextValid: false` on the return),
+ *    even though the specific attempted pairing could not be confirmed. A
+ *    genuinely absent `runtimeBindingContext`, or a well-formed EMPTY
+ *    `attemptedBindings` array, both correctly mean "no attempt" and return
+ *    `{ violations: [], contextValid: true }`.
+ *
+ * Returns `{ violations: string[], contextValid: boolean }`.
  */
-export function negativeRuleRuntimeBindingViolations(connector, negativeRelationshipRegistry, runtimeBindingContext = null) {
-  const attemptedBindings = runtimeBindingContext?.attemptedBindings;
-  if (!Array.isArray(attemptedBindings) || attemptedBindings.length === 0) return [];
-  const attemptedPairs = new Set(attemptedBindings
-    .filter((b) => b && b.fromRef && b.toRef)
-    .map((b) => `${canonicalRef(b.fromRef)}->${canonicalRef(b.toRef)}`));
-  if (attemptedPairs.size === 0) return [];
+const RUNTIME_BINDING_SENTINEL_REFS = Object.freeze(["measurementBinding"]);
 
+const isWellFormedBindingEntry = (entry) => !!entry && typeof entry === "object"
+  && typeof entry.fromRef === "string" && entry.fromRef.length > 0
+  && typeof entry.toRef === "string" && entry.toRef.length > 0;
+
+export function negativeRuleRuntimeBindingViolations(connector, negativeRelationshipRegistry, runtimeBindingContext = null) {
   const refs = new Set((connector.participants || []).map((p) =>
     canonicalRef(p.conceptId ?? p.constructId ?? p.constituentId ?? p.relatedSystemId ?? p.participantId)));
+  const activeRuntimeBindingRules = Object.values(negativeRelationshipRegistry || {})
+    .filter((rule) => rule.status === "ACTIVE" && rule.negativeRuleType === "FORBID_RUNTIME_BINDING");
+
+  // No context at all: a genuine, well-formed statement of "nothing attempted".
+  if (runtimeBindingContext === null || runtimeBindingContext === undefined) {
+    return { violations: [], contextValid: true };
+  }
+
+  const rawBindings = runtimeBindingContext.attemptedBindings;
+  const contextStructurallyValid = Array.isArray(rawBindings) && rawBindings.every(isWellFormedBindingEntry);
+
+  if (!contextStructurallyValid) {
+    // Fail closed (see doc comment above): block every rule this connector
+    // could plausibly implicate, rather than trust an unparseable context.
+    const implicated = activeRuntimeBindingRules
+      .filter((rule) => refs.has(canonicalRef(rule.fromRef)))
+      .map((rule) => rule.negativeRuleId);
+    return { violations: implicated, contextValid: false };
+  }
+
+  const attemptedPairs = new Set(rawBindings.map((b) => `${canonicalRef(b.fromRef)}->${canonicalRef(b.toRef)}`));
+  if (attemptedPairs.size === 0) return { violations: [], contextValid: true };
+
   const violated = [];
-  for (const rule of Object.values(negativeRelationshipRegistry || {})) {
-    if (rule.status !== "ACTIVE") continue;
-    if (rule.negativeRuleType !== "FORBID_RUNTIME_BINDING") continue;
+  for (const rule of activeRuntimeBindingRules) {
     const from = canonicalRef(rule.fromRef);
     const to = canonicalRef(rule.toRef);
-    if (!refs.has(from) || !refs.has(to)) continue;
+    if (!refs.has(from)) continue; // the operation's SUBJECT must be structurally present
+    if (!RUNTIME_BINDING_SENTINEL_REFS.includes(to) && !refs.has(to)) continue; // non-sentinel targets must be too
     if (!attemptedPairs.has(`${from}->${to}`)) continue;
     violated.push(rule.negativeRuleId);
   }
-  return violated;
+  return { violations: violated, contextValid: true };
 }
 
 /* ── item 3: runtime PARTICIPANT availability — a third, independent axis ── */
 
 /**
+ * Item 1 (Stage 2 review, round 4): bounded, non-recursive-in-spirit
+ * extraction of every participantId an AST actually tests, through exactly
+ * the six declared node types. This is what lets the blanket participant
+ * gate below defer to the AST ONLY for the participants the AST itself
+ * owns — a connector with `conditionExpression: {type:"ABSENT",
+ * participantId:"beta"}` and a THIRD declared participant "gamma" the AST
+ * never mentions must still respect an explicit ABSENT/UNKNOWN on gamma; the
+ * AST taking over beta's semantics does not hand it authority over
+ * participants it says nothing about.
+ */
+export function referencedParticipantIds(expr) {
+  const ids = new Set();
+  const walk = (node) => {
+    if (!node || typeof node !== "object") return;
+    switch (node.type) {
+      case "ALL":
+      case "ANY":
+        for (const operand of node.operands || []) walk(operand);
+        break;
+      case "NOT":
+        walk(node.operand);
+        break;
+      case "PRESENT":
+      case "ABSENT":
+      case "STATE":
+        if (typeof node.participantId === "string" && node.participantId) ids.add(node.participantId);
+        break;
+      default:
+        break;
+    }
+  };
+  walk(expr);
+  return ids;
+}
+
+const NO_REFERENCED_PARTICIPANTS = Object.freeze(new Set());
+
+/**
  * Whether a connector's DECLARED participants are currently present, per
  * explicitly injected runtime evidence — completely independent of (a)
  * static `measurementAvailability` (can this ever be observed) and (b) any
- * `conditionExpression` (which only exists on some connectors). An ORDINARY
- * connector with no condition at all must not silently treat a participant
- * the caller has explicitly flagged ABSENT or UNKNOWN as if it were present.
+ * `conditionExpression` (which only exists on some connectors, and which
+ * OWNS the semantics for whichever participants it explicitly references —
+ * see `referencedParticipantIds`). A participant NOT referenced by the
+ * connector's own conditionExpression (including every participant on an
+ * unconditional connector, which references none) still falls under this
+ * blanket rule: the caller's explicit ABSENT/UNKNOWN must not be silently
+ * ignored just because SOME OTHER participant happens to have its own AST
+ * clause.
  *
  * Only EXPLICIT signals matter: a participant with no entry at all in
  * `conditionContext.participants` (or no conditionContext supplied) carries
@@ -542,12 +653,13 @@ export function negativeRuleRuntimeBindingViolations(connector, negativeRelation
  * currently connected, so the connector is parked in unavailableRelations
  * with a distinct, honest reason.
  */
-function resolveParticipantRuntimeGate(connector, conditionContext) {
+function resolveParticipantRuntimeGate(connector, conditionContext, referencedIds = NO_REFERENCED_PARTICIPANTS) {
   const statuses = conditionContext?.participants;
   if (!statuses) return { blocked: false, reason: null };
   let sawAbsent = false;
   let sawUnknown = false;
   for (const participant of connector.participants || []) {
+    if (referencedIds.has(participant.participantId)) continue; // owned by the AST — see evaluateConditionExpression
     const status = statuses[participant.participantId];
     if (status === "ABSENT") sawAbsent = true;
     else if (status === "UNKNOWN") sawUnknown = true;
@@ -693,10 +805,8 @@ export function resolveHeritageConnections({
   // resolution, exactly option C for the case nobody opts into option A.
   const anchoredParticipants = conditionContext?.participants || {};
   const conceptOnlyCandidates = allConnectors.filter((connector) => {
-    const participants = connector.participants || [];
-    const isConceptOnly = participants.length > 0 && participants.every((p) => p.nodeType !== "CONSTRUCT");
-    if (!isConceptOnly) return false;
-    return participants.some((p) => p.nodeType === "HERITAGE_CONCEPT" && anchoredParticipants[p.participantId] === "PRESENT");
+    if (!isConceptOnlyConnector(connector)) return false;
+    return connector.participants.some((p) => p.nodeType === "HERITAGE_CONCEPT" && anchoredParticipants[p.participantId] === "PRESENT");
   });
 
   const candidateIds = new Set();
@@ -713,11 +823,24 @@ export function resolveHeritageConnections({
   const sourcePanels = [];
 
   for (const connector of candidates) {
-    const relationshipAvailability = classifyRelationshipAvailability(connector, context, lineageRestriction);
+    // Item 3 (Stage 2 review, round 4): the SELECTED primary lineage may
+    // gate a connector only when that connector is actually scoped to the
+    // primary construct. A concept-only connector (shen-requires-form etc.)
+    // is anchored independently of primaryConstruct/primaryLineage — an
+    // unrelated construct's lineage strength/restriction must not leak into
+    // its eligibility merely because it happened to be the construct the
+    // caller was resolving when the concept was anchored. `undefined` (as
+    // opposed to `null`) signals "not applicable" to lineageSourceStrength.
+    const conceptOnly = isConceptOnlyConnector(connector);
+    const applicableLineageRecord = conceptOnly ? undefined : lineageRecord;
+    const applicableLineageRestriction = conceptOnly ? "NONE" : lineageRestriction;
+
+    const relationshipAvailability = classifyRelationshipAvailability(connector, context, applicableLineageRestriction);
 
     // 5. reject any connector blocked by an ABSOLUTE co-existence ban or the
-    // Stage 1 safety lock. (FORBID_RUNTIME_BINDING is intentionally NOT part
-    // of this — see item 4's gate near the bottom of this loop.)
+    // Stage 1 safety lock. FORBID_RUNTIME_BINDING is a SEPARATE, narrower
+    // check (requires an explicit attempt — see negativeRuleRuntimeBindingViolations)
+    // evaluated immediately below this block, not folded in here.
     const negativeErrors = [];
     checkNegativeRelationshipInvariants(connector, negativeErrors);
     const dataDrivenViolations = negativeRuleViolations(connector, negativeRelationshipRegistry);
@@ -740,28 +863,47 @@ export function resolveHeritageConnections({
       continue;
     }
 
-    // Item 3 (Stage 2 review, round 3): runtime PARTICIPANT availability is a
-    // third, independent axis, but it must not PRE-EMPT an explicit AST
-    // whose own semantics deliberately test for absence (a conditionExpression
-    // of `{type:"ABSENT", participantId:"beta"}` is satisfied BY beta being
-    // absent — the blanket gate below would otherwise reject the connector
-    // before the AST ever got a chance to say so). So: a connector WITH a
-    // conditionExpression hands participant-availability semantics over to
-    // that AST entirely (evaluated next). Only an UNCONDITIONAL connector —
-    // no conditionExpression at all — falls back to the blanket rule: an
-    // explicit ABSENT/UNKNOWN runtime signal on a declared participant is
-    // never silently ignored just because there was no condition to say so.
-    const hasCondition = connector.conditionExpression !== null && connector.conditionExpression !== undefined;
-    if (!hasCondition) {
-      const participantGate = resolveParticipantRuntimeGate(connector, conditionContext);
-      if (participantGate.blocked) {
-        unavailable.push(toResolvedEntry(connector, {
-          relationshipAvailability, conditionResolution: { satisfied: false, resolved: true, reason: participantGate.reason }, disagreementIds,
-          disposition: "PARTICIPANT_UNAVAILABLE",
-          gateReasons: [participantGate.reason],
-        }));
-        continue;
-      }
+    // Item 4/2 (round 4 correction): an ATTEMPTED FORBID_RUNTIME_BINDING is
+    // checked here, immediately after the absolute co-existence bans — NOT
+    // as the last gate before ACTIVE. An explicit attempt is itself an
+    // absolute safety veto (the same severity as blockedByNegativeRule
+    // above, just narrower-triggering): it must be reported precisely as
+    // BLOCKED_RUNTIME_BINDING / RUNTIME_BINDING_CONTEXT_INVALID regardless
+    // of whether the connector would ALSO have been blocked for an unrelated
+    // reason further down (e.g. its own RESEARCH_ONLY policy) — masking a
+    // real attempted-binding violation behind an incidental RESEARCH_ONLY
+    // disposition would hide the one signal callers most need to see.
+    // Structural co-presence alone (no attempt) still never triggers this —
+    // see negativeRuleRuntimeBindingViolations's doc comment.
+    const runtimeBinding = negativeRuleRuntimeBindingViolations(connector, negativeRelationshipRegistry, runtimeBindingContext);
+    if (runtimeBinding.violations.length > 0) {
+      unavailable.push(toResolvedEntry(connector, {
+        relationshipAvailability, conditionResolution: { satisfied: false, resolved: true, reason: "RUNTIME_BINDING_BLOCKED" }, disagreementIds,
+        disposition: runtimeBinding.contextValid ? "BLOCKED_RUNTIME_BINDING" : "RUNTIME_BINDING_CONTEXT_INVALID",
+        gateReasons: runtimeBinding.violations,
+      }));
+      continue;
+    }
+
+    // Item 3 (Stage 2 review) / item 1 (round 4 correction): runtime
+    // PARTICIPANT availability is a third, independent axis, but it must not
+    // PRE-EMPT an explicit AST whose own semantics deliberately test for
+    // absence (a conditionExpression of `{type:"ABSENT", participantId:"beta"}`
+    // is satisfied BY beta being absent). The AST only takes over semantics
+    // for the participants it ACTUALLY REFERENCES (referencedParticipantIds)
+    // — a third declared participant the AST never mentions still falls
+    // under the blanket rule below: an explicit ABSENT/UNKNOWN runtime
+    // signal on it is never silently ignored just because some OTHER
+    // participant happens to have its own AST clause.
+    const referencedIds = referencedParticipantIds(connector.conditionExpression);
+    const participantGate = resolveParticipantRuntimeGate(connector, conditionContext, referencedIds);
+    if (participantGate.blocked) {
+      unavailable.push(toResolvedEntry(connector, {
+        relationshipAvailability, conditionResolution: { satisfied: false, resolved: true, reason: participantGate.reason }, disagreementIds,
+        disposition: "PARTICIPANT_UNAVAILABLE",
+        gateReasons: [participantGate.reason],
+      }));
+      continue;
     }
 
     // 6-7. bounded conditionExpression, evaluated against the same runtime
@@ -780,7 +922,7 @@ export function resolveHeritageConnections({
     // resolveSourceEligibility). This can veto an otherwise-eligible
     // connector even when connector.runtimePolicy alone would have allowed
     // active presentation.
-    const sourceEligibility = resolveSourceEligibility(connector, lineageRecord, sourceRegistry);
+    const sourceEligibility = resolveSourceEligibility(connector, applicableLineageRecord, sourceRegistry);
     if (sourceEligibility === "UNKNOWN_SOURCE") {
       unavailable.push(toResolvedEntry(connector, {
         relationshipAvailability, conditionResolution, disagreementIds,
@@ -795,7 +937,7 @@ export function resolveHeritageConnections({
       }));
       continue;
     }
-    if (lineageRestriction === "ABSTAIN") {
+    if (applicableLineageRestriction === "ABSTAIN") {
       unavailable.push(toResolvedEntry(connector, {
         relationshipAvailability, conditionResolution, disagreementIds,
         disposition: "LINEAGE_ABSTAINED", gateReasons: ["LINEAGE_ABSTAINED"],
@@ -816,7 +958,7 @@ export function resolveHeritageConnections({
       }));
       continue;
     }
-    if (lineageRestriction === "RESEARCH_ONLY") {
+    if (applicableLineageRestriction === "RESEARCH_ONLY") {
       unavailable.push(toResolvedEntry(connector, {
         relationshipAvailability, conditionResolution, disagreementIds,
         disposition: "LINEAGE_RESEARCH_ONLY", gateReasons: ["LINEAGE_RESEARCH_ONLY"],
@@ -836,21 +978,6 @@ export function resolveHeritageConnections({
         conditionResolution, disagreementIds,
         disposition: isPolicyRestricted ? "SOURCE_PANEL" : "SOURCE_PANEL_CEILING",
         gateReasons: isPolicyRestricted ? [] : ["SOURCE_PANEL_CEILING"],
-      }));
-      continue;
-    }
-
-    // Item 4: a FORBID_RUNTIME_BINDING rule blocks only THIS final step —
-    // becoming a live, connected ("ACTIVE") presentation — not the
-    // connector's existence or validity. It is checked last, after every
-    // other gate the connector would otherwise have cleared, so a rule
-    // violation is reported precisely rather than masked by an earlier,
-    // unrelated block.
-    const runtimeBindingViolations = negativeRuleRuntimeBindingViolations(connector, negativeRelationshipRegistry, runtimeBindingContext);
-    if (runtimeBindingViolations.length > 0) {
-      unavailable.push(toResolvedEntry(connector, {
-        relationshipAvailability, conditionResolution, disagreementIds,
-        disposition: "BLOCKED_RUNTIME_BINDING", gateReasons: runtimeBindingViolations,
       }));
       continue;
     }

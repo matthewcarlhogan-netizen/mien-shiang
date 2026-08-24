@@ -9,6 +9,7 @@ import {
   negativeRuleRuntimeBindingViolations,
   resolveSourceEligibility,
   resolveLineageRestriction,
+  referencedParticipantIds,
   RELATIONSHIP_AVAILABILITY,
   DEPTH_MODES,
 } from "../../src/heritage/resolver.js";
@@ -254,6 +255,79 @@ test("8b: resolveHeritageConnections itself surfaces both, still distinct, only 
   assert.ok(formEntry, "form-requires-shen is anchored too — both directions share the shen participant");
   assert.notEqual(shenEntry.connectorId, formEntry.connectorId);
   assert.equal(shenEntry.sourceRuleGroupId, formEntry.sourceRuleGroupId);
+});
+
+/*
+ * Item 3 (Stage 2 review, round 4): a concept-only connector's source
+ * eligibility must not depend on which UNRELATED primary construct/lineage
+ * happened to be selected when it was anchored.
+ */
+test("item 3: shen-requires-form's disposition and source eligibility are unaffected by which unrelated primary construct/lineage anchored it", () => {
+  const underFiveMountains = resolveHeritageConnections(realArgs({
+    readingState: { heritageConstruct: "fiveMountains", sourceLineage: "taiqing-siku" }, // strong lineage (VERIFIED/VERIFIED_PRIMARY)
+    conditionContext: { participants: { shen: "PRESENT" } },
+    depthMode: "SOURCE_DEEP",
+  }));
+  const underFourRivers = resolveHeritageConnections(realArgs({
+    readingState: { heritageConstruct: "fourRivers", sourceLineage: "primary" }, // a different, also-strong lineage
+    conditionContext: { participants: { shen: "PRESENT" } },
+    depthMode: "SOURCE_DEEP",
+  }));
+  const entry = (result) => [...result.activeConnectors, ...result.unavailableRelations, ...result.sourcePanels]
+    .find((e) => e.connectorId === "shen-requires-form");
+  const a = entry(underFiveMountains);
+  const b = entry(underFourRivers);
+  assert.ok(a && b);
+  assert.equal(a.disposition, b.disposition);
+  assert.equal(a.relationshipAvailability, b.relationshipAvailability);
+  assert.equal(a.runtimePolicy, "RESEARCH_ONLY");
+  assert.equal(b.runtimePolicy, "RESEARCH_ONLY");
+});
+
+test("item 3: a synthetic concept-only connector's source eligibility is IDENTICAL whether the unrelated primary lineage is fully solid or fully blocked", () => {
+  // A concept-only connector, HERITAGE_PRESENTATION_ALLOWED so its FINAL
+  // disposition is driven directly by source eligibility (RESEARCH_ONLY
+  // would mask the effect, as the real shen-requires-form connector's own
+  // policy does above) — this isolates item 3's fix unambiguously.
+  const conceptOnlyConnector = synConnector({
+    connectorId: "syn-concept-only",
+    runtimePolicy: "HERITAGE_PRESENTATION_ALLOWED",
+    sourceId: "synthetic-source", // resolves to citationStatus "verified" in SYN_SOURCE_REGISTRY
+    participants: [{ participantId: "gamma", nodeType: "HERITAGE_CONCEPT", conceptId: "gamma", memberScope: "NODE" }],
+  });
+
+  const strongLineageRegistry = {
+    alpha: { constructId: "alpha", lineages: { primary: solidLineage({ measurementAvailability: "SUPPORTED_2D" }) } },
+  };
+  const blockedLineageRegistry = {
+    alpha: {
+      constructId: "alpha",
+      lineages: {
+        primary: {
+          measurementAvailability: "SUPPORTED_2D", runtimeStatus: "RUNTIME_PROSE",
+          availability: "available", terminationState: "continue",
+          citationStatus: "source-required", evidenceStrength: "ABSTAINED", sourceId: "does-not-exist",
+        },
+      },
+    },
+  };
+
+  const underStrongLineage = resolveHeritageConnections(synArgs({
+    heritageRegistry: strongLineageRegistry,
+    connectorRegistry: { "syn-concept-only": conceptOnlyConnector },
+    readingState: { heritageConstruct: "alpha", sourceLineage: "primary" },
+    conditionContext: { participants: { gamma: "PRESENT" } },
+  }));
+  const underBlockedLineage = resolveHeritageConnections(synArgs({
+    heritageRegistry: blockedLineageRegistry,
+    connectorRegistry: { "syn-concept-only": conceptOnlyConnector },
+    readingState: { heritageConstruct: "alpha", sourceLineage: "primary" },
+    conditionContext: { participants: { gamma: "PRESENT" } },
+  }));
+
+  assert.equal(underStrongLineage.activeConnectors.length, 1, "the concept-only connector reaches ACTIVE on its own solid evidence");
+  assert.equal(underBlockedLineage.activeConnectors.length, 1, "an unrelated construct's BLOCKED lineage must not veto a connector it is not scoped to");
+  assert.deepEqual(underStrongLineage.activeConnectors[0], underBlockedLineage.activeConnectors[0]);
 });
 
 /* ── 9. partial availability ──────────────────────────────────────────────── */
@@ -1195,28 +1269,111 @@ test("condition-aware participant gate: NOT(PRESENT beta) through the full resol
   assert.equal(result.activeConnectors.length, 1, "NOT(PRESENT beta) is satisfied when beta is ABSENT");
 });
 
-test("condition-aware participant gate: a THIRD, unconditioned-on participant explicitly ABSENT still blocks — the AST only takes over for participants IT references", () => {
-  // gamma is a declared participant the conditionExpression never mentions.
-  // The connector overall must still respect an explicit ABSENT on gamma,
-  // even though beta's absence is exactly what the AST requires.
+/*
+ * Item 1 (Stage 2 review, round 4): the round-3 fix ("any conditionExpression
+ * at all suspends the blanket gate for the WHOLE connector") was too broad.
+ * The corrected rule: the AST owns availability semantics only for the
+ * participantIds it actually references (referencedParticipantIds); a THIRD
+ * declared participant the AST never mentions still falls under the blanket
+ * rule. Required scenarios A-E, run through the full resolver.
+ */
+const threeParticipantConnector = (conditionExpression) => synConnector({
+  connectorId: "syn-third-participant",
+  conditionExpression,
+  participants: [
+    { participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" },
+    { participantId: "beta", nodeType: "CONSTRUCT", constructId: "beta", memberScope: "ALL_MEMBERS" },
+    { participantId: "gamma", nodeType: "CONSTRUCT", constructId: "gamma-construct", memberScope: "ALL_MEMBERS" },
+  ],
+});
+
+test("A: participants alpha, beta — condition ABSENT(beta), beta ABSENT — satisfied, connector proceeds", () => {
   const connector = synConnector({
-    connectorId: "syn-partial-condition",
+    connectorId: "syn-scenario-a",
     conditionExpression: { type: "ABSENT", participantId: "beta" },
     participants: [
       { participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" },
       { participantId: "beta", nodeType: "CONSTRUCT", constructId: "beta", memberScope: "ALL_MEMBERS" },
     ],
   });
-  // This connector HAS a conditionExpression, so per the documented Stage 2
-  // design the AST is the sole arbiter of participant-based eligibility for
-  // THIS connector — confirming that the presence of a condition hands over
-  // the WHOLE connector's participant-availability question, not just the
-  // referenced participant's.
   const result = resolveHeritageConnections(synArgs({
-    connectorRegistry: { "syn-partial-condition": connector },
+    connectorRegistry: { "syn-scenario-a": connector },
     conditionContext: { participants: { beta: "ABSENT" } },
   }));
+  assert.equal(result.unavailableRelations.length, 0);
   assert.equal(result.activeConnectors.length, 1);
+  assert.deepEqual(result.activeConnectors[0].conditionResolution, { satisfied: true, resolved: true, reason: null });
+});
+
+test("B: participants alpha, beta, gamma — condition ABSENT(beta); beta ABSENT, gamma ABSENT — PARTICIPANT_UNAVAILABLE (gamma is outside the AST)", () => {
+  const connector = threeParticipantConnector({ type: "ABSENT", participantId: "beta" });
+  const result = resolveHeritageConnections(synArgs({
+    connectorRegistry: { "syn-third-participant": connector },
+    conditionContext: { participants: { beta: "ABSENT", gamma: "ABSENT" } },
+  }));
+  assert.equal(result.activeConnectors.length, 0);
+  assert.equal(result.unavailableRelations.length, 1);
+  assert.equal(result.unavailableRelations[0].disposition, "PARTICIPANT_UNAVAILABLE");
+  assert.equal(result.unavailableRelations[0].gateReasons[0], "PARTICIPANT_ABSENT");
+});
+
+test("C: same as B but gamma UNKNOWN — PARTICIPANT_UNAVAILABLE", () => {
+  const connector = threeParticipantConnector({ type: "ABSENT", participantId: "beta" });
+  const result = resolveHeritageConnections(synArgs({
+    connectorRegistry: { "syn-third-participant": connector },
+    conditionContext: { participants: { beta: "ABSENT", gamma: "UNKNOWN" } },
+  }));
+  assert.equal(result.activeConnectors.length, 0);
+  assert.equal(result.unavailableRelations.length, 1);
+  assert.equal(result.unavailableRelations[0].disposition, "PARTICIPANT_UNAVAILABLE");
+  assert.equal(result.unavailableRelations[0].gateReasons[0], "PARTICIPANT_UNKNOWN");
+});
+
+test("D: same as B but gamma PRESENT — condition succeeds, connector proceeds", () => {
+  const connector = threeParticipantConnector({ type: "ABSENT", participantId: "beta" });
+  const result = resolveHeritageConnections(synArgs({
+    connectorRegistry: { "syn-third-participant": connector },
+    conditionContext: { participants: { beta: "ABSENT", gamma: "PRESENT" } },
+  }));
+  assert.equal(result.unavailableRelations.length, 0);
+  assert.equal(result.activeConnectors.length, 1);
+});
+
+test("E: ANY/NOT nested AST reference extraction — referencedParticipantIds walks ALL/ANY/NOT/STATE correctly", () => {
+  assert.deepEqual(referencedParticipantIds(null), new Set());
+  assert.deepEqual(
+    referencedParticipantIds({
+      type: "ANY",
+      operands: [
+        { type: "NOT", operand: { type: "PRESENT", participantId: "alpha" } },
+        { type: "ALL", operands: [{ type: "ABSENT", participantId: "beta" }, { type: "STATE", participantId: "gamma", stateId: "s1" }] },
+      ],
+    }),
+    new Set(["alpha", "beta", "gamma"]),
+  );
+
+  // Through the full resolver: a nested ANY(NOT(PRESENT alpha), ABSENT(beta))
+  // references both alpha and beta; gamma is still outside the AST and an
+  // explicit ABSENT on it must still block.
+  const connector = threeParticipantConnector({
+    type: "ANY",
+    operands: [
+      { type: "NOT", operand: { type: "PRESENT", participantId: "alpha" } },
+      { type: "ABSENT", participantId: "beta" },
+    ],
+  });
+  const blockedByGamma = resolveHeritageConnections(synArgs({
+    connectorRegistry: { "syn-third-participant": connector },
+    conditionContext: { participants: { alpha: "PRESENT", beta: "ABSENT", gamma: "ABSENT" } },
+  }));
+  assert.equal(blockedByGamma.activeConnectors.length, 0);
+  assert.equal(blockedByGamma.unavailableRelations[0].disposition, "PARTICIPANT_UNAVAILABLE");
+
+  const succeedsWithGammaPresent = resolveHeritageConnections(synArgs({
+    connectorRegistry: { "syn-third-participant": connector },
+    conditionContext: { participants: { alpha: "PRESENT", beta: "ABSENT", gamma: "PRESENT" } },
+  }));
+  assert.equal(succeedsWithGammaPresent.activeConnectors.length, 1);
 });
 
 test("source/lineage: requesting a valid, non-default lineage is preserved exactly", () => {
@@ -1312,7 +1469,7 @@ test("historical heritageQiSe + Five Forms coexistence is not automatically bann
   // No runtimeBindingContext at all -> the type-aware check never fires,
   // structural co-presence alone is not an attempted binding.
   const noAttempt = negativeRuleRuntimeBindingViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY, null);
-  assert.deepEqual(noAttempt, []);
+  assert.deepEqual(noAttempt, { violations: [], contextValid: true });
 
   const result = resolveHeritageConnections(realArgs({
     readingState: { heritageConstruct: "fiveElements", sourceLineage: "primary" },
@@ -1336,7 +1493,8 @@ test("an attempted modern QiSe->FiveForms classification is blocked by the actua
   // The actual registry rule (canonical-ref normalized) is what fires, and
   // only because an attempt was declared.
   const runtimeBindingHits = negativeRuleRuntimeBindingViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY, runtimeBindingContext);
-  assert.ok(runtimeBindingHits.includes("no-qise-to-form-classification"), runtimeBindingHits.join(","));
+  assert.equal(runtimeBindingHits.contextValid, true);
+  assert.ok(runtimeBindingHits.violations.includes("no-qise-to-form-classification"), runtimeBindingHits.violations.join(","));
 
   const result = resolveHeritageConnections(realArgs({
     readingState: { heritageConstruct: "fiveElements", sourceLineage: "primary" },
@@ -1353,7 +1511,100 @@ test("an attempted binding for an UNRELATED ref pair does not block a connector 
   const connector = historicalQiSeFiveFormsConnector();
   const runtimeBindingContext = { attemptedBindings: [{ fromRef: "shen", toRef: "measurementBinding" }] };
   const hits = negativeRuleRuntimeBindingViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY, runtimeBindingContext);
-  assert.deepEqual(hits, []);
+  assert.deepEqual(hits, { violations: [], contextValid: true });
+});
+
+/*
+ * Item 2 (Stage 2 review, round 4): the shen-unmeasurable rule
+ * (fromRef "shen", toRef "measurementBinding" — a governance SENTINEL with
+ * no participant counterpart) must be reachable through the SAME
+ * type-aware mechanism as no-qise-to-form-classification, using the SAME
+ * four-rivers-shen-corresponds connector (which already carries a
+ * historicalState correctly marking shen UNMEASURABLE, so the SEPARATE
+ * checkNegativeRelationshipInvariants historicalStates check does not fire
+ * here — this proof is isolated to the runtime-binding path).
+ */
+test("Shen + explicit shen->measurementBinding attempt is blocked by the actual shen-unmeasurable registry rule", () => {
+  const connector = clone(HERITAGE_CONNECTOR_REGISTRY["four-rivers-shen-corresponds"]);
+  const runtimeBindingContext = { attemptedBindings: [{ fromRef: "shen", toRef: "measurementBinding" }] };
+
+  const hits = negativeRuleRuntimeBindingViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY, runtimeBindingContext);
+  assert.equal(hits.contextValid, true);
+  assert.ok(hits.violations.includes("shen-unmeasurable"), hits.violations.join(","));
+
+  const result = resolveHeritageConnections(realArgs({
+    readingState: { heritageConstruct: "fourRivers", sourceLineage: "primary" },
+    connectorRegistry: { ...HERITAGE_CONNECTOR_REGISTRY, "four-rivers-shen-corresponds": connector },
+    runtimeBindingContext,
+  }));
+  const found = result.unavailableRelations.find((e) => e.connectorId === "four-rivers-shen-corresponds");
+  assert.ok(found, "must be present, fully traceable — not silently dropped");
+  assert.equal(found.disposition, "BLOCKED_RUNTIME_BINDING");
+  assert.deepEqual(found.gateReasons, ["shen-unmeasurable"]);
+});
+
+test("the SAME Shen connector with NO binding attempt is not blocked merely because Shen exists historically", () => {
+  const connector = clone(HERITAGE_CONNECTOR_REGISTRY["four-rivers-shen-corresponds"]);
+  const hits = negativeRuleRuntimeBindingViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY, null);
+  assert.deepEqual(hits, { violations: [], contextValid: true });
+
+  const result = resolveHeritageConnections(realArgs({
+    readingState: { heritageConstruct: "fourRivers", sourceLineage: "primary" },
+  }));
+  const found = [...result.activeConnectors, ...result.unavailableRelations].find((e) => e.connectorId === "four-rivers-shen-corresponds");
+  assert.notEqual(found.disposition, "BLOCKED_RUNTIME_BINDING");
+});
+
+/*
+ * Item 2: malformed runtimeBindingContext fails CLOSED — it must never
+ * silently behave like "no attempt was made".
+ */
+test("malformed runtimeBindingContext (attemptedBindings not an array) fails closed for an implicated connector", () => {
+  const connector = historicalQiSeFiveFormsConnector();
+  const malformed = { attemptedBindings: "not-an-array" };
+  const hits = negativeRuleRuntimeBindingViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY, malformed);
+  assert.equal(hits.contextValid, false);
+  assert.ok(hits.violations.includes("no-qise-to-form-classification"), hits.violations.join(","));
+
+  const result = resolveHeritageConnections(realArgs({
+    readingState: { heritageConstruct: "fiveElements", sourceLineage: "primary" },
+    connectorRegistry: { ...HERITAGE_CONNECTOR_REGISTRY, "syn-qise-canonical": connector },
+    runtimeBindingContext: malformed,
+  }));
+  const found = [...result.activeConnectors, ...result.unavailableRelations].find((e) => e.connectorId === "syn-qise-canonical");
+  assert.equal(found.disposition, "RUNTIME_BINDING_CONTEXT_INVALID");
+  assert.equal(result.activeConnectors.some((e) => e.connectorId === "syn-qise-canonical"), false);
+});
+
+test("malformed runtimeBindingContext (one malformed entry among well-formed ones) still fails closed", () => {
+  const connector = historicalQiSeFiveFormsConnector();
+  const malformed = { attemptedBindings: [{ fromRef: "heritageQiSe", toRef: "fiveElements" }, { fromRef: "onlyFromRef" }] };
+  const hits = negativeRuleRuntimeBindingViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY, malformed);
+  assert.equal(hits.contextValid, false);
+  assert.ok(hits.violations.includes("no-qise-to-form-classification"));
+});
+
+test("malformed runtimeBindingContext does NOT block a connector that could never be implicated by any FORBID_RUNTIME_BINDING rule", () => {
+  const connector = synConnector({
+    connectorId: "syn-unrelated",
+    participants: [{ participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" }],
+  });
+  const malformed = { attemptedBindings: "not-an-array" };
+  const hits = negativeRuleRuntimeBindingViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY, malformed);
+  assert.equal(hits.contextValid, false);
+  assert.deepEqual(hits.violations, [], "a malformed context is not a license to block every connector, only ones it could plausibly implicate");
+
+  const result = resolveHeritageConnections(synArgs({
+    connectorRegistry: { "syn-unrelated": connector },
+    runtimeBindingContext: malformed,
+  }));
+  assert.equal(result.activeConnectors.length, 1);
+});
+
+test("a genuinely EMPTY, well-formed attemptedBindings array is valid and means no attempt — not malformed", () => {
+  const connector = historicalQiSeFiveFormsConnector();
+  const hits = negativeRuleRuntimeBindingViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY, { attemptedBindings: [] });
+  assert.deepEqual(hits, { violations: [], contextValid: true });
 });
 
 test("negative-rule: shen-unmeasurable is enforced (via historicalStates, unreachable to the pairwise-ref matcher by design)", () => {
