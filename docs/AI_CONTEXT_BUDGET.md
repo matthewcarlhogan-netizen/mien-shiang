@@ -5,7 +5,7 @@ To manage AI model usage costs and maintain efficient session context by routing
 
 ## Model Routing
 
-### CLAUDE
+### Claude
 The repository's research/review specialist. Use for:
 - Deep research and architectural decisions.
 - Historical/source adjudication.
@@ -13,7 +13,7 @@ The repository's research/review specialist. Use for:
 - Compliance/safety reasoning.
 - Reviewing sensitive Gemini output.
 
-### GEMINI 2.5 FLASH
+### Gemini 2.5 Flash
 The repository's default implementation/toil worker. Use for:
 - Implementation from an approved specification.
 - Mechanical refactoring, repetitive coding, bulk test creation.
@@ -27,15 +27,19 @@ The repository's default implementation/toil worker. Use for:
 - **`/clear`**: Mandatory when switching to a materially different task. Start the new task from Git + canonical docs + a compact handoff.
 
 ## Checkpoint and Handoff Format
-A substantial Claude task must end by recording:
-- Objective
-- Authoritative branch / HEAD
-- Decisions frozen during the task
-- Files changed
-- Unresolved blockers
-- Exact verification results
-- Exact next action
-- Explicit files/contracts the next agent must not modify
+Every agent handoff must state:
+- task and acceptance criteria
+- inputs and source versions
+- files changed
+- contracts changed
+- tests and evidence
+- decisions made
+- unresolved risks
+- next owner
+- authoritative branch / HEAD
+- frozen decisions/contracts
+- exact next action
+- files/contracts not to modify
 
 ## Escalation
 Gemini 2.5 Flash must STOP and escalate if:
