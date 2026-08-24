@@ -339,7 +339,7 @@ function gateOverlayHtml(shareCount) {
   return `
     <div class="gate-card">
       <p class="gate-title">Unlock the full reading</p>
-      <p class="gate-sub">Three Courts, Qi Se and Twelve Palaces</p>
+    <p class="gate-sub">Three Sections, Qi Se and Twelve Palaces</p>
       <div class="gate-opts">
         <div class="gate-opt">
           <button id="gate-share" class="gate-btn gate-btn-share" type="button">

@@ -45,6 +45,10 @@ import {
 import { frameStats } from "../../qise/framestats.js";
 import { computeReadingMetrics, lumRatioP90P50 } from "../../qise/metrics.js";
 import { interpretReading, readingConfidence, axesOf, planSegment, BASELINE_VERSION } from "../../qise/baseline.js";
+import { passageFor } from "../../qise/passages.js";
+import { reflectionMode } from "../../qise/reading-flags.js";
+import { reflectionFor } from "../../qise/reading-pipeline.js";
+import { readingTiers } from "../../qise/reading-tiers.js";
 import { openStore } from "../../qise/store.js";
 import { readingScreenModel, historyColumnModel } from "./screens.js";
 import { SHARE_CADENCES, shareReadings } from "./share.js";
@@ -936,11 +940,11 @@ function correctLab(lab, gains) {
 
 function compositionMarkup(composition, { compact = false } = {}) {
   const bar = `<div class="${compact ? "history-mini-bar" : "composition-bar"}" aria-label="Five-colour composition">${composition.items.map((item) =>
-    `<span class="composition-segment" style="width:${item.value.toFixed(1)}%;background:${item.colour}" title="${esc(item.cjk)} ${esc(item.name)} ${item.value.toFixed(1)}%"></span>`).join("")}</div>`;
+    `<span class="composition-segment" style="width:${item.value.toFixed(1)}%;background:${item.colour}" title="${esc(item.name)} ${item.value.toFixed(1)}%"></span>`).join("")}</div>`;
   if (compact) return bar;
   const featured = [composition.lead, composition.support].map((key, index) => {
     const item = composition.items.find((entry) => entry.key === key);
-    return `<div class="composition-note"><strong><span class="cjk">${esc(item.cjk)}</span> ${esc(item.name)}</strong><span>${index ? "supporting" : "leading"} ${esc(item.note)} · ${item.value.toFixed(0)}%</span></div>`;
+    return `<div class="composition-note"><strong>${esc(item.name)}</strong><span>${index ? "supporting" : "leading"} ${esc(item.note)} · ${item.value.toFixed(0)}%</span></div>`;
   }).join("");
   return `${bar}<div class="composition-lead">${featured}</div>`;
 }
@@ -951,7 +955,7 @@ function integratedTodayMarkup(model) {
     <h2 id="integrated-h">${esc(model.headline)}</h2>
     <p>${esc(model.synthesis)}</p>
     <div class="integrated-mark">
-      <div class="integrated-glyph" aria-hidden="true">${esc(model.element.hanzi)}</div>
+      <div class="integrated-glyph" aria-hidden="true">${esc(model.element.name.slice(0, 2).toUpperCase())}</div>
       <div><strong>${esc(model.element.name)} frame</strong>
       <div class="integrated-frame">${esc(model.frameLine)}</div></div>
     </div>`;
@@ -969,22 +973,24 @@ function integratedStoryMarkup(model) {
       <span class="num">${value ?? "—"}%</span></div>`).join("");
   const palaceAccents = ["chi", "huang", "qing", "bai", "hei"];
   const palaceList = model.palaces.all || model.palaces.measured;
-  const allMeasured = model.palaces.measuredCount === model.palaces.totalCount;
   const palaces = palaceList.map((palace, index) => {
     const revealId = `palace-reveal-${esc(palace.key)}`;
-    const status = palace.measured ? `${palace.tone} · read today` : "traditional context";
-    const reading = palace.measured ? palace.toneGloss : palace.reading;
+    const status = palace.measured ? "region available" : "region unavailable";
+    const reading = palace.reading;
+    const sourceHeld = palace.heritageStatus !== "RUNTIME_PROSE";
     return `<article class="palace-card" data-open="false" data-palace="${esc(palace.key)}"
         style="--palace-index:${index};--palace-accent:var(--${palaceAccents[index % palaceAccents.length]})">
       <button class="palace-enter" type="button" aria-expanded="false" aria-controls="${revealId}">
         <span class="palace-number num">${String(index + 1).padStart(2, "0")}</span>
-        <span class="palace-title"><strong>${esc(palace.hanzi)} ${esc(palace.name)}</strong>
-          <span class="muted">${esc(palace.location)}</span></span>
+        <span class="palace-title"><strong>${esc(palace.name)}</strong>
+          ${sourceHeld ? "" : `<span class="muted">${esc(palace.location)}</span>`}</span>
         <span class="palace-arrow" aria-hidden="true">↗</span>
       </button>
       <div class="palace-reveal" id="${revealId}" hidden>
         <span class="palace-tone" data-contextual="${!palace.measured}">${esc(status)}</span>
-        <p>${esc(reading)}</p>
+        ${reading
+          ? `<p>${esc(reading)}</p>`
+          : `<p class="source-note">${esc(palace.sourceReviewNote || "Heritage interpretation withheld pending source review.")}</p>`}
         ${palace.measured ? "" : `<p class="source-note">${esc(palace.notMeasuredNote)}</p>`}
       </div>
     </article>`;
@@ -993,27 +999,26 @@ function integratedStoryMarkup(model) {
     `<span class="harmony-part">${esc(component.key)}${component.percent === null ? "" : ` · ${component.percent}%`}</span>`).join("");
 
   return `<section class="structure-section">
-      <p class="eyebrow">Five Elements · 五行</p>
-      <h2>${esc(model.element.hanzi)} ${esc(model.element.name)} · ${esc(model.element.shape)} geometry</h2>
+      <p class="eyebrow">Five Elements</p>
+      <h2>${esc(model.element.name)} · ${esc(model.element.shape)} geometry</h2>
       <p class="structure-reading">${esc(model.element.reading)}</p>
       <details class="source-note"><summary>Where sources differ</summary><p>${esc(model.element.sourcesDiffer)}</p></details>
     </section>
     <section class="structure-section">
-      <p class="eyebrow">Three Courts · 三停</p>
+      <p class="eyebrow">Three Sections</p>
       <h2>${esc(model.courts.label)}</h2>
       <div class="court-bars">${courtBars}</div>
-      <p class="structure-reading">${esc(model.courts.reading)}</p>
+      <p class="structure-reading">${esc(model.courts.measurementObservation)}</p>
       <p class="source-note">${esc(model.courts.measurementCaveat)}</p>
     </section>
     <section class="structure-section palace-collection" id="palace-collection">
-      <p class="eyebrow">Twelve Palaces · 十二宮</p>
-      <div class="palace-heading"><div><h2>All 12 palaces are open</h2>
-      <p class="muted">${allMeasured
-    ? "12 of 12 measured from this scan. Tap a palace to enter."
-    : `${model.palaces.measuredCount} read from this older scan · ${model.palaces.totalCount - model.palaces.measuredCount} preserved as traditional context.`}</p></div>
-      <div class="palace-count" aria-label="12 of 12 palaces revealed"><strong>12</strong><span>/ 12</span></div></div>
+      <p class="eyebrow">Twelve Palaces</p>
+      <div class="palace-heading"><div><h2>Measured regions, interpretation withheld</h2>
+      <p class="muted">${model.palaces.measuredCount} of ${model.palaces.totalCount} regions were available in this scan. The chapter evidence is still under review.</p></div>
+      <div class="palace-count" aria-label="${model.palaces.measuredCount} of ${model.palaces.totalCount} regions measured"><strong>${model.palaces.measuredCount}</strong><span>/ ${model.palaces.totalCount}</span></div></div>
       <div class="palace-grid">${palaces}</div>
-      <button class="palace-delight" type="button" data-delight="palaces">This speaks to me · Share the moment</button>
+      <button class="palace-delight" type="button" data-delight="palaces">Save this reading</button>
+      ${model.palaces.sourceReviewNote ? `<p class="source-note">${esc(model.palaces.sourceReviewNote)}</p>` : ""}
       <details class="source-note"><summary>Placement note</summary><p>${esc(model.palaces.sourcesDiffer)}</p></details>
     </section>
     ${model.harmony ? `<section class="structure-section">
@@ -1023,6 +1028,101 @@ function integratedStoryMarkup(model) {
       <div class="harmony-parts">${harmonyParts}</div>
       <details class="source-note"><summary>Why the sources do not form one system</summary><p>${esc(model.harmony.sourcesDiffer)}</p></details>
     </section>` : ""}`;
+}
+
+/*
+ * THE REFLECTION ENGINE SURFACES, BEHIND THE ROLLOUT FLAG.
+ *
+ * Off by default. `?reflection=on` runs the new path; `?reflection=compare`
+ * renders both engines against the same stored reading so the two can be read
+ * side by side before the old one is retired. Nothing here mutates the record
+ * or the existing panels — the current engine keeps writing what it always
+ * wrote, and this adds surfaces beside it. That is the whole point of a
+ * comparison flag: if the new path is wrong, the evidence is visible rather
+ * than shipped.
+ */
+function renderReflection(reading, history) {
+  const todayNode = $("reflection-today");
+  const storyNode = $("reflection-story");
+  const compareNode = $("reflection-compare");
+  const whyNode = $("reflection-why");
+  const whyTab = $("reading-tab-why");
+  const whyPanel = document.querySelector('[data-reading-panel="why"]');
+  if (!todayNode || !storyNode || !whyNode || !whyTab || !whyPanel) return;
+
+  const mode = reflectionMode({
+    search: location.search,
+    hostname: location.hostname,
+    storage: (() => { try { return localStorage; } catch { return null; } })(),
+  });
+
+  if (mode === "off") {
+    for (const node of [todayNode, storyNode, compareNode]) if (node) node.hidden = true;
+    whyTab.hidden = true;
+    whyPanel.hidden = true;
+    return;
+  }
+
+  const reflection = reflectionFor(reading, history);
+  const tiers = reflection && readingTiers(reflection);
+  if (!tiers) {
+    for (const node of [todayNode, storyNode, compareNode]) if (node) node.hidden = true;
+    whyTab.hidden = true;
+    // The panel is hidden alongside its tab, exactly as the `off` branch
+    // above does. Hiding only the tab leaves a reader who already opened Why
+    // looking at the PREVIOUS reading's text with no way to dismiss it —
+    // stale content presented as current. Item 51's shape: a teardown
+    // written into one branch of a conditional and not the other.
+    whyPanel.hidden = true;
+    return;
+  }
+
+  const { tier1, tier2, tier3 } = tiers;
+
+  todayNode.hidden = false;
+  todayNode.innerHTML = `
+    <p class="eyebrow">${tier1.abstained ? "Not read today" : "Today"}</p>
+    <h2>${esc(tier1.headline)}</h2>
+    ${tier1.body.map((line) => `<p>${esc(line)}</p>`).join("")}
+    ${tier1.history.map((line) => `<p class="muted">${esc(line)}</p>`).join("")}
+    ${tier1.confidence ? `<p class="muted">${esc(tier1.confidence)}</p>` : ""}
+    ${tier1.selfReport ? `<p class="muted">${esc(tier1.selfReport)}</p>` : ""}`;
+
+  storyNode.hidden = false;
+  storyNode.innerHTML = `
+    <p class="eyebrow">The tradition\u2019s reading</p>
+    <p class="story-passage">${esc(tier2.passage)}</p>
+    <p class="muted">${esc(tier2.attribution)}</p>
+    <p class="muted">${esc(tier2.rotationDisclosure)}</p>
+    <p>${esc(tier2.bridge)}</p>
+    <p class="reflection">${esc(tier2.question)}</p>`;
+
+  if (compareNode) {
+    const comparing = mode === "compare";
+    compareNode.hidden = !comparing;
+    if (comparing) {
+      const previous = passageFor(reading.compass, reading.z || {}, reading.timestampIso);
+      compareNode.innerHTML = `
+        <p class="eyebrow">Side by side</p>
+        <div class="section-label"><h2>Current engine</h2><span class="muted">${esc(previous.provenanceId)}</span></div>
+        <p class="story-passage">${esc(previous.text)}</p>
+        <div class="section-label"><h2>Reflection engine</h2><span class="muted">${esc(tier3.provenance.engine)}</span></div>
+        <p class="story-passage">${esc(tier2.passage)} ${esc(tier2.bridge)} ${esc(tier2.question)}</p>`;
+    }
+  }
+
+  whyTab.hidden = false;
+  whyNode.innerHTML = `
+    <div class="section-label"><h2>What produced each line</h2><span class="muted">${esc(tier3.provenance.corpus)}</span></div>
+    ${["observation", "heritage", "reflection"].map((layer) => `
+      <p class="eyebrow">${esc(layer)}</p>
+      ${tier3.byLayer[layer].map((entry) => `
+        <p>${esc(entry.sentence)}</p>
+        <p class="muted">${esc(entry.component)} \u2190 ${esc(entry.because.join(", "))}</p>`).join("")}`).join("")}
+    <div class="section-label"><h2>Today\u2019s state</h2><span class="muted">what makes this reading this reading</span></div>
+    <div class="chips">${tier3.dimensions.map((d) =>
+      `<span class="chip">${esc(d.field)}: ${esc(String(d.value))}</span>`).join("")}</div>
+    <p class="muted">Carried but not part of the state: ${esc(tier3.notIdentifying.join(", "))}.</p>`;
 }
 
 async function renderReading(reading) {
@@ -1078,11 +1178,11 @@ async function renderReading(reading) {
     : `<div class="gauge"><div class="gauge-label"><span>${esc(g.label)}</span><span class="muted">${esc(g.relativeLabel)} (${g.n}/4)</span></div></div>`).join("");
 
   $("reading-courts").innerHTML = m.courts.map((c) =>
-    `<div class="court"><div class="cjk">${esc(c.cjk)}</div>
-     <div class="muted">${esc(c.label)}</div>
+    `<div class="court"><div>${esc(c.label)}</div>
      <div class="num">${c.read}/${c.total} read</div></div>`).join("");
 
   $("reading-passage").textContent = m.passage.text;
+  renderReflection(reading, history);
 
   $("reading-tags").innerHTML = m.tags.length
     ? m.tags.map((t) => `<span class="chip">${esc(t)}</span>`).join("")

@@ -13,7 +13,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { buildSummary, NOT_READ_LABEL, SECTION_IDS } from "../src/reading/summary.js";
+import { buildSummary, NOT_AVAILABLE_LABEL, SECTION_IDS } from "../src/reading/summary.js";
 import { renderSummary, renderReading, sourcesNote, PALACE_SCOPE_NOTE } from "../src/readingview.js";
 import { buildShareModel, chooseDelivery, wrapText, SIZES } from "../src/sharecard.js";
 
@@ -36,19 +36,19 @@ const full = () => ({
   },
   threeCourts: {
     available: true, balanced: false, dominant: "lower",
-    court: { name: "Lower Court", hanzi: "下停" },
+    court: { name: "Lower Section" },
     fractions: { upper: 0.199, middle: 0.384, lower: 0.417 },
     reading: "In Mian Xiang the lower court is read as the later years.",
-    measurementCaveat: "The upper court is measured from the top of the face oval.",
+    measurementCaveat: "The upper section is measured from the top of the face oval.",
     sourcesDiffer: "Sources differ on this — where the middle court ends.",
   },
   twelvePalaces: {
     measuredCount: 5, supportedCount: 6, totalCount: 12,
     palaces: [
-      { key: "life", hanzi: "命宮", name: "Life Palace", location: "between the brows",
+      { key: "life", name: "Life Palace", location: "between the brows",
         supported: true, measured: true, reading: "In Mian Xiang the Life Palace is the gate.",
-        toneGloss: "The texts read this palace as even in this photo." },
-      { key: "siblings", hanzi: "兄弟宮", name: "Siblings Palace", location: "the eyebrows",
+        notMeasuredNote: null },
+      { key: "siblings", name: "Siblings Palace", location: "the eyebrows",
         supported: false, measured: false, reading: "In Mian Xiang the brows are the Siblings Palace.",
         notMeasuredNote: "This palace sits on a part of the face this reading doesn't sample." },
     ],
@@ -66,7 +66,7 @@ test("the summary names only constructs that were actually read", () => {
   const labels = s.headline.map((h) => h.label);
   assert.ok(!labels.some((l) => /metal|wood|fire|earth|water/i.test(l)),
     "an unread construct must never reach the headline");
-  assert.ok(labels.includes("Lower Court") && labels.includes("Glow 50"));
+  assert.ok(labels.includes("Lower Section") && labels.includes("Glow 50"));
 });
 
 test("an unread construct gets a neutral not-read chip, never a value", () => {
@@ -75,7 +75,7 @@ test("an unread construct gets a neutral not-read chip, never a value", () => {
   const chip = buildSummary(r).chips.find((c) => c.key === "qiSe");
 
   assert.equal(chip.available, false);
-  assert.equal(chip.value, NOT_READ_LABEL);
+  assert.equal(chip.value, NOT_AVAILABLE_LABEL);
   assert.ok(!/\d/.test(chip.value), "a not-read chip must carry no number to mistake for a result");
 });
 
@@ -88,13 +88,13 @@ test("a partial colour basis is stated as scope, never rounded up", () => {
 
   assert.ok(s.coverage.includes("2 of 3 colour signals"),
     `coverage must state the partial basis, got ${JSON.stringify(s.coverage)}`);
-  assert.ok(s.coverage.some((c) => /complexion warmth not measurable/.test(c)),
+  assert.ok(s.coverage.some((c) => /complexion warmth not available in this photo/.test(c)),
     "the MISSING signal must be named, not just counted");
 });
 
 test("palace coverage in the summary matches the section exactly", () => {
   const s = buildSummary(full());
-  assert.ok(s.coverage.includes("5 of 6 supported palaces read"));
+  assert.ok(s.coverage.includes("5 of 6 supported palace regions available"));
   const chip = s.chips.find((c) => c.key === "twelvePalaces");
   assert.equal(chip.value, "5 of 6 supported");
   assert.equal(chip.partial, true, "partial coverage must be marked as partial");
@@ -120,7 +120,7 @@ test("the emphasis sentence is attributed and mentions only measured constructs"
 
   assert.match(s.emphasis, /Mian Xiang/, "must name the tradition, not assert a fact");
   assert.ok(!/Metal/.test(s.emphasis));
-  assert.match(s.emphasis, /Lower Court/);
+  assert.match(s.emphasis, /Lower Section/);
 });
 
 test("the summary never excerpts a reading paragraph", () => {
@@ -191,7 +191,7 @@ test("a disclosure is still a disclosure when there is nothing to disclose", () 
   assert.equal(sourcesNote(""), "");
 });
 
-test("the Three Courts bar keeps the exact percentages and works without colour", () => {
+test("the Three Sections bar keeps the exact percentages and works without colour", () => {
   const html = renderReading(full());
   // Unrounded, to the same decimal the section always used.
   for (const pct of ["19.9%", "38.4%", "41.7%"]) {
@@ -200,20 +200,21 @@ test("the Three Courts bar keeps the exact percentages and works without colour"
   // Text alternative for the bar as a whole...
   assert.match(html, /role="img"\s+aria-label="Facial thirds by proportion:[^"]+"/);
   // ...and a text label per segment, so meaning never rests on colour alone.
-  for (const name of ["Upper Court", "Middle Court", "Lower Court"]) {
+  for (const name of ["Upper Section", "Middle Section", "Lower Section"]) {
     assert.ok(html.includes(name), `${name} must be labelled in text`);
   }
   // The hairline caveat still sits with the bar.
-  assert.ok(html.includes("The upper court is measured from the top of the face oval."));
+  assert.ok(html.includes("The upper section is measured from the top of the face oval."));
 });
 
 test("palaces are grouped as scope, with a reason, and none are fabricated", () => {
   const html = renderReading(full());
-  assert.ok(html.includes("Read from this photo (1)"));
+  assert.ok(html.includes("Available in this photo (1)"));
   assert.ok(html.includes("Listed for context — not sampled (1)"));
   assert.ok(html.includes(PALACE_SCOPE_NOTE), "the six contextual palaces must be explained");
-  // The unread palace keeps its name, hanzi and location, and gains no reading.
-  assert.ok(html.includes("兄弟宮") && html.includes("the eyebrows"));
+  // The unread palace keeps its English name, while unverified mapping detail is withheld.
+  assert.ok(html.includes("Siblings Palace"));
+  assert.ok(!html.includes("the eyebrows"));
   assert.ok(html.includes("not read"));
 });
 
@@ -226,8 +227,8 @@ test("the share card carries the caveat and only measured values", () => {
 
   assert.equal(m.caveat, "Entertainment, not diagnosis.");
   assert.ok(!m.headline.some((h) => /Metal/.test(h)), "unread construct on the share image");
-  assert.ok(m.coverage.includes("5 of 6 supported palaces read"));
-  assert.equal(m.wordmark, "面相");
+  assert.ok(m.coverage.includes("5 of 6 supported palace regions available"));
+  assert.equal(m.wordmark, "MIEN SHIANG");
 });
 
 test("share falls back to download rather than dead-ending", () => {

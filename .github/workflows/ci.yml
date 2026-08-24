@@ -46,28 +46,29 @@ jobs:
           echo "dist/ contains $count files"
           [ "$count" -ge 20 ] || { echo "::error::dist/ has only $count files"; exit 1; }
 
+      # npm test runs exactly ONCE per job. It used to run a second time
+      # inside the assertion step below via `out="$(npm test 2>&1)"`, which on
+      # windows-latest + Node 24 hung until the six-hour job timeout instead
+      # of completing a second time — the visible output was all passing, so
+      # the run looked correct right up until it was killed. `tee` gives the
+      # assertion step the same output to read without invoking the suite
+      # again. `set -o pipefail` under `shell: bash` is what still fails this
+      # step (and the job) if npm test itself exits non-zero, since `tee`
+      # itself always exits 0.
       - name: Test
-        run: npm test
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee test-output.txt
 
       # Guards against the failure mode where npm test exits 0 having run
       # nothing, AND against tests being deleted to make a red build green.
-      # Double-quoted glob patterns throughout (CLAUDE.md item 7): npm runs
-      # scripts through cmd.exe on Windows, which does not strip single quotes.
+      # Reads the Test step's captured output rather than invoking npm test
+      # itself — see the comment above.
       - name: Assert tests were discovered and none were deleted
         shell: bash
         run: |
-          out="$(npm test 2>&1)"
-          echo "$out"
-          # NEVER pipe this into `grep -q`. -q exits on the FIRST match, and the
-          # match is the first line of ~2500, so the pipe closes while echo is
-          # still writing. echo then dies with EPIPE ("write error: Broken
-          # pipe") and, under `set -o pipefail`, that failure becomes the
-          # PIPELINE's status even though the match succeeded — so a green run
-          # reports "no discovered test files" and the build fails. It is a
-          # race, so it presents as an intermittent failure on a random leg of
-          # the matrix, which is what makes it worth a comment this long.
-          # A here-string removes the pipe, and with it the race.
-          grep -qE "Running [1-9][0-9]* test file" <<< "$out" \
+          grep -qE "Running [1-9][0-9]* test file" test-output.txt \
             || { echo "::error::test run reported no discovered test files"; exit 1; }
           # The summary prefix is "#" under the TAP reporter and "ℹ" under spec,
           # and Node picks between them BY VERSION: 20 and 22 emit TAP here, 24
@@ -79,12 +80,8 @@ jobs:
           # the assignment itself, with 208/208 tests passing and no error
           # message at all. Match a whole non-space token instead, which is
           # locale-independent and reporter-independent.
-          # Here-strings for the same reason as above. These two are not
-          # currently at risk (no -q, and tail drains the stream), but keeping
-          # one form throughout is what stops `| grep -q` reappearing here by
-          # someone copying the line next to it.
-          total="$(grep -oE "^[^ ]* tests [0-9]+" <<< "$out" | grep -oE "[0-9]+" | tail -1)"
-          fail="$(grep -oE "^[^ ]* fail [0-9]+" <<< "$out" | grep -oE "[0-9]+" | tail -1)"
+          total="$(grep -oE "^[^ ]* tests [0-9]+" test-output.txt | grep -oE "[0-9]+" | tail -1)"
+          fail="$(grep -oE "^[^ ]* fail [0-9]+" test-output.txt | grep -oE "[0-9]+" | tail -1)"
           echo "discovered $total tests, $fail failing"
           [ -n "$total" ] || { echo "::error::could not read the test count"; exit 1; }
           [ "$fail" = "0" ] || { echo "::error::$fail test(s) failing"; exit 1; }

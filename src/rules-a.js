@@ -44,51 +44,39 @@
  */
 export const ZONE_READINGS = {
   glabella: {
-    hanzi: "肝",
     correspondence: "Liver — in Mian Xiang, the seat of planning, and of frustration held rather than spoken",
   },
   center_forehead: {
-    hanzi: "小腸",
     correspondence: "Small Intestine and Bladder — in Mian Xiang, the zone of early life and of what was inherited",
   },
   periorbital_right: {
-    hanzi: "腎",
     correspondence: "Kidney — in Mian Xiang, the store of reserve and stamina",
   },
   periorbital_left: {
-    hanzi: "腎",
     correspondence: "Kidney — in Mian Xiang, the store of reserve and stamina",
   },
   nose_bridge: {
-    hanzi: "心",
     correspondence: "Heart — in Mian Xiang, warmth, and how feeling shows on a face",
   },
   nose_apex: {
-    hanzi: "心",
     correspondence: "Heart — in Mian Xiang, the palace of wealth and of what a person gathers",
   },
   cheek_right: {
-    hanzi: "肺",
     correspondence: "Lung — in Mian Xiang, breath, boundaries, and what the skin meets",
   },
   cheek_left: {
-    hanzi: "肝",
     correspondence: "Liver — in Mian Xiang, drive, and how strain is carried",
   },
   nasolabial_right: {
-    hanzi: "大腸",
     correspondence: "Large Intestine — in Mian Xiang, the lines of standing and of long work",
   },
   nasolabial_left: {
-    hanzi: "大腸",
     correspondence: "Large Intestine — in Mian Xiang, the lines of standing and of long work",
   },
   perioral_upper: {
-    hanzi: "胃",
     correspondence: "Stomach — in Mian Xiang, appetite, and the rhythm a person keeps",
   },
   chin: {
-    hanzi: "腎",
     correspondence: "Kidney — in Mian Xiang, reserve, resolve, and the later years",
   },
 };
