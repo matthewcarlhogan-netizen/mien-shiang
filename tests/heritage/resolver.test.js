@@ -7,6 +7,7 @@ import {
   evaluateConditionExpression,
   negativeRuleViolations,
   negativeRuleRuntimeBindingViolations,
+  validateRuntimeBindingContext,
   resolveSourceEligibility,
   resolveLineageRestriction,
   referencedParticipantIds,
@@ -1458,6 +1459,89 @@ const historicalQiSeFiveFormsConnector = () => synConnector({
   ],
 });
 
+/*
+ * Item 1/3 (Stage 2 review, round 5): the finite, closed-shape, fail-closed
+ * contract for runtimeBindingContext. `validateRuntimeBindingContext` is
+ * exercised directly for the shape/vocabulary rules (tests 1-10 below,
+ * numbered per the round-5 review), and end-to-end through
+ * `resolveHeritageConnections` for the cases that also need to prove the
+ * whole-resolution consequence.
+ */
+
+// 1. runtimeBindingContext absent => valid, no attempt.
+test("runtimeBindingContext: absent is valid and means no attempt", () => {
+  const result = validateRuntimeBindingContext(null, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY);
+  assert.deepEqual(result, { valid: true, attemptedPairs: new Set() });
+  const resultUndefined = validateRuntimeBindingContext(undefined, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY);
+  assert.deepEqual(resultUndefined, { valid: true, attemptedPairs: new Set() });
+});
+
+// 2. { attemptedBindings: [] } => valid, no attempt.
+test("runtimeBindingContext: a well-formed empty attemptedBindings array is valid and means no attempt — not malformed", () => {
+  const result = validateRuntimeBindingContext({ attemptedBindings: [] }, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY);
+  assert.deepEqual(result, { valid: true, attemptedPairs: new Set() });
+});
+
+// 3. recognised: heritageQiSe -> fiveElements => valid and blocked by
+// no-qise-to-form-classification when applicable.
+test("runtimeBindingContext: recognised heritageQiSe->fiveElements is valid, and blocks the actual FORBID_RUNTIME_BINDING rule when applicable", () => {
+  const context = { attemptedBindings: [{ fromRef: "heritageQiSe", toRef: "fiveElements" }] };
+  const validation = validateRuntimeBindingContext(context, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY);
+  assert.equal(validation.valid, true);
+  assert.ok(validation.attemptedPairs.has("heritageQiSe->fiveElements"));
+
+  const connector = historicalQiSeFiveFormsConnector();
+  const violations = negativeRuleRuntimeBindingViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY, validation.attemptedPairs);
+  assert.deepEqual(violations, ["no-qise-to-form-classification"]);
+
+  const result = resolveHeritageConnections(realArgs({
+    readingState: { heritageConstruct: "fiveElements", sourceLineage: "primary" },
+    connectorRegistry: { ...HERITAGE_CONNECTOR_REGISTRY, "syn-qise-canonical": connector },
+    runtimeBindingContext: context,
+  }));
+  const found = [...result.activeConnectors, ...result.unavailableRelations].find((e) => e.connectorId === "syn-qise-canonical");
+  assert.equal(found.disposition, "BLOCKED_RUNTIME_BINDING");
+  assert.equal(result.activeConnectors.some((e) => e.connectorId === "syn-qise-canonical"), false);
+  assert.deepEqual(found.gateReasons, ["no-qise-to-form-classification"]);
+});
+
+// 4. recognised: shen -> measurementBinding => valid and blocked by
+// shen-unmeasurable when applicable.
+test("runtimeBindingContext: recognised shen->measurementBinding is valid, and blocks the actual shen-unmeasurable rule when applicable", () => {
+  const context = { attemptedBindings: [{ fromRef: "shen", toRef: "measurementBinding" }] };
+  const validation = validateRuntimeBindingContext(context, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY);
+  assert.equal(validation.valid, true);
+  assert.ok(validation.attemptedPairs.has("shen->measurementBinding"));
+
+  // Item 2 (Stage 2 review, round 4): four-rivers-shen-corresponds already
+  // carries a historicalState correctly marking shen UNMEASURABLE, so the
+  // separate checkNegativeRelationshipInvariants historicalStates check does
+  // not fire here — this proof is isolated to the runtime-binding path.
+  const connector = clone(HERITAGE_CONNECTOR_REGISTRY["four-rivers-shen-corresponds"]);
+  const violations = negativeRuleRuntimeBindingViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY, validation.attemptedPairs);
+  assert.deepEqual(violations, ["shen-unmeasurable"]);
+
+  const result = resolveHeritageConnections(realArgs({
+    readingState: { heritageConstruct: "fourRivers", sourceLineage: "primary" },
+    connectorRegistry: { ...HERITAGE_CONNECTOR_REGISTRY, "four-rivers-shen-corresponds": connector },
+    runtimeBindingContext: context,
+  }));
+  const found = result.unavailableRelations.find((e) => e.connectorId === "four-rivers-shen-corresponds");
+  assert.ok(found, "must be present, fully traceable — not silently dropped");
+  assert.equal(found.disposition, "BLOCKED_RUNTIME_BINDING");
+  assert.deepEqual(found.gateReasons, ["shen-unmeasurable"]);
+});
+
+test("runtimeBindingContext: an attempted binding for an unrelated ref pair does not block a connector it doesn't apply to", () => {
+  const context = { attemptedBindings: [{ fromRef: "shen", toRef: "measurementBinding" }] };
+  const validation = validateRuntimeBindingContext(context, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY);
+  assert.equal(validation.valid, true);
+  const connector = historicalQiSeFiveFormsConnector(); // has no "shen" participant
+  const violations = negativeRuleRuntimeBindingViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY, validation.attemptedPairs);
+  assert.deepEqual(violations, []);
+});
+
+// 12. historical QiSe/Five Forms co-presence with NO context => still not blocked.
 test("historical heritageQiSe + Five Forms coexistence is not automatically banned — NO attempted binding -> not BLOCKED_RUNTIME_BINDING, may be ordinary heritage presentation", () => {
   const connector = historicalQiSeFiveFormsConnector();
   // Not caught by the absolute coexistence checks at all.
@@ -1466,10 +1550,11 @@ test("historical heritageQiSe + Five Forms coexistence is not automatically bann
   assert.deepEqual(negativeErrors, []);
   const generic = negativeRuleViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY);
   assert.equal(generic.includes("no-qise-to-form-classification"), false);
-  // No runtimeBindingContext at all -> the type-aware check never fires,
+  // No runtimeBindingContext at all -> valid, empty attemptedPairs ->
   // structural co-presence alone is not an attempted binding.
-  const noAttempt = negativeRuleRuntimeBindingViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY, null);
-  assert.deepEqual(noAttempt, { violations: [], contextValid: true });
+  const validation = validateRuntimeBindingContext(null, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY);
+  const noAttempt = negativeRuleRuntimeBindingViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY, validation.attemptedPairs);
+  assert.deepEqual(noAttempt, []);
 
   const result = resolveHeritageConnections(realArgs({
     readingState: { heritageConstruct: "fiveElements", sourceLineage: "primary" },
@@ -1486,67 +1571,11 @@ test("historical heritageQiSe + Five Forms coexistence is not automatically bann
   assert.equal(found.prohibitedForUserInference, true);
 });
 
-test("an attempted modern QiSe->FiveForms classification is blocked by the actual FORBID_RUNTIME_BINDING rule (SAME historical connector as above)", () => {
-  const connector = historicalQiSeFiveFormsConnector();
-  const runtimeBindingContext = { attemptedBindings: [{ fromRef: "heritageQiSe", toRef: "fiveElements" }] };
-
-  // The actual registry rule (canonical-ref normalized) is what fires, and
-  // only because an attempt was declared.
-  const runtimeBindingHits = negativeRuleRuntimeBindingViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY, runtimeBindingContext);
-  assert.equal(runtimeBindingHits.contextValid, true);
-  assert.ok(runtimeBindingHits.violations.includes("no-qise-to-form-classification"), runtimeBindingHits.violations.join(","));
-
-  const result = resolveHeritageConnections(realArgs({
-    readingState: { heritageConstruct: "fiveElements", sourceLineage: "primary" },
-    connectorRegistry: { ...HERITAGE_CONNECTOR_REGISTRY, "syn-qise-canonical": connector },
-    runtimeBindingContext,
-  }));
-  const found = [...result.activeConnectors, ...result.unavailableRelations].find((e) => e.connectorId === "syn-qise-canonical");
-  assert.equal(found.disposition, "BLOCKED_RUNTIME_BINDING");
-  assert.equal(result.activeConnectors.some((e) => e.connectorId === "syn-qise-canonical"), false);
-  assert.deepEqual(found.gateReasons, ["no-qise-to-form-classification"]);
-});
-
-test("an attempted binding for an UNRELATED ref pair does not block a connector it doesn't apply to", () => {
-  const connector = historicalQiSeFiveFormsConnector();
-  const runtimeBindingContext = { attemptedBindings: [{ fromRef: "shen", toRef: "measurementBinding" }] };
-  const hits = negativeRuleRuntimeBindingViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY, runtimeBindingContext);
-  assert.deepEqual(hits, { violations: [], contextValid: true });
-});
-
-/*
- * Item 2 (Stage 2 review, round 4): the shen-unmeasurable rule
- * (fromRef "shen", toRef "measurementBinding" — a governance SENTINEL with
- * no participant counterpart) must be reachable through the SAME
- * type-aware mechanism as no-qise-to-form-classification, using the SAME
- * four-rivers-shen-corresponds connector (which already carries a
- * historicalState correctly marking shen UNMEASURABLE, so the SEPARATE
- * checkNegativeRelationshipInvariants historicalStates check does not fire
- * here — this proof is isolated to the runtime-binding path).
- */
-test("Shen + explicit shen->measurementBinding attempt is blocked by the actual shen-unmeasurable registry rule", () => {
-  const connector = clone(HERITAGE_CONNECTOR_REGISTRY["four-rivers-shen-corresponds"]);
-  const runtimeBindingContext = { attemptedBindings: [{ fromRef: "shen", toRef: "measurementBinding" }] };
-
-  const hits = negativeRuleRuntimeBindingViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY, runtimeBindingContext);
-  assert.equal(hits.contextValid, true);
-  assert.ok(hits.violations.includes("shen-unmeasurable"), hits.violations.join(","));
-
-  const result = resolveHeritageConnections(realArgs({
-    readingState: { heritageConstruct: "fourRivers", sourceLineage: "primary" },
-    connectorRegistry: { ...HERITAGE_CONNECTOR_REGISTRY, "four-rivers-shen-corresponds": connector },
-    runtimeBindingContext,
-  }));
-  const found = result.unavailableRelations.find((e) => e.connectorId === "four-rivers-shen-corresponds");
-  assert.ok(found, "must be present, fully traceable — not silently dropped");
-  assert.equal(found.disposition, "BLOCKED_RUNTIME_BINDING");
-  assert.deepEqual(found.gateReasons, ["shen-unmeasurable"]);
-});
-
 test("the SAME Shen connector with NO binding attempt is not blocked merely because Shen exists historically", () => {
   const connector = clone(HERITAGE_CONNECTOR_REGISTRY["four-rivers-shen-corresponds"]);
-  const hits = negativeRuleRuntimeBindingViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY, null);
-  assert.deepEqual(hits, { violations: [], contextValid: true });
+  const validation = validateRuntimeBindingContext(null, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY);
+  const violations = negativeRuleRuntimeBindingViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY, validation.attemptedPairs);
+  assert.deepEqual(violations, []);
 
   const result = resolveHeritageConnections(realArgs({
     readingState: { heritageConstruct: "fourRivers", sourceLineage: "primary" },
@@ -1555,56 +1584,134 @@ test("the SAME Shen connector with NO binding attempt is not blocked merely beca
   assert.notEqual(found.disposition, "BLOCKED_RUNTIME_BINDING");
 });
 
-/*
- * Item 2: malformed runtimeBindingContext fails CLOSED — it must never
- * silently behave like "no attempt was made".
- */
-test("malformed runtimeBindingContext (attemptedBindings not an array) fails closed for an implicated connector", () => {
-  const connector = historicalQiSeFiveFormsConnector();
+// 5. unknown fromRef: banana -> fiveElements => invalid (not a recognised pair).
+test("runtimeBindingContext: an unrecognised fromRef is invalid — the vocabulary is finite, not free text", () => {
+  const result = validateRuntimeBindingContext(
+    { attemptedBindings: [{ fromRef: "banana", toRef: "fiveElements" }] },
+    HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY,
+  );
+  assert.equal(result.valid, false);
+  assert.deepEqual(result.attemptedPairs, new Set());
+});
+
+// 6. unknown toRef: shen -> garbageOperation => invalid.
+test("runtimeBindingContext: a recognised fromRef paired with an unrecognised toRef is invalid", () => {
+  const result = validateRuntimeBindingContext(
+    { attemptedBindings: [{ fromRef: "shen", toRef: "garbageOperation" }] },
+    HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY,
+  );
+  assert.equal(result.valid, false);
+});
+
+// 7. whitespace ref => invalid.
+test("runtimeBindingContext: a whitespace-only ref is invalid", () => {
+  const result = validateRuntimeBindingContext(
+    { attemptedBindings: [{ fromRef: "   ", toRef: "fiveElements" }] },
+    HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY,
+  );
+  assert.equal(result.valid, false);
+  const resultToRef = validateRuntimeBindingContext(
+    { attemptedBindings: [{ fromRef: "heritageQiSe", toRef: "\t\n" }] },
+    HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY,
+  );
+  assert.equal(resultToRef.valid, false);
+});
+
+// 8. extra property on binding object => invalid.
+test("runtimeBindingContext: an extra property on a binding entry is invalid — the entry shape is exactly {fromRef, toRef}", () => {
+  const result = validateRuntimeBindingContext(
+    { attemptedBindings: [{ fromRef: "heritageQiSe", toRef: "fiveElements", note: "why not" }] },
+    HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY,
+  );
+  assert.equal(result.valid, false);
+});
+
+test("runtimeBindingContext: an extra top-level property is invalid — the context shape is exactly {attemptedBindings}", () => {
+  const result = validateRuntimeBindingContext(
+    { attemptedBindings: [], note: "why not" },
+    HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY,
+  );
+  assert.equal(result.valid, false);
+});
+
+// 9. array/object impostor => invalid.
+test("runtimeBindingContext: an array pretending to be the top-level context object is invalid", () => {
+  const result = validateRuntimeBindingContext(
+    [{ fromRef: "heritageQiSe", toRef: "fiveElements" }],
+    HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY,
+  );
+  assert.equal(result.valid, false);
+});
+
+test("runtimeBindingContext: an array pretending to be a {fromRef, toRef} binding entry is invalid", () => {
+  const result = validateRuntimeBindingContext(
+    { attemptedBindings: [["heritageQiSe", "fiveElements"]] },
+    HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY,
+  );
+  assert.equal(result.valid, false);
+});
+
+test("runtimeBindingContext: attemptedBindings not being an array at all is invalid", () => {
+  const result = validateRuntimeBindingContext(
+    { attemptedBindings: "not-an-array" },
+    HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY,
+  );
+  assert.equal(result.valid, false);
+});
+
+// 10. one malformed entry among valid entries => entire context invalid.
+test("runtimeBindingContext: one malformed entry among otherwise well-formed ones invalidates the ENTIRE context, not just that entry", () => {
+  const result = validateRuntimeBindingContext(
+    { attemptedBindings: [{ fromRef: "heritageQiSe", toRef: "fiveElements" }, { fromRef: "onlyFromRef" }] },
+    HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY,
+  );
+  assert.equal(result.valid, false);
+  assert.deepEqual(result.attemptedPairs, new Set(), "no entry is silently kept when another entry is malformed");
+});
+
+// 11. CRITICAL: malformed runtimeBindingContext + otherwise unrelated
+// ordinary connector => resolver aborts / returns no active connectors,
+// no sourcePanels, no editorial presentation — the whole resolution fails
+// closed, not just the implicated connectors. Replaces the round-4 test
+// ("malformed runtimeBindingContext does NOT block a connector that could
+// never be implicated") which asserted the OPPOSITE and is deleted, not
+// renamed, per the round-5 review: that per-connector-implication behaviour
+// is exactly what item 3 requires removed.
+test("CRITICAL: a malformed runtimeBindingContext aborts the WHOLE resolution, even for an otherwise-unrelated ordinary connector", () => {
+  const connector = synConnector({
+    connectorId: "syn-unrelated",
+    participants: [{ participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" }],
+  });
   const malformed = { attemptedBindings: "not-an-array" };
-  const hits = negativeRuleRuntimeBindingViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY, malformed);
-  assert.equal(hits.contextValid, false);
-  assert.ok(hits.violations.includes("no-qise-to-form-classification"), hits.violations.join(","));
+  const validation = validateRuntimeBindingContext(malformed, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY);
+  assert.equal(validation.valid, false);
+
+  const result = resolveHeritageConnections(synArgs({
+    connectorRegistry: { "syn-unrelated": connector },
+    runtimeBindingContext: malformed,
+  }));
+  assert.equal(result.abstained, true);
+  assert.equal(result.abstentionReasonCode, "INVALID_RUNTIME_BINDING_CONTEXT");
+  assert.equal(result.primaryConstruct, null);
+  assert.deepEqual(result.activeConnectors, []);
+  assert.deepEqual(result.sourcePanels, []);
+  assert.deepEqual(result.unavailableRelations, []);
+  assert.deepEqual(result.disagreementPanels, []);
+  assert.deepEqual(result.editorialJuxtapositions, []);
+});
+
+test("a second malformed shape (one malformed entry among well-formed ones) also aborts the whole resolution end to end", () => {
+  const connector = historicalQiSeFiveFormsConnector();
+  const malformed = { attemptedBindings: [{ fromRef: "heritageQiSe", toRef: "fiveElements" }, { fromRef: "onlyFromRef" }] };
 
   const result = resolveHeritageConnections(realArgs({
     readingState: { heritageConstruct: "fiveElements", sourceLineage: "primary" },
     connectorRegistry: { ...HERITAGE_CONNECTOR_REGISTRY, "syn-qise-canonical": connector },
     runtimeBindingContext: malformed,
   }));
-  const found = [...result.activeConnectors, ...result.unavailableRelations].find((e) => e.connectorId === "syn-qise-canonical");
-  assert.equal(found.disposition, "RUNTIME_BINDING_CONTEXT_INVALID");
-  assert.equal(result.activeConnectors.some((e) => e.connectorId === "syn-qise-canonical"), false);
-});
-
-test("malformed runtimeBindingContext (one malformed entry among well-formed ones) still fails closed", () => {
-  const connector = historicalQiSeFiveFormsConnector();
-  const malformed = { attemptedBindings: [{ fromRef: "heritageQiSe", toRef: "fiveElements" }, { fromRef: "onlyFromRef" }] };
-  const hits = negativeRuleRuntimeBindingViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY, malformed);
-  assert.equal(hits.contextValid, false);
-  assert.ok(hits.violations.includes("no-qise-to-form-classification"));
-});
-
-test("malformed runtimeBindingContext does NOT block a connector that could never be implicated by any FORBID_RUNTIME_BINDING rule", () => {
-  const connector = synConnector({
-    connectorId: "syn-unrelated",
-    participants: [{ participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" }],
-  });
-  const malformed = { attemptedBindings: "not-an-array" };
-  const hits = negativeRuleRuntimeBindingViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY, malformed);
-  assert.equal(hits.contextValid, false);
-  assert.deepEqual(hits.violations, [], "a malformed context is not a license to block every connector, only ones it could plausibly implicate");
-
-  const result = resolveHeritageConnections(synArgs({
-    connectorRegistry: { "syn-unrelated": connector },
-    runtimeBindingContext: malformed,
-  }));
-  assert.equal(result.activeConnectors.length, 1);
-});
-
-test("a genuinely EMPTY, well-formed attemptedBindings array is valid and means no attempt — not malformed", () => {
-  const connector = historicalQiSeFiveFormsConnector();
-  const hits = negativeRuleRuntimeBindingViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY, { attemptedBindings: [] });
-  assert.deepEqual(hits, { violations: [], contextValid: true });
+  assert.equal(result.abstained, true);
+  assert.equal(result.abstentionReasonCode, "INVALID_RUNTIME_BINDING_CONTEXT");
+  assert.deepEqual(result.activeConnectors, []);
 });
 
 test("negative-rule: shen-unmeasurable is enforced (via historicalStates, unreachable to the pairwise-ref matcher by design)", () => {

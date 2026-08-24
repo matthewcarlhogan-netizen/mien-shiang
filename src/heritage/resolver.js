@@ -519,75 +519,127 @@ export function negativeRuleViolations(connector, negativeRelationshipRegistry) 
  * fromRef currently classifies/determines toRef"), never an inference this
  * function makes on its own.
  *
- * Two corrections from round 3 (Stage 2 review, round 4):
+ * `shen-unmeasurable`'s toRef is "measurementBinding" — a governance
+ * sentinel naming an abstract RUNTIME OPERATION ("acquire a measurement
+ * binding"), not a heritage graph node. No connector could ever declare a
+ * "measurementBinding" participant, so requiring it to appear as one (as
+ * `fromRef` correctly must) would make this rule permanently unreachable.
+ * RUNTIME_BINDING_SENTINEL_REFS names the finite set of toRefs exempt from
+ * the structural-participant requirement; `fromRef` is NOT exempt — the
+ * connector must still genuinely involve the heritage node the operation
+ * would apply to (e.g. "shen").
  *
- * 1. SENTINEL DESTINATIONS. `shen-unmeasurable`'s toRef is
- *    "measurementBinding" — a governance sentinel naming an abstract
- *    RUNTIME OPERATION ("acquire a measurement binding"), not a heritage
- *    graph node. No connector could ever declare a "measurementBinding"
- *    participant, so requiring it to appear as one (as `fromRef` correctly
- *    must) made this rule permanently unreachable through this function.
- *    RUNTIME_BINDING_SENTINEL_REFS names the finite set of toRefs exempt
- *    from the structural-participant requirement; `fromRef` is NOT exempt —
- *    the connector must still genuinely involve the heritage node the
- *    operation would apply to (e.g. "shen").
- * 2. FAIL CLOSED ON MALFORMED INPUT. A `runtimeBindingContext` that IS
- *    supplied but is malformed (`attemptedBindings` not an array, or
- *    containing an entry that is not a well-formed `{fromRef, toRef}` pair
- *    of non-empty strings) must not silently behave like "no attempt was
- *    made" — that would let a broken caller accidentally promote a
- *    forbidden binding to ordinary presentation. Instead, every ACTIVE
- *    FORBID_RUNTIME_BINDING rule whose `fromRef` the connector structurally
- *    involves is treated as blocked (`contextValid: false` on the return),
- *    even though the specific attempted pairing could not be confirmed. A
- *    genuinely absent `runtimeBindingContext`, or a well-formed EMPTY
- *    `attemptedBindings` array, both correctly mean "no attempt" and return
- *    `{ violations: [], contextValid: true }`.
- *
- * Returns `{ violations: string[], contextValid: boolean }`.
+ * ── item 1 (Stage 2 review, round 5): the ATTEMPTED PAIRS THEMSELVES ARE
+ * FINITE ──────────────────────────────────────────────────────────────────
+ * `runtimeBindingContext` is not a free-text channel. Every fromRef/toRef a
+ * caller may legitimately name is drawn from — and only from — the ACTIVE
+ * FORBID_RUNTIME_BINDING rules already declared in the injected
+ * negativeRelationshipRegistry, canonicalised through `canonicalRef`.
+ * `validateRuntimeBindingContext` derives that finite vocabulary itself
+ * (currently exactly `heritageQiSe->fiveElements` and
+ * `shen->measurementBinding`, one per FORBID_RUNTIME_BINDING record) rather
+ * than this module inventing a second, parallel rule language. An unknown
+ * ref, an unrecognised pairing, or any shape other than the exact closed
+ * `{ attemptedBindings: [{ fromRef, toRef }, ...] }` is REJECTED, not
+ * coerced or partially accepted.
  */
 const RUNTIME_BINDING_SENTINEL_REFS = Object.freeze(["measurementBinding"]);
 
-const isWellFormedBindingEntry = (entry) => !!entry && typeof entry === "object"
-  && typeof entry.fromRef === "string" && entry.fromRef.length > 0
-  && typeof entry.toRef === "string" && entry.toRef.length > 0;
+function activeRuntimeBindingRules(negativeRelationshipRegistry) {
+  return Object.values(negativeRelationshipRegistry || {})
+    .filter((rule) => rule.status === "ACTIVE" && rule.negativeRuleType === "FORBID_RUNTIME_BINDING");
+}
 
-export function negativeRuleRuntimeBindingViolations(connector, negativeRelationshipRegistry, runtimeBindingContext = null) {
+/**
+ * The finite set of `${fromRef}->${toRef}` pairs (canonicalised) any
+ * `attemptedBindings` entry may legitimately name — derived, not invented.
+ */
+function allowedBindingPairs(negativeRelationshipRegistry) {
+  return new Set(activeRuntimeBindingRules(negativeRelationshipRegistry)
+    .map((rule) => `${canonicalRef(rule.fromRef)}->${canonicalRef(rule.toRef)}`));
+}
+
+const isNonEmptyTrimmedString = (value) => typeof value === "string" && value.trim().length > 0;
+
+/**
+ * Item 2/3 (Stage 2 review, round 5): validate `runtimeBindingContext` ONCE,
+ * as a single closed-shape, closed-vocabulary contract — not per connector.
+ * A genuinely absent context (`null`/`undefined`) is valid and means "no
+ * runtime binding operation was requested". A well-formed
+ * `{ attemptedBindings: [] }` is valid and means "no attempt". Anything else
+ * must be EXACTLY `{ attemptedBindings: [{ fromRef, toRef }, ...] }` — no
+ * extra top-level properties, no extra properties per entry, no non-string
+ * or blank refs, and every canonicalised pair must be one of the finite
+ * pairs `allowedBindingPairs` derives from the registry. ONE malformed or
+ * unrecognised entry invalidates the WHOLE context — nothing is silently
+ * stripped or partially honoured, per the caller having crossed a
+ * governance-boundary contract rather than made an ordinary input mistake.
+ *
+ * Returns `{ valid: boolean, attemptedPairs: Set<string> }`; `attemptedPairs`
+ * is always empty when `valid` is false.
+ */
+export function validateRuntimeBindingContext(runtimeBindingContext, negativeRelationshipRegistry) {
+  if (runtimeBindingContext === null || runtimeBindingContext === undefined) {
+    return { valid: true, attemptedPairs: new Set() };
+  }
+  if (typeof runtimeBindingContext !== "object" || Array.isArray(runtimeBindingContext)) {
+    return { valid: false, attemptedPairs: new Set() };
+  }
+  const topLevelKeys = Object.keys(runtimeBindingContext);
+  if (topLevelKeys.length !== 1 || topLevelKeys[0] !== "attemptedBindings") {
+    return { valid: false, attemptedPairs: new Set() };
+  }
+  const rawBindings = runtimeBindingContext.attemptedBindings;
+  if (!Array.isArray(rawBindings)) {
+    return { valid: false, attemptedPairs: new Set() };
+  }
+
+  const recognisedPairs = allowedBindingPairs(negativeRelationshipRegistry);
+  const attemptedPairs = new Set();
+  for (const entry of rawBindings) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      return { valid: false, attemptedPairs: new Set() };
+    }
+    const entryKeys = Object.keys(entry);
+    if (entryKeys.length !== 2 || !entryKeys.includes("fromRef") || !entryKeys.includes("toRef")) {
+      return { valid: false, attemptedPairs: new Set() };
+    }
+    if (!isNonEmptyTrimmedString(entry.fromRef) || !isNonEmptyTrimmedString(entry.toRef)) {
+      return { valid: false, attemptedPairs: new Set() };
+    }
+    const pair = `${canonicalRef(entry.fromRef)}->${canonicalRef(entry.toRef)}`;
+    if (!recognisedPairs.has(pair)) {
+      return { valid: false, attemptedPairs: new Set() };
+    }
+    attemptedPairs.add(pair);
+  }
+  return { valid: true, attemptedPairs };
+}
+
+/**
+ * Which ACTIVE FORBID_RUNTIME_BINDING rules a connector actually violates,
+ * given an already-validated set of canonicalised attempted pairs (from
+ * `validateRuntimeBindingContext` — this function trusts its caller to have
+ * validated the context ONCE, at resolution level; see item 3's doc comment
+ * on `resolveHeritageConnections`). Structural co-presence alone (an empty
+ * or non-matching `attemptedPairs`) never violates anything on its own.
+ */
+export function negativeRuleRuntimeBindingViolations(connector, negativeRelationshipRegistry, attemptedPairs) {
+  const pairs = attemptedPairs instanceof Set ? attemptedPairs : new Set();
+  if (pairs.size === 0) return [];
   const refs = new Set((connector.participants || []).map((p) =>
     canonicalRef(p.conceptId ?? p.constructId ?? p.constituentId ?? p.relatedSystemId ?? p.participantId)));
-  const activeRuntimeBindingRules = Object.values(negativeRelationshipRegistry || {})
-    .filter((rule) => rule.status === "ACTIVE" && rule.negativeRuleType === "FORBID_RUNTIME_BINDING");
-
-  // No context at all: a genuine, well-formed statement of "nothing attempted".
-  if (runtimeBindingContext === null || runtimeBindingContext === undefined) {
-    return { violations: [], contextValid: true };
-  }
-
-  const rawBindings = runtimeBindingContext.attemptedBindings;
-  const contextStructurallyValid = Array.isArray(rawBindings) && rawBindings.every(isWellFormedBindingEntry);
-
-  if (!contextStructurallyValid) {
-    // Fail closed (see doc comment above): block every rule this connector
-    // could plausibly implicate, rather than trust an unparseable context.
-    const implicated = activeRuntimeBindingRules
-      .filter((rule) => refs.has(canonicalRef(rule.fromRef)))
-      .map((rule) => rule.negativeRuleId);
-    return { violations: implicated, contextValid: false };
-  }
-
-  const attemptedPairs = new Set(rawBindings.map((b) => `${canonicalRef(b.fromRef)}->${canonicalRef(b.toRef)}`));
-  if (attemptedPairs.size === 0) return { violations: [], contextValid: true };
 
   const violated = [];
-  for (const rule of activeRuntimeBindingRules) {
+  for (const rule of activeRuntimeBindingRules(negativeRelationshipRegistry)) {
     const from = canonicalRef(rule.fromRef);
     const to = canonicalRef(rule.toRef);
     if (!refs.has(from)) continue; // the operation's SUBJECT must be structurally present
     if (!RUNTIME_BINDING_SENTINEL_REFS.includes(to) && !refs.has(to)) continue; // non-sentinel targets must be too
-    if (!attemptedPairs.has(`${from}->${to}`)) continue;
+    if (!pairs.has(`${from}->${to}`)) continue;
     violated.push(rule.negativeRuleId);
   }
-  return { violations: violated, contextValid: true };
+  return violated;
 }
 
 /* ── item 3: runtime PARTICIPANT availability — a third, independent axis ── */
@@ -749,6 +801,19 @@ export function resolveHeritageConnections({
   const resolvedDepthMode = DEPTH_MODES.includes(depthMode) ? depthMode : "STANDARD";
   const resolvedOccurrence = Number.isFinite(occurrence) ? Math.max(0, occurrence | 0) : 0;
 
+  // Item 3 (Stage 2 review, round 5): validate runtimeBindingContext ONCE,
+  // before any candidate is even enumerated — not per connector. A caller
+  // that supplies a malformed context has crossed a governance-boundary
+  // contract, not made an ordinary per-connector input mistake, so the
+  // WHOLE resolution fails closed: no activeConnectors, no sourcePanels, no
+  // editorial presentation that could make the request look like it was
+  // handled normally. A genuinely absent context, or a well-formed empty
+  // `attemptedBindings`, both remain valid and mean "no attempt".
+  const runtimeBindingValidation = validateRuntimeBindingContext(runtimeBindingContext, negativeRelationshipRegistry);
+  if (!runtimeBindingValidation.valid) {
+    return abstainedResult("INVALID_RUNTIME_BINDING_CONTEXT", resolvedDepthMode, resolvedOccurrence);
+  }
+
   // 1-2. accept readingState, resolve primary construct.
   const requestedConstruct = readingState?.heritageConstruct;
   const primaryConstruct = requestedConstruct && heritageRegistry && heritageRegistry[requestedConstruct]
@@ -868,19 +933,22 @@ export function resolveHeritageConnections({
     // as the last gate before ACTIVE. An explicit attempt is itself an
     // absolute safety veto (the same severity as blockedByNegativeRule
     // above, just narrower-triggering): it must be reported precisely as
-    // BLOCKED_RUNTIME_BINDING / RUNTIME_BINDING_CONTEXT_INVALID regardless
-    // of whether the connector would ALSO have been blocked for an unrelated
-    // reason further down (e.g. its own RESEARCH_ONLY policy) — masking a
-    // real attempted-binding violation behind an incidental RESEARCH_ONLY
-    // disposition would hide the one signal callers most need to see.
-    // Structural co-presence alone (no attempt) still never triggers this —
-    // see negativeRuleRuntimeBindingViolations's doc comment.
-    const runtimeBinding = negativeRuleRuntimeBindingViolations(connector, negativeRelationshipRegistry, runtimeBindingContext);
-    if (runtimeBinding.violations.length > 0) {
+    // BLOCKED_RUNTIME_BINDING regardless of whether the connector would ALSO
+    // have been blocked for an unrelated reason further down (e.g. its own
+    // RESEARCH_ONLY policy) — masking a real attempted-binding violation
+    // behind an incidental RESEARCH_ONLY disposition would hide the one
+    // signal callers most need to see. Structural co-presence alone (no
+    // attempt) still never triggers this — see
+    // negativeRuleRuntimeBindingViolations's doc comment. The context itself
+    // was already validated ONCE, above, before the loop — an invalid
+    // context never reaches here at all (see item 3, round 5).
+    const runtimeBindingViolations = negativeRuleRuntimeBindingViolations(
+      connector, negativeRelationshipRegistry, runtimeBindingValidation.attemptedPairs);
+    if (runtimeBindingViolations.length > 0) {
       unavailable.push(toResolvedEntry(connector, {
         relationshipAvailability, conditionResolution: { satisfied: false, resolved: true, reason: "RUNTIME_BINDING_BLOCKED" }, disagreementIds,
-        disposition: runtimeBinding.contextValid ? "BLOCKED_RUNTIME_BINDING" : "RUNTIME_BINDING_CONTEXT_INVALID",
-        gateReasons: runtimeBinding.violations,
+        disposition: "BLOCKED_RUNTIME_BINDING",
+        gateReasons: runtimeBindingViolations,
       }));
       continue;
     }
