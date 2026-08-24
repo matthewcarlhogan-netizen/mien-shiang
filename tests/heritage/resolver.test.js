@@ -6,6 +6,7 @@ import {
   resolveHeritageConnections,
   evaluateConditionExpression,
   negativeRuleViolations,
+  negativeRuleRuntimeBindingViolations,
   resolveSourceEligibility,
   resolveLineageRestriction,
   RELATIONSHIP_AVAILABILITY,
@@ -20,6 +21,8 @@ import { HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY } from "../../src/heritage/nega
 import { HERITAGE_COMPOSITION_POLICIES } from "../../src/heritage/composition-policies-registry.js";
 import { HERITAGE_CONCEPT_REGISTRY } from "../../src/heritage/concepts.js";
 import { SOURCE_REGISTRY } from "../../src/reading/provenance.js";
+import { checkNegativeRelationshipInvariants, validateHeritageDisagreementRecord } from "../../src/heritage/validator.js";
+import { HERITAGE_CONSTRUCT_IDS } from "../../src/heritage/constants.js";
 
 const clone = (value) => structuredClone(value);
 
@@ -40,17 +43,34 @@ const realArgs = (overrides = {}) => ({
 
 /* ── a small synthetic universe for controlled scenarios ─────────────────── */
 
+/*
+ * Item 1: a lineage record's own citationStatus/evidenceStrength/sourceId now
+ * gate eligibility too, so every synthetic lineage below states them
+ * explicitly — "verified"/"VERIFIED_PRIMARY" by default (a strong lineage
+ * that should never itself be the limiting factor), so a test that wants to
+ * exercise a WEAK lineage overrides these fields deliberately and visibly.
+ */
+const solidLineage = (fields) => Object.freeze({
+  runtimeStatus: "RUNTIME_PROSE",
+  availability: "available",
+  terminationState: "continue",
+  citationStatus: "verified",
+  evidenceStrength: "VERIFIED_PRIMARY",
+  sourceId: "synthetic-source",
+  ...fields,
+});
+
 const SYN_HERITAGE_REGISTRY = Object.freeze({
   alpha: Object.freeze({
     constructId: "alpha",
     lineages: Object.freeze({
-      primary: Object.freeze({ measurementAvailability: "SUPPORTED_2D", runtimeStatus: "RUNTIME_PROSE", availability: "available", terminationState: "continue" }),
+      primary: solidLineage({ measurementAvailability: "SUPPORTED_2D" }),
     }),
   }),
   beta: Object.freeze({
     constructId: "beta",
     lineages: Object.freeze({
-      primary: Object.freeze({ measurementAvailability: "CAMERA_GEOMETRY_INSUFFICIENT", runtimeStatus: "RUNTIME_PROSE", availability: "available", terminationState: "continue" }),
+      primary: solidLineage({ measurementAvailability: "CAMERA_GEOMETRY_INSUFFICIENT" }),
     }),
   }),
 });
@@ -342,9 +362,10 @@ test("12b: readingState.availability never influences resolution", () => {
   assert.deepEqual(withRead.unavailableRelations, withoutRead.unavailableRelations);
 });
 
-test("12c: a synthetic connector binding heritageQiSe directly to fiveElements is blocked", () => {
+test("12c: a synthetic connector binding heritageQiSe directly to fiveElements never reaches ACTIVE (blocked as a runtime binding, not as a co-existence ban — see item 4 tests below)", () => {
   const connector = synConnector({
     connectorId: "syn-qise-fiveforms",
+    sourceId: "heritage-five-elements-taiqing",
     participants: [
       { participantId: "heritageQiSe", nodeType: "HERITAGE_CONCEPT", conceptId: "heritageQiSe", memberScope: "NODE" },
       { participantId: "fiveElements", nodeType: "CONSTRUCT", constructId: "fiveElements", memberScope: "ALL_MEMBERS" },
@@ -356,7 +377,8 @@ test("12c: a synthetic connector binding heritageQiSe directly to fiveElements i
   }));
   const found = [...result.activeConnectors, ...result.unavailableRelations].find((e) => e.connectorId === "syn-qise-fiveforms");
   assert.ok(found);
-  assert.equal(found.disposition, "BLOCKED_NEGATIVE_RULE");
+  assert.equal(found.disposition, "BLOCKED_RUNTIME_BINDING");
+  assert.equal(result.activeConnectors.some((e) => e.connectorId === "syn-qise-fiveforms"), false);
 });
 
 test("12d: heritageQiSe's STATE cannot be satisfied by 'read' modern availability, only by an explicit conditionContext", () => {
@@ -794,7 +816,7 @@ test("source/lineage: a HERITAGE_ONLY lineage caps availability, never converts 
     measurementAvailability: "SUPPORTED_2D",
   });
   const heritageRegistry = {
-    alpha: { constructId: "alpha", lineages: { primary: { measurementAvailability: "SUPPORTED_2D", runtimeStatus: "HERITAGE_ONLY", availability: "available", terminationState: "continue" } } },
+    alpha: { constructId: "alpha", lineages: { primary: solidLineage({ measurementAvailability: "SUPPORTED_2D", runtimeStatus: "HERITAGE_ONLY" }) } },
   };
   const result = resolveHeritageConnections(synArgs({ heritageRegistry, connectorRegistry: { "syn-cap": connector } }));
   assert.equal(result.activeConnectors.length, 1);
@@ -808,7 +830,7 @@ test("source/lineage: a RESEARCH_ONLY lineage forces every candidate research-on
     runtimePolicy: "HERITAGE_PRESENTATION_ALLOWED",
   });
   const heritageRegistry = {
-    alpha: { constructId: "alpha", lineages: { primary: { measurementAvailability: "SUPPORTED_2D", runtimeStatus: "RESEARCH_ONLY", availability: "available", terminationState: "continue" } } },
+    alpha: { constructId: "alpha", lineages: { primary: solidLineage({ measurementAvailability: "SUPPORTED_2D", runtimeStatus: "RESEARCH_ONLY" }) } },
   };
   const result = resolveHeritageConnections(synArgs({ heritageRegistry, connectorRegistry: { "syn-cap": connector } }));
   assert.equal(result.activeConnectors.length, 0);
@@ -821,7 +843,7 @@ test("source/lineage: an abstaining lineage never becomes active", () => {
     participants: [{ participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" }],
   });
   const heritageRegistry = {
-    alpha: { constructId: "alpha", lineages: { primary: { measurementAvailability: "SUPPORTED_2D", runtimeStatus: "RUNTIME_PROSE", availability: "abstention", terminationState: "abstain" } } },
+    alpha: { constructId: "alpha", lineages: { primary: solidLineage({ measurementAvailability: "SUPPORTED_2D", availability: "abstention", terminationState: "abstain" }) } },
   };
   const result = resolveHeritageConnections(synArgs({ heritageRegistry, connectorRegistry: { "syn-cap": connector } }));
   assert.equal(result.activeConnectors.length, 0);
@@ -851,13 +873,162 @@ test("source/lineage: a work-recorded (identified but unlocated) source is cappe
   assert.equal(result.sourcePanels[0].disposition, "SOURCE_PANEL_CEILING");
 });
 
+test("source/lineage: lineage citation/evidence/source can veto active presentation even when the CONNECTOR's own source is solid", () => {
+  const connector = synConnector({
+    connectorId: "syn-solid-connector-source",
+    sourceId: "solid-source",
+    participants: [{ participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" }],
+  });
+  const sourceRegistry = { "solid-source": { citationStatus: "verified" } };
+  const heritageRegistry = {
+    alpha: {
+      constructId: "alpha",
+      lineages: {
+        primary: { measurementAvailability: "SUPPORTED_2D", runtimeStatus: "RUNTIME_PROSE", availability: "available", terminationState: "continue", citationStatus: "work-recorded", evidenceStrength: "RECORDED_NOT_VERIFIED", sourceId: "solid-source" },
+      },
+    },
+  };
+  const result = resolveHeritageConnections(synArgs({ heritageRegistry, connectorRegistry: { "syn-solid-connector-source": connector }, sourceRegistry, depthMode: "SOURCE_DEEP" }));
+  assert.equal(result.activeConnectors.length, 0, "the connector's edition-recorded/verified source must not override the weaker lineage disposition");
+  assert.equal(result.sourcePanels[0]?.disposition, "SOURCE_PANEL_CEILING");
+});
+
+/*
+ * Item 2 (Stage 2 review): gate precedence. A RESEARCH_ONLY connector, or one
+ * whose SELECTED LINEAGE is RESEARCH_ONLY, must never be promoted into
+ * sourcePanels merely because source eligibility alone would compute
+ * SOURCE_PANEL_CEILING. RESEARCH_ONLY is strictly more restrictive and must
+ * win regardless of source strength.
+ */
+test("gate precedence: connector-level RESEARCH_ONLY + a weak (work-recorded) source stays RESEARCH_ONLY, never sourcePanels", () => {
+  const connector = synConnector({
+    connectorId: "syn-research-only-weak-source",
+    sourceId: "weak-source",
+    runtimePolicy: "RESEARCH_ONLY",
+    participants: [{ participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" }],
+  });
+  const sourceRegistry = { "weak-source": { citationStatus: "work-recorded" } };
+  const result = resolveHeritageConnections(synArgs({
+    connectorRegistry: { "syn-research-only-weak-source": connector },
+    sourceRegistry,
+    depthMode: "SOURCE_DEEP",
+  }));
+  assert.deepEqual(result.sourcePanels, [], "SOURCE_PANEL_CEILING must not promote a RESEARCH_ONLY connector into a source panel");
+  assert.equal(result.activeConnectors.length, 0);
+  assert.equal(result.unavailableRelations[0].disposition, "RESEARCH_ONLY");
+});
+
+test("gate precedence: lineage-level RESEARCH_ONLY + a weak (work-recorded) connector source stays LINEAGE_RESEARCH_ONLY, never sourcePanels", () => {
+  const connector = synConnector({
+    connectorId: "syn-lineage-research-only-weak-source",
+    sourceId: "weak-source",
+    runtimePolicy: "HERITAGE_PRESENTATION_ALLOWED",
+    participants: [{ participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" }],
+  });
+  const sourceRegistry = { "weak-source": { citationStatus: "work-recorded" } };
+  const heritageRegistry = {
+    alpha: { constructId: "alpha", lineages: { primary: solidLineage({ measurementAvailability: "SUPPORTED_2D", runtimeStatus: "RESEARCH_ONLY" }) } },
+  };
+  const result = resolveHeritageConnections(synArgs({
+    heritageRegistry,
+    connectorRegistry: { "syn-lineage-research-only-weak-source": connector },
+    sourceRegistry,
+    depthMode: "SOURCE_DEEP",
+  }));
+  assert.deepEqual(result.sourcePanels, [], "SOURCE_PANEL_CEILING must not promote a lineage-RESEARCH_ONLY candidate into a source panel");
+  assert.equal(result.activeConnectors.length, 0);
+  assert.equal(result.unavailableRelations[0].disposition, "LINEAGE_RESEARCH_ONLY");
+});
+
+/*
+ * Item 3 (Stage 2 review): runtime PARTICIPANT availability is its own axis,
+ * independent of measurementAvailability and of whether a conditionExpression
+ * exists at all.
+ */
+test("participant runtime availability: an explicitly ABSENT participant blocks an UNCONDITIONAL connector", () => {
+  const connector = synConnector({
+    connectorId: "syn-unconditional-absent",
+    conditionExpression: null, // no condition to evaluate at all
+    participants: [
+      { participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" },
+      { participantId: "beta", nodeType: "CONSTRUCT", constructId: "beta", memberScope: "ALL_MEMBERS" },
+    ],
+  });
+  const result = resolveHeritageConnections(synArgs({
+    connectorRegistry: { "syn-unconditional-absent": connector },
+    conditionContext: { participants: { beta: "ABSENT" } },
+  }));
+  assert.equal(result.activeConnectors.length, 0);
+  assert.equal(result.unavailableRelations[0].disposition, "PARTICIPANT_UNAVAILABLE");
+  assert.equal(result.unavailableRelations[0].gateReasons[0], "PARTICIPANT_ABSENT");
+});
+
+test("participant runtime availability: an explicitly UNKNOWN participant also blocks an unconditional connector, without asserting falsity", () => {
+  const connector = synConnector({
+    connectorId: "syn-unconditional-unknown",
+    conditionExpression: null,
+    participants: [
+      { participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" },
+      { participantId: "beta", nodeType: "CONSTRUCT", constructId: "beta", memberScope: "ALL_MEMBERS" },
+    ],
+  });
+  const result = resolveHeritageConnections(synArgs({
+    connectorRegistry: { "syn-unconditional-unknown": connector },
+    conditionContext: { participants: { beta: "UNKNOWN" } },
+  }));
+  assert.equal(result.activeConnectors.length, 0);
+  assert.equal(result.unavailableRelations[0].disposition, "PARTICIPANT_UNAVAILABLE");
+  assert.equal(result.unavailableRelations[0].gateReasons[0], "PARTICIPANT_UNKNOWN");
+});
+
+test("participant runtime availability: no entry at all (vs explicit ABSENT/UNKNOWN) carries no opinion and does not block", () => {
+  const connector = synConnector({
+    connectorId: "syn-unconditional-no-opinion",
+    conditionExpression: null,
+    participants: [
+      { participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" },
+      { participantId: "beta", nodeType: "CONSTRUCT", constructId: "beta", memberScope: "ALL_MEMBERS" },
+    ],
+  });
+  const withEmptyContext = resolveHeritageConnections(synArgs({
+    connectorRegistry: { "syn-unconditional-no-opinion": connector },
+    conditionContext: { participants: {} },
+  }));
+  const withNoContext = resolveHeritageConnections(synArgs({
+    connectorRegistry: { "syn-unconditional-no-opinion": connector },
+    conditionContext: null,
+  }));
+  assert.equal(withEmptyContext.activeConnectors.length, 1);
+  assert.equal(withNoContext.activeConnectors.length, 1);
+});
+
+test("participant runtime availability: ABSENT does not assert the historical claim is false — the connector is parked, not rejected", () => {
+  const connector = synConnector({
+    connectorId: "syn-absent-not-false",
+    participants: [
+      { participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" },
+      { participantId: "beta", nodeType: "CONSTRUCT", constructId: "beta", memberScope: "ALL_MEMBERS" },
+    ],
+  });
+  const result = resolveHeritageConnections(synArgs({
+    connectorRegistry: { "syn-absent-not-false": connector },
+    conditionContext: { participants: { beta: "ABSENT" } },
+  }));
+  const entry = result.unavailableRelations[0];
+  // It is fully present in the trace with its real provenance — "parked",
+  // never simply discarded as if the historical relationship were untrue.
+  assert.equal(entry.connectorId, "syn-absent-not-false");
+  assert.equal(entry.sourceId, connector.sourceId);
+  assert.equal(entry.evidenceClass, connector.evidenceClass);
+});
+
 test("source/lineage: requesting a valid, non-default lineage is preserved exactly", () => {
   const heritageRegistry = {
     alpha: {
       constructId: "alpha",
       lineages: {
-        primary: { measurementAvailability: "SUPPORTED_2D", runtimeStatus: "RUNTIME_PROSE", availability: "available", terminationState: "continue" },
-        variant: { measurementAvailability: "SUPPORTED_2D", runtimeStatus: "RUNTIME_PROSE", availability: "available", terminationState: "continue" },
+        primary: solidLineage({ measurementAvailability: "SUPPORTED_2D" }),
+        variant: solidLineage({ measurementAvailability: "SUPPORTED_2D" }),
       },
     },
   };
@@ -870,8 +1041,8 @@ test("source/lineage: an invalid lineage falls back to 'primary' by documented p
     alpha: {
       constructId: "alpha",
       lineages: {
-        primary: { measurementAvailability: "SUPPORTED_2D", runtimeStatus: "RUNTIME_PROSE", availability: "available", terminationState: "continue" },
-        variant: { measurementAvailability: "CAMERA_GEOMETRY_INSUFFICIENT", runtimeStatus: "RESEARCH_ONLY", availability: "available", terminationState: "continue" },
+        primary: solidLineage({ measurementAvailability: "SUPPORTED_2D" }),
+        variant: solidLineage({ measurementAvailability: "CAMERA_GEOMETRY_INSUFFICIENT", runtimeStatus: "RESEARCH_ONLY" }),
       },
     },
   };
@@ -917,27 +1088,55 @@ test("negative-rule: Three Sections / Five Forms textual-adjacency promotion is 
   assert.ok(violations.includes("no-three-sections-five-forms-promotion"), violations.join(","));
 });
 
-test("negative-rule: heritageQiSe -> Five Forms classification stays blocked (via the preserved hard-coded check, not the generic FORBID_RUNTIME_BINDING matcher)", () => {
-  const connector = synConnector({
-    connectorId: "syn-qise-canonical",
-    participants: [
-      { participantId: "heritageQiSe", nodeType: "HERITAGE_CONCEPT", conceptId: "heritageQiSe", memberScope: "NODE" },
-      { participantId: "fiveElements", nodeType: "CONSTRUCT", constructId: "fiveElements", memberScope: "ALL_MEMBERS" },
-    ],
-  });
-  // The generic data-driven matcher deliberately does NOT enforce
-  // FORBID_RUNTIME_BINDING rules (a modern-binding ban is not the same claim
-  // as "these two nodes may never coexist in a source-backed connector") —
-  // so it does not fire here.
+/*
+ * Item 4 (Stage 2 review): FORBID_RUNTIME_BINDING must block a modern
+ * runtime classification/binding, not every historical connector containing
+ * heritageQiSe and fiveElements. Split into the two proofs the review asked
+ * for explicitly.
+ */
+const historicalQiSeFiveFormsConnector = () => synConnector({
+  connectorId: "syn-qise-canonical",
+  sourceId: "heritage-five-elements-taiqing", // real, VERIFIED source — proves this is source-backed, not a placeholder
+  evidenceClass: "EXPLICITLY_ATTESTED",
+  participants: [
+    { participantId: "heritageQiSe", nodeType: "HERITAGE_CONCEPT", conceptId: "heritageQiSe", memberScope: "NODE" },
+    { participantId: "fiveElements", nodeType: "CONSTRUCT", constructId: "fiveElements", memberScope: "ALL_MEMBERS" },
+  ],
+});
+
+test("historical heritageQiSe + Five Forms coexistence is not automatically banned", () => {
+  const connector = historicalQiSeFiveFormsConnector();
+  // Not caught by the absolute coexistence checks at all.
+  const negativeErrors = [];
+  checkNegativeRelationshipInvariants(connector, negativeErrors);
+  assert.deepEqual(negativeErrors, []);
   const generic = negativeRuleViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY);
   assert.equal(generic.includes("no-qise-to-form-classification"), false);
-  // The full resolver still blocks it, via checkNegativeRelationshipInvariants.
+  // It reaches the resolver as a normal, source-backed candidate — never
+  // BLOCKED_NEGATIVE_RULE.
   const result = resolveHeritageConnections(realArgs({
     readingState: { heritageConstruct: "fiveElements", sourceLineage: "primary" },
     connectorRegistry: { ...HERITAGE_CONNECTOR_REGISTRY, "syn-qise-canonical": connector },
   }));
   const found = [...result.activeConnectors, ...result.unavailableRelations].find((e) => e.connectorId === "syn-qise-canonical");
-  assert.equal(found.disposition, "BLOCKED_NEGATIVE_RULE");
+  assert.ok(found);
+  assert.notEqual(found.disposition, "BLOCKED_NEGATIVE_RULE");
+});
+
+test("an attempted modern QiSe->FiveForms classification is blocked by the actual FORBID_RUNTIME_BINDING rule", () => {
+  const connector = historicalQiSeFiveFormsConnector();
+  // The actual registry rule (canonical-ref normalized) is what fires.
+  const runtimeBindingHits = negativeRuleRuntimeBindingViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY);
+  assert.ok(runtimeBindingHits.includes("no-qise-to-form-classification"), runtimeBindingHits.join(","));
+
+  const result = resolveHeritageConnections(realArgs({
+    readingState: { heritageConstruct: "fiveElements", sourceLineage: "primary" },
+    connectorRegistry: { ...HERITAGE_CONNECTOR_REGISTRY, "syn-qise-canonical": connector },
+  }));
+  const found = [...result.activeConnectors, ...result.unavailableRelations].find((e) => e.connectorId === "syn-qise-canonical");
+  assert.equal(found.disposition, "BLOCKED_RUNTIME_BINDING");
+  assert.equal(result.activeConnectors.some((e) => e.connectorId === "syn-qise-canonical"), false);
+  assert.deepEqual(found.gateReasons, ["no-qise-to-form-classification"]);
 });
 
 test("negative-rule: shen-unmeasurable is enforced (via historicalStates, unreachable to the pairwise-ref matcher by design)", () => {
@@ -1039,14 +1238,36 @@ test("DEPTH_MODES is the declared three-value enum", () => {
   assert.deepEqual(DEPTH_MODES, ["SUMMARY", "STANDARD", "SOURCE_DEEP"]);
 });
 
-test("resolveSourceEligibility: verified/edition-recorded is ELIGIBLE, others are ceilinged or blocked", () => {
+test("resolveSourceEligibility: verified/edition-recorded is ELIGIBLE, others are ceilinged or blocked, with a solid lineage", () => {
   const conn = (sourceId) => synConnector({ connectorId: "x", sourceId, participants: [] });
-  assert.equal(resolveSourceEligibility(conn("s"), { s: { citationStatus: "verified" } }), "ELIGIBLE");
-  assert.equal(resolveSourceEligibility(conn("s"), { s: { citationStatus: "edition-recorded" } }), "ELIGIBLE");
-  assert.equal(resolveSourceEligibility(conn("s"), { s: { citationStatus: "work-recorded" } }), "SOURCE_PANEL_CEILING");
-  assert.equal(resolveSourceEligibility(conn("s"), { s: { citationStatus: "source-required" } }), "BLOCKED");
-  assert.equal(resolveSourceEligibility(conn("s"), { s: { citationStatus: "attribution-contradicted" } }), "BLOCKED");
-  assert.equal(resolveSourceEligibility(conn("missing"), {}), "UNKNOWN_SOURCE");
+  const solid = solidLineage({ measurementAvailability: "SUPPORTED_2D" });
+  assert.equal(resolveSourceEligibility(conn("s"), solid, { s: { citationStatus: "verified" } }), "ELIGIBLE");
+  assert.equal(resolveSourceEligibility(conn("s"), solid, { s: { citationStatus: "edition-recorded" } }), "ELIGIBLE");
+  assert.equal(resolveSourceEligibility(conn("s"), solid, { s: { citationStatus: "work-recorded" } }), "SOURCE_PANEL_CEILING");
+  assert.equal(resolveSourceEligibility(conn("s"), solid, { s: { citationStatus: "source-required" } }), "BLOCKED");
+  assert.equal(resolveSourceEligibility(conn("s"), solid, { s: { citationStatus: "attribution-contradicted" } }), "BLOCKED");
+  assert.equal(resolveSourceEligibility(conn("missing"), solid, {}), "UNKNOWN_SOURCE");
+});
+
+test("resolveSourceEligibility: item 1 — a weak/held LINEAGE ceilings an otherwise-solid connector source; the weaker side always wins", () => {
+  const conn = (sourceId) => synConnector({ connectorId: "x", sourceId, participants: [] });
+  const sourceRegistry = { "solid-source": { citationStatus: "verified" } };
+
+  const weakByCitation = { citationStatus: "work-recorded", evidenceStrength: "VERIFIED_PRIMARY", sourceId: "solid-source" };
+  assert.equal(resolveSourceEligibility(conn("solid-source"), weakByCitation, sourceRegistry), "SOURCE_PANEL_CEILING",
+    "a verified connector source must not override a work-recorded lineage citationStatus");
+
+  const weakByEvidence = { citationStatus: "verified", evidenceStrength: "RECORDED_NOT_VERIFIED", sourceId: "solid-source" };
+  assert.equal(resolveSourceEligibility(conn("solid-source"), weakByEvidence, sourceRegistry), "SOURCE_PANEL_CEILING",
+    "a verified connector source must not override a lineage whose OWN evidenceStrength is unverified");
+
+  const heldByLineageSourceRecord = { citationStatus: "verified", evidenceStrength: "VERIFIED_PRIMARY", sourceId: "actually-weak-source" };
+  const sourceRegistryWithWeakLineageSource = { "solid-source": { citationStatus: "verified" }, "actually-weak-source": { citationStatus: "source-required" } };
+  assert.equal(resolveSourceEligibility(conn("solid-source"), heldByLineageSourceRecord, sourceRegistryWithWeakLineageSource), "BLOCKED",
+    "the lineage's OWN cited source record is cross-checked even when the lineage's denormalized citationStatus looks solid");
+
+  const bothSolid = { citationStatus: "verified", evidenceStrength: "VERIFIED_PRIMARY", sourceId: "solid-source" };
+  assert.equal(resolveSourceEligibility(conn("solid-source"), bothSolid, sourceRegistry), "ELIGIBLE");
 });
 
 test("prohibitedForUserInference stays true on every surfaced entry", () => {

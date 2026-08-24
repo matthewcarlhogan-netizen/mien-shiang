@@ -207,31 +207,71 @@ function classifyRelationshipAvailability(connector, context, lineageRestriction
 /* ── source / lineage eligibility (a THIRD, independent gate: evidentiary standing) ─────── */
 
 /**
- * Item 4: which source citationStatus values are solid enough for a
- * connector to become ordinary ACTIVE presentation. Deliberately conservative
- * and reusing the EXISTING Stage 1 ladder verbatim (constants.js
- * HERITAGE_CITATION_STATUSES) rather than inventing a new one.
- * "work-recorded" (a work is identified but not edition-located) and
- * "attribution-contradicted" fall short of this, on purpose.
+ * Item 1/4: a numeric ladder over the EXISTING Stage 1 citation and evidence
+ * enums (constants.js HERITAGE_CITATION_STATUSES / HERITAGE_VERIFICATION_STATUSES
+ * verbatim — no new ladder invented). 0 = blocked, 1 = source-panel ceiling,
+ * 2 = fully eligible for active presentation. "work-recorded" (a work is
+ * identified but not edition-located) and "attribution-contradicted" fall
+ * short of full eligibility on purpose.
  */
-const SOURCE_ELIGIBLE_FOR_ACTIVE = Object.freeze(["edition-recorded", "verified"]);
+const CITATION_STRENGTH = Object.freeze({
+  "source-required": 0,
+  "attribution-contradicted": 0,
+  "work-recorded": 1,
+  "edition-recorded": 2,
+  verified: 2,
+});
+const EVIDENCE_STRENGTH_LEVEL = Object.freeze({
+  ABSTAINED: 0,
+  RECORDED_NOT_VERIFIED: 1,
+  CORROBORATED_NOT_VERIFIED: 1,
+  VERIFIED_SECONDARY: 2,
+  VERIFIED_PRIMARY: 2,
+});
+const strengthToEligibility = (strength) => (strength <= 0 ? "BLOCKED" : strength === 1 ? "SOURCE_PANEL_CEILING" : "ELIGIBLE");
 
 /**
- * "ELIGIBLE" — citation is solid; no additional ceiling from the source.
- * "SOURCE_PANEL_CEILING" — a real, identified source, but not yet located
- *   well enough for active presentation; may still appear in a source panel.
- * "BLOCKED" — no usable source at all (source-required), or the received
- *   attribution is actively contradicted by the inspected witness.
- * "UNKNOWN_SOURCE" — connector.sourceId is not in the injected sourceRegistry.
+ * The SELECTED LINEAGE's own evidentiary strength — its `citationStatus` and
+ * `evidenceStrength` (both first-class fields on every lineage record, per
+ * HERITAGE_FIELD_MANIFEST.lineage), cross-checked against its own
+ * `sourceId` in the injected sourceRegistry so a lineage cannot claim a
+ * stronger citationStatus than the source record it actually cites backs up.
+ * The weakest of the three wins.
  */
-export function resolveSourceEligibility(connector, sourceRegistry) {
+function lineageSourceStrength(lineageRecord, sourceRegistry) {
+  if (!lineageRecord) return 0;
+  const citationStrength = CITATION_STRENGTH[lineageRecord.citationStatus] ?? 0;
+  const evidenceStrength = EVIDENCE_STRENGTH_LEVEL[lineageRecord.evidenceStrength] ?? 1;
+  const sourceRecord = sourceRegistry?.[lineageRecord.sourceId];
+  const sourceRecordStrength = sourceRecord ? (CITATION_STRENGTH[sourceRecord.citationStatus] ?? 0) : citationStrength;
+  return Math.min(citationStrength, evidenceStrength, sourceRecordStrength);
+}
+
+/**
+ * "ELIGIBLE" — both the connector's own source AND the selected lineage's
+ *   evidentiary standing are solid; no ceiling.
+ * "SOURCE_PANEL_CEILING" — real, identified material, but not yet located
+ *   well enough (on either side) for active presentation; may still appear
+ *   in a source panel.
+ * "BLOCKED" — no usable source at all, or an actively contradicted
+ *   attribution, on either side.
+ * "UNKNOWN_SOURCE" — connector.sourceId is not in the injected sourceRegistry
+ *   (checked first and reported distinctly, since it is a different failure
+ *   from "the source exists but is weak").
+ *
+ * Item 1: the connector's own source and the selected lineage's source are
+ * reconciled CONSERVATIVELY — the combined result is the WEAKER of the two,
+ * never the stronger. A connector citing an edition-recorded source must not
+ * be promoted to active presentation merely because ITS OWN citation looks
+ * solid, if the reading state's selected lineage for this construct is
+ * itself held at work-recorded, unverified evidence, or worse.
+ */
+export function resolveSourceEligibility(connector, lineageRecord, sourceRegistry) {
   const source = sourceRegistry?.[connector.sourceId];
   if (!source) return "UNKNOWN_SOURCE";
-  if (source.citationStatus === "source-required" || source.citationStatus === "attribution-contradicted") {
-    return "BLOCKED";
-  }
-  if (!SOURCE_ELIGIBLE_FOR_ACTIVE.includes(source.citationStatus)) return "SOURCE_PANEL_CEILING";
-  return "ELIGIBLE";
+  const connectorStrength = CITATION_STRENGTH[source.citationStatus] ?? 0;
+  const combinedStrength = Math.min(connectorStrength, lineageSourceStrength(lineageRecord, sourceRegistry));
+  return strengthToEligibility(combinedStrength);
 }
 
 /**
@@ -378,20 +418,15 @@ const PAIRWISE_COEXISTENCE_RULE_TYPES = Object.freeze([
 /**
  * `negativeRelationshipRegistry`-driven check: if a connector's participants
  * jointly cover both (canonicalised) `fromRef` and `toRef` of an ACTIVE rule
- * of one of the three PAIRWISE_COEXISTENCE_RULE_TYPES, it violates that
- * rule. FORBID_RUNTIME_BINDING rules are deliberately NOT matched this way:
- * forbidding a MODERN runtime binding (e.g. "measured Qi Se may not classify
- * Five Forms") is not the same claim as "no source-backed HISTORICAL
- * connector may ever mention heritageQiSe and fiveElements together" —
- * collapsing the two would risk banning a genuinely source-attested
- * classical relationship merely because a modern inference from it is
- * forbidden. The specific historical case Stage 1 actually needs blocked
- * (heritageQiSe binding TO fiveElements as a classifier) is enforced
- * separately and precisely by `checkNegativeRelationshipInvariants`, which
- * this function complements rather than duplicates (it also covers the
- * shen-unmeasurable rule, whose `toRef` — "measurementBinding" — is a
- * sentinel with no participant counterpart and so can never be expressed as
- * a pairwise ref match).
+ * of one of the three PAIRWISE_COEXISTENCE_RULE_TYPES, the connector is
+ * rejected outright — it may not exist as an eligible candidate at all.
+ * FORBID_RUNTIME_BINDING rules are deliberately NOT matched by this function;
+ * see `negativeRuleRuntimeBindingViolations` below for why that distinction
+ * is load-bearing, not a filter of convenience. This also does not need to
+ * cover the shen-unmeasurable rule: its `toRef` — "measurementBinding" — is
+ * a sentinel with no participant counterpart and so can never be expressed
+ * as a pairwise ref match; that rule is enforced by
+ * `checkNegativeRelationshipInvariants` via `historicalStates` instead.
  */
 export function negativeRuleViolations(connector, negativeRelationshipRegistry) {
   const refs = new Set((connector.participants || []).map((p) =>
@@ -403,6 +438,67 @@ export function negativeRuleViolations(connector, negativeRelationshipRegistry) 
     if (refs.has(canonicalRef(rule.fromRef)) && refs.has(canonicalRef(rule.toRef))) violated.push(rule.negativeRuleId);
   }
   return violated;
+}
+
+/**
+ * Item 4: FORBID_RUNTIME_BINDING is a narrower, different claim from the
+ * three PAIRWISE_COEXISTENCE_RULE_TYPES above — "this pairing must not
+ * become a live runtime binding" is not "these two nodes may never coexist
+ * in a source-backed historical connector". `no-qise-to-form-classification`
+ * (fromRef "heritageQiSe" -> canonical "fiveElements") is the concrete case:
+ * a genuinely EXPLICITLY_ATTESTED classical connector pairing heritageQiSe
+ * and fiveElements is allowed to validate and exist in the graph (it can
+ * appear in `unavailableRelations` here, fully traceable, exactly like a
+ * RESEARCH_ONLY connector does) — what it can never do is reach `ACTIVE`
+ * disposition, which is the resolver's only notion of "connected, in-use
+ * presentation". Matched the same way as `negativeRuleViolations` (canonical
+ * pairwise refs), just gated at a different point in `resolveHeritageConnections`.
+ */
+export function negativeRuleRuntimeBindingViolations(connector, negativeRelationshipRegistry) {
+  const refs = new Set((connector.participants || []).map((p) =>
+    canonicalRef(p.conceptId ?? p.constructId ?? p.constituentId ?? p.relatedSystemId ?? p.participantId)));
+  const violated = [];
+  for (const rule of Object.values(negativeRelationshipRegistry || {})) {
+    if (rule.status !== "ACTIVE") continue;
+    if (rule.negativeRuleType !== "FORBID_RUNTIME_BINDING") continue;
+    if (refs.has(canonicalRef(rule.fromRef)) && refs.has(canonicalRef(rule.toRef))) violated.push(rule.negativeRuleId);
+  }
+  return violated;
+}
+
+/* ── item 3: runtime PARTICIPANT availability — a third, independent axis ── */
+
+/**
+ * Whether a connector's DECLARED participants are currently present, per
+ * explicitly injected runtime evidence — completely independent of (a)
+ * static `measurementAvailability` (can this ever be observed) and (b) any
+ * `conditionExpression` (which only exists on some connectors). An ORDINARY
+ * connector with no condition at all must not silently treat a participant
+ * the caller has explicitly flagged ABSENT or UNKNOWN as if it were present.
+ *
+ * Only EXPLICIT signals matter: a participant with no entry at all in
+ * `conditionContext.participants` (or no conditionContext supplied) carries
+ * no opinion and is not held against the connector — this is not the same
+ * gap as "the caller said ABSENT/UNKNOWN". An ABSENT participant does NOT
+ * mean the historical claim is false (a source can attest a relationship
+ * whether or not its participant currently appears in front of the camera);
+ * it means this particular resolution cannot present the relationship as
+ * currently connected, so the connector is parked in unavailableRelations
+ * with a distinct, honest reason.
+ */
+function resolveParticipantRuntimeGate(connector, conditionContext) {
+  const statuses = conditionContext?.participants;
+  if (!statuses) return { blocked: false, reason: null };
+  let sawAbsent = false;
+  let sawUnknown = false;
+  for (const participant of connector.participants || []) {
+    const status = statuses[participant.participantId];
+    if (status === "ABSENT") sawAbsent = true;
+    else if (status === "UNKNOWN") sawUnknown = true;
+  }
+  if (sawAbsent) return { blocked: true, reason: "PARTICIPANT_ABSENT" };
+  if (sawUnknown) return { blocked: true, reason: "PARTICIPANT_UNKNOWN" };
+  return { blocked: false, reason: null };
 }
 
 /* ── connector -> trace entry (never mutates the source connector) ───────── */
@@ -562,32 +658,49 @@ export function resolveHeritageConnections({
   for (const connector of candidates) {
     const relationshipAvailability = classifyRelationshipAvailability(connector, context, lineageRestriction);
 
-    // 5. reject any connector blocked by source/runtime policy or the
-    // Stage 1 safety lock.
+    // 5. reject any connector blocked by an ABSOLUTE co-existence ban or the
+    // Stage 1 safety lock. (FORBID_RUNTIME_BINDING is intentionally NOT part
+    // of this — see item 4's gate near the bottom of this loop.)
     const negativeErrors = [];
     checkNegativeRelationshipInvariants(connector, negativeErrors);
     const dataDrivenViolations = negativeRuleViolations(connector, negativeRelationshipRegistry);
     const blockedByNegativeRule = negativeErrors.length > 0 || dataDrivenViolations.length > 0;
     const lockOk = connector.prohibitedForUserInference === true;
 
-    // 6-7. participant/state runtime evidence + bounded conditionExpression.
-    const conditionResolution = evaluateConditionExpression(connector.conditionExpression, connector, conditionContext);
-
     // 8. attach first-class disagreements (CONSTRUCT/CONNECTOR/LINEAGE
-    // targets; see collectDisagreementIds).
+    // targets; see collectDisagreementIds). Computed early so every
+    // disposition branch below can carry it.
     const disagreementIds = collectDisagreementIds({
       connector, primaryConstruct, primaryLineage, disagreementRegistry,
     });
 
     if (blockedByNegativeRule || !lockOk) {
       unavailable.push(toResolvedEntry(connector, {
-        relationshipAvailability, conditionResolution, disagreementIds,
+        relationshipAvailability, conditionResolution: { satisfied: false, resolved: true, reason: "NEGATIVE_RULE_BLOCKED" }, disagreementIds,
         disposition: "BLOCKED_NEGATIVE_RULE",
         gateReasons: [...negativeErrors, ...dataDrivenViolations, ...(lockOk ? [] : ["PROHIBITED_FOR_USER_INFERENCE_UNSET"])],
       }));
       continue;
     }
 
+    // Item 3: runtime PARTICIPANT availability — a third, independent axis.
+    // Applies to EVERY candidate, conditionExpression or not; an explicit
+    // ABSENT/UNKNOWN runtime signal on a declared participant is never
+    // silently ignored just because the connector itself declared no
+    // condition to evaluate.
+    const participantGate = resolveParticipantRuntimeGate(connector, conditionContext);
+    if (participantGate.blocked) {
+      unavailable.push(toResolvedEntry(connector, {
+        relationshipAvailability, conditionResolution: { satisfied: false, resolved: true, reason: participantGate.reason }, disagreementIds,
+        disposition: "PARTICIPANT_UNAVAILABLE",
+        gateReasons: [participantGate.reason],
+      }));
+      continue;
+    }
+
+    // 6-7. bounded conditionExpression, evaluated against the same runtime
+    // evidence.
+    const conditionResolution = evaluateConditionExpression(connector.conditionExpression, connector, conditionContext);
     if (!conditionResolution.resolved || !conditionResolution.satisfied) {
       unavailable.push(toResolvedEntry(connector, {
         relationshipAvailability, conditionResolution, disagreementIds,
@@ -597,10 +710,11 @@ export function resolveHeritageConnections({
       continue;
     }
 
-    // Item 4: source/lineage eligibility. This can veto an otherwise-eligible
+    // Item 1/4: source/lineage eligibility, reconciled conservatively (see
+    // resolveSourceEligibility). This can veto an otherwise-eligible
     // connector even when connector.runtimePolicy alone would have allowed
     // active presentation.
-    const sourceEligibility = resolveSourceEligibility(connector, sourceRegistry);
+    const sourceEligibility = resolveSourceEligibility(connector, lineageRecord, sourceRegistry);
     if (sourceEligibility === "UNKNOWN_SOURCE") {
       unavailable.push(toResolvedEntry(connector, {
         relationshipAvailability, conditionResolution, disagreementIds,
@@ -623,6 +737,27 @@ export function resolveHeritageConnections({
       continue;
     }
 
+    // Item 2: RESEARCH_ONLY (connector- or lineage-level) is checked BEFORE
+    // any SOURCE_PANEL promotion. A RESEARCH_ONLY connector — or one whose
+    // selected lineage is RESEARCH_ONLY — must never be promoted into
+    // sourcePanels merely because its source citation happens to look solid
+    // enough on its own (SOURCE_PANEL_CEILING); RESEARCH_ONLY is the more
+    // restrictive disposition and wins regardless of source strength.
+    if (connector.runtimePolicy === "RESEARCH_ONLY") {
+      unavailable.push(toResolvedEntry(connector, {
+        relationshipAvailability, conditionResolution, disagreementIds,
+        disposition: "RESEARCH_ONLY", gateReasons: ["RUNTIME_POLICY_RESEARCH_ONLY"],
+      }));
+      continue;
+    }
+    if (lineageRestriction === "RESEARCH_ONLY") {
+      unavailable.push(toResolvedEntry(connector, {
+        relationshipAvailability, conditionResolution, disagreementIds,
+        disposition: "LINEAGE_RESEARCH_ONLY", gateReasons: ["LINEAGE_RESEARCH_ONLY"],
+      }));
+      continue;
+    }
+
     if (connector.runtimePolicy === "SOURCE_PANEL_ONLY" || sourceEligibility === "SOURCE_PANEL_CEILING") {
       sourcePanels.push(toResolvedEntry(connector, {
         relationshipAvailability: sourceEligibility === "SOURCE_PANEL_CEILING" ? relationshipAvailability : "SOURCE_ONLY",
@@ -633,25 +768,24 @@ export function resolveHeritageConnections({
       continue;
     }
 
-    if (connector.runtimePolicy === "RESEARCH_ONLY") {
+    // Item 4: a FORBID_RUNTIME_BINDING rule blocks only THIS final step —
+    // becoming a live, connected ("ACTIVE") presentation — not the
+    // connector's existence or validity. It is checked last, after every
+    // other gate the connector would otherwise have cleared, so a rule
+    // violation is reported precisely rather than masked by an earlier,
+    // unrelated block.
+    const runtimeBindingViolations = negativeRuleRuntimeBindingViolations(connector, negativeRelationshipRegistry);
+    if (runtimeBindingViolations.length > 0) {
       unavailable.push(toResolvedEntry(connector, {
         relationshipAvailability, conditionResolution, disagreementIds,
-        disposition: "RESEARCH_ONLY", gateReasons: ["RUNTIME_POLICY_RESEARCH_ONLY"],
-      }));
-      continue;
-    }
-
-    if (lineageRestriction === "RESEARCH_ONLY") {
-      unavailable.push(toResolvedEntry(connector, {
-        relationshipAvailability, conditionResolution, disagreementIds,
-        disposition: "LINEAGE_RESEARCH_ONLY", gateReasons: ["LINEAGE_RESEARCH_ONLY"],
+        disposition: "BLOCKED_RUNTIME_BINDING", gateReasons: runtimeBindingViolations,
       }));
       continue;
     }
 
     // runtimePolicy === "HERITAGE_PRESENTATION_ALLOWED", source eligible,
     // lineage not restrictive beyond the HERITAGE_ONLY ceiling already folded
-    // into relationshipAvailability above.
+    // into relationshipAvailability above, no runtime-binding ban.
     active.push(toResolvedEntry(connector, {
       relationshipAvailability, conditionResolution, disagreementIds,
       disposition: "ACTIVE", gateReasons: [],

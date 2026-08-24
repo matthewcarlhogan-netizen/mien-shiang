@@ -481,13 +481,27 @@ export const participantRefId = (participant) => {
  * the negative-rule registry generically, because a generic rule-interpreter
  * over free-text fromRef/toRef names would be unverifiable in itself; a
  * fixed, named check per rule is the one that can actually be tested.
+ *
+ * ONLY rule types that ban two nodes from coexisting in ANY connector at all
+ * belong here (FORBID_RELATIONSHIP_FAMILY, FORBID_NODE_MAPPING,
+ * TEXTUAL_ADJACENCY_ONLY, and the shen historicalStates check, which is an
+ * absolute epistemic claim no source could ever change). A
+ * FORBID_RUNTIME_BINDING rule is a different, narrower claim — "this pairing
+ * must not become a live runtime binding" — and does NOT mean the historical
+ * pairing itself is forbidden from ever validating or existing in the graph.
+ * `no-qise-to-form-classification` used to be enforced HERE as a flat
+ * co-presence ban, which would have rejected a genuinely source-backed
+ * historical connector pairing heritageQiSe and fiveElements the moment one
+ * was ever added — banning attested heritage material because a MODERN
+ * inference from it is forbidden. It is enforced instead at resolution time
+ * (resolver.js's `negativeRuleRuntimeBindingViolations`), which can allow the
+ * connector to validate and exist while still refusing to let it reach
+ * ACTIVE (runtime-connected) presentation.
  */
 export function checkNegativeRelationshipInvariants(connector, errors) {
   const participants = Array.isArray(connector.participants) ? connector.participants : [];
   const hasConstruct = (id) => participants.some((p) => p.nodeType === "CONSTRUCT"
     && (p.constructId ?? p.participantId) === id);
-  const hasConcept = (id) => participants.some((p) => p.nodeType === "HERITAGE_CONCEPT"
-    && (p.conceptId ?? p.participantId) === id);
   const hasRelatedSystem = (id) => participants.some((p) => p.nodeType === "RELATED_SYSTEM"
     && (p.relatedSystemId ?? p.participantId) === id);
 
@@ -496,9 +510,6 @@ export function checkNegativeRelationshipInvariants(connector, errors) {
   }
   if (hasConstruct("fiveElements") && hasRelatedSystem("five-phases")) {
     errors.push("no-five-forms-five-phases-conflation: Five Forms and Five Phases cannot be linked as equivalent");
-  }
-  if (hasConcept("heritageQiSe") && hasConstruct("fiveElements")) {
-    errors.push("no-qise-to-form-classification: measured Qi Se cannot classify Five Forms");
   }
   if (hasConstruct("threeSections") && hasConstruct("fiveElements")) {
     errors.push("no-three-sections-five-forms-promotion: textual adjacency cannot be promoted into an explicit historical relationship");
@@ -699,6 +710,7 @@ export function validateHeritageDisagreementRecord(disagreement, context = {}) {
     constructIds = HERITAGE_CONSTRUCT_IDS,
     connectorRegistry = {},
     sourceRegistry = SOURCE_REGISTRY,
+    heritageRegistry = null,
   } = context;
 
   validateFields(disagreement, HERITAGE_DISAGREEMENT_FIELDS, "Disagreement ", errors);
@@ -718,6 +730,23 @@ export function validateHeritageDisagreementRecord(disagreement, context = {}) {
       errors.push("Disagreement target references unknown connector " + target.targetRef + " (missing disagreement target)");
     } else if (target.targetType === "SOURCE" && !sourceRegistry[target.targetRef]) {
       errors.push("Disagreement target references unknown source " + target.targetRef + " (missing disagreement target)");
+    } else if (target.targetType === "LINEAGE") {
+      // Canonical form: `${constructId}:${lineageId}` — a Stage 2 convention
+      // (no LINEAGE-targeted disagreement existed in Stage 1 data to have
+      // established one), formalised here rather than left as a
+      // resolver-only assumption: a bare lineageId like "primary" is reused
+      // across constructs and would be ambiguous on its own.
+      const ref = String(target.targetRef);
+      const separatorIndex = ref.indexOf(":");
+      const constructId = separatorIndex > 0 ? ref.slice(0, separatorIndex) : null;
+      const lineageId = separatorIndex > 0 ? ref.slice(separatorIndex + 1) : null;
+      if (!constructId || !lineageId) {
+        errors.push("Disagreement target LINEAGE targetRef must be constructId:lineageId, got " + ref + " (missing disagreement target)");
+      } else if (!constructIds.includes(constructId)) {
+        errors.push("Disagreement target LINEAGE references unknown construct " + constructId + " (missing disagreement target)");
+      } else if (heritageRegistry && !heritageRegistry[constructId]?.lineages?.[lineageId]) {
+        errors.push("Disagreement target LINEAGE references unknown lineage " + ref + " (missing disagreement target)");
+      }
     }
   }
 

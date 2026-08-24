@@ -148,13 +148,6 @@ const connectorCases = [
     (c) => { c.conditionExpression = { type: "STATE", participantId: "fiveMountains", stateId: "no-such-state" }; }, /undeclared historicalState/i],
   ["HVC-024", "measurable Shen", directedShenBase,
     (c) => { c.historicalStates[0].measurementAvailability = "SUPPORTED_2D"; }, /shen-unmeasurable/i],
-  ["HVC-026", "Qi Se classifying Five Forms", correspondsBase,
-    (c) => {
-      c.participants = [
-        { participantId: "heritageQiSe", nodeType: "HERITAGE_CONCEPT", conceptId: "heritageQiSe", memberScope: "NODE" },
-        { participantId: "fiveElements", nodeType: "CONSTRUCT", constructId: "fiveElements", memberScope: "ALL_MEMBERS" },
-      ];
-    }, /no-qise-to-form-classification/i],
   ["HVC-027", "Five Forms/Five Phases conflation", correspondsBase,
     (c) => {
       c.participants = [
@@ -199,9 +192,105 @@ test("connector falsification HVC-015: missing disagreement target", () => {
     constructIds: HERITAGE_CONSTRUCT_IDS,
     connectorRegistry: HERITAGE_CONNECTOR_REGISTRY,
     sourceRegistry: SOURCE_REGISTRY,
+    heritageRegistry: HERITAGE_REGISTRY,
   });
   assert.equal(result.valid, false);
   assert.ok(result.errors.some((error) => /missing disagreement target/i.test(error)), result.errors.join("; "));
+});
+
+/*
+ * Item 4 (Stage 2 review): a source-backed historical connector pairing
+ * heritageQiSe and fiveElements must VALIDATE — the flat co-presence ban was
+ * removed from checkNegativeRelationshipInvariants precisely because it
+ * would have rejected genuinely attested heritage material. The
+ * FORBID_RUNTIME_BINDING enforcement now lives at resolution time
+ * (resolver.test.js), not here.
+ */
+test("historical coexistence: a source-backed heritageQiSe + fiveElements connector validates at Stage 1", () => {
+  const connector = clone(HERITAGE_CONNECTOR_REGISTRY["five-mountains-four-rivers-corresponds"]);
+  connector.connectorId = "syn-historical-qise-five-forms";
+  connector.participants = [
+    { participantId: "heritageQiSe", nodeType: "HERITAGE_CONCEPT", conceptId: "heritageQiSe", memberScope: "NODE" },
+    { participantId: "fiveElements", nodeType: "CONSTRUCT", constructId: "fiveElements", memberScope: "ALL_MEMBERS" },
+  ];
+  const result = validateHeritageConnector(connector, connectorContext());
+  assert.equal(result.valid, true, result.errors.join("; "));
+});
+
+/*
+ * Item 5 (Stage 2 review): LINEAGE disagreement targets use the canonical
+ * `${constructId}:${lineageId}` form, validated against the actual heritage
+ * registry rather than left as a resolver-only assumption.
+ */
+test("disagreement falsification: malformed LINEAGE targetRef (no constructId:lineageId separator)", () => {
+  const disagreement = {
+    disagreementId: "malformed-lineage-target",
+    nature: "EDITION_VARIATION",
+    target: { targetType: "LINEAGE", targetRef: "primary" },
+    status: "OPEN",
+    positions: [{ positionId: "p1", sourceId: "heritage-three-sections", summary: "x", note: null }],
+  };
+  const result = validateHeritageDisagreementRecord(disagreement, {
+    constructIds: HERITAGE_CONSTRUCT_IDS,
+    connectorRegistry: HERITAGE_CONNECTOR_REGISTRY,
+    sourceRegistry: SOURCE_REGISTRY,
+    heritageRegistry: HERITAGE_REGISTRY,
+  });
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((error) => /constructId:lineageId/i.test(error)), result.errors.join("; "));
+});
+
+test("disagreement falsification: LINEAGE targetRef with an unknown construct", () => {
+  const disagreement = {
+    disagreementId: "unknown-construct-lineage-target",
+    nature: "EDITION_VARIATION",
+    target: { targetType: "LINEAGE", targetRef: "notAConstruct:primary" },
+    status: "OPEN",
+    positions: [{ positionId: "p1", sourceId: "heritage-three-sections", summary: "x", note: null }],
+  };
+  const result = validateHeritageDisagreementRecord(disagreement, {
+    constructIds: HERITAGE_CONSTRUCT_IDS,
+    connectorRegistry: HERITAGE_CONNECTOR_REGISTRY,
+    sourceRegistry: SOURCE_REGISTRY,
+    heritageRegistry: HERITAGE_REGISTRY,
+  });
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((error) => /unknown construct/i.test(error)), result.errors.join("; "));
+});
+
+test("disagreement falsification: LINEAGE targetRef with a known construct but unknown lineage", () => {
+  const disagreement = {
+    disagreementId: "unknown-lineage-target",
+    nature: "EDITION_VARIATION",
+    target: { targetType: "LINEAGE", targetRef: "threeSections:not-a-real-lineage" },
+    status: "OPEN",
+    positions: [{ positionId: "p1", sourceId: "heritage-three-sections", summary: "x", note: null }],
+  };
+  const result = validateHeritageDisagreementRecord(disagreement, {
+    constructIds: HERITAGE_CONSTRUCT_IDS,
+    connectorRegistry: HERITAGE_CONNECTOR_REGISTRY,
+    sourceRegistry: SOURCE_REGISTRY,
+    heritageRegistry: HERITAGE_REGISTRY,
+  });
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((error) => /unknown lineage/i.test(error)), result.errors.join("; "));
+});
+
+test("disagreement: a real, valid LINEAGE targetRef against the canonical registry passes", () => {
+  const disagreement = {
+    disagreementId: "valid-lineage-target",
+    nature: "EDITION_VARIATION",
+    target: { targetType: "LINEAGE", targetRef: "threeSections:primary" },
+    status: "OPEN",
+    positions: [{ positionId: "p1", sourceId: "heritage-three-sections", summary: "x", note: null }],
+  };
+  const result = validateHeritageDisagreementRecord(disagreement, {
+    constructIds: HERITAGE_CONSTRUCT_IDS,
+    connectorRegistry: HERITAGE_CONNECTOR_REGISTRY,
+    sourceRegistry: SOURCE_REGISTRY,
+    heritageRegistry: HERITAGE_REGISTRY,
+  });
+  assert.equal(result.valid, true, result.errors.join("; "));
 });
 
 test("connector falsification HVC-025: modern Qi Se binding to heritageQiSe", () => {

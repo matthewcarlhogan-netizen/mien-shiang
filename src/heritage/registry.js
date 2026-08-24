@@ -621,6 +621,7 @@ for (const disagreement of Object.values(HERITAGE_DISAGREEMENT_REGISTRY)) {
     constructIds: HERITAGE_CONSTRUCT_IDS,
     connectorRegistry: HERITAGE_CONNECTOR_REGISTRY,
     sourceRegistry: SOURCE_REGISTRY,
+    heritageRegistry: HERITAGE_REGISTRY,
   });
   if (!result.valid) {
     throw new Error("Heritage disagreement " + disagreement.disagreementId + " is invalid: " + result.errors.join(", "));
