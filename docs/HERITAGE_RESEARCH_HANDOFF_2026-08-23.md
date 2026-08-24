@@ -1,5 +1,12 @@
 # Heritage research encoding handoff — 23 August 2026
 
+> **Update, 24 August 2026:** see `docs/HERITAGE_RECONCILIATION_2026-08-24.md`.
+> Items 4 and 7 below are superseded — 人倫風鑑 is now held at
+> `SOURCE_REQUIRED` rather than presented as a real provisional witness
+> pending a distinctness question, and the directional Five Mountains wording
+> is now attributed to 人倫大統賦 specifically rather than an unspecified
+> 麻衣-lineage source. Item 5 (folio locators) remains open and unchanged.
+
 ## Task and acceptance criteria
 
 Encode the source-side review of the canonical heritage library without

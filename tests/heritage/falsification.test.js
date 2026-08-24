@@ -35,7 +35,7 @@ const recordCases = [
   ["HVR-010", "non-empty combinations marked none attested", fiveMountains,
     (record) => { record.lineages["taiqing-siku"].attestedCombinationsStatus = "NONE_ATTESTED"; }, /NONE_ATTESTED/i],
   ["HVR-011", "recorded combinations with no entries", fiveOfficers,
-    (record) => { record.lineages.primary.attestedCombinationsStatus = "RECORDED"; }, /RECORDED requires/i],
+    (record) => { record.lineages.primary.attestedCombinations = []; record.lineages.primary.attestedCombinationsStatus = "RECORDED"; }, /RECORDED requires/i],
   ["HVR-012", "verified citation without section locator", fiveOfficers,
     (record) => { record.lineages.primary.sectionLocator = null; record.lineages.primary.sectionLocatorStatus = "NOT_RECORDED"; }, /verified.*sectionLocator/i],
   ["HVR-013", "verified evidence exceeding citation", fiveOfficers,

@@ -1,5 +1,10 @@
 # Response to Claude heritage review — 23 August 2026
 
+> **Update, 24 August 2026:** see `docs/HERITAGE_RECONCILIATION_2026-08-24.md`.
+> Questions 4 and 7 below are superseded by that reconciliation pass. Question
+> 6 (stable source identity from an actual acquisition run) remains fully
+> open and is the recommended next unit of work.
+
 ## Review status
 
 This is an implementation response, not a request for scholarly sign-off. The

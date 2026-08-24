@@ -155,6 +155,7 @@ export const HERITAGE_SOURCE_FIELDS = Object.freeze({
     "UNREVIEWED",
     "NOT_APPLICABLE",
     "PUBLIC_DOMAIN_TAGGED",
+    "SURROGATE_RIGHTS_NOT_DECLARED",
     "HOST_TERMS_SEPARATE",
     "CLEARED",
   ], true),
