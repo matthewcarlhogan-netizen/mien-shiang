@@ -111,9 +111,133 @@ suite.
 **Do not reopen Stage 2 without a demonstrated regression against one of
 these frozen contracts.**
 
-## Stage 3 — not started
+## Stage 3 — IMPLEMENTED / PENDING REVIEW
 
-Prose composition and integration into `src/qise/reflection.js` /
-`src/qise/reading-tiers.js` is out of scope for everything above and has not
-begun. Any future Stage 3 work should branch from `main` after this freeze
-record lands, not from `feature/heritage-connectors`.
+Heritage connector graph integrated with the Reflection Engine's reading
+path, on top of the frozen Stage 1/2 baseline (`df8cf22b9257c2a7fb75affd30b5e7dc6d15caa0`).
+
+**This section records that code exists and passes its own tests. It is not
+a freeze record and does not itself approve Stage 3** — that requires the
+same independent review Stages 1 and 2 went through before being marked
+APPROVED / FROZEN.
+
+- **Branch:** `feature/heritage-stage3-reflection-integration`
+- **Base:** `main` at `f1fc55e8e9bae082ac2fa7e89e256f6b95609138`
+
+### What was built
+
+`src/heritage/composition.js` is the one new module and the sole
+product-facing entry point into `resolveHeritageConnections` — no other file
+outside `src/heritage/` and `tests/heritage/` calls the Stage 2 resolver
+directly. It:
+
+- checks capture-quality and safety gate precedence (`captureQualityPassed`,
+  `safetyPassed`) **before** the resolver is ever invoked, matching
+  `docs/PRODUCT_DESIGN_V2.md`'s documented
+  `captureQualityGate -> safetyGate -> measurementLayer -> heritageLayer`
+  ordering, without adding a gate parameter to the frozen Stage 2 function
+  itself;
+- reconstructs `readingState` from exactly the resolver's own declared
+  dependency surface (`heritageConstruct`, `sourceLineage` —
+  `RESOLVER_DEPENDS_ON` in resolver.js), never forwarding a caller's compass,
+  history, self-report or full interpreted state;
+- maps the resolver's output into five distinct, never-flattened categories:
+  `active` (A), `sourcePanelOnly` (B, populated only at `SOURCE_DEEP`),
+  `disagreements` (C), `editorialJuxtapositions` (D — always carrying
+  `historicalRelationshipAsserted: false` and
+  `disclosure: "SOURCES_SHOWN_BESIDE_ONE_ANOTHER"`, copied verbatim from the
+  Stage 1 policy record, never computed here), and `abstentions` (E);
+- exports a pure `composeHeritageForReading` (registries injected, mirrors
+  `resolveHeritageConnections`'s own signature) and an async
+  `composeHeritageForReadingWithDefaults` production wrapper (mirrors
+  `resolveHeritageConnectionsWithDefaults`), both gate-checked identically.
+
+`src/qise/reading-tiers.js` gained two additive exports —
+`tierTwoHeritageConnections` and `tierThreeHeritageConnections`. Nothing
+about the existing `tierOne`/`tierTwo`/`tierThree`/`readingTiers` changed;
+they remain exactly as Stage 2 left them and stay pinned by
+`tests/qise/reading-tiers.test.js`. The two new functions hardcode their
+`depthMode` (`STANDARD` / `SOURCE_DEEP`) so a caller cannot leak
+`SOURCE_PANEL_CEILING` material into Tier 2 by passing `depthMode` through;
+Tier 2 exposes at most **one** bounded connector — the resolver's own
+deterministic top pick, `renderPlan.relationshipOrder[0]` — never a second,
+independent selection mechanism. Tier 1 is untouched and does not import
+`composition.js` at all.
+
+No change was made to any Stage 1/2 file
+(`src/heritage/resolver.js`, `registry.js`, `validator.js`, `connectors.js`,
+`concepts.js`, `negative-relationships-registry.js`,
+`composition-policies-registry.js`), to scanner geometry, thresholds,
+historical source data, or commercial-rights state.
+
+### Exact changed modules
+
+- `src/heritage/composition.js` — new (257 lines)
+- `src/qise/reading-tiers.js` — additive edit (+75 lines; existing exports
+  byte-for-byte the same apart from one new `import`)
+- `tests/heritage/composition.test.js` — new (21 tests)
+
+### Test counts (this branch, this session)
+
+- `node --test tests/heritage/resolver.test.js`: **123/123** (unchanged —
+  proves Stage 2 was not reopened)
+- `node --test tests/heritage/validator.test.js tests/heritage/falsification.test.js tests/heritage/integration.test.js tests/heritage/resolver.test.js`: **219/219** (unchanged)
+- `node --test tests/heritage/composition.test.js`: **21/21** (new)
+- All four together (adding `composition.test.js`): **240/240**
+- `npm test`: **1052/1052** across 73 discovered test files (was 71 at the
+  Stage 2 freeze; +2 files reflects both this branch's new test file and
+  files that landed on `main` between the freeze and this branch point)
+- `npm run build`: clean — 94 files copied, Module B shipped (wellness
+  flavour)
+- `npm run lint:bundle`: clean — copy blocklist / attractiveness / egress
+  allowlist / biometric egress all `ok`
+- `git diff --check`: clean
+- `npm run audit:release`: `Release gate: BLOCKED` — the same pre-existing
+  rights/citation/manifest/store-evidence categories as at the Stage 2
+  freeze (five-elements-v1, three-courts-v1, twelve-palaces-v1/v2,
+  qi-se-reading-v1, harmony-v1, qise-passages-v1, plus store/perf evidence).
+  No new blocker category was introduced by Stage 3.
+- `npm run test:browser`: **7/7** Playwright specs pass
+
+### Negative tests added (`tests/heritage/composition.test.js`)
+
+Gate suppression (capture-quality and safety, independently, and through
+both `tierTwoHeritageConnections`/`tierThreeHeritageConnections`); a
+heritageQiSe historical STATE cannot be satisfied by modern "read"
+availability; historical heritageQiSe/Five Elements co-presence may reach
+ACTIVE but an attempted runtime classification is blocked
+(`no-qise-to-form-classification`); Shen cannot acquire a measurement
+binding, structurally or via an attempted runtime binding
+(`shen-unmeasurable`); an invalid `runtimeBindingContext` aborts the whole
+composition, fail-closed; `SOURCE_PANEL_CEILING` material never reaches
+Tier 2 and only appears in Tier 3's `sourcePanelOnly`; `prohibitedForUserInference`
+stays `true` on every active/source-panel entry across all six constructs;
+editorial juxtapositions are marked non-historical; a CONSTRUCT-level
+disagreement survives with every position intact; an unavailable third
+participant blocks an otherwise-satisfied PRESENT condition; ABSENT and
+UNKNOWN participant signals stay distinguishable; a concept-only connector's
+eligibility is unaffected by an unrelated anchor construct's lineage
+strength; the composition result is deterministic for identical inputs; and
+Tier 1 never imports the connector architecture.
+
+### Known limitations / remaining work
+
+- **No new heritage connector relationships, prose registry, or corpus
+  content were added.** This was a deliberate scope decision (see
+  `CLAUDE.md`'s AI context budget policy) — Stage 3 establishes the
+  composition contract; populating it with additional source-backed
+  connectors or a Tier-2 prose schema is separate work.
+- **`captureQualityPassed`/`safetyPassed` default to `true`.** Neither gate
+  is yet wired to a real upstream signal for the Qi Se tracker (there is no
+  existing Qi Se safety-referral gate analogous to the legacy Module B malar
+  gate). Real wiring — deciding what upstream state actually sets these two
+  booleans in `app.js` — is UI/pipeline wiring, not architecture, and is the
+  first candidate for a Gemini Flash handoff (see below).
+- **`five-mountains-mutual-facing-fullness` remains `RECORDED_NOT_VERIFIED`
+  / `SOURCE_PANEL_CEILING`**, unchanged by this stage, as required.
+- Repetitive follow-on work — wiring real gate booleans from `app.js`,
+  formatting the structured Tier 2/3 output into UI strings, and any bulk
+  connector/prose authoring — was **not started in this Claude session** and
+  should go to Gemini Flash against this document plus
+  `src/heritage/composition.js`'s own header comments as the bounded
+  specification.
