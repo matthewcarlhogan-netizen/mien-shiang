@@ -1,11 +1,11 @@
 
 import { HERITAGE_MEASUREMENT_AVAILABILITY, HERITAGE_VERIFICATION_STATUSES, HERITAGE_LOCATOR_STATUSES } from "./constants.js";
-import { stringField, nullableStringField, enumField, arrayField, objectArrayField } from "./schema-helpers.js";
+import { stringField, nullableStringField, enumField, arrayField, objectField, objectArrayField } from "./schema-helpers.js";
 
 export const HERITAGE_CONNECTOR_FIELDS = Object.freeze({
   connectorId: stringField(true),
   relationshipType: enumField(["CORRESPONDS_TO", "CONJUNCTIVE_CONFIGURATION", "REQUIRES", "MODIFIES", "SEQUENTIAL_RELATION", "COLLECTIVE_RULE"], true),
-  relationshipDirection: objectArrayField({
+  relationshipDirection: objectField({
     kind: enumField(["UNDIRECTED", "DIRECTED", "ORDERED"], true),
     from: arrayField(false),
     to: arrayField(false),

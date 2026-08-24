@@ -1,13 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  validateHeritageCombination,
   validateHeritageFieldFinding,
   validateHeritageRecord,
   validateHeritageSourceRecord,
 } from "../../src/heritage/validator.js";
 import {
-  heritageCombinationFixtures,
   heritageFieldFindingFixtures,
   heritageFixtures,
 } from "../../src/heritage/fixtures.js";
@@ -110,25 +108,6 @@ test("validator rejects an invalid measurement availability state", () => {
   assert.ok(result.errors.some((error) => error.includes("measurementAvailability")));
 });
 
-test("validator rejects source-attested combinations without their own source", () => {
-  const record = validRecord();
-  record.lineages.primary.attestedCombinations = [{
-    combinationId: "three-sections",
-    constructIds: ["test-construct"],
-    sourceId: null,
-    sectionLocator: null,
-    folioLocator: null,
-    combinationScope: "WITHIN_CONSTRUCT",
-    renderPolicy: "RESEARCH_ONLY",
-    measurementAvailability: "NOT_RECORDED",
-    prohibitedForUserInference: true,
-    note: null,
-  }];
-  const result = validateHeritageRecord(record);
-  assert.equal(result.valid, false);
-  assert.ok(result.errors.some((error) => /attestedCombinations|combination.*source/i.test(error)));
-});
-
 test("validator preserves disagreements but rejects malformed disagreement records", () => {
   const record = validRecord();
   record.lineages.primary.disagreements = [{ positionId: "other-lineage" }];
@@ -180,24 +159,6 @@ test("field-level negative findings stay outside construct lineages", () => {
   }
   assert.ok(heritageFieldFindingFixtures.some((finding) =>
     finding.findingId === "xunzi-rejects-physiognomic-inference"));
-});
-
-test("validator refuses to operationalise prohibited or unmeasurable combinations", () => {
-  const prohibited = {
-    combinationId: "unsafe-example",
-    constructIds: ["threeSections"],
-    sourceId: "heritage-three-sections",
-    sectionLocator: null,
-    folioLocator: null,
-    combinationScope: "WITHIN_CONSTRUCT",
-    renderPolicy: "RUNTIME_ALLOWED",
-    measurementAvailability: "CAMERA_GEOMETRY_INSUFFICIENT",
-    prohibitedForUserInference: true,
-    note: null,
-  };
-  const result = validateHeritageCombination(prohibited, "threeSections");
-  assert.equal(result.valid, false);
-  assert.ok(result.errors.some((error) => /RUNTIME_ALLOWED|measurable/i.test(error)));
 });
 
 test("validator rejects duplicate member IDs and alias-related-system contradictions", () => {

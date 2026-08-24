@@ -37,3 +37,18 @@ export const HERITAGE_TRANSLATION_PROVENANCE = Object.freeze([
   "PUBLIC_DOMAIN_TRANSLATION",
   "NOT_TRANSLATED_HERITAGE_ONLY",
 ]);
+
+/*
+ * The six enduring constructs (CLAUDE.md, DR-2026-08-17-B020-CLASS-A). A
+ * shared constant here — rather than importing HERITAGE_REGISTRY — is what
+ * lets validator.js check connector construct references without a circular
+ * import back through registry.js.
+ */
+export const HERITAGE_CONSTRUCT_IDS = Object.freeze([
+  "threeSections",
+  "fiveElements",
+  "twelvePalaces",
+  "fiveMountains",
+  "fourRivers",
+  "fiveOfficers",
+]);

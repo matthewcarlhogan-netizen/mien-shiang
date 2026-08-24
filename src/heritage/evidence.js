@@ -54,28 +54,6 @@ const disagreement = ({
   positions,
 });
 
-const withinCombination = ({
-  combinationId,
-  constructId,
-  sourceId,
-  sectionLocator,
-  folioLocator = null,
-  measurementAvailability,
-  renderPolicy = "HERITAGE_ONLY",
-  note,
-}) => ({
-  combinationId,
-  constructIds: [constructId],
-  sourceId,
-  sectionLocator,
-  folioLocator,
-  combinationScope: "WITHIN_CONSTRUCT",
-  renderPolicy,
-  measurementAvailability,
-  prohibitedForUserInference: true,
-  note,
-});
-
 const fiveFormMembers = ["wood", "fire", "earth", "metal", "water"].map((id) =>
   constituent({
     constituentId: id,
@@ -425,14 +403,7 @@ export const HERITAGE_EVIDENCE = deepFreeze({
           sourceId: "heritage-five-mountains-mayi",
           note: "The inspected Taiqing passage supplies mountain names and facial regions, not directional labels.",
         }],
-        attestedCombinations: [withinCombination({
-          combinationId: "five-mountains-mutual-facing-fullness",
-          constructId: "fiveMountains",
-          sourceId: "heritage-five-mountains",
-          sectionLocator: "「五嶽」; 卷二 (Siku)",
-          measurementAvailability: "CAMERA_GEOMETRY_INSUFFICIENT",
-          note: "「五嶽須要豐隆而相朝」 — the source combines the five mountains through fullness (豐隆) and mutual orientation (相朝); a frontal selfie cannot recover that rule.",
-        })],
+        note: "「五嶽須要豐隆而相朝」 — the source combines the five mountains through fullness (豐隆) and mutual orientation (相朝); a frontal selfie cannot recover that rule. Encoded as the five-mountains-mutual-facing-fullness connector in the connector graph, not as an embedded combination.",
         disagreements: [],
       },
       "sxqb-chin": {
@@ -493,14 +464,7 @@ export const HERITAGE_EVIDENCE = deepFreeze({
           constituent({ constituentId: "he", canonicalChineseName: "河", definition: "口.", sourceId: "heritage-four-rivers-primary", sectionLocator: "「四瀆」; 卷二 (Siku)", evidenceStrength: "VERIFIED_PRIMARY", measurementAvailability: "CONDITIONALLY_SUPPORTED" }),
         ],
         relatedSystems: [],
-        attestedCombinations: [withinCombination({
-          combinationId: "four-rivers-flow-and-banks",
-          constructId: "fourRivers",
-          sourceId: "heritage-four-rivers-primary",
-          sectionLocator: "「四瀆」; 卷二 (Siku)",
-          measurementAvailability: "CAMERA_GEOMETRY_INSUFFICIENT",
-          note: "The source combines mutual flow, clarity and completed banks; rim depth and ear geometry are unavailable from the current capture.",
-        })],
+        note: "The source combines mutual flow, clarity and completed banks; rim depth and ear geometry are unavailable from the current capture. Encoded as the four-rivers-flow-and-banks connector in the connector graph, not as an embedded combination.",
         disagreements: [
           disagreement({
             disagreementId: "four-rivers-eye-mouth",
@@ -608,14 +572,6 @@ export const HERITAGE_EVIDENCE = deepFreeze({
           note: "Treating the tongue list as a physiognomic variant is a category error.",
         }],
         disagreements: [],
-        attestedCombinations: [withinCombination({
-          combinationId: "five-officers-one-good-office-ten-years",
-          constructId: "fiveOfficers",
-          sourceId: "heritage-five-officers",
-          sectionLocator: "「五官」; 卷二 (Siku)",
-          measurementAvailability: "NOT_RECORDED",
-          note: "一官好則貴十年 — attested in Taiqing Shenjian juan 2. Fortune-typed heritage; heritage-only and never operationalised as a user-facing inference.",
-        })],
         unverifiedClaims: [{
           claimId: "philtrum-longevity-office",
           summary: "A reported philtrum assignment has no located source witness.",
@@ -624,26 +580,22 @@ export const HERITAGE_EVIDENCE = deepFreeze({
           prohibitedForUserInference: true,
           note: "Do not encode this as a disagreement or lineage until a source is located.",
         }],
-        note: "The one-good-office/ten-years maxim now carries a Taiqing juan 2 witness (see attestedCombinations); it remains fortune-typed heritage and is never encoded as a user inference.",
+        note: "The one-good-office/ten-years maxim now carries a Taiqing juan 2 witness, encoded as the five-officers-one-good-office-ten-years connector in the connector graph (SOURCE_PANEL_ONLY); it remains fortune-typed heritage and is never encoded as a user inference.",
       },
     },
   },
 });
 
-export const HERITAGE_CROSS_FAMILY_COMBINATIONS = deepFreeze([
-  {
-    combinationId: "taiqing-form-spirit-qise-mountains-rivers",
-    constructIds: ["fiveMountains", "fourRivers", "qiSe"],
-    sourceId: "heritage-taiqing-form-qise-interaction",
-    sectionLocator: "卷四「論㸔形神體像」",
-    folioLocator: null,
-    combinationScope: "CROSS_CONSTRUCT",
-    renderPolicy: "HERITAGE_ONLY",
-    measurementAvailability: "CAMERA_GEOMETRY_INSUFFICIENT",
-    prohibitedForUserInference: true,
-    note: "A source-attested structure-and-Qi-Se interaction. The section heading is transmitted as 論㸔形神體像 (㸔 retained as source orthography, not normalised to 看). It is evaluative and fortune-typed, so it remains heritage context and is never operationalised.",
-  },
-]);
+/*
+ * The former flat "taiqing-form-spirit-qise-mountains-rivers" cross-family
+ * combination is now decomposed into typed connectors in registry.js:
+ * five-mountains-four-rivers-corresponds, four-rivers-shen-corresponds,
+ * shen-requires-form, form-requires-shen, and
+ * heritage-qise-modifies-form-shen-mountains-rivers. See
+ * docs/HERITAGE_RECONCILIATION_2026-08-24.md and CLAUDE.md item 33-adjacent
+ * migration notes for why a flat cross-construct record was replaced by
+ * several atomic edges rather than kept alongside them.
+ */
 
 export const HERITAGE_FIELD_FINDINGS = deepFreeze([
   {

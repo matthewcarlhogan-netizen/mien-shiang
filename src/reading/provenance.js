@@ -81,6 +81,26 @@ export const CONTRIBUTOR_REGISTRY = Object.freeze({
   }),
 });
 
+/*
+ * bibliographicIdentityStatus and independentWitnessStatus are separate axes
+ * from citationStatus (item added by the connector-graph migration): whether
+ * the WORK is bibliographically identified, and whether THIS PROJECT has its
+ * own identified/acquired/verified witness of it, are both narrower claims
+ * than "an edition-level locator is recorded". Defaults are derived
+ * conservatively from citationStatus so the ~30 existing records don't need
+ * per-entry edits, and so nothing is defaulted to a stronger claim than the
+ * citation ladder already supports.
+ */
+const defaultBibliographicIdentityStatus = (citationStatus) => {
+  if (citationStatus === CITATION_STATUS.SOURCE_REQUIRED) return "UNRESOLVED";
+  if (citationStatus === CITATION_STATUS.WORK_RECORDED) return "RECORDED_IN_BIBLIOGRAPHY";
+  return "WORK_IDENTIFIED";
+};
+
+const defaultIndependentWitnessStatus = (citationStatus) => (
+  citationStatus === CITATION_STATUS.SOURCE_REQUIRED ? "UNRESOLVED" : "IDENTIFIED"
+);
+
 function sourceRecord(value) {
   const sectionLocator = value.sectionLocator ?? value.locator ?? null;
   const sectionLocatorStatus = value.sectionLocatorStatus
@@ -101,6 +121,12 @@ function sourceRecord(value) {
     authorshipStatus: "NOT_RECORDED",
     authorshipNote: null,
     translationStatus: null,
+    bibliographicIdentityStatus: defaultBibliographicIdentityStatus(value.citationStatus),
+    independentWitnessStatus: defaultIndependentWitnessStatus(value.citationStatus),
+    repository: null,
+    repositoryCommit: null,
+    repositoryFile: null,
+    juan: null,
     ...value,
     sectionLocator,
     sectionLocatorStatus,
@@ -385,6 +411,42 @@ const RAW_SOURCE_REGISTRY = {
     authorshipStatus: "ANONYMOUS",
     authorshipNote: "A distinct tongue-including five-feature construct from another source family, not a physiognomic Five Officers lineage.",
     translationStatus: "original-to-this-project",
+  }),
+  "heritage-taiqing-juan1-mountains-rivers": Object.freeze({
+    title: "Taiqing Shenjian 卷一 Three Sections/Five Mountains/Four Rivers correspondence passage",
+    kind: "historical-primary-text",
+    edition: "欽定四庫全書文淵閣本",
+    sectionLocator: "卷一「須辨三停端不端，五嶽四瀆要相應」",
+    citationStatus: CITATION_STATUS.EDITION_RECORDED,
+    rightsStatus: RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE,
+    sourceAccess: "REFERENCE_ONLY",
+    surrogateRights: "SURROGATE_RIGHTS_NOT_DECLARED",
+    authorshipStatus: "ATTRIBUTED_AND_CONTESTED",
+    authorshipNote: "A Song-era text attributed in later witnesses to Wang Pu; the Siku editors rejected that attribution. The passage pairs a Three Sections balance clause with a Five Mountains/Four Rivers mutual-correspondence clause; only the mountains/rivers clause is encoded as a connector here (see the fiveMountains/fourRivers connector graph note against combining all three into one relationship from this line alone).",
+    translationStatus: "original-to-this-project",
+  }),
+  "heritage-taiqing-juan4-form-shen-reciprocity": Object.freeze({
+    title: "Taiqing Shenjian 卷四 Form/Shen reciprocal-dependence passage",
+    kind: "historical-primary-text",
+    edition: "欽定四庫全書文淵閣本",
+    sectionLocator: "卷四",
+    citationStatus: CITATION_STATUS.EDITION_RECORDED,
+    rightsStatus: RIGHTS_STATUS.PUBLIC_DOMAIN_BY_AGE,
+    sourceAccess: "REFERENCE_ONLY",
+    surrogateRights: "SURROGATE_RIGHTS_NOT_DECLARED",
+    authorshipStatus: "ATTRIBUTED_AND_CONTESTED",
+    authorshipNote: "A Song-era text attributed in later witnesses to Wang Pu; the Siku editors rejected that attribution. This project has not independently confirmed whether this passage sits inside 論㸔形神體像 (the heading recorded for heritage-taiqing-form-qise-interaction) or a distinct part of 卷四, so the locator is held at juan level rather than merged with that source.",
+    translationStatus: "original-to-this-project",
+  }),
+  "heritage-yuebo-dongzhongji-configuration": Object.freeze({
+    title: "月波洞中記 Five Mountains/Four Rivers/Form/Shen configuration passage",
+    kind: "unresolved-tradition-source",
+    edition: null,
+    sectionLocator: null,
+    citationStatus: CITATION_STATUS.WORK_RECORDED,
+    rightsStatus: RIGHTS_STATUS.UNVERIFIED,
+    authorshipStatus: "NOT_RECORDED",
+    authorshipNote: "The work is identified and a passage quoted (凡相人靣五嶽欲其相朝四瀆欲其不混形神備足), but no edition or juan-level locator is yet recorded by this project.",
   }),
   "heritage-taiqing-form-qise-interaction": Object.freeze({
     title: "Taiqing Shenjian structure-and-Qi-Se interaction",
