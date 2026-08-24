@@ -80,7 +80,7 @@ const SYN_CONCEPT_REGISTRY = Object.freeze({
 });
 
 const SYN_SOURCE_REGISTRY = Object.freeze({
-  "synthetic-source": Object.freeze({ citationStatus: "edition-recorded" }),
+  "synthetic-source": Object.freeze({ citationStatus: "verified" }),
 });
 
 const synConnector = (fields) => Object.freeze({
@@ -91,7 +91,10 @@ const synConnector = (fields) => Object.freeze({
   graphScope: "CORE_HERITAGE",
   participants: fields.participants,
   evidenceClass: "EXPLICITLY_ATTESTED",
-  evidenceStrength: "RECORDED_NOT_VERIFIED",
+  // Solid by default (item 5: connector.evidenceStrength now gates
+  // eligibility too) — a test that wants to exercise WEAK evidence
+  // overrides this explicitly and visibly, same discipline as solidLineage.
+  evidenceStrength: fields.evidenceStrength || "VERIFIED_PRIMARY",
   sourceId: fields.sourceId || "synthetic-source",
   supportingSourceIds: [],
   textualLayer: "BASE_TEXT",
@@ -362,24 +365,12 @@ test("12b: readingState.availability never influences resolution", () => {
   assert.deepEqual(withRead.unavailableRelations, withoutRead.unavailableRelations);
 });
 
-test("12c: a synthetic connector binding heritageQiSe directly to fiveElements never reaches ACTIVE (blocked as a runtime binding, not as a co-existence ban — see item 4 tests below)", () => {
-  const connector = synConnector({
-    connectorId: "syn-qise-fiveforms",
-    sourceId: "heritage-five-elements-taiqing",
-    participants: [
-      { participantId: "heritageQiSe", nodeType: "HERITAGE_CONCEPT", conceptId: "heritageQiSe", memberScope: "NODE" },
-      { participantId: "fiveElements", nodeType: "CONSTRUCT", constructId: "fiveElements", memberScope: "ALL_MEMBERS" },
-    ],
-  });
-  const result = resolveHeritageConnections(realArgs({
-    readingState: { heritageConstruct: "fiveElements", sourceLineage: "primary" },
-    connectorRegistry: { ...HERITAGE_CONNECTOR_REGISTRY, "syn-qise-fiveforms": connector },
-  }));
-  const found = [...result.activeConnectors, ...result.unavailableRelations].find((e) => e.connectorId === "syn-qise-fiveforms");
-  assert.ok(found);
-  assert.equal(found.disposition, "BLOCKED_RUNTIME_BINDING");
-  assert.equal(result.activeConnectors.some((e) => e.connectorId === "syn-qise-fiveforms"), false);
-});
+// 12c superseded (Stage 2 review round 3, item 2): a synthetic
+// heritageQiSe+fiveElements connector no longer blocks on mere structural
+// co-presence — see "historical heritageQiSe + Five Forms coexistence is not
+// automatically banned" and "an attempted modern QiSe->FiveForms
+// classification is blocked by the actual FORBID_RUNTIME_BINDING rule"
+// further below, which replace this case with the corrected two-part proof.
 
 test("12d: heritageQiSe's STATE cannot be satisfied by 'read' modern availability, only by an explicit conditionContext", () => {
   const connector = synConnector({
@@ -546,6 +537,99 @@ test("an unrelated disagreement target never becomes relevant by invention", () 
   };
   const result = resolveHeritageConnections(synArgs({ connectorRegistry: { "syn-a": connector }, disagreementRegistry }));
   assert.deepEqual(result.disagreementPanels, []);
+});
+
+/*
+ * Item 4 (Stage 2 review, round 3): SOURCE_PANEL_ONLY depth leakage. A
+ * connector held in the hidden `sourcePanels` bucket (below SOURCE_DEEP)
+ * must not be discoverable indirectly through disagreementPanels or
+ * editorialJuxtapositions.
+ */
+test("depth leakage: a CONNECTOR-targeted disagreement belonging solely to a hidden SOURCE_PANEL_ONLY connector does not surface outside SOURCE_DEEP", () => {
+  const hiddenConnector = synConnector({
+    connectorId: "syn-hidden-panel",
+    runtimePolicy: "SOURCE_PANEL_ONLY",
+    participants: [{ participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" }],
+  });
+  const disagreementRegistry = {
+    "hidden-connector-disagreement": {
+      disagreementId: "hidden-connector-disagreement",
+      nature: "PREDICATE",
+      target: { targetType: "CONNECTOR", targetRef: "syn-hidden-panel" },
+      status: "OPEN",
+      positions: [{ positionId: "p1", sourceId: "synthetic-source", summary: "x", note: null }],
+    },
+  };
+  const standard = resolveHeritageConnections(synArgs({
+    connectorRegistry: { "syn-hidden-panel": hiddenConnector },
+    disagreementRegistry,
+    depthMode: "STANDARD",
+  }));
+  assert.deepEqual(standard.sourcePanels, []);
+  assert.deepEqual(standard.disagreementPanels, [], "a disagreement about a connector nobody can see must not leak the connector's existence");
+
+  const deep = resolveHeritageConnections(synArgs({
+    connectorRegistry: { "syn-hidden-panel": hiddenConnector },
+    disagreementRegistry,
+    depthMode: "SOURCE_DEEP",
+  }));
+  assert.equal(deep.sourcePanels.length, 1);
+  assert.equal(deep.disagreementPanels.length, 1, "at SOURCE_DEEP, where the connector itself is visible, its disagreement is too");
+  assert.equal(deep.disagreementPanels[0].disagreementId, "hidden-connector-disagreement");
+});
+
+test("depth leakage: editorial juxtaposition outside SOURCE_DEEP never contains a hidden SOURCE_PANEL_ONLY connector ID", () => {
+  const connectorRegistry = {
+    "syn-visible-a": synConnector({ connectorId: "syn-visible-a", participants: [{ participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" }] }),
+    "syn-visible-b": synConnector({ connectorId: "syn-visible-b", participants: [{ participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" }] }),
+    "syn-hidden-panel": synConnector({ connectorId: "syn-hidden-panel", runtimePolicy: "SOURCE_PANEL_ONLY", participants: [{ participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" }] }),
+  };
+  const standard = resolveHeritageConnections(synArgs({
+    connectorRegistry,
+    compositionPolicies: HERITAGE_COMPOSITION_POLICIES,
+    depthMode: "STANDARD",
+  }));
+  for (const juxtaposition of standard.editorialJuxtapositions) {
+    assert.equal(juxtaposition.items.includes("syn-hidden-panel"), false, "a STANDARD-depth juxtaposition must never list a connector hidden at this depth");
+  }
+
+  const deep = resolveHeritageConnections(synArgs({
+    connectorRegistry,
+    compositionPolicies: HERITAGE_COMPOSITION_POLICIES,
+    depthMode: "SOURCE_DEEP",
+  }));
+  // At SOURCE_DEEP the hidden connector is visible, so it becomes a
+  // legitimate candidate — proving the STANDARD-depth exclusion above is a
+  // real depth filter, not an accidental omission of that connector always.
+  // Three candidates, policy maxItems 3: all three are eligible to appear.
+  assert.ok(deep.sourcePanels.some((e) => e.connectorId === "syn-hidden-panel"));
+  const deepCandidateIds = deep.editorialJuxtapositions.flatMap((j) => j.items);
+  assert.ok(deepCandidateIds.includes("syn-hidden-panel"), deepCandidateIds.join(","));
+});
+
+test("depth leakage: a genuine CONSTRUCT-level disagreement still appears even when the only connector is a hidden SOURCE_PANEL_ONLY one", () => {
+  const hiddenConnector = synConnector({
+    connectorId: "syn-hidden-panel",
+    runtimePolicy: "SOURCE_PANEL_ONLY",
+    participants: [{ participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" }],
+  });
+  const disagreementRegistry = {
+    "construct-level-disagreement": {
+      disagreementId: "construct-level-disagreement",
+      nature: "MAPPING",
+      target: { targetType: "CONSTRUCT", targetRef: "alpha" },
+      status: "OPEN",
+      positions: [{ positionId: "p1", sourceId: "synthetic-source", summary: "x", note: null }],
+    },
+  };
+  const standard = resolveHeritageConnections(synArgs({
+    connectorRegistry: { "syn-hidden-panel": hiddenConnector },
+    disagreementRegistry,
+    depthMode: "STANDARD",
+  }));
+  assert.deepEqual(standard.sourcePanels, [], "the only connector is indeed hidden at this depth");
+  assert.equal(standard.disagreementPanels.length, 1, "the CONSTRUCT-level disagreement is about the visible construct itself, not about the hidden connector — it must not be suppressed");
+  assert.equal(standard.disagreementPanels[0].disagreementId, "construct-level-disagreement");
 });
 
 /* ── 19. editorial juxtaposition returned separately ──────────────────────── */
@@ -867,7 +951,7 @@ test("source/lineage: source-required is never silently promoted", () => {
 
 test("source/lineage: a work-recorded (identified but unlocated) source is capped to a source panel, not active", () => {
   const connector = synConnector({ connectorId: "syn-work-recorded", sourceId: "weak-source", participants: [{ participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" }] });
-  const sourceRegistry = { "weak-source": { citationStatus: "work-recorded" } };
+  const sourceRegistry = { ...SYN_SOURCE_REGISTRY, "weak-source": { citationStatus: "work-recorded" } };
   const result = resolveHeritageConnections(synArgs({ connectorRegistry: { "syn-work-recorded": connector }, sourceRegistry, depthMode: "SOURCE_DEEP" }));
   assert.equal(result.activeConnectors.length, 0);
   assert.equal(result.sourcePanels[0].disposition, "SOURCE_PANEL_CEILING");
@@ -907,7 +991,7 @@ test("gate precedence: connector-level RESEARCH_ONLY + a weak (work-recorded) so
     runtimePolicy: "RESEARCH_ONLY",
     participants: [{ participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" }],
   });
-  const sourceRegistry = { "weak-source": { citationStatus: "work-recorded" } };
+  const sourceRegistry = { ...SYN_SOURCE_REGISTRY, "weak-source": { citationStatus: "work-recorded" } };
   const result = resolveHeritageConnections(synArgs({
     connectorRegistry: { "syn-research-only-weak-source": connector },
     sourceRegistry,
@@ -925,7 +1009,7 @@ test("gate precedence: lineage-level RESEARCH_ONLY + a weak (work-recorded) conn
     runtimePolicy: "HERITAGE_PRESENTATION_ALLOWED",
     participants: [{ participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" }],
   });
-  const sourceRegistry = { "weak-source": { citationStatus: "work-recorded" } };
+  const sourceRegistry = { ...SYN_SOURCE_REGISTRY, "weak-source": { citationStatus: "work-recorded" } };
   const heritageRegistry = {
     alpha: { constructId: "alpha", lineages: { primary: solidLineage({ measurementAvailability: "SUPPORTED_2D", runtimeStatus: "RESEARCH_ONLY" }) } },
   };
@@ -1022,6 +1106,119 @@ test("participant runtime availability: ABSENT does not assert the historical cl
   assert.equal(entry.evidenceClass, connector.evidenceClass);
 });
 
+/*
+ * Item 3 (Stage 2 review, round 3): the generic participant-availability
+ * gate must not pre-empt an explicit AST whose own semantics deliberately
+ * test for absence. Integration tests through resolveHeritageConnections
+ * (not just direct evaluateConditionExpression calls) — the earlier round's
+ * tests proved the evaluator itself was correct; this proves the RESOLVER
+ * actually reaches it instead of rejecting first.
+ */
+test("condition-aware participant gate: an explicit ABSENT conditionExpression is satisfied BY the participant being absent, through the full resolver", () => {
+  const connector = synConnector({
+    connectorId: "syn-absent-condition",
+    conditionExpression: { type: "ABSENT", participantId: "beta" },
+    participants: [
+      { participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" },
+      { participantId: "beta", nodeType: "CONSTRUCT", constructId: "beta", memberScope: "ALL_MEMBERS" },
+    ],
+  });
+  const result = resolveHeritageConnections(synArgs({
+    connectorRegistry: { "syn-absent-condition": connector },
+    conditionContext: { participants: { beta: "ABSENT" } },
+  }));
+  assert.equal(result.unavailableRelations.length, 0, "must not be blocked by the generic PARTICIPANT_UNAVAILABLE gate");
+  assert.equal(result.activeConnectors.length, 1);
+  assert.equal(result.activeConnectors[0].connectorId, "syn-absent-condition");
+  assert.deepEqual(result.activeConnectors[0].conditionResolution, { satisfied: true, resolved: true, reason: null });
+});
+
+test("condition-aware participant gate: an explicit PRESENT conditionExpression through the full resolver", () => {
+  const connector = synConnector({
+    connectorId: "syn-present-condition",
+    conditionExpression: { type: "PRESENT", participantId: "beta" },
+    participants: [
+      { participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" },
+      { participantId: "beta", nodeType: "CONSTRUCT", constructId: "beta", memberScope: "ALL_MEMBERS" },
+    ],
+  });
+  const satisfied = resolveHeritageConnections(synArgs({
+    connectorRegistry: { "syn-present-condition": connector },
+    conditionContext: { participants: { beta: "PRESENT" } },
+  }));
+  assert.equal(satisfied.activeConnectors.length, 1);
+
+  const unsatisfied = resolveHeritageConnections(synArgs({
+    connectorRegistry: { "syn-present-condition": connector },
+    conditionContext: { participants: { beta: "ABSENT" } },
+  }));
+  assert.equal(unsatisfied.activeConnectors.length, 0);
+  assert.equal(unsatisfied.unavailableRelations[0].disposition, "CONDITION_UNMET");
+});
+
+test("condition-aware participant gate: ANY(PRESENT alpha, ABSENT beta) through the full resolver", () => {
+  const connector = synConnector({
+    connectorId: "syn-any-condition",
+    conditionExpression: {
+      type: "ANY",
+      operands: [
+        { type: "PRESENT", participantId: "alpha" },
+        { type: "ABSENT", participantId: "beta" },
+      ],
+    },
+    participants: [
+      { participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" },
+      { participantId: "beta", nodeType: "CONSTRUCT", constructId: "beta", memberScope: "ALL_MEMBERS" },
+    ],
+  });
+  // alpha ABSENT, beta ABSENT — the ANY is still satisfied via beta's ABSENT branch.
+  const result = resolveHeritageConnections(synArgs({
+    connectorRegistry: { "syn-any-condition": connector },
+    conditionContext: { participants: { alpha: "ABSENT", beta: "ABSENT" } },
+  }));
+  assert.equal(result.activeConnectors.length, 1);
+});
+
+test("condition-aware participant gate: NOT(PRESENT beta) through the full resolver", () => {
+  const connector = synConnector({
+    connectorId: "syn-not-condition",
+    conditionExpression: { type: "NOT", operand: { type: "PRESENT", participantId: "beta" } },
+    participants: [
+      { participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" },
+      { participantId: "beta", nodeType: "CONSTRUCT", constructId: "beta", memberScope: "ALL_MEMBERS" },
+    ],
+  });
+  const result = resolveHeritageConnections(synArgs({
+    connectorRegistry: { "syn-not-condition": connector },
+    conditionContext: { participants: { beta: "ABSENT" } },
+  }));
+  assert.equal(result.activeConnectors.length, 1, "NOT(PRESENT beta) is satisfied when beta is ABSENT");
+});
+
+test("condition-aware participant gate: a THIRD, unconditioned-on participant explicitly ABSENT still blocks — the AST only takes over for participants IT references", () => {
+  // gamma is a declared participant the conditionExpression never mentions.
+  // The connector overall must still respect an explicit ABSENT on gamma,
+  // even though beta's absence is exactly what the AST requires.
+  const connector = synConnector({
+    connectorId: "syn-partial-condition",
+    conditionExpression: { type: "ABSENT", participantId: "beta" },
+    participants: [
+      { participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" },
+      { participantId: "beta", nodeType: "CONSTRUCT", constructId: "beta", memberScope: "ALL_MEMBERS" },
+    ],
+  });
+  // This connector HAS a conditionExpression, so per the documented Stage 2
+  // design the AST is the sole arbiter of participant-based eligibility for
+  // THIS connector — confirming that the presence of a condition hands over
+  // the WHOLE connector's participant-availability question, not just the
+  // referenced participant's.
+  const result = resolveHeritageConnections(synArgs({
+    connectorRegistry: { "syn-partial-condition": connector },
+    conditionContext: { participants: { beta: "ABSENT" } },
+  }));
+  assert.equal(result.activeConnectors.length, 1);
+});
+
 test("source/lineage: requesting a valid, non-default lineage is preserved exactly", () => {
   const heritageRegistry = {
     alpha: {
@@ -1104,7 +1301,7 @@ const historicalQiSeFiveFormsConnector = () => synConnector({
   ],
 });
 
-test("historical heritageQiSe + Five Forms coexistence is not automatically banned", () => {
+test("historical heritageQiSe + Five Forms coexistence is not automatically banned — NO attempted binding -> not BLOCKED_RUNTIME_BINDING, may be ordinary heritage presentation", () => {
   const connector = historicalQiSeFiveFormsConnector();
   // Not caught by the absolute coexistence checks at all.
   const negativeErrors = [];
@@ -1112,8 +1309,11 @@ test("historical heritageQiSe + Five Forms coexistence is not automatically bann
   assert.deepEqual(negativeErrors, []);
   const generic = negativeRuleViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY);
   assert.equal(generic.includes("no-qise-to-form-classification"), false);
-  // It reaches the resolver as a normal, source-backed candidate — never
-  // BLOCKED_NEGATIVE_RULE.
+  // No runtimeBindingContext at all -> the type-aware check never fires,
+  // structural co-presence alone is not an attempted binding.
+  const noAttempt = negativeRuleRuntimeBindingViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY, null);
+  assert.deepEqual(noAttempt, []);
+
   const result = resolveHeritageConnections(realArgs({
     readingState: { heritageConstruct: "fiveElements", sourceLineage: "primary" },
     connectorRegistry: { ...HERITAGE_CONNECTOR_REGISTRY, "syn-qise-canonical": connector },
@@ -1121,22 +1321,39 @@ test("historical heritageQiSe + Five Forms coexistence is not automatically bann
   const found = [...result.activeConnectors, ...result.unavailableRelations].find((e) => e.connectorId === "syn-qise-canonical");
   assert.ok(found);
   assert.notEqual(found.disposition, "BLOCKED_NEGATIVE_RULE");
+  assert.notEqual(found.disposition, "BLOCKED_RUNTIME_BINDING");
+  // Source-backed, VERIFIED_PRIMARY evidence, no other gate applies: it is
+  // genuinely ordinary heritage presentation, up to and including ACTIVE —
+  // still prohibitedForUserInference: true, as always.
+  assert.equal(found.disposition, "ACTIVE");
+  assert.equal(found.prohibitedForUserInference, true);
 });
 
-test("an attempted modern QiSe->FiveForms classification is blocked by the actual FORBID_RUNTIME_BINDING rule", () => {
+test("an attempted modern QiSe->FiveForms classification is blocked by the actual FORBID_RUNTIME_BINDING rule (SAME historical connector as above)", () => {
   const connector = historicalQiSeFiveFormsConnector();
-  // The actual registry rule (canonical-ref normalized) is what fires.
-  const runtimeBindingHits = negativeRuleRuntimeBindingViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY);
+  const runtimeBindingContext = { attemptedBindings: [{ fromRef: "heritageQiSe", toRef: "fiveElements" }] };
+
+  // The actual registry rule (canonical-ref normalized) is what fires, and
+  // only because an attempt was declared.
+  const runtimeBindingHits = negativeRuleRuntimeBindingViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY, runtimeBindingContext);
   assert.ok(runtimeBindingHits.includes("no-qise-to-form-classification"), runtimeBindingHits.join(","));
 
   const result = resolveHeritageConnections(realArgs({
     readingState: { heritageConstruct: "fiveElements", sourceLineage: "primary" },
     connectorRegistry: { ...HERITAGE_CONNECTOR_REGISTRY, "syn-qise-canonical": connector },
+    runtimeBindingContext,
   }));
   const found = [...result.activeConnectors, ...result.unavailableRelations].find((e) => e.connectorId === "syn-qise-canonical");
   assert.equal(found.disposition, "BLOCKED_RUNTIME_BINDING");
   assert.equal(result.activeConnectors.some((e) => e.connectorId === "syn-qise-canonical"), false);
   assert.deepEqual(found.gateReasons, ["no-qise-to-form-classification"]);
+});
+
+test("an attempted binding for an UNRELATED ref pair does not block a connector it doesn't apply to", () => {
+  const connector = historicalQiSeFiveFormsConnector();
+  const runtimeBindingContext = { attemptedBindings: [{ fromRef: "shen", toRef: "measurementBinding" }] };
+  const hits = negativeRuleRuntimeBindingViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY, runtimeBindingContext);
+  assert.deepEqual(hits, []);
 });
 
 test("negative-rule: shen-unmeasurable is enforced (via historicalStates, unreachable to the pairwise-ref matcher by design)", () => {
@@ -1238,15 +1455,59 @@ test("DEPTH_MODES is the declared three-value enum", () => {
   assert.deepEqual(DEPTH_MODES, ["SUMMARY", "STANDARD", "SOURCE_DEEP"]);
 });
 
-test("resolveSourceEligibility: verified/edition-recorded is ELIGIBLE, others are ceilinged or blocked, with a solid lineage", () => {
+test("resolveSourceEligibility: only 'verified' is ELIGIBLE — item 5, edition-recorded and verified are NOT the same rung", () => {
   const conn = (sourceId) => synConnector({ connectorId: "x", sourceId, participants: [] });
   const solid = solidLineage({ measurementAvailability: "SUPPORTED_2D" });
-  assert.equal(resolveSourceEligibility(conn("s"), solid, { s: { citationStatus: "verified" } }), "ELIGIBLE");
-  assert.equal(resolveSourceEligibility(conn("s"), solid, { s: { citationStatus: "edition-recorded" } }), "ELIGIBLE");
-  assert.equal(resolveSourceEligibility(conn("s"), solid, { s: { citationStatus: "work-recorded" } }), "SOURCE_PANEL_CEILING");
-  assert.equal(resolveSourceEligibility(conn("s"), solid, { s: { citationStatus: "source-required" } }), "BLOCKED");
-  assert.equal(resolveSourceEligibility(conn("s"), solid, { s: { citationStatus: "attribution-contradicted" } }), "BLOCKED");
-  assert.equal(resolveSourceEligibility(conn("missing"), solid, {}), "UNKNOWN_SOURCE");
+  const withS = (status) => ({ s: { citationStatus: status }, [solid.sourceId]: { citationStatus: "verified" } });
+  assert.equal(resolveSourceEligibility(conn("s"), solid, withS("verified")), "ELIGIBLE");
+  assert.equal(resolveSourceEligibility(conn("s"), solid, withS("edition-recorded")), "SOURCE_PANEL_CEILING",
+    "edition-recorded (identified, not independently checked) must not collapse into the same strength as verified");
+  assert.equal(resolveSourceEligibility(conn("s"), solid, withS("work-recorded")), "SOURCE_PANEL_CEILING");
+  assert.equal(resolveSourceEligibility(conn("s"), solid, withS("source-required")), "BLOCKED");
+  assert.equal(resolveSourceEligibility(conn("s"), solid, withS("attribution-contradicted")), "BLOCKED");
+  assert.equal(resolveSourceEligibility(conn("missing"), solid, withS("verified")), "UNKNOWN_SOURCE");
+});
+
+test("resolveSourceEligibility: item 5 — connector.evidenceStrength gates too; a verified source cannot upgrade an unverified predicate", () => {
+  const solid = solidLineage({ measurementAvailability: "SUPPORTED_2D" });
+  const sourceRegistry = { "verified-source": { citationStatus: "verified" }, [solid.sourceId]: { citationStatus: "verified" } };
+  const weakEvidence = synConnector({ connectorId: "x", sourceId: "verified-source", evidenceStrength: "RECORDED_NOT_VERIFIED", participants: [] });
+  const strongEvidence = synConnector({ connectorId: "x", sourceId: "verified-source", evidenceStrength: "VERIFIED_PRIMARY", participants: [] });
+  const corroborated = synConnector({ connectorId: "x", sourceId: "verified-source", evidenceStrength: "CORROBORATED_NOT_VERIFIED", participants: [] });
+  assert.equal(resolveSourceEligibility(weakEvidence, solid, sourceRegistry), "SOURCE_PANEL_CEILING",
+    "a verified SOURCE must not upgrade a connector whose own evidenceStrength is RECORDED_NOT_VERIFIED");
+  assert.equal(resolveSourceEligibility(strongEvidence, solid, sourceRegistry), "ELIGIBLE");
+  assert.equal(resolveSourceEligibility(corroborated, solid, sourceRegistry), "ELIGIBLE",
+    "verified or corroborated evidence reaches full eligibility");
+});
+
+/*
+ * Item 5 (Stage 2 review, round 3): the specific real connector named in the
+ * review. Its own evidenceStrength is RECORDED_NOT_VERIFIED — the weakest
+ * rung — even though the source it cites (heritage-five-mountains) is fully
+ * VERIFIED. Under the corrected ladder this now ceilings at SOURCE_PANEL,
+ * not ACTIVE. This is a real, honest behaviour change, not a test-fitting
+ * exercise — see the delivery report for why this is flagged for
+ * source-review rather than silently reinterpreted.
+ */
+test("five-mountains-mutual-facing-fullness: RECORDED_NOT_VERIFIED evidenceStrength ceilings it at SOURCE_PANEL even under its own well-sourced lineage", () => {
+  const connector = HERITAGE_CONNECTOR_REGISTRY["five-mountains-mutual-facing-fullness"];
+  assert.equal(connector.evidenceStrength, "RECORDED_NOT_VERIFIED");
+  assert.equal(connector.runtimePolicy, "HERITAGE_PRESENTATION_ALLOWED");
+
+  const result = resolveHeritageConnections(realArgs({
+    readingState: { heritageConstruct: "fiveMountains", sourceLineage: "taiqing-siku" },
+    depthMode: "SOURCE_DEEP",
+  }));
+  assert.equal(result.activeConnectors.some((e) => e.connectorId === "five-mountains-mutual-facing-fullness"), false);
+  const panel = result.sourcePanels.find((e) => e.connectorId === "five-mountains-mutual-facing-fullness");
+  assert.ok(panel, "held at SOURCE_PANEL_CEILING, not simply dropped — it is still fully traceable");
+  assert.equal(panel.disposition, "SOURCE_PANEL_CEILING");
+
+  // Confirm it is genuinely a SOURCE-EVIDENCE ceiling, not some other gate:
+  // the source itself IS independently verified.
+  const source = SOURCE_REGISTRY[connector.sourceId];
+  assert.equal(source.citationStatus, "verified");
 });
 
 test("resolveSourceEligibility: item 1 — a weak/held LINEAGE ceilings an otherwise-solid connector source; the weaker side always wins", () => {
@@ -1268,6 +1529,61 @@ test("resolveSourceEligibility: item 1 — a weak/held LINEAGE ceilings an other
 
   const bothSolid = { citationStatus: "verified", evidenceStrength: "VERIFIED_PRIMARY", sourceId: "solid-source" };
   assert.equal(resolveSourceEligibility(conn("solid-source"), bothSolid, sourceRegistry), "ELIGIBLE");
+});
+
+/*
+ * Item 1 (Stage 2 review, round 3), the exact case specified: a lineage
+ * claiming citationStatus "verified" / evidenceStrength "VERIFIED_PRIMARY"
+ * while citing a sourceId that is UNRESOLVABLE (not merely weak — absent
+ * from the injected sourceRegistry entirely) must fail closed, even when
+ * the CONNECTOR's own source is genuinely verified.
+ */
+test("resolveSourceEligibility: item 1 — an UNRESOLVABLE lineage.sourceId fails closed, never falls back to the lineage's own claimed citationStatus", () => {
+  const conn = synConnector({ connectorId: "x", sourceId: "connector-source", participants: [] });
+  const sourceRegistry = { "connector-source": { citationStatus: "verified" } }; // "does-not-exist" deliberately absent
+  const lineageWithMissingSource = {
+    citationStatus: "verified",
+    evidenceStrength: "VERIFIED_PRIMARY",
+    sourceId: "does-not-exist",
+  };
+  assert.equal(
+    resolveSourceEligibility(conn, lineageWithMissingSource, sourceRegistry),
+    "BLOCKED",
+    "an unverifiable lineage source claim must not grant eligibility just because the connector's own source is solid",
+  );
+});
+
+test("resolveHeritageConnections: item 1 — an unresolvable lineage source keeps a genuinely well-sourced connector OUT of activeConnectors", () => {
+  const connector = synConnector({
+    connectorId: "syn-connector-solid",
+    sourceId: "connector-source",
+    participants: [{ participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" }],
+  });
+  const sourceRegistry = { "connector-source": { citationStatus: "verified" } };
+  const heritageRegistry = {
+    alpha: {
+      constructId: "alpha",
+      lineages: {
+        primary: {
+          measurementAvailability: "SUPPORTED_2D",
+          runtimeStatus: "RUNTIME_PROSE",
+          availability: "available",
+          terminationState: "continue",
+          citationStatus: "verified",
+          evidenceStrength: "VERIFIED_PRIMARY",
+          sourceId: "does-not-exist",
+        },
+      },
+    },
+  };
+  const result = resolveHeritageConnections(synArgs({
+    heritageRegistry,
+    connectorRegistry: { "syn-connector-solid": connector },
+    sourceRegistry,
+    depthMode: "SOURCE_DEEP",
+  }));
+  assert.equal(result.activeConnectors.length, 0);
+  assert.equal(result.activeConnectors.some((e) => e.connectorId === "syn-connector-solid"), false);
 });
 
 test("prohibitedForUserInference stays true on every surfaced entry", () => {
