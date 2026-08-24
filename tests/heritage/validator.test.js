@@ -12,8 +12,39 @@ import {
 import {
   HERITAGE_MEASUREMENT_AVAILABILITY,
   HERITAGE_TRANSLATION_PROVENANCE,
+  HeritageConnectorSchema,
 } from "../../src/heritage/schema.js";
 import { SOURCE_REGISTRY } from "../../src/reading/provenance.js";
+
+/*
+ * A tiny, purpose-built structural checker for the condition-AST fragment —
+ * this repo has no JSON Schema validation library dependency, so this is not
+ * a general JSON Schema engine, only enough to prove the six node shapes are
+ * enforced and nothing else validates.
+ */
+function matchesConditionNode(defs, node) {
+  if (!node || typeof node !== "object" || Array.isArray(node)) return false;
+  const branches = defs.conditionNode.oneOf;
+  return branches.some((branch) => {
+    const keys = Object.keys(branch.properties);
+    if (!branch.required.every((k) => k in node)) return false;
+    if (Object.keys(node).some((k) => !keys.includes(k))) return false; // additionalProperties: false
+    if (branch.properties.type.const !== node.type) return false;
+    for (const [key, propSchema] of Object.entries(branch.properties)) {
+      if (key === "type") continue;
+      const value = node[key];
+      if (propSchema.type === "string") {
+        if (typeof value !== "string" || value.length < 1) return false;
+      } else if (propSchema.$ref) {
+        if (!matchesConditionNode(defs, value)) return false;
+      } else if (propSchema.type === "array") {
+        if (!Array.isArray(value) || value.length < (propSchema.minItems || 0)) return false;
+        if (!value.every((item) => matchesConditionNode(defs, item))) return false;
+      }
+    }
+    return true;
+  });
+}
 
 const baseLineage = (overrides = {}) => ({
   lineageId: "primary",
@@ -247,4 +278,53 @@ test("constituent aliases require source-witness provenance", () => {
   const result = validateHeritageRecord(record);
   assert.equal(result.valid, false);
   assert.ok(result.errors.some((error) => /alias.*witness provenance/i.test(error)));
+});
+
+/*
+ * Item 3 (Stage 1 repair): conditionExpression's machine-readable schema
+ * must no longer be `{ type: "object" }`, which the Stage 1 checkpoint
+ * explicitly rejected as indistinguishable from "any object is acceptable".
+ */
+test("HeritageConnectorSchema no longer describes conditionExpression as an unbounded object", () => {
+  const field = HeritageConnectorSchema.properties.conditionExpression;
+  assert.equal(field.type, undefined, "must not fall back to a bare object type");
+  assert.equal(typeof field.$ref, "string");
+  assert.ok(HeritageConnectorSchema.$defs.conditionNode, "the recursive node definition must be hoisted to the schema root");
+});
+
+test("HeritageConnectorSchema's condition node describes exactly the six allowed AST shapes, each closed", () => {
+  const branches = HeritageConnectorSchema.$defs.conditionNode.oneOf;
+  const types = branches.map((b) => b.properties.type.const).sort();
+  assert.deepEqual(types, ["ABSENT", "ALL", "ANY", "NOT", "PRESENT", "STATE"]);
+  for (const branch of branches) {
+    assert.equal(branch.additionalProperties, false, `${branch.properties.type.const} must reject unknown properties`);
+  }
+});
+
+test("the schema/validator boundary rejects malformed AST shapes", () => {
+  const defs = HeritageConnectorSchema.$defs;
+  const valid = [
+    { type: "PRESENT", participantId: "a" },
+    { type: "ABSENT", participantId: "a" },
+    { type: "STATE", participantId: "a", stateId: "s" },
+    { type: "NOT", operand: { type: "PRESENT", participantId: "a" } },
+    { type: "ALL", operands: [{ type: "PRESENT", participantId: "a" }] },
+    { type: "ANY", operands: [{ type: "ABSENT", participantId: "a" }] },
+  ];
+  for (const node of valid) {
+    assert.equal(matchesConditionNode(defs, node), true, JSON.stringify(node));
+  }
+
+  const malformed = [
+    { type: "PRESENT" }, // missing participantId
+    { type: "PRESENT", participantId: "a", extra: "not allowed" }, // additionalProperties
+    { type: "BEFORE", participantId: "a" }, // not one of the six node types
+    { type: "ALL", operands: [] }, // JSON Schema minItems:1 — structurally empty
+    { type: "STATE", participantId: "a" }, // missing stateId
+    { type: "AND", operands: [{ type: "PRESENT", participantId: "a" }] }, // no generic boolean-expression names
+    { type: "PRESENT", participantId: { $$eval: "window.location" } }, // no arbitrary JS values
+  ];
+  for (const node of malformed) {
+    assert.equal(matchesConditionNode(defs, node), false, JSON.stringify(node));
+  }
 });

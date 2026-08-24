@@ -5,6 +5,9 @@ import { fileURLToPath } from "node:url";
 import {
   resolveHeritageConnections,
   evaluateConditionExpression,
+  negativeRuleViolations,
+  resolveSourceEligibility,
+  resolveLineageRestriction,
   RELATIONSHIP_AVAILABILITY,
   DEPTH_MODES,
 } from "../../src/heritage/resolver.js";
@@ -16,6 +19,7 @@ import {
 import { HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY } from "../../src/heritage/negative-relationships-registry.js";
 import { HERITAGE_COMPOSITION_POLICIES } from "../../src/heritage/composition-policies-registry.js";
 import { HERITAGE_CONCEPT_REGISTRY } from "../../src/heritage/concepts.js";
+import { SOURCE_REGISTRY } from "../../src/reading/provenance.js";
 
 const clone = (value) => structuredClone(value);
 
@@ -27,7 +31,8 @@ const realArgs = (overrides = {}) => ({
   disagreementRegistry: HERITAGE_DISAGREEMENT_REGISTRY,
   negativeRelationshipRegistry: HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY,
   compositionPolicies: HERITAGE_COMPOSITION_POLICIES,
-  readingState: { heritageConstruct: "fiveMountains", sourceLineage: "primary" },
+  sourceRegistry: SOURCE_REGISTRY,
+  readingState: { heritageConstruct: "fiveMountains", sourceLineage: "taiqing-siku" },
   depthMode: "STANDARD",
   occurrence: 0,
   ...overrides,
@@ -39,19 +44,23 @@ const SYN_HERITAGE_REGISTRY = Object.freeze({
   alpha: Object.freeze({
     constructId: "alpha",
     lineages: Object.freeze({
-      primary: Object.freeze({ measurementAvailability: "SUPPORTED_2D" }),
+      primary: Object.freeze({ measurementAvailability: "SUPPORTED_2D", runtimeStatus: "RUNTIME_PROSE", availability: "available", terminationState: "continue" }),
     }),
   }),
   beta: Object.freeze({
     constructId: "beta",
     lineages: Object.freeze({
-      primary: Object.freeze({ measurementAvailability: "CAMERA_GEOMETRY_INSUFFICIENT" }),
+      primary: Object.freeze({ measurementAvailability: "CAMERA_GEOMETRY_INSUFFICIENT", runtimeStatus: "RUNTIME_PROSE", availability: "available", terminationState: "continue" }),
     }),
   }),
 });
 
 const SYN_CONCEPT_REGISTRY = Object.freeze({
   gamma: Object.freeze({ conceptId: "gamma", measurementAvailability: "UNMEASURABLE", modernMeasurementBinding: null }),
+});
+
+const SYN_SOURCE_REGISTRY = Object.freeze({
+  "synthetic-source": Object.freeze({ citationStatus: "edition-recorded" }),
 });
 
 const synConnector = (fields) => Object.freeze({
@@ -63,7 +72,7 @@ const synConnector = (fields) => Object.freeze({
   participants: fields.participants,
   evidenceClass: "EXPLICITLY_ATTESTED",
   evidenceStrength: "RECORDED_NOT_VERIFIED",
-  sourceId: "synthetic-source",
+  sourceId: fields.sourceId || "synthetic-source",
   supportingSourceIds: [],
   textualLayer: "BASE_TEXT",
   sourceText: null,
@@ -93,6 +102,7 @@ const synArgs = (overrides = {}) => ({
   disagreementRegistry: {},
   negativeRelationshipRegistry: {},
   compositionPolicies: {},
+  sourceRegistry: SYN_SOURCE_REGISTRY,
   readingState: { heritageConstruct: "alpha", sourceLineage: "primary" },
   depthMode: "STANDARD",
   occurrence: 0,
@@ -110,12 +120,9 @@ test("1: same inputs produce identical (deep-equal) output", () => {
 /* ── 2. stable ordering independent of registry object insertion order ──── */
 
 test("2: connector order is independent of registry object insertion order", () => {
-  const forward = resolveHeritageConnections(realArgs({ readingState: { heritageConstruct: "fiveMountains", sourceLineage: "primary" } }));
+  const forward = resolveHeritageConnections(realArgs());
   const reversedRegistry = Object.fromEntries(Object.entries(HERITAGE_CONNECTOR_REGISTRY).reverse());
-  const reversed = resolveHeritageConnections(realArgs({
-    connectorRegistry: reversedRegistry,
-    readingState: { heritageConstruct: "fiveMountains", sourceLineage: "primary" },
-  }));
+  const reversed = resolveHeritageConnections(realArgs({ connectorRegistry: reversedRegistry }));
   assert.deepEqual(forward.activeConnectors, reversed.activeConnectors);
   assert.deepEqual(forward.unavailableRelations, reversed.unavailableRelations);
   assert.deepEqual(forward.renderPlan.relationshipOrder, reversed.renderPlan.relationshipOrder);
@@ -183,7 +190,10 @@ test("6: a simple two-construct CORRESPONDS_TO connector resolves", () => {
 test("7: the real Yuebo CONJUNCTIVE_CONFIGURATION connector carries all four participants", () => {
   const connector = HERITAGE_CONNECTOR_REGISTRY["yuebo-mountains-rivers-form-shen-configuration"];
   assert.equal(connector.participants.length, 4);
-  const result = resolveHeritageConnections(realArgs({ readingState: { heritageConstruct: "fourRivers", sourceLineage: "primary" } }));
+  const result = resolveHeritageConnections(realArgs({
+    readingState: { heritageConstruct: "fourRivers", sourceLineage: "primary" },
+    depthMode: "SOURCE_DEEP",
+  }));
   const found = [...result.activeConnectors, ...result.unavailableRelations, ...result.sourcePanels]
     .find((e) => e.connectorId === "yuebo-mountains-rivers-form-shen-configuration");
   assert.ok(found, "the connector should surface as a candidate for fourRivers");
@@ -199,14 +209,28 @@ test("8: shen-requires-form and form-requires-shen are two distinct connectors, 
   assert.deepEqual(shenRequires.relationshipDirection, { kind: "DIRECTED", from: ["shen"], to: ["form"] });
   assert.deepEqual(formRequires.relationshipDirection, { kind: "DIRECTED", from: ["form"], to: ["shen"] });
   assert.equal(shenRequires.sourceRuleGroupId, formRequires.sourceRuleGroupId);
+});
 
-  // Neither construct-based readingState surfaces these (they're HERITAGE_CONCEPT-only,
-  // no CONSTRUCT participant), so resolve directly against a synthetic construct that
-  // stands in for one and confirm both remain independently enumerable when both are
-  // registered.
-  const registry = { "shen-requires-form": shenRequires, "form-requires-shen": formRequires };
-  const ids = Object.keys(registry).sort();
-  assert.deepEqual(ids, ["form-requires-shen", "shen-requires-form"]);
+test("8b: resolveHeritageConnections itself surfaces both, still distinct, only when explicitly anchored", () => {
+  const unanchored = resolveHeritageConnections(realArgs({
+    readingState: { heritageConstruct: "fiveMountains", sourceLineage: "taiqing-siku" },
+    conditionContext: null,
+  }));
+  const unanchoredIds = [...unanchored.activeConnectors, ...unanchored.unavailableRelations, ...unanchored.sourcePanels].map((e) => e.connectorId);
+  assert.equal(unanchoredIds.includes("shen-requires-form"), false, "concept-only connectors are a deliberate abstention by default");
+  assert.equal(unanchoredIds.includes("form-requires-shen"), false);
+
+  const anchored = resolveHeritageConnections(realArgs({
+    readingState: { heritageConstruct: "fiveMountains", sourceLineage: "taiqing-siku" },
+    conditionContext: { participants: { shen: "PRESENT" } },
+  }));
+  const anchoredEntries = [...anchored.activeConnectors, ...anchored.unavailableRelations, ...anchored.sourcePanels];
+  const shenEntry = anchoredEntries.find((e) => e.connectorId === "shen-requires-form");
+  const formEntry = anchoredEntries.find((e) => e.connectorId === "form-requires-shen");
+  assert.ok(shenEntry, "anchoring shen as PRESENT surfaces shen-requires-form as a candidate");
+  assert.ok(formEntry, "form-requires-shen is anchored too — both directions share the shen participant");
+  assert.notEqual(shenEntry.connectorId, formEntry.connectorId);
+  assert.equal(shenEntry.sourceRuleGroupId, formEntry.sourceRuleGroupId);
 });
 
 /* ── 9. partial availability ──────────────────────────────────────────────── */
@@ -277,13 +301,37 @@ test("11b: a connector cannot present Shen as measured — measurable Shen is bl
   assert.equal(result.activeConnectors.some((e) => e.connectorId === "four-rivers-shen-corresponds"), false);
 });
 
+test("11c: Shen's STATE can never resolve true without an EXPLICIT conditionContext entry — no binding exists", () => {
+  const connector = synConnector({
+    connectorId: "syn-shen-state",
+    participants: [
+      { participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" },
+      { participantId: "shen", nodeType: "HERITAGE_CONCEPT", conceptId: "shen", memberScope: "NODE" },
+    ],
+    conditionExpression: { type: "STATE", participantId: "shen", stateId: "shen-settled" },
+    historicalStates: [{ stateId: "shen-settled", participantId: "shen", gloss: null, measurementAvailability: "UNMEASURABLE" }],
+  });
+  // No conditionContext at all: must not guess.
+  const unresolved = evaluateConditionExpression(connector.conditionExpression, connector, null);
+  assert.equal(unresolved.resolved, false);
+
+  // Even a fully "read" modern measurement in readingState must not leak in —
+  // the resolver never even looks at readingState for this.
+  const result = resolveHeritageConnections(synArgs({
+    readingState: { heritageConstruct: "alpha", sourceLineage: "primary", availability: "read" },
+    connectorRegistry: { "syn-shen-state": connector },
+  }));
+  assert.equal(result.activeConnectors.length, 0);
+  assert.equal(result.unavailableRelations[0].disposition, "CONDITION_UNMET");
+});
+
 /* ── 12. modern Qi Se does not activate heritageQiSe predicate ───────────── */
 
 test("12: heritageQiSe cannot bind to a modern measurement", () => {
   assert.equal(HERITAGE_CONCEPT_REGISTRY.heritageQiSe.modernMeasurementBinding, null);
 });
 
-test("12b: readingState never influences which heritageQiSe connector activates", () => {
+test("12b: readingState.availability never influences resolution", () => {
   const withRead = resolveHeritageConnections(realArgs({
     readingState: { heritageConstruct: "fourRivers", sourceLineage: "primary", availability: "read" },
   }));
@@ -311,10 +359,25 @@ test("12c: a synthetic connector binding heritageQiSe directly to fiveElements i
   assert.equal(found.disposition, "BLOCKED_NEGATIVE_RULE");
 });
 
+test("12d: heritageQiSe's STATE cannot be satisfied by 'read' modern availability, only by an explicit conditionContext", () => {
+  const connector = synConnector({
+    connectorId: "syn-qise-state",
+    participants: [{ participantId: "heritageQiSe", nodeType: "HERITAGE_CONCEPT", conceptId: "heritageQiSe", memberScope: "NODE" }],
+    conditionExpression: { type: "STATE", participantId: "heritageQiSe", stateId: "qise-observed" },
+    historicalStates: [{ stateId: "qise-observed", participantId: "heritageQiSe", gloss: null, measurementAvailability: "UNMEASURABLE" }],
+  });
+  const readButNoContext = evaluateConditionExpression(connector.conditionExpression, connector, null);
+  assert.equal(readButNoContext.resolved, false);
+  const explicitlySatisfied = evaluateConditionExpression(connector.conditionExpression, connector, {
+    states: { "heritageQiSe:qise-observed": "SATISFIED" },
+  });
+  assert.equal(explicitlySatisfied.satisfied, true);
+});
+
 /* ── 13. Five Forms system connector does not generate pairwise edges ────── */
 
 test("13: fiveElements candidates are exactly the registered connectors, no synthesized pairwise edges", () => {
-  const result = resolveHeritageConnections(realArgs({ readingState: { heritageConstruct: "fiveElements", sourceLineage: "primary" } }));
+  const result = resolveHeritageConnections(realArgs({ readingState: { heritageConstruct: "fiveElements", sourceLineage: "primary" }, depthMode: "SOURCE_DEEP" }));
   const allIds = [...result.activeConnectors, ...result.unavailableRelations, ...result.sourcePanels].map((e) => e.connectorId);
   assert.deepEqual(allIds.sort(), ["five-forms-generative-overcoming-system"]);
 });
@@ -332,7 +395,6 @@ test("14: a synthetic ZWDS/twelvePalaces connector is blocked even though it val
   const result = resolveHeritageConnections(realArgs({
     readingState: { heritageConstruct: "twelvePalaces", sourceLineage: "primary" },
     connectorRegistry: { "syn-zwds": connector },
-    negativeRelationshipRegistry: HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY,
   }));
   assert.equal(result.activeConnectors.length, 0);
   assert.equal(result.unavailableRelations.length, 1);
@@ -352,10 +414,14 @@ test("15: RESEARCH_ONLY connectors never appear in activeConnectors", () => {
 
 /* ── 16. SOURCE_PANEL_ONLY connector does not become ordinary active inference ── */
 
-test("16: SOURCE_PANEL_ONLY connectors land in sourcePanels, never activeConnectors", () => {
-  const result = resolveHeritageConnections(realArgs({ readingState: { heritageConstruct: "fiveOfficers", sourceLineage: "primary" } }));
-  assert.equal(result.activeConnectors.some((e) => e.connectorId === "five-officers-one-good-office-ten-years"), false);
-  const panel = result.sourcePanels.find((e) => e.connectorId === "five-officers-one-good-office-ten-years");
+test("16: SOURCE_PANEL_ONLY connectors land in sourcePanels (SOURCE_DEEP only), never activeConnectors", () => {
+  const standard = resolveHeritageConnections(realArgs({ readingState: { heritageConstruct: "fiveOfficers", sourceLineage: "primary" }, depthMode: "STANDARD" }));
+  assert.equal(standard.activeConnectors.some((e) => e.connectorId === "five-officers-one-good-office-ten-years"), false);
+  assert.deepEqual(standard.sourcePanels, [], "item 9: SOURCE_PANEL_ONLY content is withheld outside SOURCE_DEEP");
+
+  const deep = resolveHeritageConnections(realArgs({ readingState: { heritageConstruct: "fiveOfficers", sourceLineage: "primary" }, depthMode: "SOURCE_DEEP" }));
+  assert.equal(deep.activeConnectors.some((e) => e.connectorId === "five-officers-one-good-office-ten-years"), false);
+  const panel = deep.sourcePanels.find((e) => e.connectorId === "five-officers-one-good-office-ten-years");
   assert.ok(panel);
   assert.equal(panel.relationshipAvailability, "SOURCE_ONLY");
 });
@@ -363,7 +429,7 @@ test("16: SOURCE_PANEL_ONLY connectors land in sourcePanels, never activeConnect
 /* ── 17. disagreement returned without harmonization ──────────────────────── */
 
 test("17: an OPEN disagreement keeps every position, picks no winner", () => {
-  const result = resolveHeritageConnections(realArgs({ readingState: { heritageConstruct: "fiveMountains", sourceLineage: "primary" } }));
+  const result = resolveHeritageConnections(realArgs({ readingState: { heritageConstruct: "fiveMountains", sourceLineage: "taiqing-siku" } }));
   const panel = result.disagreementPanels.find((d) => d.disagreementId === "five-mountains-northern-region");
   assert.ok(panel);
   assert.equal(panel.status, "OPEN");
@@ -379,9 +445,85 @@ test("18: the Four Rivers eye/mouth disagreement is constituent-level, distinct 
   const disagreement = result.disagreementPanels.find((d) => d.disagreementId === "four-rivers-eye-mouth");
   assert.ok(disagreement);
   assert.equal(disagreement.nature, "MAPPING");
-  // Exactly one disagreement panel for fourRivers — no second, duplicated
-  // "mountains-rivers-corresponds-disagreement" record was invented.
   assert.equal(result.disagreementPanels.length, 1);
+});
+
+/* ── item 8: disagreement target types CONSTRUCT / CONNECTOR / LINEAGE ───── */
+
+test("disagreement target CONNECTOR is attached only to the connector it names", () => {
+  const connector = synConnector({
+    connectorId: "syn-a",
+    participants: [{ participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" }],
+  });
+  const other = synConnector({
+    connectorId: "syn-b",
+    participants: [{ participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" }],
+  });
+  const disagreementRegistry = {
+    "connector-level": {
+      disagreementId: "connector-level",
+      nature: "PREDICATE",
+      target: { targetType: "CONNECTOR", targetRef: "syn-a" },
+      status: "OPEN",
+      positions: [{ positionId: "p1", sourceId: "synthetic-source", summary: "x", note: null }],
+    },
+  };
+  const result = resolveHeritageConnections(synArgs({
+    connectorRegistry: { "syn-a": connector, "syn-b": other },
+    disagreementRegistry,
+  }));
+  const a = result.activeConnectors.find((e) => e.connectorId === "syn-a");
+  const b = result.activeConnectors.find((e) => e.connectorId === "syn-b");
+  assert.deepEqual(a.disagreementIds, ["connector-level"]);
+  assert.deepEqual(b.disagreementIds, []);
+  assert.equal(result.disagreementPanels.length, 1);
+});
+
+test("disagreement target LINEAGE uses the construct:lineage composite key and does not cross-contaminate other lineages", () => {
+  const connector = synConnector({
+    connectorId: "syn-a",
+    participants: [{ participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" }],
+  });
+  const disagreementRegistry = {
+    "lineage-level": {
+      disagreementId: "lineage-level",
+      nature: "EDITION_VARIATION",
+      target: { targetType: "LINEAGE", targetRef: "alpha:primary" },
+      status: "OPEN",
+      positions: [{ positionId: "p1", sourceId: "synthetic-source", summary: "x", note: null }],
+    },
+  };
+  const matching = resolveHeritageConnections(synArgs({
+    connectorRegistry: { "syn-a": connector },
+    disagreementRegistry,
+    readingState: { heritageConstruct: "alpha", sourceLineage: "primary" },
+  }));
+  assert.equal(matching.disagreementPanels.length, 1);
+
+  const nonMatching = resolveHeritageConnections(synArgs({
+    connectorRegistry: { "syn-a": connector },
+    disagreementRegistry,
+    readingState: { heritageConstruct: "beta", sourceLineage: "primary" },
+  }));
+  assert.equal(nonMatching.disagreementPanels.length, 0, "a lineage-targeted disagreement for alpha:primary must not leak onto beta:primary");
+});
+
+test("an unrelated disagreement target never becomes relevant by invention", () => {
+  const connector = synConnector({
+    connectorId: "syn-a",
+    participants: [{ participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" }],
+  });
+  const disagreementRegistry = {
+    unrelated: {
+      disagreementId: "unrelated",
+      nature: "MAPPING",
+      target: { targetType: "CONSTRUCT", targetRef: "beta" },
+      status: "OPEN",
+      positions: [{ positionId: "p1", sourceId: "synthetic-source", summary: "x", note: null }],
+    },
+  };
+  const result = resolveHeritageConnections(synArgs({ connectorRegistry: { "syn-a": connector }, disagreementRegistry }));
+  assert.deepEqual(result.disagreementPanels, []);
 });
 
 /* ── 19. editorial juxtaposition returned separately ──────────────────────── */
@@ -411,7 +553,6 @@ test("19: editorial juxtaposition is separate from activeConnectors and historic
   assert.equal(juxtaposition.attributionMode, "separate");
   assert.ok(juxtaposition.items.includes("syn-a"));
   assert.ok(juxtaposition.items.includes("syn-b"));
-  // Never merged into activeConnectors.
   assert.equal(result.activeConnectors.every((c) => c.connectorId !== "sources-shown-beside-one-another"), true);
   assert.equal("policyType" in result.activeConnectors[0], false);
 });
@@ -452,7 +593,7 @@ test("20b: a missing readingState also abstains rather than throwing", () => {
 /* ── 21. source/provenance trace preserved ────────────────────────────────── */
 
 test("21: every resolved entry preserves the full Stage 1 provenance trace", () => {
-  const result = resolveHeritageConnections(realArgs({ readingState: { heritageConstruct: "fourRivers", sourceLineage: "primary" } }));
+  const result = resolveHeritageConnections(realArgs({ readingState: { heritageConstruct: "fourRivers", sourceLineage: "primary" }, depthMode: "SOURCE_DEEP" }));
   const entries = [...result.activeConnectors, ...result.unavailableRelations, ...result.sourcePanels];
   assert.ok(entries.length > 0);
   for (const entry of entries) {
@@ -466,7 +607,7 @@ test("21: every resolved entry preserves the full Stage 1 provenance trace", () 
   }
 });
 
-/* ── 22-28. condition AST evaluation ──────────────────────────────────────── */
+/* ── 22-28. condition AST evaluation: PRESENT/ABSENT/STATE runtime tri-state ── */
 
 const conditionConnector = (conditionExpression, historicalStates = []) => synConnector({
   connectorId: "syn-cond",
@@ -478,26 +619,30 @@ const conditionConnector = (conditionExpression, historicalStates = []) => synCo
   historicalStates,
 });
 
-test("22: condition ALL — satisfied only when every operand is", () => {
+test("22: condition ALL — satisfied only when every operand resolves true", () => {
+  const ctx = { participants: { alpha: "PRESENT", beta: "PRESENT" } };
+  const connector = conditionConnector(null);
   const trueCase = evaluateConditionExpression({
     type: "ALL",
     operands: [{ type: "PRESENT", participantId: "alpha" }, { type: "PRESENT", participantId: "beta" }],
-  }, conditionConnector(null));
+  }, connector, ctx);
   assert.deepEqual(trueCase, { satisfied: true, resolved: true, reason: null });
 
+  const ctx2 = { participants: { alpha: "PRESENT", beta: "ABSENT" } };
   const falseCase = evaluateConditionExpression({
     type: "ALL",
-    operands: [{ type: "PRESENT", participantId: "alpha" }, { type: "ABSENT", participantId: "beta" }],
-  }, conditionConnector(null));
+    operands: [{ type: "PRESENT", participantId: "alpha" }, { type: "PRESENT", participantId: "beta" }],
+  }, connector, ctx2);
   assert.equal(falseCase.satisfied, false);
   assert.equal(falseCase.resolved, true);
 });
 
 test("23: condition ANY — satisfied when at least one resolved operand is true", () => {
+  const ctx = { participants: { alpha: "ABSENT", beta: "PRESENT" } };
   const result = evaluateConditionExpression({
     type: "ANY",
-    operands: [{ type: "ABSENT", participantId: "alpha" }, { type: "PRESENT", participantId: "beta" }],
-  }, conditionConnector(null));
+    operands: [{ type: "PRESENT", participantId: "alpha" }, { type: "PRESENT", participantId: "beta" }],
+  }, conditionConnector(null), ctx);
   assert.equal(result.satisfied, true);
   assert.equal(result.resolved, true);
 });
@@ -506,65 +651,322 @@ test("24: condition NOT — inverts a resolved operand", () => {
   const result = evaluateConditionExpression({
     type: "NOT",
     operand: { type: "PRESENT", participantId: "alpha" },
-  }, conditionConnector(null));
+  }, conditionConnector(null), { participants: { alpha: "PRESENT" } });
   assert.equal(result.satisfied, false);
   assert.equal(result.resolved, true);
 });
 
-test("25: condition PRESENT — true exactly when the participant is declared", () => {
-  const yes = evaluateConditionExpression({ type: "PRESENT", participantId: "alpha" }, conditionConnector(null));
-  const no = evaluateConditionExpression({ type: "PRESENT", participantId: "gamma" }, conditionConnector(null));
+test("25: condition PRESENT — declared participant + PRESENT runtime status -> true", () => {
+  const connector = conditionConnector(null);
+  const yes = evaluateConditionExpression({ type: "PRESENT", participantId: "alpha" }, connector, { participants: { alpha: "PRESENT" } });
   assert.equal(yes.satisfied, true);
-  assert.equal(no.satisfied, false);
-  assert.equal(no.resolved, true);
+  assert.equal(yes.resolved, true);
 });
 
-test("26: condition ABSENT — true exactly when the participant is not declared", () => {
-  const result = evaluateConditionExpression({ type: "ABSENT", participantId: "gamma" }, conditionConnector(null));
+test("25b: condition PRESENT — declared participant + ABSENT runtime status -> PRESENT false", () => {
+  const connector = conditionConnector(null);
+  const result = evaluateConditionExpression({ type: "PRESENT", participantId: "alpha" }, connector, { participants: { alpha: "ABSENT" } });
+  assert.equal(result.satisfied, false);
+  assert.equal(result.resolved, true);
+});
+
+test("25c: condition PRESENT — declared participant + UNKNOWN/missing runtime status -> unresolved", () => {
+  const connector = conditionConnector(null);
+  const missing = evaluateConditionExpression({ type: "PRESENT", participantId: "alpha" }, connector, { participants: {} });
+  assert.equal(missing.resolved, false);
+  assert.equal(missing.satisfied, false);
+  const unknown = evaluateConditionExpression({ type: "PRESENT", participantId: "alpha" }, connector, { participants: { alpha: "UNKNOWN" } });
+  assert.equal(unknown.resolved, false);
+  const noContextAtAll = evaluateConditionExpression({ type: "PRESENT", participantId: "alpha" }, connector, null);
+  assert.equal(noContextAtAll.resolved, false);
+});
+
+test("25d: PRESENT on a participant the connector never declared is rejected, not guessed", () => {
+  const connector = conditionConnector(null);
+  const result = evaluateConditionExpression({ type: "PRESENT", participantId: "gamma" }, connector, { participants: { gamma: "PRESENT" } });
+  assert.equal(result.resolved, false);
+  assert.equal(result.reason, "UNDECLARED_PARTICIPANT");
+});
+
+test("26: condition ABSENT — declared participant + ABSENT -> true", () => {
+  const connector = conditionConnector(null);
+  const result = evaluateConditionExpression({ type: "ABSENT", participantId: "alpha" }, connector, { participants: { alpha: "ABSENT" } });
   assert.equal(result.satisfied, true);
   assert.equal(result.resolved, true);
 });
 
-test("27: condition STATE — resolves true when the declared historicalState is capturable", () => {
+test("26b: condition ABSENT — declared participant + PRESENT -> ABSENT false", () => {
+  const connector = conditionConnector(null);
+  const result = evaluateConditionExpression({ type: "ABSENT", participantId: "alpha" }, connector, { participants: { alpha: "PRESENT" } });
+  assert.equal(result.satisfied, false);
+  assert.equal(result.resolved, true);
+});
+
+test("26c: condition ABSENT — unknown runtime presence -> unresolved, never guessed true", () => {
+  const connector = conditionConnector(null);
+  const result = evaluateConditionExpression({ type: "ABSENT", participantId: "alpha" }, connector, { participants: {} });
+  assert.equal(result.resolved, false);
+});
+
+test("27: condition STATE — declared historical state + SATISFIED runtime status -> true", () => {
   const connector = conditionConnector(
-    { type: "STATE", participantId: "alpha", stateId: "alpha-known" },
-    [{ stateId: "alpha-known", participantId: "alpha", gloss: null, measurementAvailability: "SUPPORTED_2D" }],
+    { type: "STATE", participantId: "alpha", stateId: "alpha-state" },
+    [{ stateId: "alpha-state", participantId: "alpha", gloss: null, measurementAvailability: "NOT_RECORDED" }],
   );
-  const result = evaluateConditionExpression(connector.conditionExpression, connector);
+  const result = evaluateConditionExpression(connector.conditionExpression, connector, {
+    states: { "alpha:alpha-state": "SATISFIED" },
+  });
   assert.deepEqual(result, { satisfied: true, resolved: true, reason: null });
 });
 
-test("28: condition STATE — abstains (never guesses) when unresolved or unknown", () => {
-  const unknownState = conditionConnector({ type: "STATE", participantId: "alpha", stateId: "no-such-state" });
-  const r1 = evaluateConditionExpression(unknownState.conditionExpression, unknownState);
-  assert.equal(r1.resolved, false);
-  assert.equal(r1.reason, "UNKNOWN_STATE");
-
-  const notRecorded = conditionConnector(
-    { type: "STATE", participantId: "alpha", stateId: "alpha-unknown" },
-    [{ stateId: "alpha-unknown", participantId: "alpha", gloss: null, measurementAvailability: "NOT_RECORDED" }],
+test("27b: condition STATE — UNSATISFIED runtime status -> false, resolved", () => {
+  const connector = conditionConnector(
+    { type: "STATE", participantId: "alpha", stateId: "alpha-state" },
+    [{ stateId: "alpha-state", participantId: "alpha", gloss: null, measurementAvailability: "NOT_RECORDED" }],
   );
-  const r2 = evaluateConditionExpression(notRecorded.conditionExpression, notRecorded);
-  assert.equal(r2.resolved, false);
-  assert.equal(r2.satisfied, false);
-
-  const categorical = conditionConnector(
-    { type: "STATE", participantId: "alpha", stateId: "alpha-unmeasurable" },
-    [{ stateId: "alpha-unmeasurable", participantId: "alpha", gloss: null, measurementAvailability: "UNMEASURABLE" }],
-  );
-  const r3 = evaluateConditionExpression(categorical.conditionExpression, categorical);
-  // A categorical "never measurable" IS a definitive (resolved) no, not an
-  // unknown — the resolver still never presents it as satisfied.
-  assert.equal(r3.resolved, true);
-  assert.equal(r3.satisfied, false);
+  const result = evaluateConditionExpression(connector.conditionExpression, connector, {
+    states: { "alpha:alpha-state": "UNSATISFIED" },
+  });
+  assert.equal(result.satisfied, false);
+  assert.equal(result.resolved, true);
 });
 
-test("28b: a connector whose condition cannot resolve is parked in unavailableRelations, never active", () => {
+test("28: condition STATE — UNKNOWN/missing runtime status -> unresolved; undeclared state -> rejected", () => {
+  const declared = conditionConnector(
+    { type: "STATE", participantId: "alpha", stateId: "alpha-state" },
+    [{ stateId: "alpha-state", participantId: "alpha", gloss: null, measurementAvailability: "NOT_RECORDED" }],
+  );
+  const missing = evaluateConditionExpression(declared.conditionExpression, declared, { states: {} });
+  assert.equal(missing.resolved, false);
+  const noContext = evaluateConditionExpression(declared.conditionExpression, declared, null);
+  assert.equal(noContext.resolved, false);
+
+  const undeclared = conditionConnector({ type: "STATE", participantId: "alpha", stateId: "no-such-state" });
+  const rejected = evaluateConditionExpression(undeclared.conditionExpression, undeclared, {
+    states: { "alpha:no-such-state": "SATISFIED" },
+  });
+  assert.equal(rejected.resolved, false);
+  assert.equal(rejected.reason, "UNDECLARED_STATE");
+});
+
+test("28b: SUPPORTED_2D on the historicalState alone does NOT satisfy STATE — measurementAvailability is not condition truth", () => {
+  const connector = conditionConnector(
+    { type: "STATE", participantId: "alpha", stateId: "alpha-state" },
+    [{ stateId: "alpha-state", participantId: "alpha", gloss: null, measurementAvailability: "SUPPORTED_2D" }],
+  );
+  const noRuntimeEvidence = evaluateConditionExpression(connector.conditionExpression, connector, null);
+  assert.equal(noRuntimeEvidence.resolved, false, "a capturable measurementAvailability must not, by itself, satisfy STATE");
+  const emptyContext = evaluateConditionExpression(connector.conditionExpression, connector, { states: {} });
+  assert.equal(emptyContext.resolved, false);
+});
+
+test("28c: changing readingState.availability from read to abstained_* does not satisfy a historical STATE", () => {
+  const connector = conditionConnector(
+    { type: "STATE", participantId: "alpha", stateId: "alpha-state" },
+    [{ stateId: "alpha-state", participantId: "alpha", gloss: null, measurementAvailability: "SUPPORTED_2D" }],
+  );
+  const registry = { "syn-cond": connector };
+  const read = resolveHeritageConnections(synArgs({ connectorRegistry: registry, readingState: { heritageConstruct: "alpha", sourceLineage: "primary", availability: "read" } }));
+  const abstained = resolveHeritageConnections(synArgs({ connectorRegistry: registry, readingState: { heritageConstruct: "alpha", sourceLineage: "primary", availability: "abstained_confidence" } }));
+  assert.equal(read.activeConnectors.length, 0);
+  assert.equal(abstained.activeConnectors.length, 0);
+  assert.deepEqual(read.unavailableRelations.map((e) => e.disposition), abstained.unavailableRelations.map((e) => e.disposition));
+});
+
+test("28d: a connector whose condition cannot resolve is parked in unavailableRelations, never active", () => {
   const connector = conditionConnector({ type: "STATE", participantId: "alpha", stateId: "missing" });
   const result = resolveHeritageConnections(synArgs({ connectorRegistry: { "syn-cond": connector } }));
   assert.equal(result.activeConnectors.length, 0);
   assert.equal(result.unavailableRelations.length, 1);
   assert.equal(result.unavailableRelations[0].disposition, "CONDITION_UNMET");
+});
+
+/* ── item 4: source / lineage eligibility ─────────────────────────────────── */
+
+test("source/lineage: runtime lineage (RUNTIME_PROSE, no restriction) is accepted", () => {
+  assert.equal(resolveLineageRestriction({ runtimeStatus: "RUNTIME_PROSE", availability: "available", terminationState: "continue" }), "NONE");
+});
+
+test("source/lineage: a HERITAGE_ONLY lineage caps availability, never converts to a connected/measured claim", () => {
+  const connector = synConnector({
+    connectorId: "syn-cap",
+    participants: [{ participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" }],
+    measurementAvailability: "SUPPORTED_2D",
+  });
+  const heritageRegistry = {
+    alpha: { constructId: "alpha", lineages: { primary: { measurementAvailability: "SUPPORTED_2D", runtimeStatus: "HERITAGE_ONLY", availability: "available", terminationState: "continue" } } },
+  };
+  const result = resolveHeritageConnections(synArgs({ heritageRegistry, connectorRegistry: { "syn-cap": connector } }));
+  assert.equal(result.activeConnectors.length, 1);
+  assert.equal(result.activeConnectors[0].relationshipAvailability, "HERITAGE_ONLY", "even a fully-capturable connector is capped by a HERITAGE_ONLY lineage");
+});
+
+test("source/lineage: a RESEARCH_ONLY lineage forces every candidate research-only, regardless of connector.runtimePolicy", () => {
+  const connector = synConnector({
+    connectorId: "syn-cap",
+    participants: [{ participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" }],
+    runtimePolicy: "HERITAGE_PRESENTATION_ALLOWED",
+  });
+  const heritageRegistry = {
+    alpha: { constructId: "alpha", lineages: { primary: { measurementAvailability: "SUPPORTED_2D", runtimeStatus: "RESEARCH_ONLY", availability: "available", terminationState: "continue" } } },
+  };
+  const result = resolveHeritageConnections(synArgs({ heritageRegistry, connectorRegistry: { "syn-cap": connector } }));
+  assert.equal(result.activeConnectors.length, 0);
+  assert.equal(result.unavailableRelations[0].disposition, "LINEAGE_RESEARCH_ONLY");
+});
+
+test("source/lineage: an abstaining lineage never becomes active", () => {
+  const connector = synConnector({
+    connectorId: "syn-cap",
+    participants: [{ participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" }],
+  });
+  const heritageRegistry = {
+    alpha: { constructId: "alpha", lineages: { primary: { measurementAvailability: "SUPPORTED_2D", runtimeStatus: "RUNTIME_PROSE", availability: "abstention", terminationState: "abstain" } } },
+  };
+  const result = resolveHeritageConnections(synArgs({ heritageRegistry, connectorRegistry: { "syn-cap": connector } }));
+  assert.equal(result.activeConnectors.length, 0);
+  assert.equal(result.unavailableRelations[0].disposition, "LINEAGE_ABSTAINED");
+});
+
+test("source/lineage: an unknown sourceId never becomes active", () => {
+  const connector = synConnector({ connectorId: "syn-unknown-source", sourceId: "does-not-exist", participants: [{ participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" }] });
+  const result = resolveHeritageConnections(synArgs({ connectorRegistry: { "syn-unknown-source": connector } }));
+  assert.equal(result.activeConnectors.length, 0);
+  assert.equal(result.unavailableRelations[0].disposition, "UNKNOWN_SOURCE");
+});
+
+test("source/lineage: source-required is never silently promoted", () => {
+  const connector = synConnector({ connectorId: "syn-source-required", sourceId: "weak-source", participants: [{ participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" }] });
+  const sourceRegistry = { "weak-source": { citationStatus: "source-required" } };
+  const result = resolveHeritageConnections(synArgs({ connectorRegistry: { "syn-source-required": connector }, sourceRegistry }));
+  assert.equal(result.activeConnectors.length, 0);
+  assert.equal(result.unavailableRelations[0].disposition, "SOURCE_INELIGIBLE");
+});
+
+test("source/lineage: a work-recorded (identified but unlocated) source is capped to a source panel, not active", () => {
+  const connector = synConnector({ connectorId: "syn-work-recorded", sourceId: "weak-source", participants: [{ participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" }] });
+  const sourceRegistry = { "weak-source": { citationStatus: "work-recorded" } };
+  const result = resolveHeritageConnections(synArgs({ connectorRegistry: { "syn-work-recorded": connector }, sourceRegistry, depthMode: "SOURCE_DEEP" }));
+  assert.equal(result.activeConnectors.length, 0);
+  assert.equal(result.sourcePanels[0].disposition, "SOURCE_PANEL_CEILING");
+});
+
+test("source/lineage: requesting a valid, non-default lineage is preserved exactly", () => {
+  const heritageRegistry = {
+    alpha: {
+      constructId: "alpha",
+      lineages: {
+        primary: { measurementAvailability: "SUPPORTED_2D", runtimeStatus: "RUNTIME_PROSE", availability: "available", terminationState: "continue" },
+        variant: { measurementAvailability: "SUPPORTED_2D", runtimeStatus: "RUNTIME_PROSE", availability: "available", terminationState: "continue" },
+      },
+    },
+  };
+  const result = resolveHeritageConnections(synArgs({ heritageRegistry, readingState: { heritageConstruct: "alpha", sourceLineage: "variant" } }));
+  assert.equal(result.primaryLineage, "variant");
+});
+
+test("source/lineage: an invalid lineage falls back to 'primary' by documented policy, never cross-contaminates a different lineage's data", () => {
+  const heritageRegistry = {
+    alpha: {
+      constructId: "alpha",
+      lineages: {
+        primary: { measurementAvailability: "SUPPORTED_2D", runtimeStatus: "RUNTIME_PROSE", availability: "available", terminationState: "continue" },
+        variant: { measurementAvailability: "CAMERA_GEOMETRY_INSUFFICIENT", runtimeStatus: "RESEARCH_ONLY", availability: "available", terminationState: "continue" },
+      },
+    },
+  };
+  const result = resolveHeritageConnections(synArgs({ heritageRegistry, readingState: { heritageConstruct: "alpha", sourceLineage: "not-a-real-lineage" } }));
+  assert.equal(result.primaryLineage, "primary", "falls back to primary, not to variant or any other declared lineage");
+});
+
+/* ── item 7: negative-rule canonical-reference normalization ─────────────── */
+
+test("negative-rule: the real registry's conceptual refs (fiveForms/fivePhases) block via the generic normalized matcher", () => {
+  const connector = synConnector({
+    connectorId: "syn-canonical",
+    participants: [
+      { participantId: "fiveElements", nodeType: "CONSTRUCT", constructId: "fiveElements", memberScope: "ALL_MEMBERS" },
+      { participantId: "fivePhases", nodeType: "RELATED_SYSTEM", relatedSystemId: "five-phases", memberScope: "NODE" },
+    ],
+  });
+  const violations = negativeRuleViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY);
+  assert.ok(violations.includes("no-five-forms-five-phases-conflation"), violations.join(","));
+});
+
+test("negative-rule: the real registry blocks Twelve Palaces / zwds via the generic matcher", () => {
+  const connector = synConnector({
+    connectorId: "syn-zwds-canonical",
+    participants: [
+      { participantId: "twelvePalaces", nodeType: "CONSTRUCT", constructId: "twelvePalaces", memberScope: "ALL_MEMBERS" },
+      { participantId: "zwds", nodeType: "RELATED_SYSTEM", relatedSystemId: "zwds", memberScope: "NODE" },
+    ],
+  });
+  const violations = negativeRuleViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY);
+  assert.ok(violations.includes("no-zwds-import"), violations.join(","));
+});
+
+test("negative-rule: Three Sections / Five Forms textual-adjacency promotion is blocked via the generic matcher", () => {
+  const connector = synConnector({
+    connectorId: "syn-adjacency",
+    participants: [
+      { participantId: "threeSections", nodeType: "CONSTRUCT", constructId: "threeSections", memberScope: "ALL_MEMBERS" },
+      { participantId: "fiveElements", nodeType: "CONSTRUCT", constructId: "fiveElements", memberScope: "ALL_MEMBERS" },
+    ],
+  });
+  const violations = negativeRuleViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY);
+  assert.ok(violations.includes("no-three-sections-five-forms-promotion"), violations.join(","));
+});
+
+test("negative-rule: heritageQiSe -> Five Forms classification stays blocked (via the preserved hard-coded check, not the generic FORBID_RUNTIME_BINDING matcher)", () => {
+  const connector = synConnector({
+    connectorId: "syn-qise-canonical",
+    participants: [
+      { participantId: "heritageQiSe", nodeType: "HERITAGE_CONCEPT", conceptId: "heritageQiSe", memberScope: "NODE" },
+      { participantId: "fiveElements", nodeType: "CONSTRUCT", constructId: "fiveElements", memberScope: "ALL_MEMBERS" },
+    ],
+  });
+  // The generic data-driven matcher deliberately does NOT enforce
+  // FORBID_RUNTIME_BINDING rules (a modern-binding ban is not the same claim
+  // as "these two nodes may never coexist in a source-backed connector") —
+  // so it does not fire here.
+  const generic = negativeRuleViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY);
+  assert.equal(generic.includes("no-qise-to-form-classification"), false);
+  // The full resolver still blocks it, via checkNegativeRelationshipInvariants.
+  const result = resolveHeritageConnections(realArgs({
+    readingState: { heritageConstruct: "fiveElements", sourceLineage: "primary" },
+    connectorRegistry: { ...HERITAGE_CONNECTOR_REGISTRY, "syn-qise-canonical": connector },
+  }));
+  const found = [...result.activeConnectors, ...result.unavailableRelations].find((e) => e.connectorId === "syn-qise-canonical");
+  assert.equal(found.disposition, "BLOCKED_NEGATIVE_RULE");
+});
+
+test("negative-rule: shen-unmeasurable is enforced (via historicalStates, unreachable to the pairwise-ref matcher by design)", () => {
+  const connector = clone(HERITAGE_CONNECTOR_REGISTRY["four-rivers-shen-corresponds"]);
+  // The rule's toRef "measurementBinding" has no participant counterpart —
+  // the generic matcher correctly never fires for it.
+  const generic = negativeRuleViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY);
+  assert.equal(generic.includes("shen-unmeasurable"), false);
+  // A measurable Shen is still blocked (see test 11b above) by the dedicated check.
+});
+
+test("negative-rule: FORBID_RUNTIME_BINDING does not ban an otherwise legitimate historically-attested co-occurrence generically", () => {
+  // A rule of type FORBID_RUNTIME_BINDING must not be treated by the generic
+  // matcher as "these two refs may never appear together in ANY connector" —
+  // only FORBID_RELATIONSHIP_FAMILY / FORBID_NODE_MAPPING rules are.
+  const runtimeBindingRules = Object.values(HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY)
+    .filter((r) => r.negativeRuleType === "FORBID_RUNTIME_BINDING");
+  assert.ok(runtimeBindingRules.length > 0);
+  for (const rule of runtimeBindingRules) {
+    const connector = synConnector({
+      connectorId: `syn-${rule.negativeRuleId}`,
+      participants: [
+        { participantId: "x", nodeType: "HERITAGE_CONCEPT", conceptId: rule.fromRef, memberScope: "NODE" },
+      ],
+    });
+    // Single-participant connector cannot even pair fromRef/toRef — sanity
+    // check that the generic matcher requires BOTH sides present, not one.
+    assert.equal(negativeRuleViolations(connector, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY).includes(rule.negativeRuleId), false);
+  }
 });
 
 /* ── 29. connector registry reordering does not change deterministic result ── */
@@ -580,16 +982,14 @@ test("29: shuffled connector registry key order never changes the resolved resul
 
 /* ── 30. no mutation of injected registries or readingState ──────────────── */
 
-test("30: the resolver never mutates its injected registries or readingState", () => {
+test("30: the resolver never mutates its injected registries, readingState or conditionContext", () => {
   const registrySnapshot = clone(HERITAGE_CONNECTOR_REGISTRY);
   const disagreementSnapshot = clone(HERITAGE_DISAGREEMENT_REGISTRY);
   const readingState = Object.freeze({ heritageConstruct: "fourRivers", sourceLineage: "primary" });
   const rotationState = Object.freeze({ recentConnectorIds: Object.freeze(["four-rivers-flow-and-banks"]) });
+  const conditionContext = Object.freeze({ participants: Object.freeze({ shen: "PRESENT" }), states: Object.freeze({}) });
 
-  // Registries are already deep-frozen by registry.js; a real mutation attempt
-  // would throw under strict-mode ES modules. Calling the resolver with them
-  // must not throw, and the content must be byte-identical afterward.
-  assert.doesNotThrow(() => resolveHeritageConnections(realArgs({ readingState, rotationState })));
+  assert.doesNotThrow(() => resolveHeritageConnections(realArgs({ readingState, rotationState, conditionContext })));
   assert.deepEqual(HERITAGE_CONNECTOR_REGISTRY, registrySnapshot);
   assert.deepEqual(HERITAGE_DISAGREEMENT_REGISTRY, disagreementSnapshot);
   assert.deepEqual(readingState, { heritageConstruct: "fourRivers", sourceLineage: "primary" });
@@ -618,7 +1018,6 @@ test("depthMode caps the number of active connectors surfaced in the render plan
   const deep = resolveHeritageConnections(synArgs({ connectorRegistry, depthMode: "SOURCE_DEEP" }));
   assert.equal(summary.renderPlan.relationshipOrder.length, 2);
   assert.equal(deep.renderPlan.relationshipOrder.length, 4);
-  // Cap is presentation-only — the full eligible set is still reported.
   assert.equal(summary.activeConnectors.length, 4);
 });
 
@@ -629,7 +1028,7 @@ test("unknown depthMode falls back to STANDARD rather than throwing", () => {
 
 test("relationshipAvailability values are always drawn from the declared enum", () => {
   for (const construct of Object.keys(HERITAGE_REGISTRY)) {
-    const result = resolveHeritageConnections(realArgs({ readingState: { heritageConstruct: construct, sourceLineage: "primary" } }));
+    const result = resolveHeritageConnections(realArgs({ readingState: { heritageConstruct: construct, sourceLineage: "primary" }, depthMode: "SOURCE_DEEP" }));
     for (const entry of [...result.activeConnectors, ...result.unavailableRelations, ...result.sourcePanels]) {
       assert.ok(RELATIONSHIP_AVAILABILITY.includes(entry.relationshipAvailability), entry.connectorId);
     }
@@ -640,9 +1039,19 @@ test("DEPTH_MODES is the declared three-value enum", () => {
   assert.deepEqual(DEPTH_MODES, ["SUMMARY", "STANDARD", "SOURCE_DEEP"]);
 });
 
+test("resolveSourceEligibility: verified/edition-recorded is ELIGIBLE, others are ceilinged or blocked", () => {
+  const conn = (sourceId) => synConnector({ connectorId: "x", sourceId, participants: [] });
+  assert.equal(resolveSourceEligibility(conn("s"), { s: { citationStatus: "verified" } }), "ELIGIBLE");
+  assert.equal(resolveSourceEligibility(conn("s"), { s: { citationStatus: "edition-recorded" } }), "ELIGIBLE");
+  assert.equal(resolveSourceEligibility(conn("s"), { s: { citationStatus: "work-recorded" } }), "SOURCE_PANEL_CEILING");
+  assert.equal(resolveSourceEligibility(conn("s"), { s: { citationStatus: "source-required" } }), "BLOCKED");
+  assert.equal(resolveSourceEligibility(conn("s"), { s: { citationStatus: "attribution-contradicted" } }), "BLOCKED");
+  assert.equal(resolveSourceEligibility(conn("missing"), {}), "UNKNOWN_SOURCE");
+});
+
 test("prohibitedForUserInference stays true on every surfaced entry", () => {
   for (const construct of Object.keys(HERITAGE_REGISTRY)) {
-    const result = resolveHeritageConnections(realArgs({ readingState: { heritageConstruct: construct, sourceLineage: "primary" } }));
+    const result = resolveHeritageConnections(realArgs({ readingState: { heritageConstruct: construct, sourceLineage: "primary" }, depthMode: "SOURCE_DEEP" }));
     for (const entry of [...result.activeConnectors, ...result.sourcePanels]) {
       assert.equal(entry.prohibitedForUserInference, true);
     }
@@ -650,8 +1059,8 @@ test("prohibitedForUserInference stays true on every surfaced entry", () => {
 });
 
 test("wordingVariantIndices are stable integers, not a wording corpus", () => {
-  const result = resolveHeritageConnections(realArgs({ readingState: { heritageConstruct: "fiveMountains", sourceLineage: "primary" } }));
-  for (const [id, index] of Object.entries(result.renderPlan.wordingVariantIndices)) {
+  const result = resolveHeritageConnections(realArgs({ readingState: { heritageConstruct: "fiveMountains", sourceLineage: "taiqing-siku" } }));
+  for (const [, index] of Object.entries(result.renderPlan.wordingVariantIndices)) {
     assert.equal(typeof index, "number");
     assert.ok(Number.isInteger(index) && index >= 0);
   }

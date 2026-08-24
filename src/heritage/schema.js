@@ -277,8 +277,23 @@ function properties(manifest) {
         },
       }];
     }
+    if (field.type === "condition-expression") {
+      return [name, { $ref: field.jsonSchema.$ref }];
+    }
     return [name, { type: field.type }];
   }));
+}
+
+/**
+ * `condition-expression` fields carry their own `$defs`, which must be
+ * hoisted to the enclosing schema's ROOT for `#/$defs/...` to resolve —
+ * a `$ref` is resolved against the nearest enclosing schema resource, and a
+ * manifest field is not one. See connectors.js's CONDITION_EXPRESSION_JSON_SCHEMA.
+ */
+function conditionExpressionDefs(manifest) {
+  return Object.values(manifest)
+    .filter((field) => field.type === "condition-expression")
+    .reduce((defs, field) => ({ ...defs, ...(field.jsonSchema.$defs || {}) }), {});
 }
 
 export const HeritageRecordSchema = Object.freeze({
@@ -286,4 +301,18 @@ export const HeritageRecordSchema = Object.freeze({
   type: "object",
   required: required(HERITAGE_FIELD_MANIFEST.record),
   properties: properties(HERITAGE_FIELD_MANIFEST.record),
+});
+
+/**
+ * The connector-graph counterpart to HeritageRecordSchema. This is what makes
+ * `conditionExpression` machine-readable as the bounded six-node AST rather
+ * than as "any object" — see connectors.js's CONDITION_EXPRESSION_JSON_SCHEMA
+ * for what the Stage 1 checkpoint rejected and why.
+ */
+export const HeritageConnectorSchema = Object.freeze({
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  type: "object",
+  $defs: Object.freeze(conditionExpressionDefs(HERITAGE_CONNECTOR_FIELDS)),
+  required: required(HERITAGE_CONNECTOR_FIELDS),
+  properties: properties(HERITAGE_CONNECTOR_FIELDS),
 });

@@ -2,7 +2,8 @@
  * Stage 2: the deterministic heritage connector resolver.
  *
  * This module answers one question: given an interpreted reading state, a
- * selected heritage construct/lineage, a presentation depth and a
+ * selected heritage construct/lineage, injected runtime evidence about which
+ * participants/historical states currently hold, a presentation depth and a
  * deterministic occurrence, which registered connector-graph relationships
  * are eligible to be shown, in what structured form, and why?
  *
@@ -16,27 +17,35 @@
  * swap in a synthetic registry without mutating runtime state (the same
  * reasoning `createHeritageRegistry(corpus)` in registry.js already uses).
  * The deterministic hashing below duplicates the ~8-line FNV-1a primitive
- * already in src/qise/passages.js (`seededIndex`) rather than importing it,
- * so `src/heritage/` stays free of a dependency on `src/qise/` in this
- * direction — registry.js already depends on qise/reflection-corpus.js for
- * legacy prose content, but a resolver that reasons about connectors has no
- * reason to depend on the passage engine's utility belt.
+ * already in src/qise/passages.js (`seededIndex`) rather than importing it.
  *
- * ── WHY readingState.availability IS NOT CONSULTED ─────────────────────────
- * `readingState.availability` (read / abstained_*) reports whether TODAY'S
- * qi-se compass measurement succeeded. Connector-graph availability is a
- * different, STATIC question: can this product's capture modality (a 2D
- * frontal photograph, no depth, no ear detector) ever support this
- * historical claim at all? Folding today's qi-se success into that answer
- * would be exactly the conflation Stage 1 forbids: modern measured Qi Se
- * would end up silently promoting a connector that mentions heritageQiSe
- * from HERITAGE_ONLY to FULLY_AVAILABLE on a good capture day, which is
- * precisely "today's measured Qi Se proves the traditional appraisal". So
- * relationshipAvailability below is derived ONLY from the registries'
- * declared `measurementAvailability` fields, never from `readingState`.
- * `dependsOn` at the bottom of this file names exactly what state fields
- * this resolver reads, the same declared-dependency discipline
- * `reflection.js`'s COMPONENTS use.
+ * ── THREE DIFFERENT QUESTIONS, NEVER COLLAPSED ─────────────────────────────
+ * A first draft of this resolver conflated three genuinely separate
+ * questions, and the correction below is organised around keeping them apart:
+ *
+ * 1. "Can this product's capture modality EVER support observing this?"
+ *    A static registry fact — `measurementAvailability` on a connector, a
+ *    construct's lineage, or a heritage concept. Answered by
+ *    `classifyRelationshipAvailability`. NEVER used to decide whether a
+ *    historical claim is TRUE.
+ * 2. "Is this specific participant currently present, in THIS resolution?"
+ *    A runtime fact, supplied by the caller via the injected
+ *    `conditionContext.participants` map — never inferred from (1), from
+ *    `readingState.availability`, or from anything else. Answered by
+ *    `evaluateConditionExpression`'s PRESENT/ABSENT handling.
+ * 3. "Has an explicitly authorised historical state been established?"
+ *    Also a runtime fact, supplied via `conditionContext.states` — a
+ *    `historicalState`'s declared `measurementAvailability` says what KIND of
+ *    thing it is, not whether it currently holds. heritageQiSe and shen have
+ *    no authorised binding from (1) or (2) into (3) — that binding does not
+ *    exist in this codebase, so their STATE conditions can only ever resolve
+ *    through an explicit, caller-supplied `conditionContext.states` entry.
+ *
+ * `readingState.availability` (read / abstained_*) answers a FOURTH question
+ * — did today's qi-se compass measurement succeed — and is not consulted
+ * anywhere in this file. Folding it into any of the three above is exactly
+ * the "modern measured Qi Se proves the traditional appraisal" conflation
+ * Stage 1 forbids.
  */
 
 import { checkNegativeRelationshipInvariants } from "./validator.js";
@@ -49,7 +58,25 @@ export const RELATIONSHIP_AVAILABILITY = Object.freeze([
   "SOURCE_ONLY",
 ]);
 
+/*
+ * These are RESOLVER-INTERNAL presentation depths, not a second product
+ * taxonomy. They loosely mirror src/qise/reading-tiers.js's Tier 1/2/3 split
+ * (Today / Reading / Why-Study) but are not identical to it — a future
+ * Stage 3 integration should map between them explicitly rather than assume
+ * a 1:1 correspondence, which is why this file does not simply rename its
+ * own values to "TIER_1" etc. DEPTH_MODE_TIER_GUIDANCE below records the
+ * intended correspondence for that future work.
+ *
+ * The one binding rule right now: SOURCE_PANEL_ONLY material is
+ * study/citation-panel content, and it is withheld until SOURCE_DEEP so it
+ * cannot leak into the normal daily heritage surface (item 9).
+ */
 export const DEPTH_MODES = Object.freeze(["SUMMARY", "STANDARD", "SOURCE_DEEP"]);
+export const DEPTH_MODE_TIER_GUIDANCE = Object.freeze({
+  SUMMARY: "Roughly corresponds to reading-tiers.js Tier 1 (Today) — fastest, fewest relationships, never a source panel.",
+  STANDARD: "Roughly corresponds to Tier 2 (Reading) — normal daily heritage surface. Still no source panels.",
+  SOURCE_DEEP: "Roughly corresponds to Tier 3 (Why/Study) — the only depth where sourcePanels (SOURCE_PANEL_ONLY connectors) are populated.",
+});
 const DEPTH_ACTIVE_CAP = Object.freeze({ SUMMARY: 2, STANDARD: 5, SOURCE_DEEP: Infinity });
 
 /** Fields this resolver reads from readingState. See file header. */
@@ -76,7 +103,13 @@ function coprimeStride(total) {
   return step;
 }
 
-/** Rotate a stably-ordered array deterministically. Never mutates `items`. */
+/**
+ * Rotate a stably-ordered array deterministically. Never mutates `items`.
+ * The SEED must not itself encode `occurrence` — `occurrence` is this
+ * function's own walk parameter. Folding it into both would let the two
+ * effects cancel out on small arrays (a real bug caught by this module's own
+ * determinism test during Stage 2).
+ */
 function rotateDeterministically(items, seed, occurrence) {
   const total = items.length;
   if (total <= 1) return items.slice();
@@ -91,7 +124,7 @@ function rotateDeterministically(items, seed, occurrence) {
   return out;
 }
 
-/* ── measurement-signal classification (pure, static, registry-only) ────── */
+/* ── measurement-signal classification: "can the capture modality observe this at all" ── */
 
 const MEASUREMENT_CLASS = Object.freeze({
   SUPPORTED_2D: "capturable",
@@ -107,9 +140,10 @@ const MEASUREMENT_CLASS = Object.freeze({
 const classifyMeasurement = (value) => MEASUREMENT_CLASS[value] || "unknown";
 
 /**
- * The static measurement signal for one connector participant. CONSTITUENT
- * and RELATED_SYSTEM participants carry no measurement field in Stage 1's
- * schema, so they contribute "unknown" rather than a guess.
+ * The static measurement signal for one connector participant. This is
+ * ALWAYS a registry fact (question 1 in the file header) — never runtime
+ * evidence. CONSTITUENT and RELATED_SYSTEM participants carry no measurement
+ * field in Stage 1's schema, so they contribute "unknown" rather than a guess.
  */
 function participantMeasurementSignal(participant, { heritageRegistry, conceptRegistry, primaryConstruct, primaryLineage }) {
   if (participant.nodeType === "HERITAGE_CONCEPT") {
@@ -130,26 +164,27 @@ function participantMeasurementSignal(participant, { heritageRegistry, conceptRe
 }
 
 /**
- * Static, per-connector relationship availability. A function of the
- * connector's own `measurementAvailability`, its participants' registry
- * signals, any declared `historicalStates` overrides, and — for exactly one
- * distinction — `runtimePolicy`. Never of readingState. See file header.
+ * Static, per-connector relationship availability (question 1). A function
+ * of the connector's own `measurementAvailability`, its participants'
+ * registry signals, any declared `historicalStates`' own
+ * `measurementAvailability`, `runtimePolicy`, and the SELECTED LINEAGE's
+ * restriction (see `resolveLineageRestriction`) — never of readingState, and
+ * never of `conditionContext` (that is runtime evidence, question 2/3, a
+ * different axis entirely; see `computeDisposition`).
  *
- * FULLY_AVAILABLE / PARTIALLY_AVAILABLE are pure measurement facts: does this
- * product's capture modality support some or all of what the relationship
- * involves. When NOTHING is capturable, two different things can still be
- * true, and they read very differently to a user: the source material may
- * still be worth showing as attributed tradition (HERITAGE_ONLY — this is
- * exactly what `five-mountains-mutual-facing-fullness` is FOR: 太清神鑑
- * describes a fullness/mutual-facing rule this camera cannot verify, but the
- * connector's own `runtimePolicy: HERITAGE_PRESENTATION_ALLOWED` says show it
- * anyway, as tradition, never as "your face"), or there may be nothing
- * appropriate to surface at all right now (UNAVAILABLE_FROM_CAPTURE — a
- * RESEARCH_ONLY or contested connector with no capturable signal). That
- * second distinction is a policy question, not a measurement one, which is
- * why `runtimePolicy` enters here and only here.
+ * FULLY_AVAILABLE / PARTIALLY_AVAILABLE are pure measurement facts. When
+ * NOTHING is capturable, two different things can still be true: the source
+ * material may still be worth showing as attributed tradition (HERITAGE_ONLY
+ * — this is exactly what `five-mountains-mutual-facing-fullness` is FOR),
+ * or there may be nothing appropriate to surface at all right now
+ * (UNAVAILABLE_FROM_CAPTURE — a RESEARCH_ONLY or contested connector with no
+ * capturable signal). That split is a policy question, which is why
+ * `runtimePolicy` enters here and only for that one distinction. A
+ * HERITAGE_ONLY-restricted lineage forces the same ceiling regardless of the
+ * raw per-participant signal, because the interpretive content selected for
+ * this construct has itself been held back from full/connected presentation.
  */
-function classifyRelationshipAvailability(connector, context) {
+function classifyRelationshipAvailability(connector, context, lineageRestriction) {
   const signals = [connector.measurementAvailability];
   for (const participant of connector.participants) {
     signals.push(participantMeasurementSignal(participant, context));
@@ -160,31 +195,94 @@ function classifyRelationshipAvailability(connector, context) {
 
   const classes = new Set(signals.map(classifyMeasurement));
 
-  if (classes.size === 1 && classes.has("capturable")) return "FULLY_AVAILABLE";
-  if (classes.has("capturable")) return "PARTIALLY_AVAILABLE";
-  return connector.runtimePolicy === "HERITAGE_PRESENTATION_ALLOWED" ? "HERITAGE_ONLY" : "UNAVAILABLE_FROM_CAPTURE";
+  let base;
+  if (classes.size === 1 && classes.has("capturable")) base = "FULLY_AVAILABLE";
+  else if (classes.has("capturable")) base = "PARTIALLY_AVAILABLE";
+  else base = connector.runtimePolicy === "HERITAGE_PRESENTATION_ALLOWED" ? "HERITAGE_ONLY" : "UNAVAILABLE_FROM_CAPTURE";
+
+  if (lineageRestriction === "HERITAGE_ONLY" && base !== "UNAVAILABLE_FROM_CAPTURE") return "HERITAGE_ONLY";
+  return base;
 }
 
-/* ── condition AST evaluation (Stage 1's six node types only) ────────────── */
+/* ── source / lineage eligibility (a THIRD, independent gate: evidentiary standing) ─────── */
 
 /**
- * Evaluate a connector's (already-validated) conditionExpression.
- *
- * Returns `{ satisfied, resolved, reason }`. `resolved: false` means "cannot
- * safely say" — the caller must treat that as ineligible, never as a guess in
- * either direction. A STATE node resolves true only when its declared
- * historicalState's OWN measurementAvailability classifies as capturable;
- * this is the only place STATE can become true, and it is a static registry
- * fact, never an inference from readingState or from raw measurement — the
- * explicit binding the task requires simply does not exist for heritageQiSe
- * or shen (both UNMEASURABLE), so their STATE nodes can never resolve true.
+ * Item 4: which source citationStatus values are solid enough for a
+ * connector to become ordinary ACTIVE presentation. Deliberately conservative
+ * and reusing the EXISTING Stage 1 ladder verbatim (constants.js
+ * HERITAGE_CITATION_STATUSES) rather than inventing a new one.
+ * "work-recorded" (a work is identified but not edition-located) and
+ * "attribution-contradicted" fall short of this, on purpose.
  */
-export function evaluateConditionExpression(expr, connector) {
+const SOURCE_ELIGIBLE_FOR_ACTIVE = Object.freeze(["edition-recorded", "verified"]);
+
+/**
+ * "ELIGIBLE" — citation is solid; no additional ceiling from the source.
+ * "SOURCE_PANEL_CEILING" — a real, identified source, but not yet located
+ *   well enough for active presentation; may still appear in a source panel.
+ * "BLOCKED" — no usable source at all (source-required), or the received
+ *   attribution is actively contradicted by the inspected witness.
+ * "UNKNOWN_SOURCE" — connector.sourceId is not in the injected sourceRegistry.
+ */
+export function resolveSourceEligibility(connector, sourceRegistry) {
+  const source = sourceRegistry?.[connector.sourceId];
+  if (!source) return "UNKNOWN_SOURCE";
+  if (source.citationStatus === "source-required" || source.citationStatus === "attribution-contradicted") {
+    return "BLOCKED";
+  }
+  if (!SOURCE_ELIGIBLE_FOR_ACTIVE.includes(source.citationStatus)) return "SOURCE_PANEL_CEILING";
+  return "ELIGIBLE";
+}
+
+/**
+ * The SELECTED CANONICAL LINEAGE's own restriction — a property of which
+ * lineage the reading state has chosen for the primary construct, computed
+ * once per resolution and applied uniformly to every candidate connector for
+ * that construct (connectors reference a construct, not a specific lineage,
+ * in Stage 1's schema). "ABSTAIN" means the lineage itself declares
+ * `availability: "abstention"` or `terminationState: "abstain"` — nothing
+ * for this construct is promoted while that holds, matching the existing
+ * abstention semantics in reading-state.js/reflection.js exactly rather than
+ * inventing a parallel one.
+ */
+export function resolveLineageRestriction(lineageRecord) {
+  if (!lineageRecord) return "UNKNOWN";
+  if (lineageRecord.availability === "abstention" || lineageRecord.terminationState === "abstain") return "ABSTAIN";
+  if (lineageRecord.runtimeStatus === "RESEARCH_ONLY") return "RESEARCH_ONLY";
+  if (lineageRecord.runtimeStatus === "HERITAGE_ONLY") return "HERITAGE_ONLY";
+  return "NONE";
+}
+
+/* ── condition AST evaluation: runtime evidence ONLY, never measurement-capability ──────── */
+
+/**
+ * Evaluate a connector's (already schema/validator-checked) conditionExpression
+ * against explicitly injected runtime evidence. Returns
+ * `{ satisfied, resolved, reason }`; `resolved: false` means "cannot safely
+ * say" and the caller must treat that as ineligible, never as a guess in
+ * either direction.
+ *
+ * `conditionContext` shape (all optional; absence means "nothing known"):
+ * {
+ *   participants: { [participantId]: "PRESENT" | "ABSENT" | "UNKNOWN" },
+ *   states: { ["participantId:stateId"]: "SATISFIED" | "UNSATISFIED" | "UNKNOWN" },
+ * }
+ *
+ * This function reads NOTHING else — not `historicalState.measurementAvailability`
+ * (that answers "what kind of thing is this", not "does it currently hold"),
+ * not `readingState`, not the connector's own `measurementAvailability`. A
+ * STATE node additionally requires the referenced state to be DECLARED on
+ * the connector's own `historicalStates` — the connector defines the
+ * vocabulary, `conditionContext` supplies the runtime status.
+ */
+export function evaluateConditionExpression(expr, connector, conditionContext = null) {
   if (expr === null || expr === undefined) {
     return { satisfied: true, resolved: true, reason: "NO_CONDITION" };
   }
-  const participantIds = new Set((connector.participants || []).map((p) => p.participantId));
-  const statesById = new Map((connector.historicalStates || []).map((s) => [s.stateId, s]));
+  const declaredParticipants = new Set((connector.participants || []).map((p) => p.participantId));
+  const declaredStates = new Map((connector.historicalStates || []).map((s) => [s.stateId, s]));
+  const participantStatus = conditionContext?.participants || {};
+  const stateStatus = conditionContext?.states || {};
 
   const evaluate = (node) => {
     if (!node || typeof node !== "object") {
@@ -209,19 +307,33 @@ export function evaluateConditionExpression(expr, connector) {
         if (!r.resolved) return { satisfied: false, resolved: false, reason: "UNRESOLVED_OPERAND" };
         return { satisfied: !r.satisfied, resolved: true, reason: null };
       }
-      case "PRESENT":
-        return { satisfied: participantIds.has(node.participantId), resolved: true, reason: null };
-      case "ABSENT":
-        return { satisfied: !participantIds.has(node.participantId), resolved: true, reason: null };
-      case "STATE": {
-        const state = statesById.get(node.stateId);
-        if (!state || state.participantId !== node.participantId) {
-          return { satisfied: false, resolved: false, reason: "UNKNOWN_STATE" };
+      case "PRESENT": {
+        if (!declaredParticipants.has(node.participantId)) {
+          return { satisfied: false, resolved: false, reason: "UNDECLARED_PARTICIPANT" };
         }
-        const cls = classifyMeasurement(state.measurementAvailability);
-        if (cls === "capturable") return { satisfied: true, resolved: true, reason: null };
-        if (cls === "categorical") return { satisfied: false, resolved: true, reason: "STATE_CATEGORICALLY_UNMEASURABLE" };
-        return { satisfied: false, resolved: false, reason: "STATE_UNRESOLVED" };
+        const status = participantStatus[node.participantId];
+        if (status === "PRESENT") return { satisfied: true, resolved: true, reason: null };
+        if (status === "ABSENT") return { satisfied: false, resolved: true, reason: null };
+        return { satisfied: false, resolved: false, reason: "PARTICIPANT_STATUS_UNKNOWN" };
+      }
+      case "ABSENT": {
+        if (!declaredParticipants.has(node.participantId)) {
+          return { satisfied: false, resolved: false, reason: "UNDECLARED_PARTICIPANT" };
+        }
+        const status = participantStatus[node.participantId];
+        if (status === "ABSENT") return { satisfied: true, resolved: true, reason: null };
+        if (status === "PRESENT") return { satisfied: false, resolved: true, reason: null };
+        return { satisfied: false, resolved: false, reason: "PARTICIPANT_STATUS_UNKNOWN" };
+      }
+      case "STATE": {
+        const declared = declaredStates.get(node.stateId);
+        if (!declared || declared.participantId !== node.participantId) {
+          return { satisfied: false, resolved: false, reason: "UNDECLARED_STATE" };
+        }
+        const status = stateStatus[`${node.participantId}:${node.stateId}`];
+        if (status === "SATISFIED") return { satisfied: true, resolved: true, reason: null };
+        if (status === "UNSATISFIED") return { satisfied: false, resolved: true, reason: null };
+        return { satisfied: false, resolved: false, reason: "STATE_STATUS_UNKNOWN" };
       }
       default:
         return { satisfied: false, resolved: false, reason: "UNKNOWN_NODE_TYPE" };
@@ -231,31 +343,71 @@ export function evaluateConditionExpression(expr, connector) {
   return evaluate(expr);
 }
 
-/* ── negative-rule cross-check (data-driven, complements validator.js) ───── */
+/* ── negative-rule cross-check: canonical-reference normalization ────────────────────────── */
+
+/**
+ * Item 7: HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY uses conceptual names
+ * ("fiveForms", "fivePhases") that predate the connector graph's canonical
+ * IDs ("fiveElements", the "five-phases" relatedSystemId). This is the one
+ * finite normalization layer between them — it does not change what any rule
+ * MEANS, only what string a participant ref is compared against. Refs with no
+ * canonical graph counterpart ("faceShape", "measurementBinding") are left as
+ * literals on purpose: they describe things this graph has no node for (a
+ * MODERN classifier, a synthetic "no binding may exist" sentinel), so they
+ * correctly never match any real participant.
+ */
+const NEGATIVE_RULE_REF_ALIASES = Object.freeze({
+  fiveForms: "fiveElements",
+  fivePhases: "five-phases",
+});
+export const canonicalRef = (ref) => NEGATIVE_RULE_REF_ALIASES[ref] ?? ref;
+
+/**
+ * Rule types genuinely about whether two nodes may coexist in a connector at
+ * all — as opposed to FORBID_RUNTIME_BINDING, which bans a MODERN inference
+ * FROM a relationship, not the historical relationship's existence. See the
+ * doc comment on `negativeRuleViolations` below for why that distinction is
+ * load-bearing and not just a filter of convenience.
+ */
+const PAIRWISE_COEXISTENCE_RULE_TYPES = Object.freeze([
+  "FORBID_RELATIONSHIP_FAMILY",
+  "FORBID_NODE_MAPPING",
+  "TEXTUAL_ADJACENCY_ONLY",
+]);
 
 /**
  * `negativeRelationshipRegistry`-driven check: if a connector's participants
- * jointly cover both `fromRef` and `toRef` of an ACTIVE negative rule, it
- * violates that rule. This is generic and data-driven — it does not need to
- * know the specific rule IDs — and it complements (not replaces)
- * `checkNegativeRelationshipInvariants`, which additionally covers the
- * `historicalStates`-based shen-unmeasurable case that a pure participant-ref
- * pair cannot express.
+ * jointly cover both (canonicalised) `fromRef` and `toRef` of an ACTIVE rule
+ * of one of the three PAIRWISE_COEXISTENCE_RULE_TYPES, it violates that
+ * rule. FORBID_RUNTIME_BINDING rules are deliberately NOT matched this way:
+ * forbidding a MODERN runtime binding (e.g. "measured Qi Se may not classify
+ * Five Forms") is not the same claim as "no source-backed HISTORICAL
+ * connector may ever mention heritageQiSe and fiveElements together" —
+ * collapsing the two would risk banning a genuinely source-attested
+ * classical relationship merely because a modern inference from it is
+ * forbidden. The specific historical case Stage 1 actually needs blocked
+ * (heritageQiSe binding TO fiveElements as a classifier) is enforced
+ * separately and precisely by `checkNegativeRelationshipInvariants`, which
+ * this function complements rather than duplicates (it also covers the
+ * shen-unmeasurable rule, whose `toRef` — "measurementBinding" — is a
+ * sentinel with no participant counterpart and so can never be expressed as
+ * a pairwise ref match).
  */
-function negativeRuleViolations(connector, negativeRelationshipRegistry) {
+export function negativeRuleViolations(connector, negativeRelationshipRegistry) {
   const refs = new Set((connector.participants || []).map((p) =>
-    p.conceptId ?? p.constructId ?? p.constituentId ?? p.relatedSystemId ?? p.participantId));
+    canonicalRef(p.conceptId ?? p.constructId ?? p.constituentId ?? p.relatedSystemId ?? p.participantId)));
   const violated = [];
   for (const rule of Object.values(negativeRelationshipRegistry || {})) {
     if (rule.status !== "ACTIVE") continue;
-    if (refs.has(rule.fromRef) && refs.has(rule.toRef)) violated.push(rule.negativeRuleId);
+    if (!PAIRWISE_COEXISTENCE_RULE_TYPES.includes(rule.negativeRuleType)) continue;
+    if (refs.has(canonicalRef(rule.fromRef)) && refs.has(canonicalRef(rule.toRef))) violated.push(rule.negativeRuleId);
   }
   return violated;
 }
 
 /* ── connector -> trace entry (never mutates the source connector) ───────── */
 
-function toResolvedEntry(connector, { relationshipAvailability, conditionResolution, disposition, disagreementIds }) {
+function toResolvedEntry(connector, { relationshipAvailability, conditionResolution, disposition, disagreementIds, gateReasons }) {
   return Object.freeze({
     connectorId: connector.connectorId,
     relationshipType: connector.relationshipType,
@@ -276,6 +428,7 @@ function toResolvedEntry(connector, { relationshipAvailability, conditionResolut
     relationshipAvailability,
     conditionResolution,
     disposition,
+    gateReasons: gateReasons || [],
   });
 }
 
@@ -307,6 +460,11 @@ function abstainedResult(reasonCode, depthMode, occurrence) {
  * The pure Stage 2 resolver. Every registry is injected — there is no
  * fallback to a runtime default here on purpose (see file header); use
  * `resolveHeritageConnectionsWithDefaults` for that.
+ *
+ * `conditionContext` (see `evaluateConditionExpression`'s doc comment) and
+ * `sourceRegistry` (see `resolveSourceEligibility`) are both optional; their
+ * absence resolves conservatively (unresolved conditions, unknown sources),
+ * never permissively.
  */
 export function resolveHeritageConnections({
   heritageRegistry,
@@ -315,7 +473,9 @@ export function resolveHeritageConnections({
   disagreementRegistry,
   negativeRelationshipRegistry,
   compositionPolicies,
+  sourceRegistry,
   readingState,
+  conditionContext = null,
   rotationState = null,
   depthMode = "STANDARD",
   occurrence = 0,
@@ -334,16 +494,23 @@ export function resolveHeritageConnections({
   }
   const constructRecord = heritageRegistry[primaryConstruct];
 
-  // 3. resolve allowed lineage/source state.
+  // 3. resolve allowed lineage/source state. Documented fallback policy: the
+  // requested lineage if it exists on this construct; otherwise "primary" if
+  // present; otherwise the lexicographically-first declared lineage. Never a
+  // lineage keyed to a DIFFERENT construct, and never a silent merge of two
+  // lineages' data.
   const requestedLineage = readingState?.sourceLineage;
   const lineageKeys = Object.keys(constructRecord.lineages || {}).sort();
   const primaryLineage = requestedLineage && constructRecord.lineages?.[requestedLineage]
     ? requestedLineage
     : (constructRecord.lineages?.primary ? "primary" : (lineageKeys[0] || null));
+  const lineageRecord = primaryLineage ? constructRecord.lineages[primaryLineage] : null;
+  const lineageRestriction = resolveLineageRestriction(lineageRecord);
   trace.push({
     step: "resolvePrimaryLineage",
     outcome: primaryLineage === requestedLineage ? "requested" : "fell-back",
     primaryLineage,
+    lineageRestriction,
   });
 
   const context = { heritageRegistry, conceptRegistry, primaryConstruct, primaryLineage };
@@ -355,7 +522,7 @@ export function resolveHeritageConnections({
     .slice()
     .sort((a, b) => a.connectorId.localeCompare(b.connectorId));
 
-  const candidates = allConnectors.filter((connector) =>
+  const constructCandidates = allConnectors.filter((connector) =>
     (connector.participants || []).some((p) => {
       if (p.nodeType !== "CONSTRUCT") return false;
       const refId = p.constructId ?? p.participantId;
@@ -363,12 +530,37 @@ export function resolveHeritageConnections({
       return !p.lineageId || p.lineageId === primaryLineage;
     }));
 
+  // Item 6: concept-only connectors (no CONSTRUCT participant at all — e.g.
+  // shen-requires-form / form-requires-shen) have no construct to be a
+  // candidate FOR. Rather than an arbitrary transitive graph walk, they
+  // become candidates only when the caller EXPLICITLY anchors at least one of
+  // their heritage-concept participants as PRESENT via conditionContext —
+  // a bounded, one-pass, no-recursion opt-in. Without that anchor they are a
+  // deliberate resolver abstention: present in the graph, absent from daily
+  // resolution, exactly option C for the case nobody opts into option A.
+  const anchoredParticipants = conditionContext?.participants || {};
+  const conceptOnlyCandidates = allConnectors.filter((connector) => {
+    const participants = connector.participants || [];
+    const isConceptOnly = participants.length > 0 && participants.every((p) => p.nodeType !== "CONSTRUCT");
+    if (!isConceptOnly) return false;
+    return participants.some((p) => p.nodeType === "HERITAGE_CONCEPT" && anchoredParticipants[p.participantId] === "PRESENT");
+  });
+
+  const candidateIds = new Set();
+  const candidates = [];
+  for (const connector of [...constructCandidates, ...conceptOnlyCandidates]) {
+    if (candidateIds.has(connector.connectorId)) continue;
+    candidateIds.add(connector.connectorId);
+    candidates.push(connector);
+  }
+  candidates.sort((a, b) => a.connectorId.localeCompare(b.connectorId));
+
   const active = [];
   const unavailable = [];
   const sourcePanels = [];
 
   for (const connector of candidates) {
-    const relationshipAvailability = classifyRelationshipAvailability(connector, context);
+    const relationshipAvailability = classifyRelationshipAvailability(connector, context, lineageRestriction);
 
     // 5. reject any connector blocked by source/runtime policy or the
     // Stage 1 safety lock.
@@ -378,92 +570,111 @@ export function resolveHeritageConnections({
     const blockedByNegativeRule = negativeErrors.length > 0 || dataDrivenViolations.length > 0;
     const lockOk = connector.prohibitedForUserInference === true;
 
-    // 6-7. participant availability + bounded conditionExpression.
-    const conditionResolution = evaluateConditionExpression(connector.conditionExpression, connector);
+    // 6-7. participant/state runtime evidence + bounded conditionExpression.
+    const conditionResolution = evaluateConditionExpression(connector.conditionExpression, connector, conditionContext);
 
-    // 8. attach first-class disagreements (construct-level, plus any the
-    // connector explicitly references).
-    const disagreementIds = collectDisagreementIds(connector, primaryConstruct, disagreementRegistry);
+    // 8. attach first-class disagreements (CONSTRUCT/CONNECTOR/LINEAGE
+    // targets; see collectDisagreementIds).
+    const disagreementIds = collectDisagreementIds({
+      connector, primaryConstruct, primaryLineage, disagreementRegistry,
+    });
 
     if (blockedByNegativeRule || !lockOk) {
-      trace.push({
-        step: "negativeRuleGate",
-        connectorId: connector.connectorId,
-        outcome: "blocked",
-        reasons: [...negativeErrors, ...dataDrivenViolations, ...(lockOk ? [] : ["PROHIBITED_FOR_USER_INFERENCE_UNSET"])],
-      });
       unavailable.push(toResolvedEntry(connector, {
-        relationshipAvailability,
-        conditionResolution,
+        relationshipAvailability, conditionResolution, disagreementIds,
         disposition: "BLOCKED_NEGATIVE_RULE",
-        disagreementIds,
+        gateReasons: [...negativeErrors, ...dataDrivenViolations, ...(lockOk ? [] : ["PROHIBITED_FOR_USER_INFERENCE_UNSET"])],
       }));
       continue;
     }
 
     if (!conditionResolution.resolved || !conditionResolution.satisfied) {
       unavailable.push(toResolvedEntry(connector, {
-        relationshipAvailability,
-        conditionResolution,
+        relationshipAvailability, conditionResolution, disagreementIds,
         disposition: "CONDITION_UNMET",
-        disagreementIds,
+        gateReasons: [conditionResolution.reason].filter(Boolean),
       }));
       continue;
     }
 
-    if (connector.runtimePolicy === "SOURCE_PANEL_ONLY") {
+    // Item 4: source/lineage eligibility. This can veto an otherwise-eligible
+    // connector even when connector.runtimePolicy alone would have allowed
+    // active presentation.
+    const sourceEligibility = resolveSourceEligibility(connector, sourceRegistry);
+    if (sourceEligibility === "UNKNOWN_SOURCE") {
+      unavailable.push(toResolvedEntry(connector, {
+        relationshipAvailability, conditionResolution, disagreementIds,
+        disposition: "UNKNOWN_SOURCE", gateReasons: ["UNKNOWN_SOURCE"],
+      }));
+      continue;
+    }
+    if (sourceEligibility === "BLOCKED") {
+      unavailable.push(toResolvedEntry(connector, {
+        relationshipAvailability, conditionResolution, disagreementIds,
+        disposition: "SOURCE_INELIGIBLE", gateReasons: ["SOURCE_NOT_ELIGIBLE"],
+      }));
+      continue;
+    }
+    if (lineageRestriction === "ABSTAIN") {
+      unavailable.push(toResolvedEntry(connector, {
+        relationshipAvailability, conditionResolution, disagreementIds,
+        disposition: "LINEAGE_ABSTAINED", gateReasons: ["LINEAGE_ABSTAINED"],
+      }));
+      continue;
+    }
+
+    if (connector.runtimePolicy === "SOURCE_PANEL_ONLY" || sourceEligibility === "SOURCE_PANEL_CEILING") {
       sourcePanels.push(toResolvedEntry(connector, {
-        relationshipAvailability: "SOURCE_ONLY",
-        conditionResolution,
-        disposition: "SOURCE_PANEL",
-        disagreementIds,
+        relationshipAvailability: sourceEligibility === "SOURCE_PANEL_CEILING" ? relationshipAvailability : "SOURCE_ONLY",
+        conditionResolution, disagreementIds,
+        disposition: connector.runtimePolicy === "SOURCE_PANEL_ONLY" ? "SOURCE_PANEL" : "SOURCE_PANEL_CEILING",
+        gateReasons: sourceEligibility === "SOURCE_PANEL_CEILING" ? ["SOURCE_PANEL_CEILING"] : [],
       }));
       continue;
     }
 
     if (connector.runtimePolicy === "RESEARCH_ONLY") {
       unavailable.push(toResolvedEntry(connector, {
-        relationshipAvailability,
-        conditionResolution,
-        disposition: "RESEARCH_ONLY",
-        disagreementIds,
+        relationshipAvailability, conditionResolution, disagreementIds,
+        disposition: "RESEARCH_ONLY", gateReasons: ["RUNTIME_POLICY_RESEARCH_ONLY"],
       }));
       continue;
     }
 
-    // runtimePolicy === "HERITAGE_PRESENTATION_ALLOWED": classifyRelationshipAvailability
-    // never returns UNAVAILABLE_FROM_CAPTURE for this policy (see its doc
-    // comment), so every connector reaching here is presentable — as a fully
-    // connected reading, a partial one, or pure attributed tradition.
+    if (lineageRestriction === "RESEARCH_ONLY") {
+      unavailable.push(toResolvedEntry(connector, {
+        relationshipAvailability, conditionResolution, disagreementIds,
+        disposition: "LINEAGE_RESEARCH_ONLY", gateReasons: ["LINEAGE_RESEARCH_ONLY"],
+      }));
+      continue;
+    }
+
+    // runtimePolicy === "HERITAGE_PRESENTATION_ALLOWED", source eligible,
+    // lineage not restrictive beyond the HERITAGE_ONLY ceiling already folded
+    // into relationshipAvailability above.
     active.push(toResolvedEntry(connector, {
-      relationshipAvailability,
-      conditionResolution,
-      disposition: "ACTIVE",
-      disagreementIds,
+      relationshipAvailability, conditionResolution, disagreementIds,
+      disposition: "ACTIVE", gateReasons: [],
     }));
   }
 
-  // 8 (continued) / 9. construct-level disagreement panels, independent of
-  // which specific connectors are active — the disagreement is about the
-  // CONSTRUCT's historical record, not about any one presented relationship.
-  const disagreementPanels = Object.values(disagreementRegistry || {})
-    .filter((d) => d.target?.targetType === "CONSTRUCT" && d.target?.targetRef === primaryConstruct)
-    .slice()
-    .sort((a, b) => a.disagreementId.localeCompare(b.disagreementId))
+  // 9. construct/connector/lineage-level disagreement panels — see
+  // collectDisagreementIds for target-type support.
+  const allDisagreementIds = dedupeSortedIds(
+    [...active, ...unavailable, ...sourcePanels].flatMap((entry) => entry.disagreementIds),
+  );
+  const disagreementPanels = allDisagreementIds
+    .map((id) => disagreementRegistry?.[id])
+    .filter(Boolean)
     .map((d) => Object.freeze({ ...d, positions: d.positions || [] }));
 
-  // The rotation SEED deliberately excludes occurrence: `rotateDeterministically`
-  // already takes occurrence as its own walk parameter (mirroring
-  // reflection.js's stateKey-seeded-offset + coprime-stride-per-occurrence
-  // split). Folding occurrence into the seed string TOO would let the two
-  // effects cancel each other out on small arrays — exactly the degenerate
-  // case a first draft of this file shipped with, caught by the resolver's
-  // own "occurrence causes only approved deterministic variation" test.
+  // The rotation SEED deliberately excludes occurrence — see
+  // rotateDeterministically's doc comment.
   const rotationSeed = `heritageConstruct=${primaryConstruct}|sourceLineage=${primaryLineage}|depthMode=${resolvedDepthMode}`;
   const connectorSelectionKey = `${rotationSeed}|occurrence=${resolvedOccurrence}`;
 
-  // 10. optionally select eligible editorial juxtaposition. Depth-gated:
-  // a SUMMARY presentation never juxtaposes.
+  // 10. optionally select eligible editorial juxtaposition. Depth-gated: a
+  // SUMMARY presentation never juxtaposes.
   const editorialJuxtapositions = resolvedDepthMode === "SUMMARY"
     ? []
     : selectEditorialJuxtapositions({
@@ -487,15 +698,18 @@ export function resolveHeritageConnections({
   const rotated = rotateDeterministically(deprioritized, rotationSeed, resolvedOccurrence);
   const relationshipOrder = rotated.slice(0, cap === Infinity ? rotated.length : cap);
 
+  // Item 9: SOURCE_PANEL_ONLY material is withheld until SOURCE_DEEP.
+  const surfacedSourcePanels = resolvedDepthMode === "SOURCE_DEEP" ? sourcePanels : [];
+
   const wordingVariantIndices = {};
   const WORDING_MODULUS = 97; // no wording corpus exists yet; see file header.
-  for (const id of [...relationshipOrder, ...sourcePanels.map((e) => e.connectorId)]) {
+  for (const id of [...relationshipOrder, ...surfacedSourcePanels.map((e) => e.connectorId)]) {
     wordingVariantIndices[id] = seededIndex(`${connectorSelectionKey}|${id}|wording`, WORDING_MODULUS);
   }
 
   const componentSlots = [
     ...relationshipOrder.map((id) => ({ id, kind: "connector" })),
-    ...(resolvedDepthMode !== "SUMMARY" ? sourcePanels.map((e) => ({ id: e.connectorId, kind: "sourcePanel" })) : []),
+    ...surfacedSourcePanels.map((e) => ({ id: e.connectorId, kind: "sourcePanel" })),
     ...disagreementPanels.map((d) => ({ id: d.disagreementId, kind: "disagreement" })),
     ...editorialJuxtapositions.map((j) => ({ id: j.policyId, kind: "editorial" })),
   ];
@@ -519,7 +733,7 @@ export function resolveHeritageConnections({
     unavailableRelations: Object.freeze(unavailable),
     disagreementPanels: Object.freeze(disagreementPanels),
     editorialJuxtapositions: Object.freeze(editorialJuxtapositions),
-    sourcePanels: resolvedDepthMode === "SUMMARY" ? Object.freeze([]) : Object.freeze(sourcePanels),
+    sourcePanels: Object.freeze(surfacedSourcePanels),
     renderPlan: Object.freeze({
       relationshipOrder: Object.freeze(relationshipOrder),
       componentSlots: Object.freeze(componentSlots),
@@ -536,18 +750,31 @@ function dedupeSortedIds(ids) {
 }
 
 /**
- * Disagreements attached to a candidate connector: explicit
- * `connector.disagreementIds`, plus any registry disagreement whose target is
- * the primary construct itself (Stage 1's actual disagreement records target
- * CONSTRUCTs, not connectors — see docs/HERITAGE_VALIDATOR_FALSIFICATION.md).
- * Never harmonizes: every position on an OPEN/PARALLEL disagreement is kept.
+ * Item 8: disagreements attached to a candidate connector. Supports
+ * CONSTRUCT (targeting the primary construct), CONNECTOR (targeting this
+ * specific connectorId) and LINEAGE (targeting `${constructId}:${lineageId}`
+ * — a composite key, since a bare lineageId like "primary" is reused across
+ * constructs and would otherwise collide; this composite form is a Stage 2
+ * convention, since no LINEAGE-targeted disagreement exists yet in Stage 1
+ * data to have established one). Plus any the connector explicitly
+ * references via its own `disagreementIds`. Never harmonizes — every
+ * position on an OPEN/PARALLEL disagreement is kept, and no relevance is
+ * invented for a target type/ref this connector does not actually match.
  */
-function collectDisagreementIds(connector, primaryConstruct, disagreementRegistry) {
+function collectDisagreementIds({ connector, primaryConstruct, primaryLineage, disagreementRegistry }) {
   const explicit = connector.disagreementIds || [];
-  const constructLevel = Object.values(disagreementRegistry || {})
-    .filter((d) => d.target?.targetType === "CONSTRUCT" && d.target?.targetRef === primaryConstruct)
+  const lineageKey = `${primaryConstruct}:${primaryLineage}`;
+  const matched = Object.values(disagreementRegistry || {})
+    .filter((d) => {
+      const t = d.target;
+      if (!t) return false;
+      if (t.targetType === "CONSTRUCT") return t.targetRef === primaryConstruct;
+      if (t.targetType === "CONNECTOR") return t.targetRef === connector.connectorId;
+      if (t.targetType === "LINEAGE") return t.targetRef === lineageKey;
+      return false;
+    })
     .map((d) => d.disagreementId);
-  return dedupeSortedIds([...explicit, ...constructLevel]);
+  return dedupeSortedIds([...explicit, ...matched]);
 }
 
 /**
@@ -585,11 +812,12 @@ function selectEditorialJuxtapositions({ compositionPolicies, candidateIds, seed
 let cachedDefaults = null;
 export async function resolveHeritageConnectionsWithDefaults(args = {}) {
   if (!cachedDefaults) {
-    const [registryMod, negativeMod, policyMod, conceptMod] = await Promise.all([
+    const [registryMod, negativeMod, policyMod, conceptMod, provenanceMod] = await Promise.all([
       import("./registry.js"),
       import("./negative-relationships-registry.js"),
       import("./composition-policies-registry.js"),
       import("./concepts.js"),
+      import("../reading/provenance.js"),
     ]);
     cachedDefaults = {
       heritageRegistry: registryMod.HERITAGE_REGISTRY,
@@ -598,6 +826,7 @@ export async function resolveHeritageConnectionsWithDefaults(args = {}) {
       negativeRelationshipRegistry: negativeMod.HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY,
       compositionPolicies: policyMod.HERITAGE_COMPOSITION_POLICIES,
       conceptRegistry: conceptMod.HERITAGE_CONCEPT_REGISTRY,
+      sourceRegistry: provenanceMod.SOURCE_REGISTRY,
     };
   }
   return resolveHeritageConnections({ ...cachedDefaults, ...args });
