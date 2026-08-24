@@ -1659,6 +1659,90 @@ test("runtimeBindingContext: attemptedBindings not being an array at all is inva
   assert.equal(result.valid, false);
 });
 
+/*
+ * Item (Stage 2 review, round 6): "closed object" must mean an actual plain
+ * object with exactly the declared own keys — not merely "typeof === object,
+ * not an array, and Object.keys() happens to report two names". A class
+ * instance, a Date, or a Map can satisfy the looser check while carrying
+ * none of the semantics a plain { fromRef, toRef } record implies; and
+ * Object.keys() silently ignores symbol-keyed and non-enumerable own
+ * properties, so a hidden extra key could ride along undetected.
+ */
+test("runtimeBindingContext: a class instance standing in for the top-level context is invalid, even with the right own keys", () => {
+  class BindingContext {
+    constructor(bindings) {
+      this.attemptedBindings = bindings;
+    }
+  }
+  const instance = new BindingContext([{ fromRef: "heritageQiSe", toRef: "fiveElements" }]);
+  assert.deepEqual(Object.keys(instance), ["attemptedBindings"], "own keys alone would pass the OLD, looser check");
+  const result = validateRuntimeBindingContext(instance, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY);
+  assert.equal(result.valid, false);
+});
+
+test("runtimeBindingContext: a class instance standing in for a binding entry is invalid, even with the right own keys", () => {
+  class Binding {
+    constructor(fromRef, toRef) {
+      this.fromRef = fromRef;
+      this.toRef = toRef;
+    }
+  }
+  const entry = new Binding("heritageQiSe", "fiveElements");
+  assert.deepEqual(Object.keys(entry), ["fromRef", "toRef"], "own keys alone would pass the OLD, looser check");
+  const result = validateRuntimeBindingContext({ attemptedBindings: [entry] }, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY);
+  assert.equal(result.valid, false);
+});
+
+test("runtimeBindingContext: a Date or Map standing in for the context or an entry is invalid, even with matching own keys", () => {
+  const dateAsContext = validateRuntimeBindingContext(new Date(), HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY);
+  assert.equal(dateAsContext.valid, false);
+
+  const mapEntry = new Map();
+  mapEntry.fromRef = "heritageQiSe"; // own properties, NOT Map entries — deliberately, to isolate the prototype check
+  mapEntry.toRef = "fiveElements";
+  assert.deepEqual(Object.keys(mapEntry), ["fromRef", "toRef"], "own keys alone would pass the OLD, looser check");
+  const mapAsEntry = validateRuntimeBindingContext({ attemptedBindings: [mapEntry] }, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY);
+  assert.equal(mapAsEntry.valid, false);
+});
+
+test("runtimeBindingContext: a binding entry with an extra Symbol-keyed own property is invalid", () => {
+  const entry = { fromRef: "heritageQiSe", toRef: "fiveElements" };
+  entry[Symbol("hidden")] = "sneaky";
+  assert.deepEqual(Object.keys(entry), ["fromRef", "toRef"], "Object.keys() ignores the symbol key — the OLD check would miss it");
+  const result = validateRuntimeBindingContext({ attemptedBindings: [entry] }, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY);
+  assert.equal(result.valid, false);
+});
+
+test("runtimeBindingContext: a binding entry with an extra non-enumerable own property is invalid", () => {
+  const entry = { fromRef: "heritageQiSe", toRef: "fiveElements" };
+  Object.defineProperty(entry, "hidden", { value: "sneaky", enumerable: false });
+  assert.deepEqual(Object.keys(entry), ["fromRef", "toRef"], "Object.keys() ignores non-enumerable own properties — the OLD check would miss it");
+  const result = validateRuntimeBindingContext({ attemptedBindings: [entry] }, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY);
+  assert.equal(result.valid, false);
+});
+
+test("runtimeBindingContext: a top-level context with an extra Symbol-keyed own property is invalid", () => {
+  const context = { attemptedBindings: [] };
+  context[Symbol("hidden")] = "sneaky";
+  assert.deepEqual(Object.keys(context), ["attemptedBindings"], "Object.keys() ignores the symbol key — the OLD check would miss it");
+  const result = validateRuntimeBindingContext(context, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY);
+  assert.equal(result.valid, false);
+});
+
+// Paired positive control (Verification Protocol item 3): the plain-object
+// check must not overreach into rejecting a genuinely plain, merely
+// null-prototype record — Object.create(null) is deliberately still "plain".
+test("runtimeBindingContext: a null-prototype record (Object.create(null)) is still accepted as plain", () => {
+  const entry = Object.create(null);
+  entry.fromRef = "heritageQiSe";
+  entry.toRef = "fiveElements";
+  const context = Object.create(null);
+  context.attemptedBindings = [entry];
+  const result = validateRuntimeBindingContext(context, HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY);
+  assert.equal(result.valid, true);
+  assert.ok(result.attemptedPairs.has("heritageQiSe->fiveElements"));
+});
+
 // 10. one malformed entry among valid entries => entire context invalid.
 test("runtimeBindingContext: one malformed entry among otherwise well-formed ones invalidates the ENTIRE context, not just that entry", () => {
   const result = validateRuntimeBindingContext(

@@ -562,18 +562,54 @@ function allowedBindingPairs(negativeRelationshipRegistry) {
 const isNonEmptyTrimmedString = (value) => typeof value === "string" && value.trim().length > 0;
 
 /**
+ * Item (Stage 2 review, round 6): "closed object" must mean exactly that —
+ * a `Date`, a `Map`, a class instance, a boxed primitive, or any object with
+ * a custom prototype can satisfy `typeof value === "object" &&
+ * !Array.isArray(value)` while carrying none of the semantics a plain
+ * `{ fromRef, toRef }` record implies (a `Date`'s own keys are irrelevant
+ * internal slots; a class instance can define `fromRef`/`toRef` as getters
+ * that read something else on every access). Only a genuine plain object —
+ * `Object.prototype` on its chain, or no prototype at all (an
+ * `Object.create(null)` record, deliberately still accepted as "plain") —
+ * qualifies.
+ */
+function isPlainRecord(value) {
+  if (value === null || typeof value !== "object") return false;
+  if (Array.isArray(value)) return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+/**
+ * Item (Stage 2 review, round 6): `Object.keys()` silently ignores
+ * symbol-keyed and non-enumerable own properties, so a "closed object" check
+ * built on it is not actually closed — an entry could carry a hidden extra
+ * key alongside `fromRef`/`toRef` and still read as exactly two keys.
+ * `Reflect.ownKeys()` returns every own property key regardless of
+ * enumerability or symbol-ness, so an object closed under this check is
+ * closed in fact, not merely under casual enumeration.
+ */
+function hasExactOwnKeys(value, expectedKeys) {
+  const actual = Reflect.ownKeys(value);
+  if (actual.length !== expectedKeys.length) return false;
+  return expectedKeys.every((key) => actual.includes(key));
+}
+
+/**
  * Item 2/3 (Stage 2 review, round 5): validate `runtimeBindingContext` ONCE,
  * as a single closed-shape, closed-vocabulary contract — not per connector.
  * A genuinely absent context (`null`/`undefined`) is valid and means "no
  * runtime binding operation was requested". A well-formed
  * `{ attemptedBindings: [] }` is valid and means "no attempt". Anything else
- * must be EXACTLY `{ attemptedBindings: [{ fromRef, toRef }, ...] }` — no
- * extra top-level properties, no extra properties per entry, no non-string
- * or blank refs, and every canonicalised pair must be one of the finite
- * pairs `allowedBindingPairs` derives from the registry. ONE malformed or
- * unrecognised entry invalidates the WHOLE context — nothing is silently
- * stripped or partially honoured, per the caller having crossed a
- * governance-boundary contract rather than made an ordinary input mistake.
+ * must be EXACTLY `{ attemptedBindings: [{ fromRef, toRef }, ...] }` — a
+ * PLAIN object (`isPlainRecord`) with EXACTLY those own keys
+ * (`hasExactOwnKeys`, symbol-keyed and non-enumerable included), no extra
+ * properties per entry, no non-string or blank refs, and every canonicalised
+ * pair must be one of the finite pairs `allowedBindingPairs` derives from
+ * the registry. ONE malformed or unrecognised entry invalidates the WHOLE
+ * context — nothing is silently stripped or partially honoured, per the
+ * caller having crossed a governance-boundary contract rather than made an
+ * ordinary input mistake.
  *
  * Returns `{ valid: boolean, attemptedPairs: Set<string> }`; `attemptedPairs`
  * is always empty when `valid` is false.
@@ -582,11 +618,7 @@ export function validateRuntimeBindingContext(runtimeBindingContext, negativeRel
   if (runtimeBindingContext === null || runtimeBindingContext === undefined) {
     return { valid: true, attemptedPairs: new Set() };
   }
-  if (typeof runtimeBindingContext !== "object" || Array.isArray(runtimeBindingContext)) {
-    return { valid: false, attemptedPairs: new Set() };
-  }
-  const topLevelKeys = Object.keys(runtimeBindingContext);
-  if (topLevelKeys.length !== 1 || topLevelKeys[0] !== "attemptedBindings") {
+  if (!isPlainRecord(runtimeBindingContext) || !hasExactOwnKeys(runtimeBindingContext, ["attemptedBindings"])) {
     return { valid: false, attemptedPairs: new Set() };
   }
   const rawBindings = runtimeBindingContext.attemptedBindings;
@@ -597,11 +629,7 @@ export function validateRuntimeBindingContext(runtimeBindingContext, negativeRel
   const recognisedPairs = allowedBindingPairs(negativeRelationshipRegistry);
   const attemptedPairs = new Set();
   for (const entry of rawBindings) {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-      return { valid: false, attemptedPairs: new Set() };
-    }
-    const entryKeys = Object.keys(entry);
-    if (entryKeys.length !== 2 || !entryKeys.includes("fromRef") || !entryKeys.includes("toRef")) {
+    if (!isPlainRecord(entry) || !hasExactOwnKeys(entry, ["fromRef", "toRef"])) {
       return { valid: false, attemptedPairs: new Set() };
     }
     if (!isNonEmptyTrimmedString(entry.fromRef) || !isNonEmptyTrimmedString(entry.toRef)) {
