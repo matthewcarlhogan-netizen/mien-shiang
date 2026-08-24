@@ -50,6 +50,38 @@ dlg.addEventListener("cancel", (e) => e.preventDefault());
 
 // -------------------------------------------------------------------- pick --
 
+/**
+ * Move the three-step rail. Photo (1) → Read (2) → Result (3).
+ *
+ * The flow was previously unsignposted: after choosing a photo nothing
+ * indicated that a second tap was needed. The rail says where the user is.
+ */
+function setStep(n) {
+  const items = document.querySelectorAll("#steps .step");
+  items.forEach((li, i) => {
+    const idx = i + 1;
+    li.classList.toggle("is-current", idx === n);
+    li.classList.toggle("is-done", idx < n);
+    if (idx === n) li.setAttribute("aria-current", "step");
+    else li.removeAttribute("aria-current");
+  });
+}
+
+/**
+ * Promote "Read this photo" to the primary action and demote the picker.
+ *
+ * Reducing the number of AMBIGUOUS decisions matters more than reducing the
+ * number of taps: with both buttons live, the one still styled as primary was
+ * the one that discards the photo just chosen.
+ */
+function armReadAction() {
+  const go = $("go"), pick = $("pick");
+  go.hidden = false;
+  go.classList.remove("ghost");
+  pick.classList.add("ghost");
+  pick.textContent = "Choose a different photo";
+}
+
 $("pick").addEventListener("click", () => $("file").click());
 
 $("file").addEventListener("change", (e) => {
@@ -65,7 +97,8 @@ $("file").addEventListener("change", (e) => {
 
   $("plate").innerHTML =
     `<div class="frame"><img id="shot" src="${objectUrl}" alt="" /></div>`;
-  $("go").hidden = false;
+  armReadAction();
+  setStep(2);
   $("out").innerHTML = "";
 });
 
@@ -194,6 +227,7 @@ function render(r) {
   wireReportControl();
   wireShare(r);
   wireShareGate(r);
+  setStep(3);
 }
 
 function wireResultScreens() {
@@ -227,6 +261,7 @@ function wireResultScreens() {
     document.body.classList.remove("has-results");
     activeResultScreen = "overview";
     $("out").innerHTML = "";
+    setStep(2); // the plate still holds the photo just read, not the empty state
     window.scrollTo({ top: 0, behavior: "smooth" });
   });
   select(activeResultScreen, { scroll: false });
