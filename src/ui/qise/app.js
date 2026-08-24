@@ -48,7 +48,7 @@ import { interpretReading, readingConfidence, axesOf, planSegment, BASELINE_VERS
 import { passageFor } from "../../qise/passages.js";
 import { reflectionMode } from "../../qise/reading-flags.js";
 import { reflectionFor } from "../../qise/reading-pipeline.js";
-import { readingTiers } from "../../qise/reading-tiers.js";
+import { readingTiersWithHeritage } from "../../qise/heritage-connections.js";
 import { openStore } from "../../qise/store.js";
 import { readingScreenModel, historyColumnModel } from "./screens.js";
 import { SHARE_CADENCES, shareReadings } from "./share.js";
@@ -1064,7 +1064,21 @@ function renderReflection(reading, history) {
   }
 
   const reflection = reflectionFor(reading, history);
-  const tiers = reflection && readingTiers(reflection);
+  /*
+   * Stage 3: heritage-connector material rides alongside tier2/tier3 as
+   * `.connectors` (see src/qise/heritage-connections.js). Gates fail closed
+   * on anything other than an explicit `true` — `captureQualityPassed` is
+   * honestly `true` here because `reading` is an already-completed, stored
+   * capture (it could not exist if the capture-quality gates in
+   * src/qise/gates.js had not passed). `safetyPassed` is deliberately left
+   * unset: the Qi Se tracker has no safety-referral gate of its own yet
+   * (unlike the legacy Module A/B malar gate), so there is nothing true to
+   * assert, and an unasserted gate must suppress rather than silently pass.
+   * Wire a real safety signal here if/when one is built for Qi Se.
+   */
+  const tiers = reflection && readingTiersWithHeritage(reflection, {
+    captureQualityPassed: Boolean(reading),
+  });
   if (!tiers) {
     for (const node of [todayNode, storyNode, compareNode]) if (node) node.hidden = true;
     whyTab.hidden = true;

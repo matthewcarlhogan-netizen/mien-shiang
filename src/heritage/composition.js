@@ -1,50 +1,105 @@
 /*
  * Stage 3: the sole product-facing entry point into the heritage connector
- * graph. UI and Reflection Engine code must call this — never
- * `resolveHeritageConnections` directly — so gate precedence and the
+ * graph. UI and Reflection Engine code must call `composeHeritageForReading`
+ * — never `resolveHeritageConnections` directly, and never
+ * `composeHeritageConnectionsWithRegistries` (the test/internal seam below)
+ * — so gate precedence, canonical-registry ownership, and the
  * ACTIVE / SOURCE-PANEL / DISAGREEMENT / EDITORIAL / ABSTENTION split are
- * enforced in exactly one place, rather than re-decided ad hoc at every call
- * site.
+ * enforced in exactly one place.
  *
- * ── WHY GATES ARE CHECKED HERE, NOT INSIDE resolveHeritageConnections ──────
- * Stage 2's resolver deliberately never reads `readingState.availability`
- * (see resolver.js's file header) because heritage material is independent
- * of whether today's Qi Se measurement succeeded
- * (READING_EXPERIENCE_CONTRACT.md §13 — a rotated heritage passage is not a
- * claim about today's capture). "Gate suppression" here is a different,
- * upstream question — did the capture even produce a usable frame, and did
- * any safety gate fire — and it belongs at the boundary, before the resolver
- * is invoked at all, per `docs/PRODUCT_DESIGN_V2.md`'s documented
- * `captureQualityGate -> safetyGate -> measurementLayer -> heritageLayer`
- * precedence: any gate firing suppresses everything downstream, including
- * heritage content. Folding this into the resolver would reopen the frozen
- * Stage 2 contract; checking it here, before the resolver is ever called,
- * does not.
+ * ── WHY GATES FAIL CLOSED ON "UNKNOWN", NOT JUST ON "FALSE" ─────────────────
+ * A caller that has never been wired to real gate state and one that has
+ * been wired and told "the gate failed" must not be treated the same as a
+ * caller that has been wired and told "the gate passed". `captureQualityPassed`/
+ * `safetyPassed` are read through `gateStatus()`, which recognises exactly the
+ * boolean `true` as PASSED — `false` is FAILED, and anything else (`undefined`,
+ * `null`, a string, an accidental `0`) is UNKNOWN. Both FAILED and UNKNOWN
+ * suppress; only literal `true` proceeds. This is what stops the historically
+ * easy mistake of a default parameter silently authorising output the moment
+ * nobody has gotten around to wiring the real gate yet (see
+ * docs/PRODUCT_DESIGN_V2.md's `captureQualityGate -> safetyGate ->
+ * measurementLayer -> heritageLayer` precedence: "any gate firing suppresses
+ * everything downstream" — an unwired gate has not been proven not to have
+ * fired).
  *
- * ── WHY THE INPUT IS THIS NARROW ────────────────────────────────────────────
+ * ── WHY GATE SUPPRESSION IS NOT A STAGE 2 ABSTENTION ────────────────────────
+ * `suppressed`/`suppressionReason` and `abstained`/`abstentionReasonCode` are
+ * two different axes and must never be conflated. `suppressed` means this
+ * module refused to call the resolver at all — an upstream fact, decided here,
+ * before Stage 2 is ever reached. `abstained` is the resolver's OWN verdict
+ * (e.g. `UNKNOWN_HERITAGE_CONSTRUCT`, `INVALID_RUNTIME_BINDING_CONTEXT`) and
+ * is only ever `true` when the resolver actually ran and chose to abstain. A
+ * suppressed result therefore always carries `abstained: false,
+ * abstentionReasonCode: null` — there is no Stage 2 verdict to report, because
+ * Stage 2 was never asked.
+ *
+ * ── WHY CANONICAL REGISTRIES ARE BOUND HERE, NOT INJECTED ───────────────────
+ * `composeHeritageForReading` accepts only the finite runtime contract listed
+ * in `RUNTIME_CONTRACT_KEYS` — no registry of any kind. `CANONICAL_REGISTRIES`
+ * is a plain static import bound once, at module load, and is what every
+ * production call resolves against; a caller cannot substitute a different
+ * registry, accidentally or otherwise; passing anything outside the allowed
+ * key set throws rather than being silently ignored. Registry injection
+ * survives only as `composeHeritageConnectionsWithRegistries`, an explicit,
+ * separately named seam for tests (and this module's own internals) that
+ * need a synthetic universe — product code must not call it.
+ *
+ * ── WHY THE FINITE CONTRACT IS THIS NARROW ──────────────────────────────────
  * `heritageConstruct`/`sourceLineage` are the resolver's own declared
  * dependency surface (`RESOLVER_DEPENDS_ON` in resolver.js). This module
- * reconstructs a fresh, minimal `readingState` from exactly those two
- * fields — it never forwards a caller's full interpreted state, compass,
- * history or self-report, so modern Qi Se measurement cannot leak into the
- * historical graph as a generic predicate bag. There is deliberately no
- * parameter here that would accept one.
+ * reconstructs a fresh `readingState` from exactly those two fields — it
+ * never forwards a caller's full interpreted state, compass, history or
+ * self-report, so modern Qi Se measurement cannot leak into the historical
+ * graph as a generic predicate bag.
  *
  * ── WHAT THIS MODULE DOES NOT DO ────────────────────────────────────────────
  * It produces no prose (Stage 2's constraint, inherited unchanged) and no
- * second selection/rotation mechanism — the "one bounded Tier 2 pick" is
- * always `renderPlan.relationshipOrder[0]`, the resolver's own deterministic
- * rotation, never a value computed here. It does not persist anything; every
- * field is recomputed from the injected registries and the caller's
- * explicit inputs on every call.
+ * second selection/rotation mechanism — see src/qise/heritage-connections.js,
+ * which is the ONLY caller of this module from product code, for how
+ * `occurrence` is shared with reflection.js's own rotation rather than driven
+ * independently. It does not persist anything; every field is recomputed on
+ * every call.
  */
 
 import { resolveHeritageConnections, DEPTH_MODES } from "./resolver.js";
+import {
+  HERITAGE_REGISTRY,
+  HERITAGE_CONNECTOR_REGISTRY,
+  HERITAGE_DISAGREEMENT_REGISTRY,
+} from "./registry.js";
+import { HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY } from "./negative-relationships-registry.js";
+import { HERITAGE_COMPOSITION_POLICIES } from "./composition-policies-registry.js";
+import { HERITAGE_CONCEPT_REGISTRY } from "./concepts.js";
+import { SOURCE_REGISTRY } from "../reading/provenance.js";
 
 export const SUPPRESSION_REASONS = Object.freeze([
   "CAPTURE_QUALITY_GATE_FAILED",
+  "CAPTURE_QUALITY_GATE_UNKNOWN",
   "SAFETY_GATE_FAILED",
+  "SAFETY_GATE_UNKNOWN",
 ]);
+
+/*
+ * Bound once, at module load, from the real Stage 1 registries. This is the
+ * ONLY registry set `composeHeritageForReading` will ever resolve against —
+ * see the file header for why that matters.
+ */
+const CANONICAL_REGISTRIES = Object.freeze({
+  heritageRegistry: HERITAGE_REGISTRY,
+  conceptRegistry: HERITAGE_CONCEPT_REGISTRY,
+  connectorRegistry: HERITAGE_CONNECTOR_REGISTRY,
+  disagreementRegistry: HERITAGE_DISAGREEMENT_REGISTRY,
+  negativeRelationshipRegistry: HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY,
+  compositionPolicies: HERITAGE_COMPOSITION_POLICIES,
+  sourceRegistry: SOURCE_REGISTRY,
+});
+
+/** Exactly `true` passes; `false` fails; anything else is unknown. */
+function gateStatus(value) {
+  if (value === true) return "PASSED";
+  if (value === false) return "FAILED";
+  return "UNKNOWN";
+}
 
 function resolveDepthMode(depthMode) {
   return DEPTH_MODES.includes(depthMode) ? depthMode : "STANDARD";
@@ -58,8 +113,9 @@ function suppressedResult(reason, depthMode, occurrence) {
   return Object.freeze({
     suppressed: true,
     suppressionReason: reason,
-    abstained: true,
-    abstentionReasonCode: reason,
+    // A suppressed result never carries a Stage 2 verdict — see file header.
+    abstained: false,
+    abstentionReasonCode: null,
     primaryConstruct: null,
     primaryLineage: null,
     // Category A — active historical relationships.
@@ -97,17 +153,19 @@ function toEditorial(j) {
 }
 
 /*
- * E — abstentions/suppressions. `gateReasons` is preserved verbatim from the
- * resolver so distinct reasons (e.g. PARTICIPANT_ABSENT vs
- * PARTICIPANT_UNKNOWN) remain distinguishable — collapsing them here would
- * repeat item 23/38's mistake of merging two different "why not" reasons
- * into one.
+ * E — abstentions/suppressions. `gateReasons` and `prohibitedForUserInference`
+ * are preserved verbatim from the resolver: the frozen Stage 2 contract
+ * requires `prohibitedForUserInference` to stay true on every surfaced
+ * connector entry, including the ones parked here as unavailable, and
+ * distinct gate reasons (e.g. PARTICIPANT_ABSENT vs PARTICIPANT_UNKNOWN) must
+ * stay distinguishable rather than collapsed.
  */
 function toAbstention(entry) {
   return Object.freeze({
     connectorId: entry.connectorId,
     disposition: entry.disposition,
     relationshipAvailability: entry.relationshipAvailability,
+    prohibitedForUserInference: entry.prohibitedForUserInference,
     gateReasons: entry.gateReasons,
   });
 }
@@ -136,20 +194,13 @@ function mapResolverResult(result, depthMode, occurrence) {
 }
 
 /**
- * The pure Stage 3 boundary. Every registry `resolveHeritageConnections`
- * needs is injected here too (see that function's own header) — this module
- * adds gate precedence and output typing on top, nothing else.
- *
- * `captureQualityPassed`/`safetyPassed` default to `true` so existing tests
- * and callers that predate any real gate wiring keep working unchanged; a
- * caller that actually has gate state must pass it explicitly. Either gate
- * being anything other than exactly `true` suppresses the ENTIRE
- * resolution — the resolver is never invoked, so no registry content of any
- * kind (not even an editorial juxtaposition) can leak through a fired gate.
+ * The shared implementation: gate precedence, then the resolver, then output
+ * typing. Neither exported function below adds behaviour beyond this — they
+ * differ only in where their registries come from.
  */
-export function composeHeritageForReading({
-  captureQualityPassed = true,
-  safetyPassed = true,
+function composeHeritageConnectionsInternal({
+  captureQualityPassed,
+  safetyPassed,
   heritageConstruct,
   sourceLineage,
   depthMode = "STANDARD",
@@ -165,11 +216,19 @@ export function composeHeritageForReading({
   compositionPolicies,
   sourceRegistry,
 } = {}) {
-  if (captureQualityPassed !== true) {
-    return suppressedResult("CAPTURE_QUALITY_GATE_FAILED", depthMode, occurrence);
+  const captureStatus = gateStatus(captureQualityPassed);
+  if (captureStatus !== "PASSED") {
+    return suppressedResult(
+      captureStatus === "FAILED" ? "CAPTURE_QUALITY_GATE_FAILED" : "CAPTURE_QUALITY_GATE_UNKNOWN",
+      depthMode, occurrence,
+    );
   }
-  if (safetyPassed !== true) {
-    return suppressedResult("SAFETY_GATE_FAILED", depthMode, occurrence);
+  const safetyStatus = gateStatus(safetyPassed);
+  if (safetyStatus !== "PASSED") {
+    return suppressedResult(
+      safetyStatus === "FAILED" ? "SAFETY_GATE_FAILED" : "SAFETY_GATE_UNKNOWN",
+      depthMode, occurrence,
+    );
   }
 
   const result = resolveHeritageConnections({
@@ -193,65 +252,49 @@ export function composeHeritageForReading({
   return mapResolverResult(result, depthMode, occurrence);
 }
 
-let cachedDefaultRegistries = null;
-async function loadDefaultRegistries() {
-  if (!cachedDefaultRegistries) {
-    const [registryMod, negativeMod, policyMod, conceptMod, provenanceMod] = await Promise.all([
-      import("./registry.js"),
-      import("./negative-relationships-registry.js"),
-      import("./composition-policies-registry.js"),
-      import("./concepts.js"),
-      import("../reading/provenance.js"),
-    ]);
-    cachedDefaultRegistries = {
-      heritageRegistry: registryMod.HERITAGE_REGISTRY,
-      connectorRegistry: registryMod.HERITAGE_CONNECTOR_REGISTRY,
-      disagreementRegistry: registryMod.HERITAGE_DISAGREEMENT_REGISTRY,
-      negativeRelationshipRegistry: negativeMod.HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY,
-      compositionPolicies: policyMod.HERITAGE_COMPOSITION_POLICIES,
-      conceptRegistry: conceptMod.HERITAGE_CONCEPT_REGISTRY,
-      sourceRegistry: provenanceMod.SOURCE_REGISTRY,
-    };
-  }
-  return cachedDefaultRegistries;
+/**
+ * TEST / INTERNAL DEPENDENCY-INJECTION SEAM.
+ *
+ * Product code must call `composeHeritageForReading` instead. This function
+ * exists so tests (and nothing else) can exercise the composition boundary
+ * against a synthetic or fixture registry set without touching the real
+ * heritage graph. Gate precedence is identical — this is not a way around
+ * fail-closed gating, only a way around which registries are consulted.
+ */
+export function composeHeritageConnectionsWithRegistries(input = {}) {
+  return composeHeritageConnectionsInternal(input);
 }
 
+const RUNTIME_CONTRACT_KEYS = Object.freeze([
+  "captureQualityPassed",
+  "safetyPassed",
+  "heritageConstruct",
+  "sourceLineage",
+  "depthMode",
+  "occurrence",
+  "conditionContext",
+  "runtimeBindingContext",
+  "rotationState",
+]);
+
 /**
- * Thin production wrapper: real registries, identical gate precedence and
- * output shape. Mirrors `resolveHeritageConnectionsWithDefaults`
- * (resolver.js) — the pure function above never imports these itself, same
- * reasoning as that file's header. Gates are still checked FIRST, before the
- * registries are even loaded, so a fired gate costs nothing and leaks
- * nothing.
+ * THE product-facing Stage 3 entry point. Accepts only the finite runtime
+ * contract in `RUNTIME_CONTRACT_KEYS` — no registry of any kind. Canonical
+ * registries are bound internally (`CANONICAL_REGISTRIES`, above) and cannot
+ * be substituted: passing any other key throws immediately, rather than
+ * being silently accepted and ignored.
  */
-export async function composeHeritageForReadingWithDefaults({
-  captureQualityPassed = true,
-  safetyPassed = true,
-  heritageConstruct,
-  sourceLineage,
-  depthMode = "STANDARD",
-  occurrence = 0,
-  conditionContext = null,
-  runtimeBindingContext = null,
-  rotationState = null,
-} = {}) {
-  if (captureQualityPassed !== true) {
-    return suppressedResult("CAPTURE_QUALITY_GATE_FAILED", depthMode, occurrence);
+export function composeHeritageForReading(runtimeContract = {}) {
+  const unexpected = Object.keys(runtimeContract).filter(
+    (key) => !RUNTIME_CONTRACT_KEYS.includes(key),
+  );
+  if (unexpected.length > 0) {
+    throw new TypeError(
+      "composeHeritageForReading accepts only the finite runtime contract "
+      + `(${RUNTIME_CONTRACT_KEYS.join(", ")}); unexpected field(s): ${unexpected.join(", ")}. `
+      + "Canonical registries are bound internally and cannot be injected here — "
+      + "use composeHeritageConnectionsWithRegistries in tests instead.",
+    );
   }
-  if (safetyPassed !== true) {
-    return suppressedResult("SAFETY_GATE_FAILED", depthMode, occurrence);
-  }
-
-  const registries = await loadDefaultRegistries();
-  const result = resolveHeritageConnections({
-    ...registries,
-    readingState: { heritageConstruct, sourceLineage },
-    conditionContext,
-    runtimeBindingContext,
-    rotationState,
-    depthMode,
-    occurrence,
-  });
-
-  return mapResolverResult(result, depthMode, occurrence);
+  return composeHeritageConnectionsInternal({ ...runtimeContract, ...CANONICAL_REGISTRIES });
 }

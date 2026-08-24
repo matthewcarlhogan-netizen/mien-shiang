@@ -16,7 +16,6 @@
 
 import { LAYERS, heritageMaterialFor } from "./reflection.js";
 import { READING_AFFECTING, NON_READING_AFFECTING } from "./reading-state.js";
-import { composeHeritageForReading } from "../heritage/composition.js";
 
 const textsFor = (composed, ids) => composed.parts
   .filter((p) => ids.includes(p.id)).map((p) => p.text);
@@ -78,80 +77,6 @@ export function tierThree(state, composed) {
     provenance: composed.provenance,
     availability: state.availability,
   };
-}
-
-/*
- * Stage 3 — heritage connector material, additive to the frozen Tier
- * functions above.
- *
- * These are NEW exports, not changes to `tierOne`/`tierTwo`/`tierThree`/
- * `readingTiers`: those four are pinned by tests/qise/reading-tiers.test.js
- * and stay exactly as Stage 2 left them. `state` is read the same way the
- * existing tier functions already read it — two named fields, never
- * traversed — so this is not a new kind of dependency on the interpreted
- * state, just one more caller of the same discipline.
- *
- * `compose` carries whatever the caller has for gate flags
- * (`captureQualityPassed`/`safetyPassed`), the injected registries (or none,
- * for `composeHeritageForReadingWithDefaults` callers that resolve their own),
- * `conditionContext`, `runtimeBindingContext` and `rotationState`. `depthMode`
- * is fixed per tier below and cannot be overridden through `compose` — that is
- * what keeps SOURCE_PANEL_CEILING material out of Tier 2 (requirement 3/6)
- * and keeps Tier 1 free of connector architecture entirely (tierOne above
- * never imports this module at all).
- */
-
-/**
- * Tier 2 — at most ONE bounded heritage composition, from the resolver's own
- * deterministic top pick (`renderPlan.relationshipOrder[0]`). Never a second,
- * independent selection mechanism (Stage 3 requirement 4).
- */
-export function tierTwoHeritageConnections(state, compose = {}) {
-  const result = composeHeritageForReading({
-    ...compose,
-    heritageConstruct: state.heritageConstruct,
-    sourceLineage: state.sourceLineage,
-    depthMode: "STANDARD",
-  });
-
-  if (result.suppressed || result.abstained) {
-    return {
-      available: false,
-      reason: result.suppressionReason || result.abstentionReasonCode,
-      connector: null,
-      disagreements: Object.freeze([]),
-      editorial: null,
-    };
-  }
-
-  const topId = result.renderPlan?.relationshipOrder?.[0] ?? null;
-  const connector = topId
-    ? result.active.find((entry) => entry.connectorId === topId) || null
-    : null;
-
-  return {
-    available: Boolean(connector),
-    reason: connector ? null : "NO_ACTIVE_CONNECTOR",
-    connector,
-    disagreements: result.disagreements,
-    editorial: result.editorialJuxtapositions[0] || null,
-  };
-}
-
-/**
- * Tier 3 — everything: sources, disagreement, availability,
- * SOURCE_PANEL_CEILING material. SOURCE_DEEP is the only depth at which the
- * resolver ever populates `sourcePanelOnly` (resolver.js item 9) — this
- * function must never be reused to feed Tier 2, or ceilinged material leaks
- * into the daily surface.
- */
-export function tierThreeHeritageConnections(state, compose = {}) {
-  return composeHeritageForReading({
-    ...compose,
-    heritageConstruct: state.heritageConstruct,
-    sourceLineage: state.sourceLineage,
-    depthMode: "SOURCE_DEEP",
-  });
 }
 
 export function readingTiers(reflection) {

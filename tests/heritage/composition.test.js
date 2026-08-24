@@ -1,26 +1,26 @@
 /*
  * Stage 3 — the heritage connector composition boundary
- * (src/heritage/composition.js) and its two Tier integration points
- * (tierTwoHeritageConnections/tierThreeHeritageConnections in
- * src/qise/reading-tiers.js).
+ * (src/heritage/composition.js).
  *
  * This file does not re-prove Stage 2's own guarantees (condition AST
  * semantics, source-eligibility ladders, negative-rule matching — all
  * covered exhaustively by tests/heritage/resolver.test.js). It proves the
- * NEW thing Stage 3 adds: gate precedence ahead of the resolver, the typed
- * A/B/C/D/E output split, that Tier 2/3 route through exactly one boundary,
- * and that none of that reopens a frozen Stage 2 contract.
+ * NEW thing Stage 3 adds at this boundary: gate precedence FAILS CLOSED on
+ * missing/unknown evidence (not just on an explicit failure), gate
+ * suppression is never reported as a Stage 2 resolver abstention, canonical
+ * registries are bound internally and cannot be substituted by a caller, and
+ * the typed A/B/C/D/E output split survives that rework unchanged.
+ *
+ * Tier 2/Tier 3 integration (src/qise/heritage-connections.js) has its own
+ * suite: tests/qise/heritage-connections.test.js.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   composeHeritageForReading,
+  composeHeritageConnectionsWithRegistries,
   SUPPRESSION_REASONS,
 } from "../../src/heritage/composition.js";
-import {
-  tierTwoHeritageConnections,
-  tierThreeHeritageConnections,
-} from "../../src/qise/reading-tiers.js";
 import {
   HERITAGE_REGISTRY,
   HERITAGE_CONNECTOR_REGISTRY,
@@ -33,8 +33,10 @@ import { SOURCE_REGISTRY } from "../../src/reading/provenance.js";
 
 const clone = (value) => structuredClone(value);
 
-/* ── real Stage 1 registries, as production will actually see them ───────── */
+/* ── the injectable seam: real Stage 1 registries, explicit gates ────────── */
 const realBase = (overrides = {}) => ({
+  captureQualityPassed: true,
+  safetyPassed: true,
   heritageRegistry: HERITAGE_REGISTRY,
   conceptRegistry: HERITAGE_CONCEPT_REGISTRY,
   connectorRegistry: HERITAGE_CONNECTOR_REGISTRY,
@@ -108,6 +110,8 @@ const synConnector = (fields) => Object.freeze({
 });
 
 const synBase = (overrides = {}) => ({
+  captureQualityPassed: true,
+  safetyPassed: true,
   heritageRegistry: SYN_HERITAGE_REGISTRY,
   conceptRegistry: {},
   connectorRegistry: {},
@@ -132,10 +136,10 @@ const historicalQiSeFiveFormsConnector = () => synConnector({
   ],
 });
 
-/* ── 1/2/15: gate precedence — checked before the resolver runs at all ───── */
+/* ── 1: gate precedence fails closed on FAILED — checked before the resolver runs ── */
 
-test("gate suppression: a failed capture-quality gate suppresses every category, even against a rich real registry", () => {
-  const result = composeHeritageForReading(realBase({
+test("gate suppression: a failed capture-quality gate suppresses every category", () => {
+  const result = composeHeritageConnectionsWithRegistries(realBase({
     captureQualityPassed: false,
     heritageConstruct: "fourRivers",
     sourceLineage: "primary",
@@ -151,7 +155,7 @@ test("gate suppression: a failed capture-quality gate suppresses every category,
 });
 
 test("gate suppression: a failed safety gate suppresses every category too", () => {
-  const result = composeHeritageForReading(realBase({
+  const result = composeHeritageConnectionsWithRegistries(realBase({
     safetyPassed: false,
     heritageConstruct: "fourRivers",
     sourceLineage: "primary",
@@ -161,50 +165,145 @@ test("gate suppression: a failed safety gate suppresses every category too", () 
   assert.deepEqual(result.active, []);
 });
 
-test("SUPPRESSION_REASONS names exactly the two upstream gates, not a free-text reason", () => {
-  assert.deepEqual(SUPPRESSION_REASONS, ["CAPTURE_QUALITY_GATE_FAILED", "SAFETY_GATE_FAILED"]);
-});
+/* ── 2: gate precedence fails closed on MISSING/UNKNOWN, not just FAILED ──── */
 
-test("no connector path bypasses captureQualityGate -> safetyGate precedence: both Tier 2 and Tier 3 honour a fired gate", () => {
-  const state = { heritageConstruct: "fourRivers", sourceLineage: "primary" };
-  const compose = { ...realBase(), captureQualityPassed: false };
-  delete compose.heritageConstruct;
-  delete compose.sourceLineage;
-
-  const tier2 = tierTwoHeritageConnections(state, compose);
-  assert.equal(tier2.available, false);
-  assert.equal(tier2.reason, "CAPTURE_QUALITY_GATE_FAILED");
-  assert.equal(tier2.connector, null);
-
-  const tier3 = tierThreeHeritageConnections(state, compose);
-  assert.equal(tier3.suppressed, true);
-  assert.equal(tier3.suppressionReason, "CAPTURE_QUALITY_GATE_FAILED");
-});
-
-/* ── 13: heritage composition never touches the measurement payload ──────── */
-
-test("composeHeritageForReading takes only heritageConstruct/sourceLineage — an extraneous availability/compass field is never forwarded", () => {
-  const withRead = composeHeritageForReading(realBase({
+test("a fully omitted gate flag suppresses — missing evidence is not a pass", () => {
+  const noCapture = composeHeritageConnectionsWithRegistries(realBase({
+    captureQualityPassed: undefined,
     heritageConstruct: "fourRivers",
     sourceLineage: "primary",
-    availability: "read",
   }));
-  const withAbstained = composeHeritageForReading(realBase({
+  assert.equal(noCapture.suppressed, true);
+  assert.equal(noCapture.suppressionReason, "CAPTURE_QUALITY_GATE_UNKNOWN");
+
+  const noSafety = composeHeritageConnectionsWithRegistries(realBase({
+    safetyPassed: undefined,
     heritageConstruct: "fourRivers",
     sourceLineage: "primary",
-    availability: "abstained_confidence",
+  }));
+  assert.equal(noSafety.suppressed, true);
+  assert.equal(noSafety.suppressionReason, "SAFETY_GATE_UNKNOWN");
+});
+
+test("a non-boolean gate value (truthy or falsy) is UNKNOWN, never coerced to a pass", () => {
+  for (const value of ["true", 1, "false", 0, null, "yes", {}, []]) {
+    const result = composeHeritageConnectionsWithRegistries(realBase({
+      captureQualityPassed: value,
+      heritageConstruct: "fourRivers",
+      sourceLineage: "primary",
+    }));
+    assert.equal(result.suppressed, true, `gate value ${JSON.stringify(value)} must not pass`);
+    assert.equal(result.suppressionReason, "CAPTURE_QUALITY_GATE_UNKNOWN");
+  }
+});
+
+test("SUPPRESSION_REASONS names exactly the four gate outcomes that suppress", () => {
+  assert.deepEqual(SUPPRESSION_REASONS, [
+    "CAPTURE_QUALITY_GATE_FAILED",
+    "CAPTURE_QUALITY_GATE_UNKNOWN",
+    "SAFETY_GATE_FAILED",
+    "SAFETY_GATE_UNKNOWN",
+  ]);
+});
+
+/* ── 3: gate suppression is never reported as a Stage 2 abstention ───────── */
+
+test("gate suppression carries abstained:false — it is not a Stage 2 resolver verdict", () => {
+  for (const overrides of [
+    { captureQualityPassed: false },
+    { captureQualityPassed: undefined },
+    { safetyPassed: false },
+    { safetyPassed: undefined },
+  ]) {
+    const result = composeHeritageConnectionsWithRegistries(realBase({
+      heritageConstruct: "fourRivers", sourceLineage: "primary", ...overrides,
+    }));
+    assert.equal(result.suppressed, true);
+    assert.equal(result.abstained, false, "a suppressed result must not also claim a Stage 2 abstention");
+    assert.equal(result.abstentionReasonCode, null);
+  }
+});
+
+test("a genuine Stage 2 abstention is NOT suppressed, and the two axes stay independent", () => {
+  const malformed = { attemptedBindings: [{ fromRef: "heritageQiSe", toRef: "fiveElements", extra: true }] };
+  const result = composeHeritageConnectionsWithRegistries(realBase({
+    heritageConstruct: "fourRivers",
+    sourceLineage: "primary",
+    runtimeBindingContext: malformed,
+  }));
+  assert.equal(result.suppressed, false);
+  assert.equal(result.suppressionReason, null);
+  assert.equal(result.abstained, true);
+  assert.equal(result.abstentionReasonCode, "INVALID_RUNTIME_BINDING_CONTEXT");
+});
+
+/* ── 4/9: canonical registries are bound internally and cannot be injected ── */
+
+test("composeHeritageForReading throws if a caller tries to inject any registry", () => {
+  const registryKeys = [
+    "heritageRegistry", "conceptRegistry", "connectorRegistry",
+    "disagreementRegistry", "negativeRelationshipRegistry",
+    "compositionPolicies", "sourceRegistry",
+  ];
+  for (const key of registryKeys) {
+    assert.throws(() => composeHeritageForReading({
+      captureQualityPassed: true,
+      safetyPassed: true,
+      heritageConstruct: "fourRivers",
+      sourceLineage: "primary",
+      [key]: {},
+    }), TypeError, `${key} must be rejected, not silently accepted`);
+  }
+});
+
+test("composeHeritageForReading throws on any field outside the finite runtime contract", () => {
+  assert.throws(() => composeHeritageForReading({
+    captureQualityPassed: true,
+    safetyPassed: true,
+    heritageConstruct: "fourRivers",
+    sourceLineage: "primary",
+    availability: "read", // not part of the contract — see resolver.js RESOLVER_DEPENDS_ON
+  }), TypeError);
+});
+
+test("composeHeritageForReading resolves against the REAL canonical registries with zero registries supplied", () => {
+  const result = composeHeritageForReading({
+    captureQualityPassed: true,
+    safetyPassed: true,
+    heritageConstruct: "fiveMountains",
+    sourceLineage: "taiqing-siku",
+    depthMode: "SOURCE_DEEP",
+  });
+  assert.equal(result.suppressed, false);
+  // The real corpus's flagship SOURCE_PANEL_CEILING record (see
+  // docs/HERITAGE_CONNECTOR_STAGE_STATUS.md) — present here with zero
+  // registries injected proves canonical binding actually happened, not
+  // just that the call didn't throw.
+  assert.ok(result.sourcePanelOnly.some((e) => e.connectorId === "five-mountains-mutual-facing-fullness"),
+    "the real five-mountains-mutual-facing-fullness connector must resolve with no registries injected");
+});
+
+test("composeHeritageForReading also fails closed exactly like the injectable seam", () => {
+  const result = composeHeritageForReading({
+    heritageConstruct: "fourRivers",
+    sourceLineage: "primary",
+    // both gate flags omitted entirely
+  });
+  assert.equal(result.suppressed, true);
+  assert.equal(result.suppressionReason, "CAPTURE_QUALITY_GATE_UNKNOWN");
+});
+
+/* ── 13/1: heritage composition never touches the measurement payload ────── */
+
+test("composeHeritageConnectionsWithRegistries takes only heritageConstruct/sourceLineage — an extraneous availability field is never forwarded", () => {
+  const withRead = composeHeritageConnectionsWithRegistries(realBase({
+    heritageConstruct: "fourRivers", sourceLineage: "primary", availability: "read",
+  }));
+  const withAbstained = composeHeritageConnectionsWithRegistries(realBase({
+    heritageConstruct: "fourRivers", sourceLineage: "primary", availability: "abstained_confidence",
   }));
   assert.deepEqual(withRead.active, withAbstained.active);
   assert.deepEqual(withRead.abstentions, withAbstained.abstentions);
-});
-
-test("tierTwoHeritageConnections never reads or mutates the caller's compass/measurement state", () => {
-  const compass = Object.freeze({ ascendant: "chi", magnitude: 2.1, z: { L: 3 } });
-  const state = Object.freeze({ heritageConstruct: "fourRivers", sourceLineage: "primary", compass });
-  const result = tierTwoHeritageConnections(state, realBase());
-  assert.equal(state.compass, compass, "the caller's compass object must be untouched");
-  assert.equal("compass" in result, false);
-  assert.equal("ascendant" in result, false);
 });
 
 /* ── 2/12d: modern Qi Se cannot satisfy a heritageQiSe historical STATE ───── */
@@ -222,14 +321,14 @@ test("a heritageQiSe historical STATE cannot be satisfied by 'read' modern avail
   // resolver.js's conceptOnlyCandidates. The anchor alone is not the STATE
   // evidence: it makes the connector a candidate, it does not satisfy its
   // condition.
-  const noContext = composeHeritageForReading(synBase({
+  const noContext = composeHeritageConnectionsWithRegistries(synBase({
     connectorRegistry: { "syn-qise-state": connector },
     conditionContext: { participants: { heritageQiSe: "PRESENT" } },
   }));
   assert.equal(noContext.active.length, 0);
   assert.equal(noContext.abstentions[0].disposition, "CONDITION_UNMET");
 
-  const explicitContext = composeHeritageForReading(synBase({
+  const explicitContext = composeHeritageConnectionsWithRegistries(synBase({
     connectorRegistry: { "syn-qise-state": connector },
     conditionContext: {
       participants: { heritageQiSe: "PRESENT" },
@@ -243,17 +342,15 @@ test("a heritageQiSe historical STATE cannot be satisfied by 'read' modern avail
 /* ── 3: modern Qi Se cannot classify Five Forms through Stage 3 ──────────── */
 
 test("historical heritageQiSe+FiveElements co-presence may reach ACTIVE, but an attempted runtime classification is blocked", () => {
-  const noAttempt = composeHeritageForReading(realBase({
+  const noAttempt = composeHeritageConnectionsWithRegistries(realBase({
     heritageConstruct: "fiveElements",
     sourceLineage: "primary",
     connectorRegistry: { ...HERITAGE_CONNECTOR_REGISTRY, "syn-qise-canonical": historicalQiSeFiveFormsConnector() },
   }));
-  const ordinary = [...noAttempt.active, ...noAttempt.abstentions.map((a) => a)]
-    .find((e) => e.connectorId === "syn-qise-canonical");
   assert.ok(noAttempt.active.some((e) => e.connectorId === "syn-qise-canonical"),
     "source-backed historical co-presence, no attempted binding, is ordinary heritage presentation");
 
-  const attempted = composeHeritageForReading(realBase({
+  const attempted = composeHeritageConnectionsWithRegistries(realBase({
     heritageConstruct: "fiveElements",
     sourceLineage: "primary",
     connectorRegistry: { ...HERITAGE_CONNECTOR_REGISTRY, "syn-qise-canonical": historicalQiSeFiveFormsConnector() },
@@ -272,7 +369,7 @@ test("Shen cannot acquire a measurement binding through the Stage 3 boundary", (
   const measurableShen = clone(HERITAGE_CONNECTOR_REGISTRY["four-rivers-shen-corresponds"]);
   measurableShen.historicalStates[0].measurementAvailability = "SUPPORTED_2D";
 
-  const result = composeHeritageForReading(realBase({
+  const result = composeHeritageConnectionsWithRegistries(realBase({
     heritageConstruct: "fourRivers",
     sourceLineage: "primary",
     connectorRegistry: { ...HERITAGE_CONNECTOR_REGISTRY, "four-rivers-shen-corresponds": measurableShen },
@@ -285,7 +382,7 @@ test("Shen cannot acquire a measurement binding through the Stage 3 boundary", (
 
 test("Shen cannot acquire a measurement binding via an ATTEMPTED runtime binding either", () => {
   const connector = clone(HERITAGE_CONNECTOR_REGISTRY["four-rivers-shen-corresponds"]);
-  const result = composeHeritageForReading(realBase({
+  const result = composeHeritageConnectionsWithRegistries(realBase({
     heritageConstruct: "fourRivers",
     sourceLineage: "primary",
     connectorRegistry: { ...HERITAGE_CONNECTOR_REGISTRY, "four-rivers-shen-corresponds": connector },
@@ -301,7 +398,7 @@ test("Shen cannot acquire a measurement binding via an ATTEMPTED runtime binding
 
 test("an invalid runtimeBindingContext aborts the whole Stage 3 composition, even against an otherwise rich real registry", () => {
   const malformed = { attemptedBindings: [{ fromRef: "heritageQiSe", toRef: "fiveElements", extra: true }] };
-  const result = composeHeritageForReading(realBase({
+  const result = composeHeritageConnectionsWithRegistries(realBase({
     heritageConstruct: "fourRivers",
     sourceLineage: "primary",
     runtimeBindingContext: malformed,
@@ -313,35 +410,24 @@ test("an invalid runtimeBindingContext aborts the whole Stage 3 composition, eve
   assert.deepEqual(result.editorialJuxtapositions, []);
 });
 
-/* ── 6: SOURCE_PANEL_CEILING never reaches Tier 2 ─────────────────────────── */
+/* ── 6: SOURCE_PANEL_CEILING material is correctly categorised ───────────── */
 
-test("SOURCE_PANEL_CEILING material never produces Tier 2 runtime prose, and only appears in Tier 3's sourcePanelOnly", () => {
-  const state = { heritageConstruct: "fiveMountains", sourceLineage: "taiqing-siku" };
+test("SOURCE_PANEL_CEILING material surfaces only in sourcePanelOnly, at SOURCE_DEEP, never in active", () => {
+  const standard = composeHeritageConnectionsWithRegistries(realBase({ depthMode: "STANDARD" }));
+  assert.equal(standard.sourcePanelOnly.length, 0);
 
-  const tier2 = tierTwoHeritageConnections(state, realBase());
-  assert.equal(tier2.available, false);
-  assert.equal(tier2.connector, null);
-
-  const tier3 = tierThreeHeritageConnections(state, realBase());
-  const ceilinged = tier3.sourcePanelOnly.find((e) => e.connectorId === "five-mountains-mutual-facing-fullness");
+  const deep = composeHeritageConnectionsWithRegistries(realBase({ depthMode: "SOURCE_DEEP" }));
+  const ceilinged = deep.sourcePanelOnly.find((e) => e.connectorId === "five-mountains-mutual-facing-fullness");
   assert.ok(ceilinged, "five-mountains-mutual-facing-fullness must surface at SOURCE_DEEP");
   assert.equal(ceilinged.disposition, "SOURCE_PANEL_CEILING");
-  assert.equal(tier3.active.some((e) => e.connectorId === "five-mountains-mutual-facing-fullness"), false);
-});
-
-test("Tier 2 depthMode cannot be overridden by the caller through compose — it is always STANDARD", () => {
-  const state = { heritageConstruct: "fiveMountains", sourceLineage: "taiqing-siku" };
-  const tier2 = tierTwoHeritageConnections(state, realBase({ depthMode: "SOURCE_DEEP" }));
-  // Even asking for SOURCE_DEEP through `compose`, Tier 2 must stay STANDARD —
-  // proven indirectly: the ceilinged connector still does not appear.
-  assert.equal(tier2.available, false);
+  assert.equal(deep.active.some((e) => e.connectorId === "five-mountains-mutual-facing-fullness"), false);
 });
 
 /* ── 7: prohibitedForUserInference stays true on every surfaced entry ────── */
 
 test("prohibitedForUserInference stays true on every active and source-panel entry", () => {
   for (const construct of Object.keys(HERITAGE_REGISTRY)) {
-    const result = composeHeritageForReading(realBase({
+    const result = composeHeritageConnectionsWithRegistries(realBase({
       heritageConstruct: construct,
       sourceLineage: "primary",
       depthMode: "SOURCE_DEEP",
@@ -350,6 +436,18 @@ test("prohibitedForUserInference stays true on every active and source-panel ent
       assert.equal(entry.prohibitedForUserInference, true, `${entry.connectorId} must stay prohibited for user inference`);
     }
   }
+});
+
+test("prohibitedForUserInference also survives onto Category E (abstentions), not only active/source-panel entries", () => {
+  const measurableShen = clone(HERITAGE_CONNECTOR_REGISTRY["four-rivers-shen-corresponds"]);
+  measurableShen.historicalStates[0].measurementAvailability = "SUPPORTED_2D";
+  const result = composeHeritageConnectionsWithRegistries(realBase({
+    heritageConstruct: "fourRivers",
+    sourceLineage: "primary",
+    connectorRegistry: { ...HERITAGE_CONNECTOR_REGISTRY, "four-rivers-shen-corresponds": measurableShen },
+  }));
+  const found = result.abstentions.find((e) => e.connectorId === "four-rivers-shen-corresponds");
+  assert.equal(found.prohibitedForUserInference, true);
 });
 
 /* ── 8: editorial juxtaposition never asserts a historical relationship ──── */
@@ -363,24 +461,31 @@ test("an editorial juxtaposition is clearly marked as non-historical", () => {
     connectorId: "syn-editorial-b",
     participants: [{ participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" }],
   });
-  const result = composeHeritageForReading(synBase({
+  const result = composeHeritageConnectionsWithRegistries(synBase({
     connectorRegistry: { "syn-editorial-a": connectorA, "syn-editorial-b": connectorB },
     compositionPolicies: HERITAGE_COMPOSITION_POLICIES,
     depthMode: "STANDARD",
   }));
   assert.ok(result.editorialJuxtapositions.length >= 1);
+  const detailedIds = new Set([...result.active, ...result.sourcePanelOnly].map((e) => e.connectorId));
   for (const juxtaposition of result.editorialJuxtapositions) {
     assert.equal(juxtaposition.historicalRelationshipAsserted, false);
     assert.equal(juxtaposition.disclosure, "SOURCES_SHOWN_BESIDE_ONE_ANOTHER");
     assert.equal(juxtaposition.requiresSeparateAttribution, true);
-    assert.equal(result.active.some((e) => juxtaposition.items.includes(e.connectorId) && false), false);
+    // The P1 finding on the earlier draft: an editorial juxtaposition must
+    // never name a connector the SAME result has no full detail for — that
+    // makes `requiresSeparateAttribution` unmeetable. Every item here must
+    // be resolvable against active/sourcePanelOnly at this same depth.
+    for (const id of juxtaposition.items) {
+      assert.ok(detailedIds.has(id), `editorial item ${id} must have full detail in this same result`);
+    }
   }
 });
 
 /* ── 9: a CONSTRUCT-level disagreement survives, every position intact ───── */
 
 test("a CONSTRUCT-level disagreement survives into the composition model with every position intact", () => {
-  const result = composeHeritageForReading(realBase({
+  const result = composeHeritageConnectionsWithRegistries(realBase({
     heritageConstruct: "threeSections",
     sourceLineage: "primary",
   }));
@@ -406,7 +511,7 @@ test("an unavailable third participant prevents a PRESENT condition from becomin
       { participantId: "gamma", nodeType: "CONSTRUCT", constructId: "gamma-construct", memberScope: "ALL_MEMBERS" },
     ],
   });
-  const result = composeHeritageForReading(synBase({
+  const result = composeHeritageConnectionsWithRegistries(synBase({
     connectorRegistry: { "syn-third-participant": connector },
     conditionContext: { participants: { beta: "PRESENT", gamma: "ABSENT" } },
   }));
@@ -427,11 +532,11 @@ test("explicit ABSENT and UNKNOWN participant signals stay distinguishable throu
       { participantId: "beta", nodeType: "CONSTRUCT", constructId: "beta", memberScope: "ALL_MEMBERS" },
     ],
   });
-  const absent = composeHeritageForReading(synBase({
+  const absent = composeHeritageConnectionsWithRegistries(synBase({
     connectorRegistry: { "syn-unconditional": connector },
     conditionContext: { participants: { beta: "ABSENT" } },
   }));
-  const unknown = composeHeritageForReading(synBase({
+  const unknown = composeHeritageConnectionsWithRegistries(synBase({
     connectorRegistry: { "syn-unconditional": connector },
     conditionContext: { participants: { beta: "UNKNOWN" } },
   }));
@@ -451,13 +556,13 @@ test("a concept-only connector's eligibility is unaffected by which unrelated pr
   });
   const conceptRegistry = { gamma: { conceptId: "gamma", measurementAvailability: "UNMEASURABLE", modernMeasurementBinding: null } };
 
-  const underSolidAnchor = composeHeritageForReading(synBase({
+  const underSolidAnchor = composeHeritageConnectionsWithRegistries(synBase({
     heritageConstruct: "alpha",
     connectorRegistry: { "syn-concept-only": conceptOnly },
     conceptRegistry,
     conditionContext: { participants: { gamma: "PRESENT" } },
   }));
-  const underWeakAnchor = composeHeritageForReading(synBase({
+  const underWeakAnchor = composeHeritageConnectionsWithRegistries(synBase({
     heritageConstruct: "alpha",
     sourceLineage: "primary",
     connectorRegistry: { "syn-concept-only": conceptOnly },
@@ -481,14 +586,12 @@ test("a concept-only connector's eligibility is unaffected by which unrelated pr
 
 test("identical inputs produce a deep-equal Stage 3 composition result", () => {
   const args = realBase({ heritageConstruct: "fourRivers", sourceLineage: "primary", occurrence: 3 });
-  const a = composeHeritageForReading(args);
-  const b = composeHeritageForReading(args);
+  const a = composeHeritageConnectionsWithRegistries(args);
+  const b = composeHeritageConnectionsWithRegistries(args);
   assert.deepEqual(a, b);
-});
 
-test("Tier 1 never imports or leaks connector architecture", async () => {
-  const source = await import("node:fs/promises").then((fs) =>
-    fs.readFile(new URL("../../src/qise/reading-tiers.js", import.meta.url), "utf8"));
-  const tierOneBody = source.slice(source.indexOf("export function tierOne"), source.indexOf("export function tierTwo("));
-  assert.doesNotMatch(tierOneBody, /composeHeritageForReading/);
+  const productArgs = { captureQualityPassed: true, safetyPassed: true, heritageConstruct: "fourRivers", sourceLineage: "primary", occurrence: 3 };
+  const c = composeHeritageForReading(productArgs);
+  const d = composeHeritageForReading(productArgs);
+  assert.deepEqual(c, d);
 });
