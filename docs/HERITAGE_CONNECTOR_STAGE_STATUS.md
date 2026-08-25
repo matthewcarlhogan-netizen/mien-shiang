@@ -1366,6 +1366,157 @@ are non-empty), inventing nothing.
 - `tests/qise/heritage-connections.test.js` — 2 new tests (occurrence-equality
   behavioural check, documentation-consistency check)
 
+### Stage 3 — disclosure-ownership correction pass (this session, on top of `967b1eb`)
+
+**A further technical correction pass, not a Stage 3 approval, and it does
+not close either blocker.** A fresh review against `967b1eb` found exactly 1
+unresolved Codex thread; a bounded self-review of the same surface, before
+pushing that fix, found one further defect in the identical mechanism.
+Neither touched either blocker, and neither required touching
+`src/heritage/resolver.js`, `registry.js`, `src/qise/reading-tiers.js`,
+`reading-state.js`, or `src/qise/heritage-connections.js` — `git diff --stat`
+against all five is empty. **Stage 3's status is unchanged: PARTIAL / BLOCKED
+ON SAFETY AUTHORIZATION AND A LINEAGE CONTENT DECISION.**
+
+**Root cause, shared by both:** disclosure ownership was never assigned to a
+single rendering layer. Fixed with one rule, applied consistently: **the
+tier/model carries `rotationDisclosure` as metadata; the outer UI surface
+(`app.js`) owns rendering it; connector-markup helpers
+(`heritageConnectorTier2Markup`/`heritageConnectorTier3Markup`) render none.**
+`deriveTier2FromComposition()`, `tier2ConnectorModel()` and
+`tier3ConnectorModel()` all keep computing the field exactly as before — an
+earlier requirement needs the rotating connector payload to carry it, and
+removing it would reopen that requirement. Only the RENDERING moved.
+
+1. **Story showed the rotation disclosure twice (Codex, P2, thread on
+   `src/ui/qise/heritage-view.js:466`).** `src/ui/qise/app.js` has, since a
+   much earlier round, unconditionally rendered `tier2.rotationDisclosure`
+   (the reading-level disclosure, from `reflection.js`'s
+   `composed.rotationDisclosure`, present on every reading) at the top of
+   Story. `heritageConnectorTier2Markup()` — untouched by the prior pass —
+   ALSO rendered its own copy, `model.rotationDisclosure`
+   (`deriveTier2FromComposition`'s connector-level field), after the card,
+   whenever Tier 2 had a selected connector. Both fields hold the identical
+   `ROTATION_DISCLOSURE` string, so whenever a connector was selected Story
+   showed the sentence twice. This predates `967b1eb` (which touched only
+   Tier 3) and never reached a real screen (real corpus has zero ACTIVE
+   connectors anywhere, and `safetyPassed` is never `true` in production),
+   but the fresh review reasoned about the code, not a live occurrence, and
+   was correct to flag it. Fixed by removing the disclosure line from
+   `heritageConnectorTier2Markup()` entirely — Story's existing unconditional
+   render stays, unchanged, as the sole emission.
+
+2. **Why never disclosed its OWN rotated heritage material at all — a
+   broader, pre-existing gap found by this pass's own bounded self-review,
+   not a live bot finding.** The prior pass's fix had
+   `heritageConnectorTier3Markup()` render `tier3ConnectorModel().rotationDisclosure`
+   itself, as the first line of its own output — which only ever covers the
+   Stage-3 CONNECTOR block. But `tier3.byLayer["heritage"]` (rendered by
+   `app.js`, in the "What produced each line" loop, ABOVE the connector
+   block) is itself day-rotated heritage content: `reading-tiers.js`'s frozen
+   `tierThree()` reconstructs it from the heritage-layer entries in
+   `composed.trace`, reading each sentence from `composed.parts` — the exact
+   same `composed` reading `tierTwo()`'s `passage` (`composed.layers.heritage`)
+   is built from. This is independent of Stage-3 connector authorization
+   entirely (it is the base Reflection Engine's own output, unconditional,
+   older than Stage 3), so a disclosure confined to the connector block would
+   still let a reader see the rotated passage trace with nothing above it
+   explaining it. `reading-tiers.js`'s frozen `tierThree()` carries no
+   `rotationDisclosure` field of its own at all (confirmed by direct
+   inspection — the only `rotationDisclosure` in that file is on `tierTwo()`).
+
+   Fixed at the SURFACE, in `app.js`'s `renderReflection()`: one binding,
+   `const rotationDisclosure = tier2.rotationDisclosure;`, made immediately
+   after destructuring the tiers, reused by BOTH templates. Story keeps its
+   existing render (now reading the local binding). Why gets the identical
+   expression as the very first line of `whyNode.innerHTML` — before the
+   "What produced each line" header, therefore before `byLayer.heritage`,
+   therefore before everything, including the connector block — unconditional,
+   exactly mirroring Story, since the heritage trace itself is unconditional.
+   `heritageConnectorTier3Markup()`'s own disclosure-rendering (added by the
+   prior pass) is removed; `tier3ConnectorModel().rotationDisclosure` is
+   NOT separately rendered by `app.js` — doing so would recreate the exact
+   duplicate-disclosure defect this pass exists to fix, just moved into Why.
+
+3. **`withConnectorLocatorStatus()` locator-status precedence (Copilot,
+   suppressed pre-existing note, not a new inline thread).** Fresh Copilot
+   review at `967b1eb` surfaced a note on `src/heritage/composition.js:293`:
+   the function unconditionally overwrote a resolved entry's
+   `sectionLocatorStatus`/`folioLocatorStatus` with the connector registry's
+   value, rather than preferring the entry's own if present. Verified
+   directly against frozen `resolver.js`'s `toResolvedEntry()` (lines
+   754-776): it never copies either field onto a resolved entry, so
+   `entry.sectionLocatorStatus`/`folioLocatorStatus` are ALWAYS `undefined`
+   today — this changes no current real resolver output; it is purely
+   defensive against a FUTURE resolver enhancement that starts populating
+   these fields, which an unconditional overwrite would then silently
+   discard. Fixed with `entry.sectionLocatorStatus ?? raw.sectionLocatorStatus`
+   (and the same for `folioLocatorStatus`). `??` is safe here specifically
+   because `registry.js`'s `connectorRecord()` factory (lines 219-234)
+   defaults these two STATUS fields to the string `"NOT_RECORDED"`, never
+   `null` — `null` is used in that same factory only for the locator VALUE
+   fields (`sectionLocator`/`folioLocator`), so there is no legitimate
+   `null` status this could misread as "absent". No status VALUE is altered
+   by this fix — it is a precedence correction, not an evidence upgrade.
+   `resolver.js` is not touched.
+
+4. **Small adjacent JSDoc correction, same file already being touched.**
+   `heritage-view.js`'s `participantLabel()` doc comment claimed to mirror
+   `validator.js`'s `participantDisplayId` — no such export exists;
+   `validator.js` exports `participantRefId`. Verified line-by-line that the
+   two functions are close but not identical (for `CONSTITUENT`,
+   `participantRefId()` has no fallback to `participantId`, and it has no
+   final catch-all for an unrecognized `nodeType`, while `participantLabel()`
+   has both) — so the comment is corrected to describe what is actually true
+   ("uses the same canonical identifier fields... for validated participant
+   node types; display-safe fallbacks remain local to this view layer"),
+   not simply renamed to a second overstated claim.
+
+**Falsification.** All new/rewritten tests were run against `967b1eb`'s
+actual `app.js`/`heritage-view.js`/`composition.js` (temporarily restored)
+and confirmed to fail — 4 tests in `tests/qise/heritage-connections.test.js`/
+`tests/qise/heritage-view.test.js` (the combined ownership test plus three
+`"13:"` tests whose assertions inverted) and 1 in
+`tests/heritage/composition.test.js` (the locator-status precedence test) —
+while every other then-present test continued to pass. The fixed
+implementation was then restored and the full suites re-run clean.
+
+**Locked invariants, reconfirmed after this pass:** `src/heritage/resolver.js`,
+`registry.js`, `src/qise/reading-tiers.js`, `reading-state.js` and
+`src/qise/heritage-connections.js` are all byte-identical to `967b1eb`.
+`ABSTRACT_LINEAGE_OVERRIDES` remains `Object.freeze({})`. `fiveMountains`'s
+`"primary"` still resolves to the registry `"primary"` (Renlun Datong)
+witness and is still blocked at `LINEAGE_RESEARCH_ONLY`, never
+`taiqing-siku`. No `Math.random`, no `rotationState`, no new detector, no
+`safetyPassed: true` fabrication, no scanner-threshold change, and no
+source/evidence status was upgraded or downgraded — the locator-status fix
+is a precedence correction over already-recorded values, never a new one.
+
+**Files changed this session:**
+- `src/ui/qise/heritage-view.js` — removed the disclosure line from
+  `heritageConnectorTier2Markup()` and the disclosure-prepending block from
+  `heritageConnectorTier3Markup()`; JSDoc corrections (disclosure ownership,
+  `participantLabel()`'s `participantRefId` reference); no change to either
+  model function's data (`rotationDisclosure` computation unchanged)
+- `src/ui/qise/app.js` — one `const rotationDisclosure = tier2.rotationDisclosure;`
+  binding in `renderReflection()`; Story's existing render reads the local
+  binding; Why gains one new unconditional render, first in its template
+- `src/heritage/composition.js` — `withConnectorLocatorStatus()`'s two
+  assignments changed from unconditional to `??`-precedenced; no other
+  function touched
+- `docs/HERITAGE_CONNECTOR_STAGE_STATUS.md` — this section
+- `tests/qise/heritage-view.test.js` — 1 test renamed (dropped a disclosure
+  assertion the removed code no longer produces), 3 of the prior pass's
+  `"13:"` tests rewritten from positive to negative disclosure-rendering
+  assertions (the model-level assertions in each were kept)
+- `tests/qise/heritage-connections.test.js` — 2 new tests: the combined
+  surface-ownership regression, and a check that `app.js` never hardcodes
+  the disclosure sentence as a second literal
+- `tests/heritage/composition.test.js` — 2 new tests: the locator-status
+  precedence regression (source-text, since a true runtime negative case is
+  unconstructable without reopening frozen `resolver.js`) and its schema
+  justification (`registry.js`'s status-field defaults are never `null`)
+
 ### Known limitations / remaining work
 
 - **Stage 3 is BLOCKED, not approved, not merged.** See the framing at the

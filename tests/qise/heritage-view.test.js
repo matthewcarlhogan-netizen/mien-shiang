@@ -259,7 +259,7 @@ test("E: building a connector view model is pure and cannot be observed to mutat
 
 /* ── A: Tier 2 emits the selected connector's bounded content ────────────── */
 
-test("A: heritageConnectorTier2Markup renders the card's constructs, relationship, citation and rotation disclosure", () => {
+test("A: heritageConnectorTier2Markup renders the card's constructs, relationship and citation", () => {
   const model = tier2ConnectorModel({
     available: true, reason: null, connector: entry(), disagreements: [],
     rotationDisclosure: "Today's passage comes from the rotation through the traditional systems, not from anything the app measured.",
@@ -271,7 +271,6 @@ test("A: heritageConnectorTier2Markup renders the card's constructs, relationshi
   assert.match(html, /corresponds to/);
   assert.match(html, /Synthetic Source Title/);
   assert.match(html, /juan 2/);
-  assert.match(html, /passage comes from the rotation/);
 });
 
 test("A: heritageConnectorTier2Markup renders nothing (empty string) when no connector is available — never a placeholder implying one exists", () => {
@@ -979,21 +978,17 @@ test("13: tier3ConnectorModel's rotationDisclosure is null with nothing to show,
   assert.equal(noData.rotationDisclosure, null);
 });
 
-test("13: heritageConnectorTier3Markup renders the rotation disclosure once, BEFORE the material it applies to, exactly when material is shown", () => {
+test("13: heritageConnectorTier3Markup never renders a rotation disclosure, even when model.rotationDisclosure is set and material is visible — the Why SURFACE (app.js) owns that emission, not connector markup", () => {
   const model = tier3ConnectorModel({
     suppressed: false, abstained: false,
     active: [entry({ connectorId: "active-1" })],
     sourcePanelOnly: [], disagreements: [], abstentions: [], editorialJuxtapositions: [],
   }, SOURCE_REGISTRY);
+  assert.equal(typeof model.rotationDisclosure, "string");
+  assert.ok(model.rotationDisclosure.length > 0, "fixture assumption: the model must actually carry the metadata this test proves is NOT rendered");
   const html = heritageConnectorTier3Markup(model);
-  assert.match(html, /rotation through the traditional systems/);
-  // The disclosure must precede the material it is disclosing, so a reader
-  // opening Why sees it before anything that could otherwise read as
-  // measurement-derived.
-  assert.ok(html.indexOf("rotation through the traditional systems") < html.indexOf("corresponds to"),
-    "the rotation disclosure must render before the connector card, not after");
-  // Exactly one occurrence — not once per section.
-  assert.equal(html.split("rotation through the traditional systems").length - 1, 1);
+  assert.doesNotMatch(html, /rotation through the traditional systems/);
+  assert.match(html, /corresponds to/, "the connector card itself must still render");
 });
 
 test("13: heritageConnectorTier3Markup renders no disclosure when there is no material (an empty model gains no stray paragraph)", () => {
@@ -1004,7 +999,7 @@ test("13: heritageConnectorTier3Markup renders no disclosure when there is no ma
   assert.equal(heritageConnectorTier3Markup(model), "");
 });
 
-test("13: Tier 2 and Tier 3 render the SAME rotation-disclosure string — no second, independently authored disclosure mechanism", () => {
+test("13: Tier 2 and Tier 3 models carry the SAME rotation-disclosure string as metadata, and neither connector-markup function ever renders it", () => {
   const tier2Model = tier2ConnectorModel({
     available: true, reason: null, connector: entry(), disagreements: [],
     rotationDisclosure: ROTATION_DISCLOSURE, occurrence: 0,
@@ -1017,14 +1012,15 @@ test("13: Tier 2 and Tier 3 render the SAME rotation-disclosure string — no se
   assert.equal(tier2Model.rotationDisclosure, ROTATION_DISCLOSURE);
   assert.equal(tier3Model.rotationDisclosure, ROTATION_DISCLOSURE);
   assert.equal(tier2Model.rotationDisclosure, tier3Model.rotationDisclosure);
-  // esc() HTML-encodes the apostrophe in ROTATION_DISCLOSURE, so the markup
-  // is matched on a stable, punctuation-free substring rather than the raw
-  // constant (see the apostrophe-free assertions elsewhere in this file).
-  assert.match(heritageConnectorTier2Markup(tier2Model), /rotation through the traditional systems/);
-  assert.match(heritageConnectorTier3Markup(tier3Model), /rotation through the traditional systems/);
+  // The Why/Story SURFACE owns rendering it (src/ui/qise/app.js), not these
+  // connector-card functions — see the "surface owns disclosure exactly
+  // once; connector markup owns none" test in heritage-connections.test.js
+  // for the surface-level proof.
+  assert.doesNotMatch(heritageConnectorTier2Markup(tier2Model), /rotation through the traditional systems/);
+  assert.doesNotMatch(heritageConnectorTier3Markup(tier3Model), /rotation through the traditional systems/);
 });
 
-test("13 (real corpus, real chain): fourRivers/primary has real sourcePanelOnly material with no active connector — Tier 3 discloses the rotation even though Tier 2 has nothing to disclose", () => {
+test("13 (real corpus, real chain): fourRivers/primary has real sourcePanelOnly material with no active connector — Tier 3's model still carries disclosure metadata even though Tier 2 has nothing to disclose", () => {
   const reflection = makeReflection({ heritageConstruct: "fourRivers", sourceLineage: "primary" });
   const tier2Connectors = tierTwoHeritageConnections(reflection, { captureQualityPassed: true, safetyPassed: true });
   const tier3Connectors = tierThreeHeritageConnections(reflection, { captureQualityPassed: true, safetyPassed: true });
@@ -1032,7 +1028,14 @@ test("13 (real corpus, real chain): fourRivers/primary has real sourcePanelOnly 
   // Fixture assumption: today's real corpus has no ACTIVE connector for any
   // construct (see docs/HERITAGE_CONNECTOR_STAGE_STATUS.md), so Tier 2 has
   // nothing to select and nothing to disclose -- exactly the asymmetric case
-  // the Codex finding described, reproduced with zero synthetic data.
+  // the Codex finding described, reproduced with zero synthetic data. This
+  // asymmetry no longer matters for what actually reaches the screen: the
+  // Why SURFACE (app.js) discloses the reading-level rotation unconditionally
+  // regardless of whether any Stage-3 connector is selected -- see the
+  // combined ownership test in heritage-connections.test.js. What this test
+  // proves is narrower and still real: even in this exact asymmetric case,
+  // Tier 3's connector-payload metadata is present and correct, and the
+  // connector markup itself still renders no disclosure of its own.
   assert.equal(tier2Connectors.available, false);
   assert.equal(tier2ConnectorModel(tier2Connectors).rotationDisclosure, null);
 
@@ -1041,8 +1044,7 @@ test("13 (real corpus, real chain): fourRivers/primary has real sourcePanelOnly 
     "fixture assumption: fourRivers/primary's real sourcePanelOnly material must include this connector");
   assert.equal(tier3Model.rotationDisclosure, ROTATION_DISCLOSURE);
   const html = heritageConnectorTier3Markup(tier3Model);
-  assert.match(html, /rotation through the traditional systems/,
-    "Tier 3 must disclose the scheduled rotation whenever it renders heritage material, even when Tier 2 selected nothing");
+  assert.doesNotMatch(html, /rotation through the traditional systems/);
 });
 
 test("13: safety UNKNOWN still renders neither heritage material NOR a misleading rotation disclosure in Tier 3", () => {

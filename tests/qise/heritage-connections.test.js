@@ -410,6 +410,96 @@ test("src/ui/qise/app.js no longer owns the connector markup-building logic itse
 });
 
 /*
+ * ── PR #40 disclosure-ownership correction: ONE reading-level disclosure,
+ *    TWO mutually exclusive surfaces, ZERO connector-markup emissions ──────
+ * A fresh review found the Story surface duplicated the rotation disclosure:
+ * app.js already rendered `tier2.rotationDisclosure` unconditionally, and
+ * `heritageConnectorTier2Markup` ALSO rendered its own copy whenever a
+ * connector was selected, so Story showed the sentence twice. A bounded
+ * self-review of the same surface, before pushing that fix, found a second,
+ * broader gap: the Why tab's `tier3.byLayer.heritage` trace is ITSELF
+ * day-rotated heritage content — a projection of the exact same `composed`
+ * reading Tier 2's passage is built from (see `reading-tiers.js`'s frozen
+ * `tierThree()`/`tierTwo()`) — and had no disclosure anywhere, on any
+ * authorized reading, independent of Stage-3 connector authorization.
+ *
+ * Both are fixed the same way: `renderReflection()` binds ONE
+ * `rotationDisclosure` value from `tier2.rotationDisclosure` and renders it
+ * exactly once per surface — Story where it already was, Why as the very
+ * first thing in the tab, before the heritage trace and before the connector
+ * block. Neither connector-markup function renders a disclosure of its own
+ * (proven behaviourally in heritage-view.test.js's "13:" tests). This test
+ * proves the SURFACE half of that invariant together, scoped to
+ * `renderReflection()` specifically so an unrelated match elsewhere in
+ * app.js cannot make it pass or fail for the wrong reason.
+ */
+test("surface owns disclosure exactly once; connector markup owns none", () => {
+  const appSource = readSrc("ui/qise/app.js");
+  const renderReflectionSrc = appSource.slice(
+    appSource.indexOf("function renderReflection(reading, history) {"),
+    appSource.indexOf("async function renderReading(reading) {"),
+  );
+  assert.ok(renderReflectionSrc.length > 0, "fixture assumption: renderReflection must be found in app.js");
+
+  // 1. Exactly one binding of the reading-level disclosure.
+  const bindings = renderReflectionSrc.match(/const rotationDisclosure = tier2\.rotationDisclosure;/g) || [];
+  assert.equal(bindings.length, 1,
+    "renderReflection must bind rotationDisclosure from tier2.rotationDisclosure exactly once");
+
+  // 2. Story renders it exactly once.
+  const storySlice = renderReflectionSrc.slice(
+    renderReflectionSrc.indexOf("storyNode.innerHTML = `"),
+    renderReflectionSrc.indexOf("`;", renderReflectionSrc.indexOf("storyNode.innerHTML = `")),
+  );
+  const storyRenders = storySlice.match(/\$\{esc\(rotationDisclosure\)\}/g) || [];
+  assert.equal(storyRenders.length, 1, "Story must render the bound disclosure exactly once");
+
+  // 3 & 6. Neither connector-markup function references rotationDisclosure
+  // at all — sliced precisely so Tier 3's own JSDoc (which discusses the
+  // metadata field by name) cannot be mistaken for Tier 2's function body.
+  const viewSource = readSrc("ui/qise/heritage-view.js");
+  const tier2Body = viewSource.slice(
+    viewSource.indexOf("export function heritageConnectorTier2Markup(model) {"),
+    viewSource.indexOf("/**\n * Tier 3's expanded contract:"),
+  );
+  assert.ok(tier2Body.length > 0, "fixture assumption: heritageConnectorTier2Markup must be found");
+  assert.doesNotMatch(tier2Body, /rotationDisclosure/,
+    "heritageConnectorTier2Markup must not reference rotationDisclosure at all");
+
+  const tier3Body = viewSource.slice(
+    viewSource.indexOf("export function heritageConnectorTier3Markup(model) {"),
+  );
+  assert.ok(tier3Body.length > 0, "fixture assumption: heritageConnectorTier3Markup must be found");
+  assert.doesNotMatch(tier3Body, /rotationDisclosure/,
+    "heritageConnectorTier3Markup must not reference rotationDisclosure at all");
+
+  // 4 & 5. Why renders the SAME bound disclosure exactly once, before both
+  // the heritage-layer trace and the connector block — and never renders
+  // heritageTier3.rotationDisclosure (the second-source-of-truth defect the
+  // ownership invariant forbids).
+  const whySlice = renderReflectionSrc.slice(
+    renderReflectionSrc.indexOf("whyNode.innerHTML = `"),
+    renderReflectionSrc.lastIndexOf("`;"),
+  );
+  const whyRenders = whySlice.match(/\$\{esc\(rotationDisclosure\)\}/g) || [];
+  assert.equal(whyRenders.length, 1, "Why must render the bound disclosure exactly once");
+  assert.doesNotMatch(whySlice, /heritageTier3\.rotationDisclosure/,
+    "Why must not render the connector-payload metadata field directly — that would be a second source of truth");
+
+  const disclosureIndex = whySlice.indexOf("${esc(rotationDisclosure)}");
+  const byLayerIndex = whySlice.indexOf("byLayer");
+  const connectorMarkupIndex = whySlice.indexOf("heritageConnectorTier3Markup(heritageTier3)");
+  assert.ok(disclosureIndex >= 0 && byLayerIndex > disclosureIndex && connectorMarkupIndex > disclosureIndex,
+    "the disclosure must render before both the heritage-layer trace and the connector block");
+});
+
+test("src/ui/qise/app.js contains no hardcoded copy of the rotation-disclosure sentence — it always reads the bound field, never a second literal", () => {
+  const source = readSrc("ui/qise/app.js");
+  assert.doesNotMatch(source, /Today's passage comes from the rotation/,
+    "app.js must never hardcode ROTATION_DISCLOSURE's wording; it must always read it from the tier data");
+});
+
+/*
  * ── falsification: omission at the finish() boundary cannot produce "clean" ──
  *
  * `captureTier` is the field `captureAuthorizationFromReading` trusts as

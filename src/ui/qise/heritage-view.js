@@ -112,9 +112,9 @@ export function humanizeRelationshipType(value) {
  * RELATED_SYSTEM have no ENGLISH label registry in Stage 1 (see the file
  * header on `canonicalChineseName`) — their recorded id is the only
  * canonical English-safe text available for them, so it is shown as-is
- * rather than paraphrased. Mirrors `validator.js`'s `participantDisplayId`
- * id-resolution precedence exactly, so "which id identifies this
- * participant" stays defined in one place.
+ * rather than paraphrased. Uses the same canonical identifier fields as
+ * `validator.js`'s `participantRefId` for validated participant node types;
+ * display-safe fallbacks remain local to this view layer.
  */
 function participantLabel(p) {
   if (p.nodeType === "CONSTRUCT") {
@@ -311,20 +311,22 @@ export function tier2ConnectorModel(tier2Connectors, sourceRegistry = SOURCE_REG
  * each reduced to a display-safe shape. `tier3Connectors` is `tier3.connectors`
  * from `readingTiersWithHeritage()` — the full Stage 3 composition result.
  *
- * `rotationDisclosure` carries the SAME `ROTATION_DISCLOSURE` string Tier 2
- * already shows (`deriveTier2FromComposition`/`tier2ConnectorModel`) — never
- * a second, independently authored sentence for the same fact (Contract §13).
- * Every category here (active, source-panel-only, disagreements, abstentions,
- * editorial) is selected from the SAME day-rotated `heritageConstruct`/
- * `sourceLineage` composition, so it is set whenever ANY of them is
- * non-empty — not only when `active` is, and not only when Tier 2 happened to
- * select a connector. Without this, opening Why could show source-panel
- * material, a disagreement or an abstention chip with no disclosure at all
- * (the exact gap Tier 2 already having material and Tier 3 having none, or
- * vice versa, would otherwise leave open), letting it read as selected by the
- * measurement rather than by the scheduled rotation. `null` whenever nothing
- * is shown, so a fail-closed suppression never renders a disclosure about
- * material that was never displayed.
+ * `rotationDisclosure` is CONNECTOR-PAYLOAD METADATA, not something this
+ * module renders itself — see `heritageConnectorTier3Markup`, which renders
+ * none of it. It carries the SAME `ROTATION_DISCLOSURE` string Tier 2's
+ * model carries (`deriveTier2FromComposition`/`tier2ConnectorModel`) — never
+ * a second, independently authored sentence for the same fact (Contract §13)
+ * — and is set whenever ANY category here (active, source-panel-only,
+ * disagreements, abstentions, editorial) is non-empty, `null` whenever
+ * nothing is shown, so a fail-closed suppression never carries a disclosure
+ * about material that was never composed. `src/ui/qise/app.js`'s
+ * `renderReflection()` is the actual disclosure owner for the Why surface —
+ * it renders one unconditional disclosure (from `tier2.rotationDisclosure`,
+ * reused) before everything on that tab, including the heritage trace above
+ * this model's own material, which is day-rotated content independent of
+ * whether any Stage-3 connector is authorised at all. This field survives
+ * for callers/tests that need to confirm the connector composition itself
+ * carries disclosure-relevant metadata, per that earlier requirement.
  */
 export function tier3ConnectorModel(tier3Connectors, sourceRegistry = SOURCE_REGISTRY) {
   if (!tier3Connectors) {
@@ -451,19 +453,29 @@ export function heritageConnectorCardMarkup(card) {
 
 /**
  * Tier 2's bounded contract: at most the one selected RUNTIME_PROSE
- * connector, its attribution, and the rotation disclosure when a connector
- * IS selected. Returns "" (nothing rendered) when unavailable — never a
- * placeholder that implies a connector exists. Reads only `model.card`
- * (never `model.sourcePanelOnly`/`model.editorial`, which do not exist on
- * this model at all — see `tier2ConnectorModel`), so SOURCE_PANEL_CEILING
- * and editorial material structurally cannot appear here.
+ * connector and its attribution. Returns "" (nothing rendered) when
+ * unavailable — never a placeholder that implies a connector exists. Reads
+ * only `model.card` (never `model.sourcePanelOnly`/`model.editorial`, which
+ * do not exist on this model at all — see `tier2ConnectorModel`), so
+ * SOURCE_PANEL_CEILING and editorial material structurally cannot appear
+ * here.
+ *
+ * Renders NO rotation disclosure of its own. `model.rotationDisclosure`
+ * stays on the model as connector-payload metadata (an earlier requirement
+ * needs it carried there), but the Story SURFACE already renders the
+ * reading-level disclosure unconditionally (`src/ui/qise/app.js`'s
+ * `renderReflection()`, from `tier2.rotationDisclosure` — the same value,
+ * already true for every reading regardless of connector selection). A
+ * connector-markup function rendering its own copy duplicated that sentence
+ * on screen whenever a connector was selected. Ownership rule: the surface
+ * renders the disclosure exactly once; connector markup renders connector
+ * content only.
  */
 export function heritageConnectorTier2Markup(model) {
   if (!model.available || !model.card) return "";
   return `
     <p class="eyebrow">A related historical connection</p>
-    ${heritageConnectorCardMarkup(model.card)}
-    ${model.rotationDisclosure ? `<p class="muted">${esc(model.rotationDisclosure)}</p>` : ""}`;
+    ${heritageConnectorCardMarkup(model.card)}`;
 }
 
 /**
@@ -484,14 +496,18 @@ export function heritageConnectorTier2Markup(model) {
  * gate must render nothing, not an empty-looking section that invites a
  * reader to wonder what is missing.
  *
- * `model.rotationDisclosure` (`tier3ConnectorModel`, above) renders once, at
- * the top, whenever any section below is about to render — Contract §13's
- * "the UX must distinguish this appeared because your measurement changed
- * from this is today's scheduled heritage study" applies here exactly as it
- * already does to Tier 2's `heritageConnectorTier2Markup`, using the SAME
- * disclosure string, not a second one. Placed first, not last, so a reader
- * opening Why sees the disclosure before any connector/source/disagreement
- * material that could otherwise read as selected by their measurement.
+ * Renders NO rotation disclosure of its own. `model.rotationDisclosure`
+ * (`tier3ConnectorModel`, above) stays on the model as connector-payload
+ * metadata, but the Why SURFACE owns the actual emission
+ * (`src/ui/qise/app.js`'s `renderReflection()`) — and for a stronger reason
+ * than symmetry with Tier 2: Why's `byLayer.heritage` trace (rendered above
+ * this function's output, in app.js's own template) is ITSELF day-rotated
+ * heritage content, reconstructed from the same `composed` reading Tier 2's
+ * passage comes from, whether or not any Stage-3 connector is authorised or
+ * selected. A disclosure owned by this function could only ever cover the
+ * connector block below it, leaving the heritage trace above undisclosed.
+ * The surface therefore renders ONE disclosure, unconditionally, before
+ * everything on the Why tab — see app.js for the exact placement.
  */
 export function heritageConnectorTier3Markup(model) {
   if (model.suppressed || model.abstained) return "";
@@ -533,9 +549,5 @@ export function heritageConnectorTier3Markup(model) {
           ${j.items.map(heritageConnectorCardMarkup).join("")}
         </div>`).join("")}`);
   }
-  if (!sections.length) return "";
-  const disclosure = model.rotationDisclosure
-    ? `<p class="muted">${esc(model.rotationDisclosure)}</p>`
-    : "";
-  return disclosure + sections.join("");
+  return sections.join("");
 }

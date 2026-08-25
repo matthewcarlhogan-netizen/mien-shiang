@@ -281,14 +281,29 @@ function toAbstention(entry) {
  * unchanged. A connectorId with no registry match (should not happen; the
  * entry came from this exact registry) leaves the entry untouched rather
  * than inventing a status.
+ *
+ * ENRICH, NEVER OVERWRITE: `entry.sectionLocatorStatus`/`folioLocatorStatus`
+ * win when already present; the registry is consulted only as a fallback.
+ * Today `toResolvedEntry()` never sets either field (see above), so
+ * `entry.*` is always `undefined` here and this is a no-op in practice — but
+ * an unconditional overwrite would silently discard a future resolver
+ * enhancement that DID start copying these fields onto resolved entries,
+ * which is exactly the kind of regression this module exists to prevent
+ * elsewhere (see the file header's "WHY GATES FAIL CLOSED..." and the
+ * connector-vs-source precedence this same function was added to enforce).
+ * `??` is safe specifically because the STATUS fields are a closed enum that
+ * always defaults to the string `"NOT_RECORDED"` in `registry.js`'s
+ * `connectorRecord()` factory — `null` is used there for the locator VALUE
+ * fields, never for the status fields, so there is no legitimate `null`
+ * status this would misread as "absent".
  */
 function withConnectorLocatorStatus(entry, connectorRegistry) {
   const raw = connectorRegistry?.[entry.connectorId];
   if (!raw) return entry;
   return Object.freeze({
     ...entry,
-    sectionLocatorStatus: raw.sectionLocatorStatus,
-    folioLocatorStatus: raw.folioLocatorStatus,
+    sectionLocatorStatus: entry.sectionLocatorStatus ?? raw.sectionLocatorStatus,
+    folioLocatorStatus: entry.folioLocatorStatus ?? raw.folioLocatorStatus,
   });
 }
 

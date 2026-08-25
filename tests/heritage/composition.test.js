@@ -881,3 +881,62 @@ test("a single composition, reused for both tiers, cannot exhibit the ordering h
       `occurrence ${occurrence}: Tier 2's selected connector must be the head of Tier 3's presentation order`);
   }
 });
+
+/*
+ * ── locator-status precedence: enrich, never overwrite (Copilot, suppressed
+ *    pre-existing note, PR #40 closeout) ────────────────────────────────────
+ * `withConnectorLocatorStatus()` reads the connector registry ONLY to fill
+ * in `sectionLocatorStatus`/`folioLocatorStatus` when the resolved entry
+ * doesn't already carry its own — never to overwrite a value the entry
+ * already has. Today `resolver.js`'s frozen `toResolvedEntry()` never copies
+ * either field onto a resolved entry (verified directly against its source,
+ * lines 754-776), so `entry.sectionLocatorStatus`/`folioLocatorStatus` are
+ * ALWAYS `undefined` on every real entry this function ever sees — meaning a
+ * true runtime negative case ("an entry that already has its own status,
+ * different from the registry's") cannot be constructed end to end without
+ * reopening the frozen resolver boundary, which this pass must not do.
+ *
+ * So this is a source-text regression, not a behavioural one — the
+ * "implementation-level regression test" the task explicitly sanctions as
+ * the fallback here, rather than exporting `withConnectorLocatorStatus` as a
+ * new product API solely to make it importable. `??` is safe specifically
+ * because `registry.js`'s `connectorRecord()` factory (lines 219-234)
+ * defaults these two STATUS fields to the string `"NOT_RECORDED"`, never
+ * `null` — `null` is used in that same factory only for the locator VALUE
+ * fields (`sectionLocator`/`folioLocator`), so nullish-coalescing on the
+ * status fields specifically cannot confuse "not recorded" with "absent".
+ * The existing end-to-end tests in tests/qise/heritage-view.test.js (item
+ * 11, "four-rivers-flow-and-banks..."/"five-forms-generative-overcoming-
+ * system...") continue to prove the fallback-FILL path still works with
+ * real data — unaffected by this change, since `entry.*` is always
+ * `undefined` in that data either way.
+ */
+test("withConnectorLocatorStatus preserves an already-present entry status over the registry's, and falls back to the registry only when the entry's own is absent", () => {
+  const source = readFileSync(
+    fileURLToPath(new URL("../../src/heritage/composition.js", import.meta.url)), "utf8");
+  const fn = source.slice(
+    source.indexOf("function withConnectorLocatorStatus"),
+    source.indexOf("function mapResolverResult"),
+  );
+  assert.ok(fn.length > 0, "fixture assumption: withConnectorLocatorStatus must be found");
+  assert.match(fn, /sectionLocatorStatus:\s*entry\.sectionLocatorStatus\s*\?\?\s*raw\.sectionLocatorStatus/,
+    "the entry's own sectionLocatorStatus must win; the registry is a fallback, not an overwrite");
+  assert.match(fn, /folioLocatorStatus:\s*entry\.folioLocatorStatus\s*\?\?\s*raw\.folioLocatorStatus/,
+    "the entry's own folioLocatorStatus must win; the registry is a fallback, not an overwrite");
+  // Negative control: the OLD unconditional-overwrite shape must be gone.
+  assert.doesNotMatch(fn, /sectionLocatorStatus:\s*raw\.sectionLocatorStatus,\n\s*folioLocatorStatus:\s*raw\.folioLocatorStatus,/,
+    "the unconditional overwrite this test replaces must not still be present");
+});
+
+test("withConnectorLocatorStatus's precedence is safe under the validated schema: registry.js's connectorRecord() status fields never use null", () => {
+  const source = readFileSync(
+    fileURLToPath(new URL("../../src/heritage/registry.js", import.meta.url)), "utf8");
+  const factory = source.slice(
+    source.indexOf("const connectorRecord = (fields) => ({"),
+    source.indexOf("});", source.indexOf("const connectorRecord = (fields) => ({")),
+  );
+  assert.ok(factory.length > 0, "fixture assumption: connectorRecord's factory literal must be found");
+  assert.match(factory, /sectionLocatorStatus:\s*"NOT_RECORDED"/,
+    "the status field must default to a non-null string, confirming ?? cannot misread a legitimate null status as absent");
+  assert.match(factory, /folioLocatorStatus:\s*"NOT_RECORDED"/);
+});

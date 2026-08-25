@@ -1125,6 +1125,11 @@ function renderReflection(reading, history) {
   const { tier1, tier2, tier3 } = tiers;
   const heritageTier2 = tier2ConnectorModel(tier2.connectors);
   const heritageTier3 = tier3ConnectorModel(tier3.connectors);
+  // One reading-level disclosure value, bound once. Story and Why each
+  // render it exactly once; neither connector-markup function renders its
+  // own copy (see heritage-view.js) — the surface owns disclosure, not the
+  // connector card.
+  const rotationDisclosure = tier2.rotationDisclosure;
 
   todayNode.hidden = false;
   todayNode.innerHTML = `
@@ -1140,7 +1145,7 @@ function renderReflection(reading, history) {
     <p class="eyebrow">The tradition\u2019s reading</p>
     <p class="story-passage">${esc(tier2.passage)}</p>
     <p class="muted">${esc(tier2.attribution)}</p>
-    <p class="muted">${esc(tier2.rotationDisclosure)}</p>
+    <p class="muted">${esc(rotationDisclosure)}</p>
     <p>${esc(tier2.bridge)}</p>
     <p class="reflection">${esc(tier2.question)}</p>
     ${heritageConnectorTier2Markup(heritageTier2)}`;
@@ -1161,6 +1166,7 @@ function renderReflection(reading, history) {
 
   whyTab.hidden = false;
   whyNode.innerHTML = `
+    <p class="muted">${esc(rotationDisclosure)}</p>
     <div class="section-label"><h2>What produced each line</h2><span class="muted">${esc(tier3.provenance.corpus)}</span></div>
     ${["observation", "heritage", "reflection"].map((layer) => `
       <p class="eyebrow">${esc(layer)}</p>
