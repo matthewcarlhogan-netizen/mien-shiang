@@ -16,7 +16,7 @@
  * dependency that "looks reachable" only because nothing traced the actual
  * import graph. Keeping the connector integration in its own file is what
  * makes `import { tierOne } from "./reading-tiers.js"` provably free of it —
- * `tests/heritage/composition.test.js` asserts reading-tiers.js's source
+ * `tests/qise/heritage-connections.test.js` asserts reading-tiers.js's source
  * contains no reference to composition.js at all, not merely that one
  * function's body doesn't call it.
  *
@@ -58,12 +58,16 @@ const CAPTURE_TIER_AUTHORIZED = Object.freeze(["clean", "assisted"]);
  * The authoritative capture-quality gate boolean for Stage 3, derived from
  * an already-persisted `reading` record. Returns `true` only for an
  * explicit "clean"/"assisted" `captureTier`; `false` for an explicit
- * "waiting" (the gates are recorded as NOT having passed); `undefined`
- * (unknown — fails closed identically to `false` in
- * `src/heritage/composition.js`'s `gateStatus()`) for anything else,
- * including a missing field, a malformed value, or `reading` itself being
- * absent. Changing Qi Se MEASUREMENT values (compass, metrics, confidence)
- * has no effect here at all — only `captureTier` is read.
+ * "waiting" (the gates are recorded as NOT having passed); `undefined` for
+ * anything else, including a missing field, a malformed value, or `reading`
+ * itself being absent. `false` and `undefined` are NOT the same thing: fed
+ * into `src/heritage/composition.js`'s `gateStatus()`, `false` reads as
+ * FAILED (the gates ran and did not pass) while `undefined` reads as
+ * UNKNOWN (no gate evidence exists at all) — two different reasons
+ * (`CAPTURE_QUALITY_GATE_FAILED` vs `CAPTURE_QUALITY_GATE_UNKNOWN`). Both
+ * suppress output, but never for the same reason. Changing Qi Se MEASUREMENT
+ * values (compass, metrics, confidence) has no effect here at all — only
+ * `captureTier` is read.
  */
 export function captureAuthorizationFromReading(reading) {
   const tier = reading && reading.captureTier;

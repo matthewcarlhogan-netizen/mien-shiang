@@ -36,6 +36,7 @@ import {
   readingStateFromRecord, reflectionFor, heritageRotation, recentMovements, regionOf,
 } from "../../src/qise/reading-pipeline.js";
 import { LAYERS } from "../../src/qise/reflection.js";
+import { readingTiersWithHeritage } from "../../src/qise/heritage-connections.js";
 
 /* ── the real capture arithmetic ─────────────────────────────────────────── */
 
@@ -301,4 +302,68 @@ test("the existing passage engine still runs on the same record", () => {
   const fresh = reflectionFor(record, BASE_HISTORY).composed;
   assert.equal(fresh.provenance.engine, "reflection-engine-v1");
   assert.notEqual(fresh.text, old.text);
+});
+
+/*
+ * ── 7. the lineage adapter through the REAL production path ─────────────────
+ *
+ * A prior test (tests/heritage/composition.test.js) claimed to prove
+ * `five-mountains-mutual-facing-fullness` reaches `SOURCE_PANEL_CEILING`
+ * "through the REAL Stage-3 production composition path" — but it called
+ * `composeHeritageForReading` with the explicit canonical id "taiqing-siku"
+ * supplied directly. Nothing in the real reading pipeline ever supplies
+ * that string: `heritageRotation()` and `reading-state.js`'s
+ * `SOURCE_LINEAGES` only ever emit the ABSTRACT labels "primary"/"variant".
+ * This is the actual real path — a persisted reading, through
+ * `reflectionFor()`, through `readingTiersWithHeritage()` — for the one
+ * `canonicalDay` that genuinely rotates to fiveMountains/primary (see
+ * `heritageRotation` above; "2026-08-20" verified against
+ * `HERITAGE_CONSTRUCTS`'s fixed six-day cycle).
+ *
+ * The honest current result: `ABSTRACT_LINEAGE_OVERRIDES` is deliberately
+ * empty (a content/editorial decision reserved for a product owner — see
+ * src/heritage/composition.js's file header), so the abstract "primary"
+ * resolves to fiveMountains' literal registry key "primary" — the
+ * 人倫大統賦 (Renlun Datong) directional-naming witness, `runtimeStatus:
+ * "RESEARCH_ONLY"` — never to "taiqing-siku" (太清神鑑, HERITAGE_ONLY,
+ * the mountain-name-to-region witness the connector actually cites). The
+ * resolver therefore blocks `five-mountains-mutual-facing-fullness` at
+ * `LINEAGE_RESEARCH_ONLY`, not `SOURCE_PANEL_CEILING` — it is fully
+ * traceable (present in `abstentions`) but never shown. If a product owner
+ * later authorises routing fiveMountains' abstract "primary" to
+ * "taiqing-siku" via `ABSTRACT_LINEAGE_OVERRIDES`, this test's asserted
+ * outcome will correctly start failing, which is the intended signal to
+ * update it alongside that decision.
+ */
+test("fiveMountains/primary through the REAL reflectionFor()/readingTiersWithHeritage() path does NOT reach taiqing-siku or SOURCE_PANEL_CEILING today", () => {
+  const canonicalDay = "2026-08-20";
+  const rotation = heritageRotation(canonicalDay);
+  assert.deepEqual(rotation, { heritageConstruct: "fiveMountains", sourceLineage: "primary" },
+    "fixture assumption: this canonicalDay must rotate to fiveMountains/primary — the six-day cycle moved");
+
+  const record = scan({ history: BASE_HISTORY, canonicalDay });
+  const reflection = reflectionFor(record, BASE_HISTORY);
+  assert.equal(reflection.state.heritageConstruct, "fiveMountains");
+  assert.equal(reflection.state.sourceLineage, "primary",
+    "the Reflection Engine state only ever carries the ABSTRACT label, never a canonical lineage id");
+
+  const tiers = readingTiersWithHeritage(reflection, { captureQualityPassed: true, safetyPassed: true });
+
+  // Tier 2: no active connector — the flagship claim is not production-reachable today.
+  assert.equal(tiers.tier2.connectors.available, false);
+  assert.equal(tiers.tier2.connectors.reason, "NO_ACTIVE_CONNECTOR");
+  assert.equal(tiers.tier2.connectors.connector, null);
+
+  // Tier 3 (SOURCE_DEEP): not ACTIVE, not source-panel-ceilinged — genuinely blocked.
+  const tier3Connectors = tiers.tier3.connectors;
+  assert.equal(tier3Connectors.primaryLineage, "primary",
+    "the resolver received the abstract label verbatim, not \"taiqing-siku\"");
+  assert.equal(
+    tier3Connectors.active.some((e) => e.connectorId === "five-mountains-mutual-facing-fullness"), false);
+  assert.equal(
+    tier3Connectors.sourcePanelOnly.some((e) => e.connectorId === "five-mountains-mutual-facing-fullness"), false,
+    "SOURCE_PANEL_CEILING is not reached through the real abstract-label path");
+  const blocked = tier3Connectors.abstentions.find((e) => e.connectorId === "five-mountains-mutual-facing-fullness");
+  assert.ok(blocked, "the connector must still be fully traceable, even though it is never shown");
+  assert.equal(blocked.gateReasons[0], "LINEAGE_RESEARCH_ONLY");
 });

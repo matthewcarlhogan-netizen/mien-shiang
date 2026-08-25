@@ -325,7 +325,7 @@ async function runCapture() {
 
   const burst = {};
   let collecting = 0;
-  let lastSclera = null, lastRois = null, lastMargins = null, lastCaptureTier = "clean";
+  let lastSclera = null, lastRois = null, lastMargins = null, lastCaptureTier = null;
 
   /**
    * Abandon a running screen-light session, wherever the loop noticed.
@@ -824,8 +824,28 @@ async function runSelfie(file) {
 
 /* ── finishing a reading ─────────────────────────────────────────────────── */
 
+/*
+ * `captureTier` has NO DEFAULT on purpose. `src/qise/gates.js`'s
+ * `evaluateGates()` is the only thing that ever produces a real value here
+ * ("clean"/"assisted" when the gates passed, "waiting" when they did not),
+ * and `captureAuthorizationFromReading()` (heritage-connections.js) trusts
+ * this field as PROOF the capture-quality gates ran. A default parameter
+ * that silently supplied "clean" would manufacture that proof for any call
+ * site that forgot to derive it from real gate evidence — the reading would
+ * look authorised without ever having been gated. Both current call sites
+ * already pass an explicit, gate-derived tier; this assertion is what keeps
+ * that true for the next one too, by failing loudly instead of silently
+ * authorising.
+ */
+const VALID_CAPTURE_TIERS = Object.freeze(["clean", "assisted", "waiting"]);
+
 async function finish(burst, rois, sclera, opened, history, gateMargins, illumination,
-  captureTier = "clean", acceptedImage = null, acceptedPoints = null) {
+  captureTier, acceptedImage = null, acceptedPoints = null) {
+  if (!VALID_CAPTURE_TIERS.includes(captureTier)) {
+    throw new Error(
+      `finish() requires an explicit gate-derived captureTier ("clean"/"assisted"/"waiting"); received ${JSON.stringify(captureTier)}`,
+    );
+  }
   const reduced = reduceBurst(burst);
   const rawLab = reduced.lab;
   // A still image has no temporal samples. Do not report duplicated analysis

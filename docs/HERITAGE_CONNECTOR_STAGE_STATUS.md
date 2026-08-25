@@ -111,7 +111,7 @@ suite.
 **Do not reopen Stage 2 without a demonstrated regression against one of
 these frozen contracts.**
 
-## Stage 3 — PARTIAL / BLOCKED ON UPSTREAM SAFETY AUTHORIZATION
+## Stage 3 — PARTIAL / BLOCKED ON SAFETY AUTHORIZATION AND A LINEAGE CONTENT DECISION
 
 Heritage connector graph integrated with the Reflection Engine's reading
 path, on top of the frozen Stage 1/2 baseline (`df8cf22b9257c2a7fb75affd30b5e7dc6d15caa0`).
@@ -125,18 +125,44 @@ Stages 1 and 2, and explicitly states that doing so does not authorise Stage
 code on a review branch, not an approved stage — until a separate,
 independent review and a separate product-owner decision both say otherwise.
 
-**Why the status line reads BLOCKED rather than IMPLEMENTED.** Three of the
-four architectural blockers from the second review pass are resolved (capture
-authorization, selection lifecycle, lineage adapter — all below). The fourth,
-safety authorization, is NOT resolved and cannot be resolved inside this
-stage: no authoritative Qi Se safety-referral signal exists anywhere in the
-current product, and inventing one is explicitly out of scope for Stage 3 (it
-would be a new clinical/safety subsystem, not an integration). Stage 3's OWN
-side of that interface is fully defined and fails closed — see "Safety
-authorization" below — but a fully-defined, fail-closed interface with
-nothing real behind it is a blocked stage, not a settled one. Marking this
-IMPLEMENTED would misstate that the production connector path can actually
-authorise output; it cannot, honestly, until that prerequisite exists.
+**Why the status line reads BLOCKED rather than IMPLEMENTED.** Two of the
+four architectural blockers from the second review pass are fully resolved
+(capture authorization, selection lifecycle — both below). The remaining two
+are each blocked on something outside this module's authority to decide, for
+different reasons:
+
+- **Lineage adapter — the MECHANISM is resolved; a CONTENT decision is not.**
+  `resolveHeritageLineage()` itself is correct and tested: it fails closed on
+  an unresolvable pairing, never borrows another construct's data, never
+  falls back to "primary" when something else was requested. But its
+  `ABSTRACT_LINEAGE_OVERRIDES` table — the only way an abstract rotation slot
+  can be routed to a specific named witness — is deliberately empty, because
+  making that routing decision is explicitly outside this module's authority
+  (see "Lineage adapter" below). A prior revision of this document claimed
+  `five-mountains-mutual-facing-fullness` reaches `SOURCE_PANEL_CEILING`
+  "through the REAL Stage-3 production composition path" — that claim was
+  independently re-checked and does not hold: the test it cited called
+  `composeHeritageForReading` with the canonical lineage id `"taiqing-siku"`
+  supplied directly, which the real Reflection Engine reading path
+  (`heritageRotation()` → `deriveReadingState()` → `reflectionFor()` →
+  `readingTiersWithHeritage()`) never does — it only ever supplies the
+  abstract label `"primary"`. Through that real path today,
+  `five-mountains-mutual-facing-fullness` is blocked at
+  `LINEAGE_RESEARCH_ONLY` and never reaches `SOURCE_PANEL_CEILING` or
+  `ACTIVE`. See "Lineage adapter" below for why this is a content decision
+  and not a bug the adapter can fix on its own.
+- **Safety authorization — NOT resolved**, and cannot be resolved inside this
+  stage: no authoritative Qi Se safety-referral signal exists anywhere in the
+  current product, and inventing one is explicitly out of scope for Stage 3 (it
+  would be a new clinical/safety subsystem, not an integration). Stage 3's OWN
+  side of that interface is fully defined and fails closed — see "Safety
+  authorization" below.
+
+Both remaining blockers share the same shape: a fully-defined, fail-closed
+interface with nothing (safety) or nothing-yet-authorised (lineage content)
+behind it. Marking this IMPLEMENTED would misstate that the production
+connector path can actually authorise or show heritage-connector output; it
+cannot, honestly, until both are resolved.
 
 - **Branch:** `feature/heritage-stage3-reflection-integration`
 - **Base:** `main` at `f1fc55e8e9bae082ac2fa7e89e256f6b95609138`
@@ -157,10 +183,24 @@ report. `readingConfidence()` (`src/qise/baseline.js`) already trusts this
 same field for exactly this kind of purpose. `src/qise/heritage-connections.js`'s
 new `captureAuthorizationFromReading(reading)` reads exactly that one field
 and returns `true` only for `"clean"`/`"assisted"`, `false` for an explicit
-`"waiting"`, and `undefined` (fails closed, identically to `false`) for
-anything else — a missing field, a malformed value, or no reading at all.
+`"waiting"`, and `undefined` for anything else — a missing field, a
+malformed value, or no reading at all. `false` and `undefined` both suppress
+downstream output, but they are not identical: `false` means the gates ran
+and recorded a fail; `undefined` means no gate evidence exists at all
+(`gateStatus()` in `src/heritage/composition.js` reports these as the
+distinct `FAILED` and `UNKNOWN` states, respectively).
 **No new field was added to persistence.** `src/ui/qise/app.js` now calls
 `captureAuthorizationFromReading(reading)` instead of `Boolean(reading)`.
+**Hardened further this session:** `app.js`'s `finish()` — the function that
+actually writes `captureTier` onto the persisted reading — still defaulted
+an omitted `captureTier` to `"clean"`, and `lastCaptureTier` (the variable
+its live-capture call site feeds from) defaulted the same way. Both call
+sites already supplied an explicit, gate-derived tier, so this was dead code
+today, but it meant the field `captureAuthorizationFromReading` trusts as
+proof could itself have been manufactured by omission at a different
+boundary. Both defaults are now removed and `finish()` throws if it is ever
+reached without an explicit `"clean"`/`"assisted"`/`"waiting"` tier. See
+"Stage 3 — correction pass" below.
 
 **2. One deterministic selection lifecycle — RESOLVED.**
 `occurrence` was already correctly read from `reflection.occurrence` (fixed
@@ -181,7 +221,8 @@ deterministic variation via the resolver's own coprime-stride rotation.
 `composeHeritageConnectionsWithRegistries`, the test/internal seam, for
 exercising the resolver's own already-tested behaviour directly.
 
-**3. Lineage adapter — RESOLVED.**
+**3. Lineage adapter — MECHANISM RESOLVED; CONTENT-ROUTING DECISION OPEN,
+BLOCKING THE FLAGSHIP `SOURCE_PANEL_CEILING` DEMONSTRATION.**
 The gap: `reading-state.js`'s `sourceLineage` is a two-value ABSTRACT
 rotation label (`"primary"`/`"variant"`), general across all six
 constructs; the canonical heritage registry's own lineages are
@@ -201,17 +242,62 @@ something else. An unresolvable pairing returns `null`, and
 `composeHeritageForReading` turns that into a Stage-3-level abstention
 (`abstentionReasonCode: "UNSUPPORTED_LINEAGE"`) BEFORE the resolver is ever
 called — distinct from both gate suppression and the resolver's own
-abstentions. The adapter's override table (`ABSTRACT_LINEAGE_OVERRIDES`) is
-deliberately empty: routing an abstract label to a NAMED witness other than
-the identically-named registry key (e.g. deciding fiveMountains' rotation
-should sometimes show `"taiqing-siku"` specifically) is a content/editorial
-decision outside this module's authority, and the table exists as a
-documented extension point for that decision, not a place to guess. Verified
-end to end: `composeHeritageForReading` reaches
-`five-mountains-mutual-facing-fullness` at `SOURCE_PANEL_CEILING` with zero
-registries injected, by requesting the explicit canonical id
-`"taiqing-siku"` directly — the real production entry point, not a test-only
-seam.
+abstentions. **This mechanism is correct and well-tested** — that part of
+the gap is genuinely resolved.
+
+**What is NOT resolved: the previously-claimed real-path reachability of
+`five-mountains-mutual-facing-fullness` at `SOURCE_PANEL_CEILING`.** A prior
+revision of this document asserted this was "Verified end to end" because
+`composeHeritageForReading` reaches `SOURCE_PANEL_CEILING` when the explicit
+canonical id `"taiqing-siku"` is requested directly. That call is a
+legitimate direct use of the adapter (it accepts an explicit canonical id as
+well as an abstract label), but it is **not** what the real Reflection
+Engine reading path ever supplies. `heritageRotation()`
+(`src/qise/reading-pipeline.js`) and `reading-state.js`'s `SOURCE_LINEAGES`
+only ever emit the abstract labels `"primary"`/`"variant"` — never a
+construct-specific canonical id like `"taiqing-siku"`. An independent check
+against `2f14912` traced the actual call chain
+(`heritageRotation()` → `deriveReadingState()` → `reflectionFor()` →
+`readingTiersWithHeritage()` → `composeHeritageForReading()`) and found the
+prior test did not exercise it: it called `composeHeritageForReading`
+directly with the canonical id, bypassing `reflectionFor`/
+`readingTiersWithHeritage` entirely, so it never proved what it was labelled
+as proving. That test has been renamed to describe what it actually tests
+(`tests/heritage/composition.test.js`), and a genuine real-path test has
+been added (`tests/qise/reading-production-path.test.js`) that drives a
+persisted reading through `reflectionFor()` and `readingTiersWithHeritage()`
+for the `canonicalDay` that rotates to fiveMountains/primary.
+
+**The actual result through the real path today:** the adapter's override
+table (`ABSTRACT_LINEAGE_OVERRIDES`) is deliberately empty, so fiveMountains'
+abstract `"primary"` resolves to the literal registry key `"primary"` — the
+人倫大統賦 (Renlun Datong) directional-naming witness (`runtimeStatus:
+"RESEARCH_ONLY"`) — never to `"taiqing-siku"` (太清神鑑, `HERITAGE_ONLY`,
+the mountain-name-to-region witness the connector actually cites). These are
+two different sub-claims of the tradition (compass-direction labels vs.
+named-mountain-to-region assignment), not a weak witness and a strong
+witness of the same claim, so this is not a bug the adapter can silently
+correct — see `tests/heritage/composition.test.js`'s
+`"fiveMountains's registry-key 'primary' lineage is NOT the same claim as
+'taiqing-siku'"` test for the registry evidence. The resolver blocks
+`five-mountains-mutual-facing-fullness` at `LINEAGE_RESEARCH_ONLY`
+(fully traceable in `abstentions`, never shown) rather than reaching
+`SOURCE_PANEL_CEILING` or `ACTIVE`, for the only abstract-lineage value the
+Reflection Engine can ever produce for fiveMountains (`"primary"` — see
+`reading-state.js`'s `SOURCE_LINEAGES`/`isReachable`: `"variant"` is
+reachable only for fourRivers). This document makes no claim about the
+other five constructs' construct-scoped connectors, which were not
+re-examined this session.
+
+**Routing fiveMountains' abstract `"primary"` to `"taiqing-siku"` — or any
+other named witness — via `ABSTRACT_LINEAGE_OVERRIDES` remains a
+content/editorial decision outside this module's (and this stage's) own
+authority.** The table exists as a documented extension point for that
+decision; it must not be populated by inference. Until a product owner makes
+that call, the honest status is: the lineage adapter's mechanism is sound,
+but no construct-scoped `HERITAGE_PRESENTATION_ALLOWED` connector currently
+becomes visible (`ACTIVE` or `SOURCE_PANEL_CEILING`) through the real
+Reflection Engine rotation for fiveMountains.
 
 **4. Safety authorization — DEFINED AND FAIL-CLOSED, NOT WIRED. BLOCKING.**
 Investigated whether an authoritative Qi Se safety-referral decision exists
@@ -326,24 +412,39 @@ registries — it reads them, it does not modify them or their validation.
   instead of `Boolean(reading)`
 - `tests/heritage/composition.test.js` — 15 new tests (rotationState
   rejection, the lineage adapter, fail-closed unsupported-lineage behaviour,
-  end-to-end reachability of `taiqing-siku`)
+  reachability of `taiqing-siku` via an explicit request). **Correction, this
+  session:** the last of these was originally labelled as proving this was
+  reachable "through the REAL Stage-3 production composition path" — it was
+  not; see "Stage 3 — correction pass" below.
 - `tests/qise/heritage-connections.test.js` — 8 new tests (capture
   authorization, including "object existence is not enough" and "measurement
   values cannot fabricate authorization")
 
 ### Test counts (this branch, this session)
 
+Superseded numbers from the prior revision are struck through; current
+numbers are from this session's correction pass, re-run after the fixes
+above.
+
 - `node --test tests/heritage/resolver.test.js`: **123/123** (unchanged —
   Stage 2 not reopened)
-- `node --test tests/heritage/validator.test.js tests/heritage/falsification.test.js tests/heritage/integration.test.js tests/heritage/resolver.test.js tests/heritage/composition.test.js`: **260/260**
-- `node --test tests/heritage/composition.test.js`: **41/41**
-- `node --test tests/qise/heritage-connections.test.js`: **26/26**
+- `node --test tests/heritage/validator.test.js tests/heritage/falsification.test.js tests/heritage/integration.test.js tests/heritage/resolver.test.js tests/heritage/composition.test.js`:
+  ~~260/260~~ **261/261** (+1: the new registry-evidence test documenting
+  why `"primary"` and `"taiqing-siku"` are different sub-claims)
+- `node --test tests/heritage/composition.test.js`: ~~41/41~~ **42/42**
+- `node --test tests/qise/heritage-connections.test.js`: ~~26/26~~ **29/29**
+  (+3: the capture-tier fail-closed falsification tests)
 - `node --test tests/qise/reading-tiers.test.js`: **14/14** (unchanged)
-- `npm test`: **1098/1098** across 74 discovered test files
+- `node --test tests/qise/reading-production-path.test.js`: **15/15** (+1:
+  the real fiveMountains/primary production-path test)
+- `node --test tests/heritage/resolver.test.js tests/heritage/composition.test.js tests/qise/heritage-connections.test.js tests/qise/reading-tiers.test.js tests/qise/reading-production-path.test.js`
+  (exact set re-verified this session): **223/223**
+- `npm test`: ~~1098/1098~~ **1103/1103** across `Running 74 test file(s)`
 - `npm run build`: clean — 95 files copied, Module B shipped (wellness
-  flavour)
-- `npm run lint:bundle`: clean — copy blocklist / attractiveness / egress
-  allowlist / biometric egress all `ok`
+  flavour), 6 pinned MediaPipe assets copied
+- `npm run lint:bundle`: clean — 96 files scanned, 1465 user-facing strings
+  extracted; copy blocklist / attractiveness / egress allowlist / biometric
+  egress all `ok`
 - `git diff --check`: clean
 - `npm run audit:release`: `Release gate: BLOCKED` — identical pre-existing
   categories to every prior check at this stage (rights-not-cleared,
@@ -375,10 +476,25 @@ another); an unknown construct abstains; fourRivers' primary/variant remain
 two deliberately different resolutions; an unsupported pairing produces
 `UNSUPPORTED_LINEAGE` — abstained, never suppressed, never silently
 substituted with that construct's own "primary" data;
-`five-mountains-mutual-facing-fullness` reached via `"taiqing-siku"` through
-the real product-facing entry point with evidence unchanged; the same
+`five-mountains-mutual-facing-fullness` reached via the explicit canonical id
+`"taiqing-siku"` when requested directly, with evidence unchanged (renamed
+from a prior claim that this was the real production path — it is a direct
+call to `composeHeritageForReading`, not the abstract-label path
+`reflectionFor`/`readingTiersWithHeritage` actually drive); the same
 connector is never ACTIVE under any of fiveMountains' four declared
-lineages; concept-only connector eligibility is unaffected by the adapter.
+lineages; concept-only connector eligibility is unaffected by the adapter;
+fiveMountains' registry-key `"primary"` and `"taiqing-siku"` are shown to be
+different sub-claims (different `sourceId`, different `runtimeStatus`), not
+a weak/strong pair of the same claim — documenting why the override table
+cannot be populated by inference. **New this session**
+(`tests/qise/reading-production-path.test.js`): a persisted reading, on the
+`canonicalDay` that rotates to fiveMountains/primary, driven through the
+REAL path (`reflectionFor()` → `readingTiersWithHeritage()`) — confirms
+`primaryLineage` stays `"primary"` (never `"taiqing-siku"`),
+`five-mountains-mutual-facing-fullness` is absent from both `active` and
+`sourcePanelOnly`, and appears in `abstentions` with
+`gateReasons: ["LINEAGE_RESEARCH_ONLY"]`; Tier 2 reports
+`available: false, reason: "NO_ACTIVE_CONNECTOR"`.
 
 **Production wiring:** `app.js`'s source is asserted to call
 `readingTiersWithHeritage` and `captureAuthorizationFromReading(reading)`,
@@ -395,14 +511,54 @@ editorial-item detail integrity; disagreement position integrity;
 participant-gate distinctions; real Tier 1 import-graph isolation;
 determinism.
 
+### Stage 3 — correction pass (this session, on top of `5827d33`)
+
+An independent re-check of PR #40 found two overstated claims in this
+document and fixed both. Neither reopens Stage 1 or Stage 2; both are
+scoped to `src/heritage/composition.js`'s tests/docs and
+`src/ui/qise/app.js`'s capture-authorization call boundary.
+
+1. **The lineage-adapter "verified end to end" claim did not hold.** See
+   "Lineage adapter" above for the full account. Fixed by renaming the
+   test that made the claim, adding a genuine real-path test
+   (`tests/qise/reading-production-path.test.js`) that proves what actually
+   happens today (blocked at `LINEAGE_RESEARCH_ONLY`, not
+   `SOURCE_PANEL_CEILING`), and adding a test documenting why
+   `ABSTRACT_LINEAGE_OVERRIDES` cannot be populated by inference. **No
+   change to `src/heritage/resolver.js`, `registry.js`, or
+   `composition.js`'s actual resolution logic** — this was a test/doc
+   correction, not a behaviour change.
+2. **`src/ui/qise/app.js`'s `finish()` still defaulted an omitted
+   `captureTier` to `"clean"`**, and the `lastCaptureTier` variable it is
+   normally fed from defaulted the same way. Both call sites already passed
+   an explicit, gate-derived tier, so this was dead code today — but a
+   default at this exact boundary is precisely the shape of defect item 43
+   in CLAUDE.md describes ("a gate fed a literal is a gate that can never
+   fire"), just inverted: a boundary that can silently manufacture a PASSING
+   result instead of a gate that can never fail. Fixed by removing both
+   defaults and adding an explicit fail-closed check inside `finish()` that
+   throws if `captureTier` is not one of `"clean"`/`"assisted"`/`"waiting"`.
+   Falsification tests added to `tests/qise/heritage-connections.test.js`
+   (static source checks, the same technique the file's existing
+   "production wiring" tests use — `finish()` lives in the file no test can
+   import; see CLAUDE.md item 44).
+
 ### Known limitations / remaining work
 
 - **Stage 3 is BLOCKED, not approved, not merged.** See the framing at the
   top of this section.
-- **Safety authorization is the sole remaining architectural blocker.** See
-  Blocker 4. This is a product/design decision (or a new subsystem), not
-  mechanical work, and is explicitly not something this session should
-  attempt to invent.
+- **Two architectural blockers remain, neither mechanical.** Safety
+  authorization (Blocker 4) needs either a product-owner decision that Qi Se
+  needs no safety gate, or a new safety subsystem — out of scope here. The
+  lineage content-routing decision (Blocker 3) needs a product owner to
+  decide whether, and to which named witness, an abstract construct rotation
+  slot should route via `ABSTRACT_LINEAGE_OVERRIDES` — for fiveMountains
+  specifically, whether `"primary"` should route to `"taiqing-siku"` (a
+  content substitution: routing away from the currently-aliased
+  人倫大統賦/directional-naming witness to the 太清神鑑/mountain-name
+  witness the connector needs) or to something else, or not at all. Neither
+  is mechanical work, and neither is something this session should attempt
+  to invent.
 - **No new heritage connector relationships, prose registry, or corpus
   content were added.** Stage 3 establishes the composition contract;
   populating it with additional source-backed connectors or a Tier-2 prose

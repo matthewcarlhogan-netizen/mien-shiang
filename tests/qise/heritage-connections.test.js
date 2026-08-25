@@ -258,6 +258,48 @@ test("src/ui/qise/app.js derives captureQualityPassed from captureAuthorizationF
 });
 
 /*
+ * ── falsification: omission at the finish() boundary cannot produce "clean" ──
+ *
+ * `captureTier` is the field `captureAuthorizationFromReading` trusts as
+ * PROOF the capture-quality gates ran (see the tests above). That proof is
+ * only as good as the writer: `src/ui/qise/app.js`'s `finish()` used to
+ * default an omitted `captureTier` to `"clean"`, and the `lastCaptureTier`
+ * variable it is normally fed from used to default the same way — either
+ * one would manufacture an authorised-looking tier for a call site that
+ * forgot to derive it from `gates.js`'s real gate evidence. `finish()` is
+ * not importable under `node --test` (it lives in the file no test can
+ * import — see CLAUDE.md item 44), so this is necessarily a static check on
+ * its source, the same technique the two tests above already use.
+ */
+test("src/ui/qise/app.js's finish() declares no permissive default for captureTier", () => {
+  const source = readSrc("ui/qise/app.js");
+  const sig = source.slice(
+    source.indexOf("async function finish("),
+    source.indexOf("{", source.indexOf("async function finish(")),
+  );
+  assert.doesNotMatch(sig, /captureTier\s*=\s*["']/,
+    "the captureTier parameter must have no default — omission must not manufacture a tier");
+});
+
+test("src/ui/qise/app.js no longer seeds lastCaptureTier with a permissive default", () => {
+  const source = readSrc("ui/qise/app.js");
+  assert.doesNotMatch(source, /lastCaptureTier\s*=\s*["']clean["']/,
+    "lastCaptureTier must not default to an authorised-looking tier before any gate has run");
+});
+
+test("src/ui/qise/app.js's finish() fails closed on a captureTier that is not an explicit clean/assisted/waiting", () => {
+  const source = readSrc("ui/qise/app.js");
+  const fn = source.slice(
+    source.indexOf("async function finish("),
+    source.indexOf("\n}\n", source.indexOf("async function finish(")),
+  );
+  assert.match(fn, /VALID_CAPTURE_TIERS\.includes\(captureTier\)/,
+    "finish() must validate captureTier against the explicit gate-derived set before proceeding");
+  assert.match(fn, /throw new Error/,
+    "an invalid/omitted captureTier must throw, not silently proceed as if gated");
+});
+
+/*
  * ── Blocker 1: capture-quality authorization, derived from captureTier ────
  *
  * `captureTier` is written ONLY by src/qise/gates.js's evaluateGates() and
