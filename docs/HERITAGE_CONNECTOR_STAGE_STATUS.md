@@ -164,6 +164,29 @@ behind it. Marking this IMPLEMENTED would misstate that the production
 connector path can actually authorise or show heritage-connector output; it
 cannot, honestly, until both are resolved.
 
+**Two further technical defects were found and fixed on top of this
+(`fc63744` → this revision) — neither is one of the two blockers above, and
+neither required touching Stage 1/2 or either intentional product blocker:**
+
+- **Single connector-selection lifecycle — a SPECIFIC defect, distinct from
+  the `rotationState` fix "selection lifecycle" originally referred to.**
+  `tierTwoHeritageConnections`/`tierThreeHeritageConnections` called
+  `composeHeritageForReading` SEPARATELY, at `depthMode: "STANDARD"` and
+  `"SOURCE_DEEP"` respectively. Stage 2's own rotation seed includes
+  `depthMode`, so those two calls could rotate `relationshipOrder`
+  differently whenever a construct has 2+ ACTIVE connectors and
+  `occurrence > 0` — Tier 2's top pick could then genuinely differ from
+  Tier 3's presentation order for the same reading. Fixed by funnelling both
+  tiers through one shared call. See "Single connector-selection lifecycle"
+  below.
+- **Connector payload computed but never rendered.** `app.js` called
+  `readingTiersWithHeritage()` and therefore computed `tier2.connectors`/
+  `tier3.connectors`, but the renderer below that call never consumed
+  either property — so even a fully-authorised composition would never
+  reach the reader. Fixed by adding a tested, pure render layer
+  (`src/ui/qise/heritage-view.js`) and wiring it into `app.js`'s existing
+  DOM assignment sites. See "Connector production rendering" below.
+
 - **Branch:** `feature/heritage-stage3-reflection-integration`
 - **Base:** `main` at `f1fc55e8e9bae082ac2fa7e89e256f6b95609138`
 - **This revision's parent commit (previously reviewed, PR #40):** `2f1491283c36708f8c8c0e608c5dd63e6c4644f3`
@@ -429,20 +452,27 @@ above.
 - `node --test tests/heritage/resolver.test.js`: **123/123** (unchanged —
   Stage 2 not reopened)
 - `node --test tests/heritage/validator.test.js tests/heritage/falsification.test.js tests/heritage/integration.test.js tests/heritage/resolver.test.js tests/heritage/composition.test.js`:
-  ~~260/260~~ **261/261** (+1: the new registry-evidence test documenting
-  why `"primary"` and `"taiqing-siku"` are different sub-claims)
-- `node --test tests/heritage/composition.test.js`: ~~41/41~~ **42/42**
-- `node --test tests/qise/heritage-connections.test.js`: ~~26/26~~ **29/29**
-  (+3: the capture-tier fail-closed falsification tests)
+  ~~261/261~~ **263/263** (+2: the ordering-hazard falsification pair —
+  "the ordering hazard is real..." and "a single composition, reused for
+  both tiers...")
+- `node --test tests/heritage/composition.test.js`: ~~42/42~~ **44/44**
+- `node --test tests/qise/heritage-connections.test.js`: ~~29/29~~ **36/36**
+  (+7: the single-selection-lifecycle structural tests, the
+  `tier2VisibleDisagreements` tests, and the two connector-rendering wiring
+  tests)
+- `node --test tests/qise/heritage-view.test.js` (new this session): **21/21**
 - `node --test tests/qise/reading-tiers.test.js`: **14/14** (unchanged)
-- `node --test tests/qise/reading-production-path.test.js`: **15/15** (+1:
-  the real fiveMountains/primary production-path test)
+- `node --test tests/qise/reading-production-path.test.js`: **15/15**
+  (unchanged this pass)
 - `node --test tests/heritage/resolver.test.js tests/heritage/composition.test.js tests/qise/heritage-connections.test.js tests/qise/reading-tiers.test.js tests/qise/reading-production-path.test.js`
-  (exact set re-verified this session): **223/223**
-- `npm test`: ~~1098/1098~~ **1103/1103** across `Running 74 test file(s)`
-- `npm run build`: clean — 95 files copied, Module B shipped (wellness
+  (exact specified set, re-verified this session): **232/232**
+- `node --test tests/heritage/*.test.js tests/qise/heritage-connections.test.js tests/qise/heritage-view.test.js tests/qise/reading-tiers.test.js tests/qise/reading-production-path.test.js`
+  (combined heritage scope, including the new view-model file): **349/349**
+- `npm test`: ~~1103/1103~~ **1133/1133** across `Running 75 test file(s)`
+  (+1 discovered file: `tests/qise/heritage-view.test.js`)
+- `npm run build`: clean — 96 files copied, Module B shipped (wellness
   flavour), 6 pinned MediaPipe assets copied
-- `npm run lint:bundle`: clean — 96 files scanned, 1465 user-facing strings
+- `npm run lint:bundle`: clean — 97 files scanned, 1469 user-facing strings
   extracted; copy blocklist / attractiveness / egress allowlist / biometric
   egress all `ok`
 - `git diff --check`: clean
@@ -543,6 +573,149 @@ scoped to `src/heritage/composition.js`'s tests/docs and
    "production wiring" tests use — `finish()` lives in the file no test can
    import; see CLAUDE.md item 44).
 
+### Stage 3 — single-selection-lifecycle and connector-rendering fix (this session, on top of `fc63744`)
+
+Fresh independent review (Copilot + Codex) against `fc63744` found two new
+substantive defects, both now fixed. Neither reopens Stage 1/2, neither
+touches the two intentional product blockers (lineage content routing,
+safety authorization), and neither changes `src/heritage/resolver.js`,
+`registry.js`, or `src/qise/reading-tiers.js` (`git diff --stat` against all
+three is empty).
+
+**1. Single connector-selection lifecycle (Copilot).**
+`src/qise/heritage-connections.js`'s `tierTwoHeritageConnections` and
+`tierThreeHeritageConnections` called `composeHeritageForReading` SEPARATELY
+— Tier 2 at `depthMode: "STANDARD"`, Tier 3 at `"SOURCE_DEEP"`. Stage 2's own
+rotation seed (`resolver.js`: `rotationSeed = "...|depthMode=${depthMode}"`)
+includes `depthMode` by design — real, load-bearing, and not something this
+fix may touch (`resolver.js` is unchanged). But it meant the two calls could
+rotate `renderPlan.relationshipOrder` DIFFERENTLY whenever a construct has
+2+ ACTIVE connectors and `occurrence > 0`, so Tier 2's top pick could
+genuinely differ from Tier 3's presentation order for the exact same
+reading — opening Tier 3 could make it look like the selected relationship
+changed merely because the depth changed.
+
+Fixed with one new function, `composeHeritageOnceForReading()`: the ONLY
+place `depthMode` is chosen (always `"SOURCE_DEEP"`, the deepest — a strict
+superset, since `active`/`abstentions` are already depth-INDEPENDENT in
+Stage 2's resolver; only `sourcePanelOnly`, the editorial candidate pool and
+`relationshipOrder`'s rotation/cap vary by depth). `tierTwoHeritageConnections`,
+`tierThreeHeritageConnections` and `readingTiersWithHeritage` (which now
+calls it exactly once and shares the result with both tiers, rather than
+calling the two per-tier wrappers) all funnel through it, so Tier 2 and
+Tier 3 can no longer diverge by construction.
+
+Reusing a `SOURCE_DEEP` result for Tier 2 does not, by itself, leak
+`SOURCE_PANEL_CEILING` material into Tier 2 — `deriveTier2FromComposition`
+only ever reads `result.active` and `result.renderPlan.relationshipOrder`
+(built from `active` alone), never `result.sourcePanelOnly`, and never
+returns `result.editorialJuxtapositions` at all. The one field that DOES
+become depth-sensitive when reused this way is `result.disagreements`
+(Stage 2's `visibleConnectorIds` includes `sourcePanelOnly` only at
+`SOURCE_DEEP`) — a new function, `tier2VisibleDisagreements()`, filters that
+back down to `active ∪ abstentions` (i.e. everything except
+`sourcePanelOnly`) without a second resolver call, so a CONNECTOR-targeted
+disagreement about a `SOURCE_DEEP`-only connector still cannot reach Tier 2.
+
+*Falsification test.* The real corpus has no construct with two or more
+ACTIVE connectors yet, so the divergence itself is proven with a synthetic
+registry (`tests/heritage/composition.test.js`, using the same
+`synBase`/`synConnector` seam every other resolver-adjacent test in that
+file already uses): `"the ordering hazard is real..."` drives two
+`composeHeritageConnectionsWithRegistries` calls that differ only in
+`depthMode`, at occurrence 0–5, and asserts they DO disagree on the top pick
+(confirming the hazard is real, not hypothetical) — paired with
+`"a single composition, reused for both tiers, cannot exhibit the ordering
+hazard..."`, which proves `deriveTier2FromComposition`'s pick always equals
+the head of the SAME result's `relationshipOrder`. Structural proof that the
+production code can no longer create two divergent calls lives in
+`tests/qise/heritage-connections.test.js`
+(`"composeHeritageOnceForReading hardcodes depthMode: SOURCE_DEEP..."`,
+`"tierTwoHeritageConnections and tierThreeHeritageConnections both funnel
+through composeHeritageOnceForReading..."`,
+`"readingTiersWithHeritage computes the composition exactly once..."`). The
+disagreement-filtering fix is covered by
+`"tier2VisibleDisagreements drops a CONNECTOR-targeted disagreement..."` and
+`"deriveTier2FromComposition applies tier2VisibleDisagreements..."`.
+
+**2. Connector payload computed but never rendered (Codex, P1).**
+`src/ui/qise/app.js`'s `renderReflection()` called `readingTiersWithHeritage()`
+and therefore computed `tier2.connectors`/`tier3.connectors` on every
+render, but nothing below that call ever read either property — the DOM
+never gained a single node describing heritage-connector material. Even a
+fully-authorised composition (hypothetically, once Blocker 4 is resolved)
+would have reached the reader as nothing at all.
+
+Fixed with a new pure, DOM-free view/render layer,
+`src/ui/qise/heritage-view.js` — placed there rather than left inline in
+`app.js` because `app.js` is DOM wiring only (nothing can import it under
+`node --test`; CLAUDE.md item 44) and string-building logic left there is
+untestable by construction, the exact defect class item 18a describes.
+`tier2ConnectorModel()`/`tier3ConnectorModel()` reduce Stage 3's structured
+output to a display-safe shape (construct labels via the existing
+`HERITAGE_CONSTRUCT_LABEL`, a mechanical enum-to-words transform for
+`relationshipType`, and already-recorded `SOURCE_REGISTRY` citation
+metadata — no new prose, no inference); `heritageConnectorTier2Markup()`/
+`heritageConnectorTier3Markup()` are the actual HTML-string-producing
+functions `app.js` now imports and interpolates directly into
+`storyNode.innerHTML`/`whyNode.innerHTML`, replacing nothing else on that
+screen. `todayNode` (Tier 1 — Qi Se measurement) is untouched; the
+measurement and heritage layers remain textually and structurally separate.
+
+*Tier 2's bounded contract, as rendered:* at most the one selected
+connector's construct names, relationship, and source citation; the
+rotation disclosure when a connector is selected; nothing at all when
+unavailable. Structurally cannot include `sourcePanelOnly` or
+`editorialJuxtapositions` — `tier2ConnectorModel`'s input
+(`tier2.connectors`) has no such fields to read.
+
+*Tier 3's expanded contract, as rendered:* active connector cards,
+source-panel-only cards under an explicit "not shown in the daily reading"
+label, disagreement positions, abstention reasons (`gateReasons`), and
+editorial juxtapositions under an explicit "not a historical claim" label —
+renders nothing at all when the composition is suppressed or abstained.
+
+*Testing.* Because the render functions were moved out of `app.js` into a
+testable module specifically so they would not be provable only by a
+source-text grep, `tests/qise/heritage-view.test.js` tests the actual
+HTML-string output directly (21 tests: A–E per the review's own lettering —
+Tier 2 bounded emission, `SOURCE_PANEL_CEILING` exclusion proven even against
+a deliberately-smuggled field, Tier 3's structured sections, fail-closed
+empty output under suppression/abstention including end-to-end through the
+real Stage 3 path, and purity/signature checks proving the render functions
+cannot read Tier 1 measurement fields). Two further tests in
+`tests/qise/heritage-connections.test.js` close the loop the pure-function
+tests cannot: `"...app.js imports the heritage-view render functions and
+actually assigns their output into storyNode/whyNode"` proves `app.js`'s
+`innerHTML` templates genuinely interpolate `heritageConnectorTier2Markup(heritageTier2)`/
+`heritageConnectorTier3Markup(heritageTier3)`, not merely reference the
+imports; `"...no longer owns the connector markup-building logic itself"`
+proves the functions were moved, not duplicated.
+
+**Files changed this session:**
+- `src/qise/heritage-connections.js` — added `composeHeritageOnceForReading()`,
+  `tier2VisibleDisagreements()`; rewrote `tierTwoHeritageConnections`,
+  `tierThreeHeritageConnections`, `readingTiersWithHeritage`,
+  `deriveTier2FromComposition` to share the single composition
+- `src/ui/qise/heritage-view.js` — **new file.** Pure connector view models
+  (`tier2ConnectorModel`, `tier3ConnectorModel`, `connectorCard`,
+  `humanizeRelationshipType`) and the actual render functions
+  (`heritageConnectorTier2Markup`, `heritageConnectorTier3Markup`,
+  `heritageConnectorCardMarkup`)
+- `src/ui/qise/app.js` — imports the two render functions; `renderReflection()`
+  builds `heritageTier2`/`heritageTier3` view models and interpolates their
+  markup into the existing `storyNode`/`whyNode` `innerHTML` templates;
+  `todayNode` (Tier 1) untouched
+- `tests/heritage/composition.test.js` — +2 tests (the ordering-hazard
+  falsification pair)
+- `tests/qise/heritage-connections.test.js` — +7 tests (single-selection
+  structural proofs, `tier2VisibleDisagreements`, connector-rendering wiring)
+- `tests/qise/heritage-view.test.js` — **new file**, 21 tests
+
+No change to `src/heritage/resolver.js`, `src/heritage/registry.js`,
+`src/qise/reading-tiers.js`, `src/qise/reading-state.js`, or
+`src/heritage/composition.js` (`git diff --stat` against all five is empty).
+
 ### Known limitations / remaining work
 
 - **Stage 3 is BLOCKED, not approved, not merged.** See the framing at the
@@ -570,9 +743,17 @@ scoped to `src/heritage/composition.js`'s tests/docs and
   hand-built composition-result fixture (`deriveTier2FromComposition`'s
   tests) rather than live multi-connector data. Not a defect; a fact about
   the current corpus's size, recorded rather than worked around.
+- **Connector rendering now exists** (`src/ui/qise/heritage-view.js`, wired
+  into `app.js`), but it is exercised in production ONLY by the fail-closed
+  suppression path — `safetyPassed` is never supplied as `true` anywhere in
+  `app.js`, so `tier2.connectors`/`tier3.connectors` are always suppressed
+  today, and the render functions always return `""`. The rendering itself
+  has been proven correct against hand-built and synthetic inputs
+  (`tests/qise/heritage-view.test.js`), not against a live authorised
+  reading in a browser — there is no live authorised reading to test against
+  until Blocker 4 is resolved. Revisit visual/interaction polish
+  (styling, placement, copy review by a human) once Blocker 4 is resolved
+  and a real authorised reading exists to design against.
 - Given Stage 3 remains blocked, **no Gemini Flash handoff is appropriate
-  yet.** Mechanical UI/copy/fixture work (rendering `tier2.connectors`/
-  `tier3.connectors` into the DOM, formatting connector cards) would produce
-  UI for a path that cannot legitimately authorise output in production
-  today, which is not a good use of that work. Revisit once Blocker 4 is
-  resolved one way or the other.
+  yet** for any remaining polish on this surface — the same reasoning as
+  above applies to visual refinement work.

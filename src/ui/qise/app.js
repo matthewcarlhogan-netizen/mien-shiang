@@ -49,6 +49,10 @@ import { passageFor } from "../../qise/passages.js";
 import { reflectionMode } from "../../qise/reading-flags.js";
 import { reflectionFor } from "../../qise/reading-pipeline.js";
 import { readingTiersWithHeritage, captureAuthorizationFromReading } from "../../qise/heritage-connections.js";
+import {
+  tier2ConnectorModel, tier3ConnectorModel,
+  heritageConnectorTier2Markup, heritageConnectorTier3Markup,
+} from "./heritage-view.js";
 import { openStore } from "../../qise/store.js";
 import { readingScreenModel, historyColumnModel } from "./screens.js";
 import { SHARE_CADENCES, shareReadings } from "./share.js";
@@ -1119,6 +1123,8 @@ function renderReflection(reading, history) {
   }
 
   const { tier1, tier2, tier3 } = tiers;
+  const heritageTier2 = tier2ConnectorModel(tier2.connectors);
+  const heritageTier3 = tier3ConnectorModel(tier3.connectors);
 
   todayNode.hidden = false;
   todayNode.innerHTML = `
@@ -1136,7 +1142,8 @@ function renderReflection(reading, history) {
     <p class="muted">${esc(tier2.attribution)}</p>
     <p class="muted">${esc(tier2.rotationDisclosure)}</p>
     <p>${esc(tier2.bridge)}</p>
-    <p class="reflection">${esc(tier2.question)}</p>`;
+    <p class="reflection">${esc(tier2.question)}</p>
+    ${heritageConnectorTier2Markup(heritageTier2)}`;
 
   if (compareNode) {
     const comparing = mode === "compare";
@@ -1163,7 +1170,8 @@ function renderReflection(reading, history) {
     <div class="section-label"><h2>Today\u2019s state</h2><span class="muted">what makes this reading this reading</span></div>
     <div class="chips">${tier3.dimensions.map((d) =>
       `<span class="chip">${esc(d.field)}: ${esc(String(d.value))}</span>`).join("")}</div>
-    <p class="muted">Carried but not part of the state: ${esc(tier3.notIdentifying.join(", "))}.</p>`;
+    <p class="muted">Carried but not part of the state: ${esc(tier3.notIdentifying.join(", "))}.</p>
+    ${heritageConnectorTier3Markup(heritageTier3)}`;
 }
 
 async function renderReading(reading) {

@@ -31,6 +31,51 @@
  * independently driven rotation lifecycles" this module exists to prevent.
  * So `reflection.occurrence` is read directly and any `occurrence` field on
  * `compose` is ignored — there is exactly one occurrence per reading.
+ *
+ * ── WHY TIER 2 AND TIER 3 SHARE ONE `composeHeritageForReading` CALL, NOT TWO
+ *    AT DIFFERENT `depthMode`s ──────────────────────────────────────────────
+ * A fresh review found that Tier 2 requested `depthMode: "STANDARD"` and
+ * Tier 3 requested `depthMode: "SOURCE_DEEP"` as two SEPARATE resolver calls.
+ * Stage 2's own deterministic rotation seed
+ * (`resolver.js`'s `rotationSeed = "...|depthMode=${depthMode}"`) includes
+ * `depthMode` by design — a real, load-bearing part of Stage 2's frozen
+ * contract, not something this file may "fix" by changing resolver.js. But
+ * it also means two calls that differ only in `depthMode` can rotate their
+ * `renderPlan.relationshipOrder` DIFFERENTLY whenever a construct has two or
+ * more ACTIVE connectors and `occurrence > 0` — so Tier 2's top pick and
+ * Tier 3's presentation order could, in principle, name a DIFFERENT
+ * connector as "first" for the exact same reading. That violates the locked
+ * rule of ONE deterministic connector-selection lifecycle per reading: Tier
+ * 3 must EXPAND on what Tier 2 showed, never reroll it.
+ *
+ * `composeHeritageOnceForReading()` is the fix: exactly one
+ * `composeHeritageForReading` call per reading, always at `"SOURCE_DEEP"`
+ * (the deepest depth, a strict superset of what any shallower depth would
+ * return — `active` and `abstentions` are already depth-INDEPENDENT in
+ * Stage 2's own resolver; only `sourcePanelOnly`, the editorial candidate
+ * pool and `relationshipOrder`'s rotation/cap vary by depth). Both
+ * `tierTwoHeritageConnections` and `tierThreeHeritageConnections` — and
+ * `readingTiersWithHeritage`, which computes it exactly once and hands the
+ * SAME result object to both derivations — read from this one call, so
+ * their `renderPlan` (and therefore their top pick) is IDENTICAL by
+ * construction, not by coincidence of matching inputs.
+ *
+ * Reusing a SOURCE_DEEP result for Tier 2 does not, by itself, leak
+ * SOURCE_PANEL_CEILING material into Tier 2: `deriveTier2FromComposition`
+ * only ever reads `result.active` and `result.renderPlan.relationshipOrder`
+ * (built from `active` alone), never `result.sourcePanelOnly`, and never
+ * exposes `result.editorialJuxtapositions` at all. The one field that DOES
+ * become depth-sensitive when reused this way is `result.disagreements`:
+ * Stage 2's `visibleConnectorIds` (resolver.js item 9) includes
+ * `sourcePanelOnly` connector ids only at `SOURCE_DEEP`, so a
+ * CONNECTOR-targeted disagreement about a connector that is ONLY in
+ * `sourcePanelOnly` would, read naively, appear in a SOURCE_DEEP-computed
+ * result even though Tier 2 never shows that connector.
+ * `tier2VisibleDisagreements()` below reconstructs exactly what
+ * `visibleConnectorIds` would have been at Tier 2's own (shallower)
+ * visibility — `active ∪ abstentions`, i.e. everything except
+ * `sourcePanelOnly` — without a second resolver call, so this protection
+ * survives the merge to one call.
  */
 
 import { readingTiers } from "./reading-tiers.js";
@@ -90,9 +135,52 @@ function occurrenceOf(reflection) {
 }
 
 /**
+ * THE single Stage 3 composition call for a reading. Always `SOURCE_DEEP` —
+ * see the file header's "WHY TIER 2 AND TIER 3 SHARE ONE
+ * `composeHeritageForReading` CALL" section for why. Returns `null` only
+ * when there is no reflection state to compose from at all.
+ */
+export function composeHeritageOnceForReading(reflection, compose = {}) {
+  if (!reflection || !reflection.state) return null;
+  return composeHeritageForReading({
+    ...compose,
+    heritageConstruct: reflection.state.heritageConstruct,
+    sourceLineage: reflection.state.sourceLineage,
+    occurrence: occurrenceOf(reflection),
+    depthMode: "SOURCE_DEEP",
+  });
+}
+
+/**
+ * Reconstructs, WITHOUT a second resolver call, what Stage 2's own
+ * `visibleConnectorIds` would have been at Tier 2's shallower visibility —
+ * `active ∪ abstentions` (resolver.js's `unavailable`), i.e. everything
+ * except `sourcePanelOnly`. A CONNECTOR-targeted disagreement whose
+ * `target.targetRef` names a connector that is ONLY in `sourcePanelOnly` is
+ * dropped; a CONSTRUCT-targeted disagreement, or one targeting a connector
+ * that is `active` or merely `unavailable` (blocked, but not
+ * SOURCE_PANEL_CEILING-only), survives unchanged. Mirrors resolver.js item 9
+ * exactly, at the one tier that must not see SOURCE_DEEP-only material.
+ */
+export function tier2VisibleDisagreements(result) {
+  const visible = new Set([...(result.active || []), ...(result.abstentions || [])]
+    .map((entry) => entry.connectorId));
+  return (result.disagreements || []).filter((d) => (
+    d.target?.targetType !== "CONNECTOR" || visible.has(d.target.targetRef)
+  ));
+}
+
+/**
  * The pure Tier 2 selection: at most ONE bounded heritage composition, from
  * the resolver's own deterministic top pick (`renderPlan.relationshipOrder[0]`).
  * Never a second, independent selection mechanism (Stage 3 requirement 4).
+ *
+ * SOURCE_PANEL_CEILING material cannot leak in here even though `result` may
+ * have been computed at `SOURCE_DEEP`: only `result.active` and
+ * `result.renderPlan.relationshipOrder` (itself built from `active` alone)
+ * are ever read for the connector, `result.disagreements` is filtered through
+ * `tier2VisibleDisagreements()`, and `result.editorialJuxtapositions` /
+ * `result.sourcePanelOnly` are never read or returned at all.
  *
  * Editorial juxtapositions are deliberately NOT surfaced here: they require
  * `requiresSeparateAttribution` over 2-3 connectors, and Tier 2 only ever
@@ -129,7 +217,7 @@ export function deriveTier2FromComposition(result) {
     available: Boolean(connector),
     reason: connector ? null : "NO_ACTIVE_CONNECTOR",
     connector,
-    disagreements: result.disagreements,
+    disagreements: tier2VisibleDisagreements(result),
     // Contract §13: a rotated selection must disclose that it rotated,
     // carried outside the prose so a surface cannot drop it while keeping
     // the connector. Reused verbatim from reflection.js's own rotation
@@ -144,39 +232,24 @@ export function deriveTier2FromComposition(result) {
 }
 
 export function tierTwoHeritageConnections(reflection, compose = {}) {
-  if (!reflection || !reflection.state) return NO_CONNECTOR_TIER2;
-
-  const result = composeHeritageForReading({
-    ...compose,
-    heritageConstruct: reflection.state.heritageConstruct,
-    sourceLineage: reflection.state.sourceLineage,
-    occurrence: occurrenceOf(reflection),
-    depthMode: "STANDARD",
-  });
-
+  const result = composeHeritageOnceForReading(reflection, compose);
+  if (!result) return NO_CONNECTOR_TIER2;
   return deriveTier2FromComposition(result);
 }
 
 /**
  * Tier 3 — everything: sources, disagreement, availability,
- * SOURCE_PANEL_CEILING material, editorial juxtapositions. SOURCE_DEEP is the
- * only depth at which the resolver ever populates `sourcePanelOnly`
- * (resolver.js item 9) — this function must never be reused to feed Tier 2,
- * or ceilinged material leaks into the daily surface. Every connector named
- * inside an editorial juxtaposition here IS present in `active`/
+ * SOURCE_PANEL_CEILING material, editorial juxtapositions. Always the SAME
+ * `SOURCE_DEEP` composition Tier 2 derives its bounded view from (see the
+ * file header) — this function must never be given a DIFFERENT depthMode
+ * than `tierTwoHeritageConnections`/`composeHeritageOnceForReading` use, or
+ * the single-selection-lifecycle guarantee breaks again. Every connector
+ * named inside an editorial juxtaposition here IS present in `active`/
  * `sourcePanelOnly`, so separate attribution is always renderable.
  */
 export function tierThreeHeritageConnections(reflection, compose = {}) {
-  if (!reflection || !reflection.state) {
-    return composeHeritageForReading({ ...compose, depthMode: "SOURCE_DEEP" });
-  }
-  return composeHeritageForReading({
-    ...compose,
-    heritageConstruct: reflection.state.heritageConstruct,
-    sourceLineage: reflection.state.sourceLineage,
-    occurrence: occurrenceOf(reflection),
-    depthMode: "SOURCE_DEEP",
-  });
+  return composeHeritageOnceForReading(reflection, compose)
+    ?? composeHeritageForReading({ ...compose, depthMode: "SOURCE_DEEP" });
 }
 
 /**
@@ -188,13 +261,19 @@ export function tierThreeHeritageConnections(reflection, compose = {}) {
  * and the connector boundary separately; that is what "Tier 2/Tier 3 can
  * consume the model without ad-hoc UI resolver calls" means in practice —
  * one function, one place the two are stitched together.
+ *
+ * Computes the Stage 3 composition EXACTLY ONCE (`composeHeritageOnceForReading`)
+ * and hands the SAME result to both `deriveTier2FromComposition` (Tier 2's
+ * bounded view) and Tier 3 (the full result) — never two separate resolver
+ * calls at different depths for one reading.
  */
 export function readingTiersWithHeritage(reflection, compose = {}) {
   const base = readingTiers(reflection);
   if (!base) return null;
+  const composition = composeHeritageOnceForReading(reflection, compose);
   return {
     tier1: base.tier1,
-    tier2: { ...base.tier2, connectors: tierTwoHeritageConnections(reflection, compose) },
-    tier3: { ...base.tier3, connectors: tierThreeHeritageConnections(reflection, compose) },
+    tier2: { ...base.tier2, connectors: composition ? deriveTier2FromComposition(composition) : NO_CONNECTOR_TIER2 },
+    tier3: { ...base.tier3, connectors: composition ?? composeHeritageForReading({ ...compose, depthMode: "SOURCE_DEEP" }) },
   };
 }

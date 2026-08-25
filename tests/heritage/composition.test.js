@@ -33,6 +33,7 @@ import { HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY } from "../../src/heritage/nega
 import { HERITAGE_COMPOSITION_POLICIES } from "../../src/heritage/composition-policies-registry.js";
 import { HERITAGE_CONCEPT_REGISTRY } from "../../src/heritage/concepts.js";
 import { SOURCE_REGISTRY } from "../../src/reading/provenance.js";
+import { deriveTier2FromComposition } from "../../src/qise/heritage-connections.js";
 
 const clone = (value) => structuredClone(value);
 
@@ -796,4 +797,87 @@ test("the lineage adapter does not change concept-only connector eligibility —
   }));
   assert.equal(result.abstained, false);
   assert.equal(result.active[0]?.connectorId, "syn-concept-only-lineage-check");
+});
+
+/* ── single connector-selection lifecycle: the ordering hazard is real ───── */
+
+/*
+ * A fresh review found that src/qise/heritage-connections.js used to call
+ * composeHeritageForReading TWICE per reading — once for Tier 2 at
+ * depthMode "STANDARD", once for Tier 3 at "SOURCE_DEEP" — and Stage 2's own
+ * rotation seed (resolver.js: `rotationSeed = "...|depthMode=${depthMode}"`)
+ * includes depthMode by design. This is Stage 2's frozen contract, not a bug
+ * this file may "fix" by changing resolver.js — but it means two SEPARATE
+ * calls that differ only in depthMode CAN rotate `relationshipOrder`
+ * differently whenever a construct has 2+ ACTIVE connectors and
+ * occurrence > 0. The real corpus has no construct with two or more ACTIVE
+ * connectors yet (see docs/HERITAGE_CONNECTOR_STAGE_STATUS.md), so this test
+ * necessarily uses a synthetic multi-connector registry — the same
+ * `synBase`/`synConnector` seam every other resolver-adjacent test in this
+ * file already uses.
+ */
+const twoActiveConnectorsBase = (overrides = {}) => {
+  const connA = synConnector({
+    connectorId: "alpha-conn-a",
+    participants: [{ participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" }],
+  });
+  const connB = synConnector({
+    connectorId: "alpha-conn-b",
+    participants: [{ participantId: "alpha", nodeType: "CONSTRUCT", constructId: "alpha", memberScope: "ALL_MEMBERS" }],
+  });
+  return synBase({
+    connectorRegistry: { "alpha-conn-a": connA, "alpha-conn-b": connB },
+    ...overrides,
+  });
+};
+
+test("the ordering hazard is real: two composeHeritageForReading calls that differ only in depthMode can disagree on the top-pick connector", () => {
+  let sawDivergence = false;
+  for (let occurrence = 0; occurrence < 6; occurrence++) {
+    const standard = composeHeritageConnectionsWithRegistries(
+      twoActiveConnectorsBase({ depthMode: "STANDARD", occurrence }));
+    const deep = composeHeritageConnectionsWithRegistries(
+      twoActiveConnectorsBase({ depthMode: "SOURCE_DEEP", occurrence }));
+    assert.equal(standard.active.length, 2, "fixture must actually produce two ACTIVE connectors");
+    assert.deepEqual(
+      new Set(standard.active.map((e) => e.connectorId)),
+      new Set(deep.active.map((e) => e.connectorId)),
+      "the ACTIVE set itself is depth-independent — only its presentation order may differ");
+    if (standard.renderPlan.relationshipOrder[0] !== deep.renderPlan.relationshipOrder[0]) sawDivergence = true;
+  }
+  assert.ok(sawDivergence,
+    "two depthMode-differing calls never disagreed on the top pick across occurrence 0-5 — " +
+    "either the fixture stopped exercising the hazard, or resolver.js's rotation seed changed");
+});
+
+/*
+ * The fix lives in src/qise/heritage-connections.js: `composeHeritageOnceForReading`
+ * is the ONLY place `depthMode` is chosen, and both `tierTwoHeritageConnections`/
+ * `tierThreeHeritageConnections` (and `readingTiersWithHeritage`, which calls
+ * it exactly once and shares the result) funnel through it — see
+ * "composeHeritageOnceForReading hardcodes depthMode: SOURCE_DEEP..." and
+ * "tierTwoHeritageConnections and tierThreeHeritageConnections both funnel
+ * through composeHeritageOnceForReading..." in
+ * tests/qise/heritage-connections.test.js for the structural proof that the
+ * two tiers can no longer request different depths for the same reading —
+ * this file has no product-facing registry-injection seam to reconstruct
+ * that call site directly (composeHeritageForReading binds the canonical
+ * registries internally), so the structural proof lives beside the code it
+ * proves.
+ */
+test("a single composition, reused for both tiers, cannot exhibit the ordering hazard — Tier 2's derived connector is always Tier 3's presentation head", () => {
+  for (let occurrence = 0; occurrence < 6; occurrence++) {
+    // Simulates the FIXED architecture: exactly one composeHeritageForReading
+    // call (here, its registry-injectable twin) shared by both derivations —
+    // deriveTier2FromComposition (the REAL Tier 2 selection function) reading
+    // the SAME object Tier 3 presents from, never a second call at a
+    // different depthMode.
+    const once = composeHeritageConnectionsWithRegistries(
+      twoActiveConnectorsBase({ depthMode: "SOURCE_DEEP", occurrence }));
+    const tier2 = deriveTier2FromComposition(once);
+    const tier3PresentationHead = once.renderPlan.relationshipOrder[0];
+    assert.equal(tier2.available, true);
+    assert.equal(tier2.connector.connectorId, tier3PresentationHead,
+      `occurrence ${occurrence}: Tier 2's selected connector must be the head of Tier 3's presentation order`);
+  }
 });

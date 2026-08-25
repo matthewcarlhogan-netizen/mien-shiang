@@ -24,6 +24,8 @@ import {
   readingTiersWithHeritage,
   deriveTier2FromComposition,
   captureAuthorizationFromReading,
+  composeHeritageOnceForReading,
+  tier2VisibleDisagreements,
 } from "../../src/qise/heritage-connections.js";
 import { readingTiers } from "../../src/qise/reading-tiers.js";
 import { deriveReadingState } from "../../src/qise/reading-state.js";
@@ -199,14 +201,79 @@ test("tierThreeHeritageConnections always requests SOURCE_DEEP — the only dept
   assert.equal(tier3.depthMode, "SOURCE_DEEP", "Tier 3 must not honour a caller-requested depthMode override");
 });
 
-test("tierTwoHeritageConnections hardcodes depthMode: STANDARD after spreading compose, so a caller-supplied depthMode cannot win", () => {
+/*
+ * ── single connector-selection lifecycle: Tier 2 and Tier 3 share ONE
+ *    composeHeritageForReading call, not two at different depthModes ────────
+ * A fresh review found that Tier 2 (STANDARD) and Tier 3 (SOURCE_DEEP) used
+ * to call composeHeritageForReading SEPARATELY. Stage 2's own rotation seed
+ * includes depthMode, so two such calls could rotate `relationshipOrder`
+ * differently whenever a construct has 2+ ACTIVE connectors and
+ * occurrence > 0 — Tier 2's top pick could then genuinely differ from
+ * Tier 3's presentation order for the SAME reading. Fixed by funnelling both
+ * tiers, and `readingTiersWithHeritage`, through ONE shared helper,
+ * `composeHeritageOnceForReading`, which is the only place `depthMode` is
+ * chosen. For the behavioural proof that this actually prevents the
+ * divergence (the real corpus has no multi-connector construct yet, so the
+ * proof necessarily uses `composeHeritageConnectionsWithRegistries` with a
+ * synthetic registry), see
+ * "the ordering hazard is real, and the fixed architecture cannot exhibit
+ * it" in tests/heritage/composition.test.js.
+ */
+test("composeHeritageOnceForReading hardcodes depthMode: SOURCE_DEEP after spreading compose, so a caller-supplied depthMode cannot win", () => {
   const source = readSrc("qise/heritage-connections.js");
   const fn = source.slice(
-    source.indexOf("export function tierTwoHeritageConnections"),
-    source.indexOf("export function tierThreeHeritageConnections"),
+    source.indexOf("export function composeHeritageOnceForReading"),
+    source.indexOf("export function tier2VisibleDisagreements"),
   );
-  assert.match(fn, /\.\.\.compose,[\s\S]*depthMode:\s*"STANDARD"/,
-    "depthMode must be the literal STANDARD, placed AFTER ...compose in object-literal order, so it always wins");
+  assert.match(fn, /\.\.\.compose,[\s\S]*depthMode:\s*"SOURCE_DEEP"/,
+    "depthMode must be the literal SOURCE_DEEP, placed AFTER ...compose in object-literal order, so it always wins");
+});
+
+test("tierTwoHeritageConnections and tierThreeHeritageConnections both funnel through composeHeritageOnceForReading — neither calls composeHeritageForReading with its own depthMode", () => {
+  const source = readSrc("qise/heritage-connections.js");
+  const tierTwoBody = source.slice(
+    source.indexOf("export function tierTwoHeritageConnections"),
+    source.indexOf("/**\n * Tier 3 —"),
+  );
+  const tierThreeBody = source.slice(
+    source.indexOf("export function tierThreeHeritageConnections"),
+    source.indexOf("/**\n * THE Stage 3 integration point"),
+  );
+  for (const [name, body] of [["tierTwoHeritageConnections", tierTwoBody], ["tierThreeHeritageConnections", tierThreeBody]]) {
+    assert.match(body, /composeHeritageOnceForReading\(reflection, compose\)/,
+      `${name} must call the single shared composition helper`);
+    // A direct composeHeritageForReading call is only permitted as the
+    // no-reflection fallback (tierThreeHeritageConnections), and even then
+    // it must request the same SOURCE_DEEP depth, never a different one.
+    const directCalls = body.match(/composeHeritageForReading\(\{[^}]*\}\)/g) || [];
+    for (const call of directCalls) {
+      assert.match(call, /depthMode:\s*"SOURCE_DEEP"/,
+        `${name}'s direct composeHeritageForReading fallback must still request SOURCE_DEEP: ${call}`);
+    }
+  }
+});
+
+test("readingTiersWithHeritage computes the composition exactly once and shares it between tier2 and tier3", () => {
+  const source = readSrc("qise/heritage-connections.js");
+  const fn = source.slice(
+    source.indexOf("export function readingTiersWithHeritage"),
+  );
+  const calls = fn.match(/composeHeritageOnceForReading\(/g) || [];
+  assert.equal(calls.length, 1,
+    "readingTiersWithHeritage must call composeHeritageOnceForReading exactly once, sharing the result with both tiers");
+  assert.doesNotMatch(fn, /tierTwoHeritageConnections\(|tierThreeHeritageConnections\(/,
+    "readingTiersWithHeritage must derive both tiers from its own single composition, not call the two per-tier wrappers (which would recompute)");
+});
+
+test("composeHeritageOnceForReading: null with no reflection state, otherwise a real SOURCE_DEEP composition read from reflection", () => {
+  assert.equal(composeHeritageOnceForReading(null, PASSED), null);
+  assert.equal(composeHeritageOnceForReading({}, PASSED), null);
+
+  const reflection = makeReflection({}, 3);
+  const result = composeHeritageOnceForReading(reflection, PASSED);
+  assert.equal(result.depthMode, "SOURCE_DEEP");
+  assert.equal(result.occurrence, 3);
+  assert.equal(result.primaryConstruct, reflection.state.heritageConstruct);
 });
 
 test("deriveTier2FromComposition picks exactly the resolver's own top pick, never a second selection mechanism", () => {
@@ -241,6 +308,47 @@ test("deriveTier2FromComposition surfaces a suppressed/abstained composition wit
   assert.equal(abstained.reason, "UNKNOWN_HERITAGE_CONSTRUCT");
 });
 
+/*
+ * ── disagreements that only concern a SOURCE_DEEP-only connector must not
+ *    reach Tier 2, even though Tier 2 now reuses a SOURCE_DEEP result ───────
+ * Reusing one SOURCE_DEEP composition for both tiers (the ordering-lifecycle
+ * fix above) means `result.disagreements` may include a CONNECTOR-targeted
+ * disagreement about a connector that is only in `sourcePanelOnly` — Stage
+ * 2's own `visibleConnectorIds` only includes `sourcePanelOnly` at
+ * SOURCE_DEEP. `tier2VisibleDisagreements` must filter that back out.
+ */
+test("tier2VisibleDisagreements drops a CONNECTOR-targeted disagreement about a connector that is only in sourcePanelOnly", () => {
+  const result = {
+    active: [{ connectorId: "connector-a" }],
+    abstentions: [{ connectorId: "connector-blocked" }],
+    disagreements: [
+      { disagreementId: "d-construct", target: { targetType: "CONSTRUCT", targetRef: "fourRivers" } },
+      { disagreementId: "d-active-connector", target: { targetType: "CONNECTOR", targetRef: "connector-a" } },
+      { disagreementId: "d-unavailable-connector", target: { targetType: "CONNECTOR", targetRef: "connector-blocked" } },
+      { disagreementId: "d-source-panel-only-connector", target: { targetType: "CONNECTOR", targetRef: "connector-ceilinged" } },
+    ],
+  };
+  const visible = tier2VisibleDisagreements(result).map((d) => d.disagreementId);
+  assert.deepEqual(visible.sort(), ["d-active-connector", "d-construct", "d-unavailable-connector"]);
+  assert.ok(!visible.includes("d-source-panel-only-connector"),
+    "a disagreement naming a SOURCE_DEEP-only connector must not reach Tier 2");
+});
+
+test("deriveTier2FromComposition applies tier2VisibleDisagreements — an unfiltered pass-through would leak the connector's existence", () => {
+  const result = {
+    suppressed: false, abstained: false, occurrence: 0,
+    active: [{ connectorId: "connector-a" }],
+    abstentions: [],
+    renderPlan: { relationshipOrder: ["connector-a"] },
+    disagreements: [
+      { disagreementId: "d-visible", target: { targetType: "CONNECTOR", targetRef: "connector-a" } },
+      { disagreementId: "d-ceilinged", target: { targetType: "CONNECTOR", targetRef: "connector-only-in-source-panel" } },
+    ],
+  };
+  const tier2 = deriveTier2FromComposition(result);
+  assert.deepEqual(tier2.disagreements.map((d) => d.disagreementId), ["d-visible"]);
+});
+
 /* ── the actual production reading path calls the integrated function ────── */
 
 test("src/ui/qise/app.js calls readingTiersWithHeritage, not bare readingTiers, at the reflection render site", () => {
@@ -255,6 +363,50 @@ test("src/ui/qise/app.js derives captureQualityPassed from captureAuthorizationF
   assert.match(source, /captureAuthorizationFromReading\(reading\)/);
   assert.doesNotMatch(source, /captureQualityPassed:\s*Boolean\(reading\)/,
     "object existence must not stand in for proven capture-quality authorization");
+});
+
+/*
+ * ── connector payload actually reaches the renderer (Codex P1) ──────────────
+ * A fresh review found that app.js computed `tier2.connectors`/
+ * `tier3.connectors` (via readingTiersWithHeritage) but the renderer below
+ * that call never consumed either property — so even a fully-authorised
+ * composition would never reach the reader. The render FUNCTIONS themselves
+ * (`heritageConnectorTier2Markup`/`heritageConnectorTier3Markup`) now live in
+ * src/ui/qise/heritage-view.js and are behaviourally tested there (this file
+ * cannot import app.js at all — CLAUDE.md item 44) — what THIS test proves,
+ * that the view-model tests cannot, is that app.js actually calls those
+ * specific imported functions on the actual tier2/tier3 connector data and
+ * assigns the result into the DOM nodes real users see, not into a variable
+ * that is computed and discarded.
+ */
+test("src/ui/qise/app.js imports the heritage-view render functions and actually assigns their output into storyNode/whyNode", () => {
+  const source = readSrc("ui/qise/app.js");
+  assert.match(source, /import\s*\{[^}]*heritageConnectorTier2Markup[^}]*heritageConnectorTier3Markup[^}]*\}\s*from\s*["']\.\/heritage-view\.js["']/s,
+    "app.js must import both render functions from heritage-view.js");
+  assert.match(source, /tier2ConnectorModel\(tier2\.connectors\)/,
+    "app.js must build Tier 2's view model from the actual computed tier2.connectors");
+  assert.match(source, /tier3ConnectorModel\(tier3\.connectors\)/,
+    "app.js must build Tier 3's view model from the actual computed tier3.connectors");
+
+  const storyAssignment = source.slice(
+    source.indexOf("storyNode.innerHTML = `"),
+    source.indexOf("`;", source.indexOf("storyNode.innerHTML = `")),
+  );
+  assert.match(storyAssignment, /\$\{heritageConnectorTier2Markup\(heritageTier2\)\}/,
+    "storyNode's innerHTML template must interpolate heritageConnectorTier2Markup's actual return value, not merely reference it");
+
+  const whyAssignment = source.slice(
+    source.indexOf("whyNode.innerHTML = `"),
+    source.lastIndexOf("`;"),
+  );
+  assert.match(whyAssignment, /\$\{heritageConnectorTier3Markup\(heritageTier3\)\}/,
+    "whyNode's innerHTML template must interpolate heritageConnectorTier3Markup's actual return value, not merely reference it");
+});
+
+test("src/ui/qise/app.js no longer owns the connector markup-building logic itself — it is imported, not redeclared", () => {
+  const source = readSrc("ui/qise/app.js");
+  assert.doesNotMatch(source, /function heritageConnectorTier2Markup|function heritageConnectorTier3Markup|function heritageConnectorCardMarkup/,
+    "the render functions must live in heritage-view.js (testable), not be redeclared in app.js (untestable)");
 });
 
 /*
