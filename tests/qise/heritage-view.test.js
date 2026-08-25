@@ -15,8 +15,44 @@ import {
 } from "../../src/qise/heritage-connections.js";
 import { deriveReadingState } from "../../src/qise/reading-state.js";
 import { composeReading } from "../../src/qise/reflection.js";
-import { HERITAGE_CONNECTOR_REGISTRY, HERITAGE_DISAGREEMENT_REGISTRY } from "../../src/heritage/registry.js";
+import {
+  HERITAGE_REGISTRY, HERITAGE_CONNECTOR_REGISTRY, HERITAGE_DISAGREEMENT_REGISTRY,
+} from "../../src/heritage/registry.js";
+import { HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY } from "../../src/heritage/negative-relationships-registry.js";
+import { HERITAGE_COMPOSITION_POLICIES } from "../../src/heritage/composition-policies-registry.js";
+import { HERITAGE_CONCEPT_REGISTRY } from "../../src/heritage/concepts.js";
 import { SOURCE_REGISTRY as REAL_SOURCE_REGISTRY } from "../../src/reading/provenance.js";
+import {
+  composeHeritageForReading, composeHeritageConnectionsWithRegistries,
+} from "../../src/heritage/composition.js";
+
+/* Same real-registry base composeHeritageConnectionsWithRegistries() call
+ * tests/heritage/composition.test.js uses, so a "real chain" test here means
+ * the same thing it means there: the actual resolver + the actual Stage-3
+ * mapping, with zero synthetic registry data. */
+const realBase = (overrides = {}) => ({
+  captureQualityPassed: true,
+  safetyPassed: true,
+  heritageRegistry: HERITAGE_REGISTRY,
+  conceptRegistry: HERITAGE_CONCEPT_REGISTRY,
+  connectorRegistry: HERITAGE_CONNECTOR_REGISTRY,
+  disagreementRegistry: HERITAGE_DISAGREEMENT_REGISTRY,
+  negativeRelationshipRegistry: HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY,
+  compositionPolicies: HERITAGE_COMPOSITION_POLICIES,
+  sourceRegistry: REAL_SOURCE_REGISTRY,
+  depthMode: "SOURCE_DEEP",
+  occurrence: 0,
+  ...overrides,
+});
+
+/* Same three CJK ranges tests/ui-language.test.js uses. Defined once, up
+ * top, and reused by every English-only assertion in this file. */
+const hasHan = (value) => [...String(value ?? "")].some((character) => {
+  const code = character.codePointAt(0);
+  return (code >= 0x3400 && code <= 0x4dbf)
+    || (code >= 0x4e00 && code <= 0x9fff)
+    || (code >= 0xf900 && code <= 0xfaff);
+});
 
 const SOURCE_REGISTRY = Object.freeze({
   "synthetic-source": Object.freeze({
@@ -612,11 +648,6 @@ test("8: Tier-1 Qi Se measurement fields still cannot affect the connector marku
   assert.equal(heritageConnectorTier3Markup(model), heritageConnectorTier3Markup(withExtraMeasurement));
 });
 
-const hasHan = (value) => [...String(value ?? "")].some((character) => {
-  const code = character.codePointAt(0);
-  return (code >= 0x3400 && code <= 0x4dbf) || (code >= 0x4e00 && code <= 0x9fff) || (code >= 0xf900 && code <= 0xfaff);
-});
-
 test("2a: preserving HERITAGE_CONCEPT participants does not leak Chinese-language canonicalChineseName into reader-facing markup (tests/ui-language.test.js's guard does not scan this file, so this file must guard itself)", () => {
   const mixed = entry({
     connectorId: "mixed-participants",
@@ -717,4 +748,176 @@ test("10: two synthetic positions on one disagreement render their own, differen
   const html = heritageConnectorTier3Markup(model);
   assert.match(html, /citation:\s*verified/i);
   assert.match(html, /citation:\s*edition-recorded/i);
+});
+
+/* ── 11: connector-specific locator status survives the REAL end-to-end chain ──
+ * Round 6's proof called connectorEvidenceCard(rawRegistryEntry) directly,
+ * which skips resolver.js's toResolvedEntry() and composition.js's Stage-3
+ * mapping entirely — so it could not have caught a regression at either
+ * layer. These two tests go through the real chain instead: the actual
+ * resolveHeritageConnections() (resolver.js, frozen, untouched) and the
+ * actual Stage-3 mapping (composition.js's mapResolverResult(), which now
+ * carries sectionLocatorStatus/folioLocatorStatus from the canonical
+ * connector registry onto the resolved entry — see that function). */
+
+test("11 (real corpus, real chain): four-rivers-flow-and-banks' sectionLocatorStatus survives resolveHeritageConnections() -> Stage-3 mapping -> tier3ConnectorModel(), through the actual composeHeritageForReading() production entry point, with ZERO registry override", () => {
+  const result = composeHeritageForReading({
+    captureQualityPassed: true, safetyPassed: true,
+    heritageConstruct: "fourRivers", sourceLineage: "primary",
+    depthMode: "SOURCE_DEEP", occurrence: 0,
+  });
+  assert.equal(result.abstained, false);
+  const resolvedEntry = result.sourcePanelOnly.find((e) => e.connectorId === "four-rivers-flow-and-banks");
+  assert.ok(resolvedEntry, "the real connector this test targets must be reachable through the real production path");
+  assert.equal(resolvedEntry.sectionLocatorStatus, "VERIFIED",
+    "the Stage-3 mapping layer must carry the connector's own recorded status onto the resolved entry");
+
+  const model = tier3ConnectorModel(result, REAL_SOURCE_REGISTRY);
+  const card = model.sourcePanelOnly.find((c) => c.connectorId === "four-rivers-flow-and-banks");
+  assert.ok(card);
+  assert.equal(card.sectionLocatorStatus, "VERIFIED");
+});
+
+test("11 (real corpus, real chain, disclosed reachability override): five-forms-generative-overcoming-system's own RECORDED sectionLocatorStatus survives the same real chain end-to-end and is NOT upgraded to its source's stronger VERIFIED status", () => {
+  const real = HERITAGE_CONNECTOR_REGISTRY["five-forms-generative-overcoming-system"];
+  assert.ok(real);
+  assert.equal(real.sectionLocatorStatus, "RECORDED");
+  const source = REAL_SOURCE_REGISTRY[real.sourceId];
+  assert.ok(source);
+  assert.equal(source.citationStatus, "verified");
+  assert.equal(source.sectionLocatorStatus, "VERIFIED",
+    "fixture assumption: the source's status is stronger than the connector's own -- this is what makes the test meaningful, not a coincidence of equal values");
+
+  // This connector's real runtimePolicy is RESEARCH_ONLY, and resolver.js
+  // correctly routes RESEARCH_ONLY connectors to abstentions BEFORE any
+  // SOURCE_PANEL promotion (resolver.js item 2) -- proven below with ZERO
+  // override, through the real, unmodified production path. Abstention
+  // cards (composition.js's toAbstention()) never carry locator fields at
+  // all, so no real (construct, lineage) pairing today can drive this exact
+  // connector into tier3ConnectorModel()'s evidence-card reduction -- a
+  // pre-existing, orthogonal fact about this connector's runtime policy,
+  // not something this fix touches or needs to touch.
+  const realPath = composeHeritageForReading({
+    captureQualityPassed: true, safetyPassed: true,
+    heritageConstruct: "fiveElements", sourceLineage: "primary",
+    depthMode: "SOURCE_DEEP", occurrence: 0,
+  });
+  assert.equal(
+    realPath.abstentions.some((a) => a.connectorId === "five-forms-generative-overcoming-system" && a.disposition === "RESEARCH_ONLY"),
+    true,
+    "fixture assumption: through the real, unmodified production path, this connector abstains as RESEARCH_ONLY today, and so cannot demonstrate the locator-status gap via that path alone",
+  );
+
+  // So the real chain is exercised through the injectable seam instead --
+  // composeHeritageConnectionsWithRegistries, which calls the SAME
+  // resolveHeritageConnections() and the SAME mapResolverResult() the
+  // production path calls -- with the REAL canonical registries UNCHANGED
+  // except one disclosed, single-field override on a CLONE of this ONE
+  // connector record: runtimePolicy only, so the record becomes reachable
+  // as sourcePanelOnly and can reach an evidence card at all. Every other
+  // field on the clone -- including the sectionLocatorStatus under test --
+  // stays byte-identical to the real registry entry.
+  const reachableConnectorRegistry = Object.freeze({
+    ...HERITAGE_CONNECTOR_REGISTRY,
+    "five-forms-generative-overcoming-system": Object.freeze({
+      ...real,
+      runtimePolicy: "HERITAGE_PRESENTATION_ALLOWED",
+    }),
+  });
+  const result = composeHeritageConnectionsWithRegistries(realBase({
+    heritageConstruct: "fiveElements", sourceLineage: "primary",
+    connectorRegistry: reachableConnectorRegistry,
+  }));
+  assert.equal(result.abstained, false);
+  const resolvedEntry = [...result.active, ...result.sourcePanelOnly]
+    .find((e) => e.connectorId === "five-forms-generative-overcoming-system");
+  assert.ok(resolvedEntry, "the connector must be reachable once the orthogonal runtimePolicy gate is (disclosedly) lifted");
+  assert.equal(resolvedEntry.sectionLocatorStatus, "RECORDED",
+    "the connector's own RECORDED status must survive resolveHeritageConnections() -> Stage-3 mapping");
+
+  const model = tier3ConnectorModel(result, REAL_SOURCE_REGISTRY);
+  const card = [...model.active, ...model.sourcePanelOnly]
+    .find((c) => c.connectorId === "five-forms-generative-overcoming-system");
+  assert.ok(card);
+  assert.equal(card.sectionLocatorStatus, "RECORDED",
+    "end-to-end: the connector's own locator status must not be upgraded to the source's VERIFIED");
+  assert.equal(card.citationStatus, "verified",
+    "the SOURCE's own citationStatus must remain visible and unmodified alongside the connector-specific status -- both must be true at once");
+});
+
+/* ── 12: English-only reader-facing boundary -- real canonical corpus, zero Han ── */
+
+test("12A (real corpus, real chain): four-rivers-flow-and-banks cannot render \u56db\u7006 or any Han character, even though its own sectionLocator carries it", () => {
+  const real = HERITAGE_CONNECTOR_REGISTRY["four-rivers-flow-and-banks"];
+  assert.ok(real);
+  assert.equal(hasHan(real.sectionLocator), true,
+    "fixture assumption: the connector's own recorded sectionLocator contains Han -- this is what makes the test meaningful");
+
+  const result = composeHeritageForReading({
+    captureQualityPassed: true, safetyPassed: true,
+    heritageConstruct: "fourRivers", sourceLineage: "primary",
+    depthMode: "SOURCE_DEEP", occurrence: 0,
+  });
+  const model = tier3ConnectorModel(result, REAL_SOURCE_REGISTRY);
+  const card = model.sourcePanelOnly.find((c) => c.connectorId === "four-rivers-flow-and-banks");
+  assert.ok(card);
+  assert.equal(hasHan(card.sectionLocator), false, "the card must not carry the raw Han-bearing locator");
+  assert.equal(card.sectionLocator, null, "the unsafe field is omitted, not surgically stripped");
+  assert.ok(card.sourceTitle, "an English-safe sourceTitle must still be shown");
+
+  const html = heritageConnectorTier3Markup(model);
+  assert.equal(html.includes("\u56db\u7006"), false);
+  assert.equal(hasHan(html), false, "the rendered markup for this connector must be entirely Han-free");
+});
+
+test("12B (real corpus, real chain): three-sections-boundaries cannot render Han from any position's summary, source title or source locator", () => {
+  const real = HERITAGE_DISAGREEMENT_REGISTRY["three-sections-boundaries"];
+  assert.ok(real);
+  const rawPositionsWithHan = real.positions.filter((p) => hasHan(p.summary));
+  assert.ok(rawPositionsWithHan.length >= 1,
+    "fixture assumption: at least one of this disagreement's raw summaries contains Han -- this is what makes the test meaningful");
+
+  const result = composeHeritageForReading({
+    captureQualityPassed: true, safetyPassed: true,
+    heritageConstruct: "threeSections", sourceLineage: "primary",
+    depthMode: "SOURCE_DEEP", occurrence: 0,
+  });
+  const model = tier3ConnectorModel(result, REAL_SOURCE_REGISTRY);
+  const disagreement = model.disagreements.find((d) => d.disagreementId === "three-sections-boundaries");
+  assert.ok(disagreement);
+  for (const p of disagreement.positions) {
+    assert.equal(hasHan(p.summary), false, `position ${p.positionId}'s summary must not carry raw Han text`);
+    assert.equal(hasHan(p.sourceTitle), false, `position ${p.positionId}'s sourceTitle must not carry raw Han text`);
+    assert.equal(hasHan(p.sectionLocator), false, `position ${p.positionId}'s sectionLocator must not carry raw Han text`);
+    // Provenance identity must survive even where the free-text summary was
+    // omitted -- positionId/sourceId are structurally English-safe and are
+    // never Han-filtered themselves.
+    assert.ok(p.positionId, "positionId must survive regardless of summary safety");
+  }
+
+  const html = heritageConnectorTier3Markup(model);
+  assert.equal(hasHan(html), false, "the rendered markup for this disagreement must be entirely Han-free");
+  // At least one position's bare positionId must appear in place of its
+  // omitted Han-bearing summary, proving the fallback actually fired rather
+  // than the position silently vanishing.
+  assert.ok(rawPositionsWithHan.some((p) => html.includes(p.positionId)),
+    "a position whose summary was omitted must still show its positionId");
+});
+
+test("12C (real corpus, real chain, combined): complete Tier-3 connector + disagreement markup built from BOTH canonical entries above contains zero Han characters", () => {
+  const activeStyleConnector = HERITAGE_CONNECTOR_REGISTRY["four-rivers-flow-and-banks"];
+  const disagreement = HERITAGE_DISAGREEMENT_REGISTRY["three-sections-boundaries"];
+  assert.ok(activeStyleConnector);
+  assert.ok(disagreement);
+
+  const tier3Connectors = {
+    suppressed: false, abstained: false,
+    active: [{ ...activeStyleConnector, disposition: "ACTIVE", relationshipAvailability: "AVAILABLE", gateReasons: [] }],
+    sourcePanelOnly: [], abstentions: [], editorialJuxtapositions: [],
+    disagreements: [disagreement],
+  };
+  const model = tier3ConnectorModel(tier3Connectors, REAL_SOURCE_REGISTRY);
+  const html = heritageConnectorTier3Markup(model);
+  assert.ok(html.length > 0, "the combined markup must actually render something to be a meaningful proof");
+  assert.equal(hasHan(html), false, "complete Tier-3 markup built from real canonical corpus data must contain zero Han characters");
 });

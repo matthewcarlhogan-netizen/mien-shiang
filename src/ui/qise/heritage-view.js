@@ -63,6 +63,43 @@ import { SOURCE_REGISTRY } from "../../reading/provenance.js";
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
+/*
+ * Same three CJK ranges `tests/ui-language.test.js` and
+ * `tests/qise/heritage-view.test.js`'s own `hasHan` guard already use — kept
+ * identical on purpose, so "English-only" means the same thing everywhere it
+ * is checked.
+ */
+const HAN_RANGES = Object.freeze([[0x3400, 0x4dbf], [0x4e00, 0x9fff], [0xf900, 0xfaff]]);
+function containsHan(value) {
+  if (typeof value !== "string") return false;
+  for (const ch of value) {
+    const code = ch.codePointAt(0);
+    if (HAN_RANGES.some(([lo, hi]) => code >= lo && code <= hi)) return true;
+  }
+  return false;
+}
+
+/*
+ * The canonical heritage/source registries are source-language records on
+ * purpose (see the file header) and this view layer must not become the
+ * first reader-facing surface to leak their Han-script text — `sourceTitle`,
+ * `sectionLocator`/`folioLocator` and disagreement `summary` all come from
+ * those registries verbatim and several genuinely mix Han characters into an
+ * otherwise-English string (e.g. a title prefixed with a Han work name, or a
+ * locator like `"「四瀆」; 卷二 (Siku)"`). This never translates and never
+ * strips characters out of a string to leave a partial remainder — a
+ * surgically-edited fragment is not a verified translation, it is a guess
+ * with the evidence removed. A string containing ANY Han character is
+ * treated as not English-safe as a whole and OMITTED (`null`); the caller
+ * falls back to an already-recorded, structurally English-safe identifier
+ * (`sourceId`/`connectorId`/`positionId`) where provenance identity still
+ * needs to be shown.
+ */
+function englishSafe(value) {
+  if (typeof value !== "string" || value === "") return null;
+  return containsHan(value) ? null : value;
+}
+
 /** "CORRESPONDS_TO" -> "corresponds to". A mechanical transform, not a new phrase. */
 export function humanizeRelationshipType(value) {
   return typeof value === "string" ? value.toLowerCase().replace(/_/g, " ") : "";
@@ -98,6 +135,14 @@ function participantLabel(p) {
  * or the source's evidence/citation-status fields — those belong to Tier 3's
  * fuller reduction (`connectorEvidenceCard`), not to this bounded card, which
  * both tiers share.
+ *
+ * `sourceTitle`/`sectionLocator` are passed through `englishSafe()` — see its
+ * definition above — because both are free-text registry fields that
+ * sometimes carry Han-script text (a title prefixed with a Han work name, a
+ * locator like `"「四瀆」; 卷二 (Siku)"`). `sourceId` is exposed alongside
+ * them, structurally English-safe by construction (a kebab-case registry
+ * key), so `heritageConnectorCardMarkup` still has an identifier to fall back
+ * to when both free-text fields are omitted.
  */
 export function connectorCard(entry, sourceRegistry = SOURCE_REGISTRY) {
   if (!entry) return null;
@@ -111,8 +156,9 @@ export function connectorCard(entry, sourceRegistry = SOURCE_REGISTRY) {
       label: participantLabel(p),
     }))),
     relationshipDirection: entry.relationshipDirection || null,
-    sourceTitle: source ? source.title : null,
-    sectionLocator: entry.sectionLocator || null,
+    sourceId: entry.sourceId || null,
+    sourceTitle: englishSafe(source ? source.title : null),
+    sectionLocator: englishSafe(entry.sectionLocator || null),
     disposition: entry.disposition || null,
     prohibitedForUserInference: entry.prohibitedForUserInference === true,
   });
@@ -150,7 +196,7 @@ export function connectorEvidenceCard(entry, sourceRegistry = SOURCE_REGISTRY) {
     ...base,
     evidenceStrength: entry.evidenceStrength || null,
     textualLayer: entry.textualLayer || null,
-    folioLocator: entry.folioLocator || null,
+    folioLocator: englishSafe(entry.folioLocator || null),
     sectionLocatorStatus: entry.sectionLocatorStatus ?? (source ? source.sectionLocatorStatus : null),
     folioLocatorStatus: entry.folioLocatorStatus ?? (source ? source.folioLocatorStatus : null),
     citationStatus: source ? source.citationStatus : null,
@@ -186,15 +232,22 @@ function orderByRelationshipOrder(entries, relationshipOrder) {
  * Several canonical summaries read as bare labels ("Primary position",
  * "Variant position") with the source distinguishing them left implicit;
  * this is what makes that provenance explicit rather than dropping it.
+ *
+ * `summary`/`sourceTitle`/`sectionLocator` all pass through `englishSafe()`
+ * — a disagreement summary is free-text prose and, like a source title or
+ * locator, sometimes mixes in Han-script text (e.g. a summary opening with a
+ * Han work name). `positionId`/`sourceId` stay untouched: both are
+ * structurally English-safe registry keys, so `heritageConnectorTier3Markup`
+ * can always fall back to one of them when the free-text fields are omitted.
  */
 function disagreementPositionCard(position, sourceRegistry) {
   const source = sourceRegistry?.[position?.sourceId] || null;
   return Object.freeze({
     positionId: position?.positionId ?? null,
-    summary: position?.summary ?? "",
+    summary: englishSafe(position?.summary ?? null),
     sourceId: position?.sourceId ?? null,
-    sourceTitle: source ? source.title : null,
-    sectionLocator: source ? source.sectionLocator : null,
+    sourceTitle: englishSafe(source ? source.title : null),
+    sectionLocator: englishSafe(source ? source.sectionLocator : null),
     citationStatus: source ? source.citationStatus : null,
   });
 }
@@ -358,10 +411,16 @@ function evidenceStatusText(card) {
   return bits.join("; ");
 }
 
-/** One connector, reduced further to exactly what a reader sees. */
+/**
+ * One connector, reduced further to exactly what a reader sees. `citation`
+ * falls back to the bare `sourceId` only when BOTH free-text fields were
+ * omitted as not English-safe (see `connectorCard`'s `englishSafe()` use) —
+ * provenance identity must still be shown, per the English-only boundary,
+ * even when the prose describing it cannot be.
+ */
 export function heritageConnectorCardMarkup(card) {
   const constructs = participantsLineText(card);
-  const citation = [card.sourceTitle, card.sectionLocator].filter(Boolean).join(", ");
+  const citation = [card.sourceTitle, card.sectionLocator].filter(Boolean).join(", ") || card.sourceId || "";
   const evidence = evidenceStatusText(card);
   return `
     <p>${esc(constructs)}${constructs && card.relationshipLabel ? " — " : ""}${esc(card.relationshipLabel)}</p>
@@ -418,12 +477,17 @@ export function heritageConnectorTier3Markup(model) {
         ${heritageConnectorCardMarkup(c)}`).join("")}`);
   }
   if (model.disagreements.length) {
+    // `p.summary` falls back to `positionId`, and the citation line to
+    // `sourceId`, only when the free-text field was omitted as not
+    // English-safe (see `disagreementPositionCard`'s `englishSafe()` use) —
+    // provenance identity is still shown even when the prose describing it
+    // cannot be.
     sections.push(`<p class="eyebrow">Where sources disagree</p>
       ${model.disagreements.map((d) => `
         <details class="source-note"><summary>${esc(d.disagreementId || "")}</summary>
           ${(d.positions || []).map((p) => `
-            <p class="muted">${esc(p.summary || "")}</p>
-            ${(p.sourceTitle || p.sectionLocator) ? `<p class="muted">${esc([p.sourceTitle, p.sectionLocator].filter(Boolean).join(", "))}</p>` : ""}
+            <p class="muted">${esc(p.summary || p.positionId || "")}</p>
+            ${([p.sourceTitle, p.sectionLocator].filter(Boolean).join(", ") || p.sourceId) ? `<p class="muted">${esc([p.sourceTitle, p.sectionLocator].filter(Boolean).join(", ") || p.sourceId || "")}</p>` : ""}
             ${p.citationStatus ? `<p class="muted">citation: ${esc(p.citationStatus)}</p>` : ""}`).join("")}
         </details>`).join("")}`);
   }

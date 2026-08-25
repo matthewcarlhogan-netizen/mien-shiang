@@ -259,7 +259,40 @@ function toAbstention(entry) {
   });
 }
 
-function mapResolverResult(result, depthMode, occurrence) {
+/*
+ * Stage 2's `toResolvedEntry()` (resolver.js, frozen) does not copy
+ * `sectionLocatorStatus`/`folioLocatorStatus` from the connector record onto
+ * the entries it returns — that boundary predates this field pair. Reading
+ * the SOURCE record's status for a connector-specific locator (as the prior
+ * pass's `connectorEvidenceCard` fix does when the entry carries no status of
+ * its own) can silently upgrade a connector whose own recorded locator is
+ * weaker than its source's general standing — see
+ * `five-forms-generative-overcoming-system` (`sectionLocatorStatus:
+ * "RECORDED"` on the connector, `"VERIFIED"` on its source
+ * `heritage-five-elements-taiqing`). Carrying the two fields through requires
+ * either reopening the frozen resolver boundary or closing the gap here, at
+ * the Stage-3 mapping layer that already owns the canonical connector
+ * registry. This is the latter: an EXACT `connectorId` lookup against the
+ * SAME `connectorRegistry` this call resolved against (the internally-bound
+ * canonical one in production, the caller-supplied one on the test seam —
+ * never a different or fallback registry), adding ONLY these two fields.
+ * Everything else on the entry — disposition, relationshipAvailability,
+ * gateReasons, evidenceStrength, membership, order — passes through
+ * unchanged. A connectorId with no registry match (should not happen; the
+ * entry came from this exact registry) leaves the entry untouched rather
+ * than inventing a status.
+ */
+function withConnectorLocatorStatus(entry, connectorRegistry) {
+  const raw = connectorRegistry?.[entry.connectorId];
+  if (!raw) return entry;
+  return Object.freeze({
+    ...entry,
+    sectionLocatorStatus: raw.sectionLocatorStatus,
+    folioLocatorStatus: raw.folioLocatorStatus,
+  });
+}
+
+function mapResolverResult(result, depthMode, occurrence, connectorRegistry) {
   return Object.freeze({
     suppressed: false,
     suppressionReason: null,
@@ -267,8 +300,8 @@ function mapResolverResult(result, depthMode, occurrence) {
     abstentionReasonCode: result.abstentionReasonCode,
     primaryConstruct: result.primaryConstruct,
     primaryLineage: result.primaryLineage,
-    active: result.activeConnectors,
-    sourcePanelOnly: result.sourcePanels,
+    active: Object.freeze(result.activeConnectors.map((e) => withConnectorLocatorStatus(e, connectorRegistry))),
+    sourcePanelOnly: Object.freeze(result.sourcePanels.map((e) => withConnectorLocatorStatus(e, connectorRegistry))),
     disagreements: result.disagreementPanels,
     editorialJuxtapositions: Object.freeze(
       result.editorialJuxtapositions.map(toEditorial),
@@ -349,7 +382,7 @@ function composeHeritageConnectionsInternal({
     occurrence,
   });
 
-  return mapResolverResult(result, depthMode, occurrence);
+  return mapResolverResult(result, depthMode, occurrence, connectorRegistry);
 }
 
 /**
