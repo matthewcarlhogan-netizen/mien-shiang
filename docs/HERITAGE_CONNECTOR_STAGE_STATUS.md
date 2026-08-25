@@ -1021,6 +1021,204 @@ ALREADY-retained field that was simply never displayed.
   `reading/provenance.js` aliased as `REAL_SOURCE_REGISTRY` to avoid
   colliding with this file's existing synthetic `SOURCE_REGISTRY` fixture)
 
+### Stage 3 — end-to-end locator-status + English-only correction pass (this session, on top of `ea1e640`)
+
+**A further technical correction pass, not a Stage 3 approval, and it does
+not close either blocker.** A fresh live review against `ea1e640` (the
+commit the prior provenance-fidelity pass landed in) produced exactly 3
+unresolved threads, reducing to 2 root defects. **Stage 3's status is
+unchanged: PARTIAL / BLOCKED ON SAFETY AUTHORIZATION AND A LINEAGE CONTENT
+DECISION.** Neither finding touched either blocker.
+
+**`src/heritage/resolver.js` remains unchanged and frozen.** The fix for
+defect 1 is implemented entirely at the Stage-3 composition boundary
+(`src/heritage/composition.js`), per the architecture this round's review
+required — reopening the frozen resolver boundary was the fallback, used
+only if the composition-layer fix could not be done cleanly. It could, so
+that fallback was not needed.
+
+1. **The Round-6 connector-locator-status fix was correct but not
+   end-to-end.** `connectorEvidenceCard()`'s preference for the connector's
+   own `sectionLocatorStatus`/`folioLocatorStatus` over the source's (Round 6)
+   never actually took effect in production, because `resolver.js`'s
+   `toResolvedEntry()` (lines 754-776, frozen) does not copy those two fields
+   from the connector record onto the resolved entries it returns — so
+   `entry.sectionLocatorStatus` was always `undefined` by the time the view
+   layer saw it, and the source's fallback fired every time regardless of
+   what the connector itself recorded. Round 6's own falsification test
+   passed `HERITAGE_CONNECTOR_REGISTRY`'s raw entry directly to
+   `connectorEvidenceCard()`, which skips `resolveHeritageConnections()` and
+   the Stage-3 mapping entirely and so could not have caught this.
+
+   **Fixed at the Stage-3 mapping layer**, not the frozen resolver:
+   `composition.js`'s `mapResolverResult()` now runs every `active`/
+   `sourcePanelOnly` entry through a new `withConnectorLocatorStatus()` —
+   an EXACT `connectorId` lookup against the SAME `connectorRegistry` the
+   call already resolved against (the internally-bound canonical registry in
+   production via `composeHeritageForReading`, the caller-supplied one on the
+   test/internal seam `composeHeritageConnectionsWithRegistries` — never a
+   different or fallback registry), adding ONLY `sectionLocatorStatus`/
+   `folioLocatorStatus`. Every other field on the entry — `disposition`,
+   `relationshipAvailability`, `gateReasons`, `evidenceStrength`, active/
+   source-panel membership, relationship order — passes through the spread
+   unchanged. A connectorId with no registry match (should not happen; the
+   entry came from this exact registry) leaves the entry untouched rather
+   than inventing a status.
+
+   One consequence worth recording: `registry.js`'s `connectorRecord()`
+   factory already defaults every connector's `sectionLocatorStatus`/
+   `folioLocatorStatus` to `"NOT_RECORDED"` when not explicitly set (a
+   pre-existing default, not something this pass added), so after this fix
+   EVERY active/source-panel connector now carries an explicit
+   connector-level status — the source-level fallback in
+   `connectorEvidenceCard()` (Round 6) remains correct and necessary for
+   entries that reach it by some other path (e.g. a direct call, as several
+   existing tests still do), but in practice rarely fires for entries that
+   went through `composeHeritageForReading`/`composeHeritageConnectionsWithRegistries`
+   now that the connector's own status — even a "NOT_RECORDED" default —
+   always wins. This is the correct direction: "NOT_RECORDED" is a true,
+   weaker statement than borrowing the source's stronger one.
+
+   **Falsification, real corpus, real chain (not a direct card-construction
+   call):** `"11 (real corpus, real chain): four-rivers-flow-and-banks'
+   sectionLocatorStatus survives resolveHeritageConnections() -> Stage-3
+   mapping -> tier3ConnectorModel(), through the actual
+   composeHeritageForReading() production entry point, with ZERO registry
+   override"` — proves the plumbing works end-to-end with real data and zero
+   test-seam substitution (this connector's own status happens to equal its
+   source's, `VERIFIED`, so it proves the mechanism but not the gap).
+
+   The GAP itself — `five-forms-generative-overcoming-system`'s `RECORDED`
+   connector-level status against its source's `VERIFIED` — cannot be
+   demonstrated through the zero-argument production entry point for any
+   real `(heritageConstruct, sourceLineage)` pairing: this connector's own
+   `runtimePolicy` is `RESEARCH_ONLY`, and resolver.js correctly routes
+   `RESEARCH_ONLY` connectors to `abstentions` BEFORE any `SOURCE_PANEL`
+   promotion (resolver.js item 2) — verified in the test with ZERO override,
+   against the real, unmodified production path, before proceeding. Abstention
+   cards (`composition.js`'s `toAbstention()`) never carry locator fields at
+   all, so no real reading today can drive this exact connector into
+   `tier3ConnectorModel()`'s evidence-card reduction — a pre-existing,
+   orthogonal fact about this connector's runtime policy, not something this
+   fix touches or needs to touch, and not something a future pass should
+   "fix" by loosening `RESEARCH_ONLY`'s precedence over `SOURCE_PANEL`
+   promotion without separate authorization.
+
+   So test `"11 (real corpus, real chain, disclosed reachability override):
+   five-forms-generative-overcoming-system's own RECORDED sectionLocatorStatus
+   survives the same real chain end-to-end and is NOT upgraded to its
+   source's stronger VERIFIED status"` exercises the identical real
+   `resolveHeritageConnections()` → `mapResolverResult()` → `tier3ConnectorModel()`
+   chain through the injectable seam, with the real canonical registries
+   unchanged except one disclosed, single-field override on a CLONE of this
+   ONE connector record — `runtimePolicy` only, so the record becomes
+   reachable as `sourcePanelOnly`. Every other field on the clone, including
+   the `sectionLocatorStatus` under test, stays byte-identical to the real
+   registry entry. The test asserts BOTH `card.sectionLocatorStatus ===
+   "RECORDED"` AND `card.citationStatus === "verified"` (the source's own,
+   correctly unmodified) at once, per this round's explicit requirement.
+
+2. **English reader-facing Stage-3 markup could leak Han-script text.**
+   Several registry fields mix Han characters into an otherwise-English
+   string rather than being cleanly bilingual or cleanly English —
+   `four-rivers-flow-and-banks`' `sectionLocator` is `"「四瀆」; 卷二 (Siku)"`;
+   `heritage-three-sections-sxqb`'s source `title` is `"神相全編 Three
+   Sections material"`; two of `three-sections-boundaries`' four position
+   summaries open with a Han work name. `disagreementPositionCard()` and
+   `connectorCard()`/`connectorEvidenceCard()` forwarded `summary`/
+   `sourceTitle`/`sectionLocator`/`folioLocator` verbatim, so any of these
+   could reach the English Stage-3 screen once safety authorization exists.
+   `tests/ui-language.test.js`'s static English-only guard does not scan
+   `src/heritage/`'s own registries (by design — they are source-language
+   records) or, historically, `src/ui/qise/heritage-view.js`'s output.
+
+   **Fixed with a new `englishSafe()` in `heritage-view.js`**: any free-text
+   provenance field containing so much as one Han character (same three CJK
+   ranges `tests/ui-language.test.js` uses) is treated as not English-safe
+   AS A WHOLE and OMITTED (`null`) — never surgically stripped to a partial
+   remainder. Stripping the Han prefix off `"神相全編 Three Sections
+   material"` to leave `"Three Sections material"` would be exactly the
+   forbidden move: a fragment with the evidence for its own accuracy removed
+   is not a verified translation, whatever it happens to read as. Where
+   provenance identity is still required after an omission, the markup falls
+   back to an already-recorded, structurally English-safe identifier —
+   `sourceId` for a connector/position's citation line, `positionId` for a
+   disagreement position's summary — both kebab-case registry keys, never
+   Han-filtered themselves because they are never free text.
+   `citationStatus`/`evidenceStrength`/`disposition` and the other
+   machine-readable enum fields are untouched; they were never the leak.
+
+   **Falsification, real corpus, real chain, three proofs:**
+   - `"12A: four-rivers-flow-and-banks cannot render 四瀆 or any Han
+     character, even though its own sectionLocator carries it"` — through
+     the real `composeHeritageForReading()` for `fourRivers`/`primary`;
+     asserts the card's `sectionLocator` is omitted (`null`, not a stripped
+     fragment) while its English-safe `sourceTitle` still renders.
+   - `"12B: three-sections-boundaries cannot render Han from any position's
+     summary, source title or source locator"` — through the real
+     `composeHeritageForReading()` for `threeSections`/`primary`; asserts
+     every position's three free-text fields are Han-free and that a
+     position whose summary was omitted still shows its `positionId` in the
+     rendered markup (proving the fallback fired, not that the position
+     silently vanished).
+   - `"12C: complete Tier-3 connector + disagreement markup built from BOTH
+     canonical entries above contains zero Han characters"` — combines the
+     real `four-rivers-flow-and-banks` connector and the real
+     `three-sections-boundaries` disagreement in one `tier3ConnectorModel`/
+     `heritageConnectorTier3Markup` render and scans the ENTIRE output.
+
+   All 5 new tests (2 for defect 1, 3 for defect 2) were verified this
+   session to fail against `ea1e640`'s actual `heritage-view.js`/
+   `composition.js` (temporarily restored) and pass only after the fix; the
+   other 44 then-present tests in the file continued to pass against the
+   unfixed code, confirming no incidental drift.
+
+**Locked invariants, reconfirmed after this pass:** `src/heritage/resolver.js`
+is byte-identical to `ea1e640` (`git diff --stat` empty). `registry.js`,
+`src/qise/reading-tiers.js`, `reading-state.js`, `src/qise/heritage-connections.js`
+are also all byte-identical to `ea1e640`. Only `src/heritage/composition.js`,
+`src/ui/qise/heritage-view.js` and their test file changed — `composition.js`
+per this round's explicit authorization (Stage-3 mapping layer, not
+resolver.js). `ABSTRACT_LINEAGE_OVERRIDES` remains `Object.freeze({})`.
+`fiveMountains`'s `"primary"` still resolves through the real production path
+to the registry `"primary"` (Renlun Datong) witness and is still blocked at
+`LINEAGE_RESEARCH_ONLY` — reconfirmed live this session
+(`five-mountains-mutual-facing-fullness:LINEAGE_RESEARCH_ONLY` in the real
+abstentions list), never `taiqing-siku`. No `Math.random`, no `rotationState`
+on the product-facing contract, no new detector, no `safetyPassed: true`
+fabrication, no scanner-threshold change, and no source/evidence status was
+upgraded — defect 1's fix carries an already-recorded connector-level status
+through instead of substituting a different already-recorded source-level
+one; defect 2's fix omits or substitutes an already-recorded identifier,
+never inventing or translating text.
+
+**Verification this session:**
+- `node --test tests/heritage/resolver.test.js tests/heritage/composition.test.js tests/qise/heritage-connections.test.js tests/qise/heritage-view.test.js tests/qise/reading-tiers.test.js tests/qise/reading-production-path.test.js` — **281/281**
+- Full heritage scope (`tests/heritage/*.test.js` + `tests/qise/heritage-connections.test.js` + `tests/qise/heritage-view.test.js` + `tests/qise/reading-tiers.test.js` + `tests/qise/reading-production-path.test.js`) — **348/348**
+- `node --test tests/qise/heritage-view.test.js` alone — **49/49** (was 44/44)
+- `npm test` — **1161/1161**, 75 test file(s)
+- `npm run build` — clean, 96 files copied, Module B shipped (wellness flavour)
+- `npm run lint:bundle` — clean, 97 files scanned, 1471 user-facing strings extracted
+- `git diff --check` — clean
+- `npm run audit:release` — `Release gate: BLOCKED`, identical pre-existing categories, no new blocker category
+- `npm run test:browser` — **7/7** Playwright specs pass
+
+**Files changed this session:**
+- `src/heritage/composition.js` — `withConnectorLocatorStatus()` and its use
+  in `mapResolverResult()`; no other function touched
+- `src/ui/qise/heritage-view.js` — `containsHan()`/`englishSafe()` and their
+  use in `connectorCard()`, `connectorEvidenceCard()`,
+  `disagreementPositionCard()`, `heritageConnectorCardMarkup()` and the
+  disagreement section of `heritageConnectorTier3Markup()`; `connectorCard()`
+  now also exposes `sourceId` (a new, additive field) so the markup has an
+  English-safe identifier to fall back to
+- `tests/qise/heritage-view.test.js` — 5 new tests (2 for the locator-status
+  end-to-end fix, 3 for the English-only boundary), plus the imports/helpers
+  they need (`composeHeritageForReading`, `composeHeritageConnectionsWithRegistries`,
+  the remaining canonical registries, a `realBase()` helper matching
+  `tests/heritage/composition.test.js`'s own, and a single top-level `hasHan()`
+  consolidating what had been a duplicate later in the file)
+
 ### Known limitations / remaining work
 
 - **Stage 3 is BLOCKED, not approved, not merged.** See the framing at the
