@@ -716,6 +716,200 @@ No change to `src/heritage/resolver.js`, `src/heritage/registry.js`,
 `src/qise/reading-tiers.js`, `src/qise/reading-state.js`, or
 `src/heritage/composition.js` (`git diff --stat` against all five is empty).
 
+### Stage 3 — renderer semantic-fidelity correction pass (this session, on top of `cb3eaf8`)
+
+**This is a separate technical review pass, not a Stage 3 approval.** It fixes
+defects in `src/ui/qise/heritage-view.js` — the pure render layer added in the
+prior session — found by a fresh independent Codex review that inspected
+`cb3eaf8` itself (the commit the prior "connector payload... rendered" fix
+landed in) and opened 8 unresolved P2 threads. **Stage 3's status is
+unchanged: PARTIAL / BLOCKED ON SAFETY AUTHORIZATION AND A LINEAGE CONTENT
+DECISION.** None of the 8 findings touched either blocker, and none required
+touching `src/heritage/resolver.js`, `registry.js`, `src/qise/reading-tiers.js`,
+`reading-state.js`, `src/heritage/composition.js`, or `src/qise/heritage-connections.js`
+— `git diff --stat` against all six is empty. Every fix is confined to
+`src/ui/qise/heritage-view.js` (the pure view-model/render layer) and its test
+file. Because Stage 3's own rendering is exercised in production only via the
+fail-closed suppression path (`safetyPassed` is never `true` anywhere in
+`app.js`), none of these 8 defects has ever reached a real device screen — the
+review caught them the same way the prior session's own tests did, against
+hand-built and synthetic inputs, before any authorised reading exists to
+render them against.
+
+**All 8 findings, their fix, and their falsification test** (each test is
+required to fail against `cb3eaf8`'s implementation and pass only after the
+fix — verified this session by temporarily restoring `cb3eaf8`'s
+`heritage-view.js`, adding a one-line shim so the file still loads, and
+confirming each of the 8 new tests fails while its paired negative control
+still passes; see "Falsification proof" below):
+
+1. **Tier 3's ACTIVE order did not follow the resolver's `renderPlan.relationshipOrder`.**
+   `tier3ConnectorModel` mapped `tier3Connectors.active` directly, which the
+   resolver keeps in stable connectorId order (resolver.js item 11) —
+   independent of the occurrence-rotated presentation order Tier 2's
+   selection (`deriveTier2FromComposition`'s `relationshipOrder[0]`) is drawn
+   from. With 2+ ACTIVE connectors, Tier 2 could select one connector while
+   opening Tier 3 showed a different one first, for the same reading. Fixed
+   with `orderByRelationshipOrder()`: `tier3ConnectorModel` now sorts
+   `active` by `renderPlan.relationshipOrder` before building cards — no new
+   selection mechanism, purely a presentation-order sort over the same set.
+   Test: `"1: tier3ConnectorModel orders ACTIVE cards by
+   renderPlan.relationshipOrder..."`.
+2. **`connectorCard` dropped every non-CONSTRUCT participant, and always
+   rendered `↔` regardless of `relationshipDirection`.** The old filter
+   (`.filter((p) => p.nodeType === "CONSTRUCT")`) silently deleted
+   HERITAGE_CONCEPT/CONSTITUENT/RELATED_SYSTEM participants (e.g. Shen, Form
+   on `shen-requires-form`), and `heritageConnectorCardMarkup` joined
+   whatever survived with an unconditional `" ↔ "`, flattening DIRECTED/ORDERED
+   connectors (e.g. `heritage-qise-modifies-form-shen-mountains-rivers`) into
+   a symmetric-looking relationship. Fixed: `connectorCard` now maps every
+   participant (via `participantLabel()`, which resolves a label per node
+   type — CONSTRUCT via the existing `HERITAGE_CONSTRUCT_LABEL`, every other
+   type falls back to its own recorded id, deliberately never the concept
+   registry's `canonicalChineseName` — see the Chinese-character correction
+   below) and carries `relationshipDirection` through to the card;
+   `participantsLineText()` renders `from → to` for DIRECTED, the declared
+   sequence for ORDERED, and the original `↔`-joined list only for UNDIRECTED
+   (kept as a negative control). Tests: `"2a: connectorCard preserves
+   HERITAGE_CONCEPT, CONSTITUENT and RELATED_SYSTEM participants..."` (+ a
+   real-corpus proof against `heritage-qise-modifies-form-shen-mountains-rivers`),
+   `"2b: heritageConnectorCardMarkup renders a DIRECTED connector as from →
+   to, never as ↔"` (+ a real-corpus proof against `shen-requires-form`, + the
+   UNDIRECTED negative control).
+3. **Disagreement positions rendered only `summary`, dropping `sourceId`.**
+   Some canonical summaries read as bare labels ("Primary position",
+   "Variant position") with nothing distinguishing which source backs which
+   side. Fixed: `disagreementPositionCard()` resolves each position's
+   `sourceId` against `SOURCE_REGISTRY` and carries `sourceTitle`/
+   `sectionLocator`/`citationStatus` alongside the summary; the markup now
+   renders each position's own citation beneath it. Test: `"3:
+   tier3ConnectorModel resolves each disagreement position's sourceId to its
+   own source title"`.
+4. **Editorial juxtapositions rendered bare internal connector ids.** A
+   `requiresSeparateAttribution: true` policy was not met by a comma-joined
+   list of ids the reader has no way to look up. Fixed: `tier3ConnectorModel`
+   resolves every editorial `items` id against the SAME cards already built
+   for `active`/`sourcePanelOnly` (every referenced connector is provably
+   present there — see `composeHeritageOnceForReading`'s file header) and the
+   markup renders each item through the normal card markup, giving it its own
+   title/citation. Test: `"4: tier3ConnectorModel resolves each editorial
+   item to its own connector card, not a bare id"`.
+5. **Every source-panel entry got one evidence-ceiling sentence, regardless
+   of `disposition`.** `SOURCE_PANEL` (a permanent `runtimePolicy:
+   "SOURCE_PANEL_ONLY"` restriction — currently
+   `five-officers-one-good-office-ten-years`) was worded identically to
+   `SOURCE_PANEL_CEILING` (an evidentiary ceiling that could, in principle,
+   be cleared by stronger evidence), misstating a permanent policy
+   restriction as a temporary evidence gap. Fixed:
+   `sourcePanelDisclosureFor()` selects wording from the entry's own
+   `disposition`; no resolver policy changed, only which of two existing,
+   already-true sentences is shown for which existing status. Tests: `"5: a
+   policy-restricted SOURCE_PANEL entry is worded as a standing
+   restriction..."` (+ the SOURCE_PANEL_CEILING wording kept as a negative
+   control).
+6. **Abstention chips showed only `gateReasons[0]`.** The composition layer
+   preserves the full array; a connector blocked for two simultaneous reasons
+   (e.g. a negative-invariant AND a registry-driven restriction) silently
+   lost the second, which could hide a safety-relevant reason. Fixed: the
+   chip now joins every reason (`gateReasons.join("; ")`). Test: `"6:
+   heritageConnectorTier3Markup renders every gate reason, not only the
+   first"`.
+7. **Tier 3's cards dropped evidence/provenance status entirely.** A
+   `SOURCE_PANEL_CEILING` entry's card kept only title/locator/disposition,
+   discarding `evidenceStrength`, `textualLayer`, locator status, and the
+   source's own citation/authorship/access status — all already computed
+   upstream (`resolver.js`'s `toResolvedEntry`, `reading/provenance.js`'s
+   `sourceRecord`) — so the scholarly view could not explain what remained
+   unverified or why material was ceilinged. Fixed with a new function,
+   `connectorEvidenceCard()`, layered on top of `connectorCard()` and used
+   ONLY by `tier3ConnectorModel` (for both `active` and `sourcePanelOnly`) —
+   `tier2ConnectorModel` still calls the bounded `connectorCard()`, so Tier 2
+   structurally cannot carry these fields, not merely by convention. Tests:
+   `"7: connectorEvidenceCard preserves evidenceStrength, textualLayer and
+   the source's locator/citation/authorship/access status"`, `"7:
+   tier3ConnectorModel's sourcePanelOnly/active cards carry evidence
+   status..."`, `"7: Tier 2 stays bounded..."` (negative control proving Tier
+   2's card never gains these fields even for the identical connector).
+8. **Test coverage itself** — `tests/qise/heritage-view.test.js` grew from 21
+   to 39 tests: the 8 findings above (several with both a synthetic and a
+   real-corpus proof), plus three tests re-confirming the already-locked
+   invariants still hold after this pass (`SOURCE_PANEL_CEILING` still cannot
+   leak into Tier 2, safety `UNKNOWN` still renders no connector heritage at
+   all, Tier-1 Qi Se measurement fields still cannot affect connector
+   markup).
+
+**A ninth issue was found and fixed during this pass, by self-review rather
+than by Codex — not one of the 8 threads, but load-bearing enough to record
+here.** The first implementation of fix #2 resolved a HERITAGE_CONCEPT
+participant's label as `HERITAGE_CONCEPT_REGISTRY[conceptId].canonicalChineseName`
+when no English label existed (e.g. Shen -> "神"). That field is
+Chinese-language text, and `tests/ui-language.test.js` keeps Chinese
+characters out of every reader-facing surface EXCEPT `src/heritage/` and
+`reading/provenance.js` themselves — by design, since those two hold the
+source-language record. None of that file's four guards actually scan
+`src/ui/qise/heritage-view.js`'s output (its source-literal scan has no
+Chinese literals to find there since the value is read at runtime, not
+written as a literal; its other three guards exercise the legacy
+`reading-tiers.js`/`readingview.js`/`sharecard.js` surfaces, not this
+connector-card render path) — so this would have shipped as an
+undetected English-only violation. Fixed by dropping `canonicalChineseName`
+entirely from `participantLabel()`: HERITAGE_CONCEPT, like CONSTITUENT and
+RELATED_SYSTEM, now falls back to the participant's own recorded id (English
+already — `"shen"`, `"form"`, `"heritageQiSe"`), never a registry lookup that
+could resolve to non-English text. A new test,
+`"2a: preserving HERITAGE_CONCEPT participants does not leak Chinese-language
+canonicalChineseName into reader-facing markup..."`, guards this file
+directly since `tests/ui-language.test.js` does not reach it.
+
+**Falsification proof (this session).** For each of the 8 fresh findings, its
+new test was run against `cb3eaf8`'s actual `heritage-view.js` (temporarily
+restored via `git show HEAD:src/ui/qise/heritage-view.js`, with a one-line
+`export const connectorEvidenceCard = connectorCard;` shim added so the file
+still loads under the new imports) and confirmed to fail — 12 of the 38
+then-existing tests failed, covering all 8 items plus the renamed
+`constructLabels` assertion — while every paired negative control (the
+UNDIRECTED case, the SOURCE_PANEL_CEILING wording case, the Tier-2-stays-bounded
+case, and the three already-locked-invariant tests) continued to pass. The
+fixed implementation was then restored and the full 39-test file re-run
+clean.
+
+**Locked invariants, reconfirmed after this pass:**
+`git diff --stat` shows changes in exactly two files —
+`src/ui/qise/heritage-view.js` and `tests/qise/heritage-view.test.js`.
+`src/heritage/resolver.js`, `registry.js`, `src/qise/reading-tiers.js`,
+`reading-state.js`, `src/heritage/composition.js` and
+`src/qise/heritage-connections.js` are all byte-identical to `cb3eaf8`
+(confirmed via `git diff --stat` per file, all empty).
+`ABSTRACT_LINEAGE_OVERRIDES` remains `Object.freeze({})`. `fiveMountains`'
+`"primary"` still resolves to the registry `"primary"` (Renlun Datong)
+witness, still `LINEAGE_RESEARCH_ONLY` through the real path, still never
+`taiqing-siku`. No `Math.random`/nondeterministic selection was introduced —
+`orderByRelationshipOrder()` is a pure, deterministic sort over
+already-resolver-produced data. No new clinical detector, no
+`safetyPassed: true` fabrication, no scanner-threshold change, no source or
+evidence status upgraded (the wording fix in item 5 renders one of two
+ALREADY-recorded dispositions; the evidence fields in item 7 are read, never
+computed or promoted).
+
+**Verification this session:**
+- `node --test tests/heritage/resolver.test.js tests/heritage/composition.test.js tests/qise/heritage-connections.test.js tests/qise/heritage-view.test.js tests/qise/reading-tiers.test.js tests/qise/reading-production-path.test.js` — **271/271** (was 232/232 excluding heritage-view.test.js at cb3eaf8; +39 from the expanded heritage-view.test.js, -0)
+- Full heritage scope (`tests/heritage/*.test.js` + `tests/qise/heritage-connections.test.js` + `tests/qise/heritage-view.test.js` + `tests/qise/reading-tiers.test.js` + `tests/qise/reading-production-path.test.js`) — **367/367** (was 349/349)
+- `node --test tests/qise/heritage-view.test.js` alone — **39/39** (was 21/21)
+- `npm test` — **1151/1151** (was 1133/1133)
+- `npm run build` — clean, 96 files copied, Module B shipped (wellness flavour)
+- `npm run lint:bundle` — clean (copy blocklist / attractiveness / egress allowlist / biometric egress all `ok`). One real finding was caught and fixed here: `orderByRelationshipOrder()`'s local variables `rank`/`ra`/`rb` tripped the attractiveness scanner's segment-prefix match on "rank" (CLAUDE.md item 40 — the scanner matches identifier segments, not just whole words, on purpose). Renamed to `positionOf`/`posA`/`posB`; not a rating/ranking-of-people scalar, just a presentation-order lookup, but the rename was the correct response rather than weakening the lint.
+- `git diff --check` — clean
+- `npm run audit:release` — `Release gate: BLOCKED`, identical pre-existing categories (rights-not-cleared, citation-source-required, manifest-pending across all content families, plus store/performance evidence), no new blocker category
+- `npm run test:browser` — **7/7** Playwright specs pass
+
+**Files changed this session:**
+- `src/ui/qise/heritage-view.js` — the 8 fixes above, plus the
+  Chinese-character correction; no other file touched
+- `tests/qise/heritage-view.test.js` — 18 new tests (8 findings, several with
+  a paired real-corpus proof and/or negative control, plus 3 re-confirmations
+  of already-locked invariants and 1 Chinese-character guard); one existing
+  assertion updated for the renamed `constructLabels` -> `participants` field
+
 ### Known limitations / remaining work
 
 - **Stage 3 is BLOCKED, not approved, not merged.** See the framing at the

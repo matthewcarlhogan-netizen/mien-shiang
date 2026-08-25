@@ -6,7 +6,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  humanizeRelationshipType, connectorCard, tier2ConnectorModel, tier3ConnectorModel,
+  humanizeRelationshipType, connectorCard, connectorEvidenceCard,
+  tier2ConnectorModel, tier3ConnectorModel,
   heritageConnectorCardMarkup, heritageConnectorTier2Markup, heritageConnectorTier3Markup,
 } from "../../src/ui/qise/heritage-view.js";
 import {
@@ -14,9 +15,24 @@ import {
 } from "../../src/qise/heritage-connections.js";
 import { deriveReadingState } from "../../src/qise/reading-state.js";
 import { composeReading } from "../../src/qise/reflection.js";
+import { HERITAGE_CONNECTOR_REGISTRY } from "../../src/heritage/registry.js";
 
 const SOURCE_REGISTRY = Object.freeze({
-  "synthetic-source": Object.freeze({ title: "Synthetic Source Title" }),
+  "synthetic-source": Object.freeze({
+    title: "Synthetic Source Title",
+    sectionLocator: "juan 2",
+    sectionLocatorStatus: "VERIFIED",
+    folioLocatorStatus: "NOT_RECORDED",
+    citationStatus: "verified",
+    authorshipStatus: "ATTRIBUTED",
+    sourceAccess: "REFERENCE_ONLY",
+  }),
+  "synthetic-source-2": Object.freeze({
+    title: "Synthetic Source Title 2",
+    sectionLocator: "head volume",
+    citationStatus: "edition-recorded",
+    authorshipStatus: "ATTRIBUTED_AND_CONTESTED",
+  }),
 });
 
 const entry = (overrides = {}) => ({
@@ -53,7 +69,7 @@ test("connectorCard reduces a connector entry to display-safe fields, resolving 
   const card = connectorCard(entry(), SOURCE_REGISTRY);
   assert.equal(card.connectorId, "syn-connector");
   assert.equal(card.relationshipLabel, "corresponds to");
-  assert.deepEqual(card.constructLabels, ["Five Mountains", "Four Rivers"]);
+  assert.deepEqual(card.participants.map((p) => p.label), ["Five Mountains", "Four Rivers"]);
   assert.equal(card.sourceTitle, "Synthetic Source Title");
   assert.equal(card.sectionLocator, "juan 2");
   assert.equal(card.prohibitedForUserInference, true);
@@ -301,4 +317,316 @@ test("E: the markup functions' entire signature is the connector view model — 
   }, SOURCE_REGISTRY);
   const withExtraMeasurement = { ...model, compass: { ascendant: "chi", magnitude: 9 }, metrics: { ming: 1 } };
   assert.equal(heritageConnectorTier2Markup(model), heritageConnectorTier2Markup(withExtraMeasurement));
+});
+
+/*
+ * ── FRESH CODEX FINDINGS AGAINST cb3eaf8 — 8 falsification tests ─────────
+ * Each test below is a falsification test for one of the 8 fresh P2
+ * findings raised by Codex against commit cb3eaf8's heritage-view.js: it
+ * MUST fail against cb3eaf8's implementation (mapping `active` directly
+ * instead of following `renderPlan.relationshipOrder`; filtering
+ * participants to `nodeType === "CONSTRUCT"`; always joining participants
+ * with an unconditional "↔"; dropping disagreement positions to their bare
+ * `summary`; rendering editorial `items` as bare connector-id strings;
+ * describing every source-panel entry with one evidence-ceiling sentence
+ * regardless of `disposition`; rendering only `gateReasons[0]`; and
+ * `connectorCard` dropping evidence/provenance fields entirely so Tier 3
+ * had nothing to preserve) and pass against the fix above.
+ */
+
+/* ── 1: Tier 3's ACTIVE order follows renderPlan.relationshipOrder, matching Tier 2's pick ── */
+
+test("1: tier3ConnectorModel orders ACTIVE cards by renderPlan.relationshipOrder, not by stable connectorId order", () => {
+  const tier3Connectors = {
+    suppressed: false, abstained: false,
+    // Stable connectorId order (what the resolver's `active` array is always
+    // in) puts "connector-a" first, alphabetically ahead of "connector-b".
+    active: [
+      entry({ connectorId: "connector-a" }),
+      entry({ connectorId: "connector-b" }),
+    ],
+    sourcePanelOnly: [], disagreements: [], abstentions: [], editorialJuxtapositions: [],
+    // The resolver's own rotated presentation order (what Tier 2's pick,
+    // renderPlan.relationshipOrder[0], is drawn from) puts "connector-b" first.
+    renderPlan: { relationshipOrder: ["connector-b", "connector-a"] },
+  };
+  const tier2Pick = tier3Connectors.renderPlan.relationshipOrder[0];
+  const model = tier3ConnectorModel(tier3Connectors, SOURCE_REGISTRY);
+  assert.equal(model.active[0].connectorId, tier2Pick,
+    "Tier 3's first displayed ACTIVE connector must be the same one Tier 2 selected for this reading");
+  assert.equal(model.active[1].connectorId, "connector-a");
+});
+
+/* ── 2a: every supported participant type survives, not only CONSTRUCT ── */
+
+test("2a: connectorCard preserves HERITAGE_CONCEPT, CONSTITUENT and RELATED_SYSTEM participants, not only CONSTRUCT", () => {
+  const mixed = entry({
+    connectorId: "mixed-participants",
+    participants: [
+      { participantId: "fourRivers", nodeType: "CONSTRUCT", constructId: "fourRivers" },
+      { participantId: "shen", nodeType: "HERITAGE_CONCEPT", conceptId: "shen" },
+      { participantId: "someConstituent", nodeType: "CONSTITUENT", constituentId: "someConstituent" },
+      { participantId: "five-phases", nodeType: "RELATED_SYSTEM", relatedSystemId: "five-phases" },
+    ],
+  });
+  const card = connectorCard(mixed, SOURCE_REGISTRY);
+  assert.equal(card.participants.length, 4, "all four declared participants must survive the reduction");
+  const nodeTypes = card.participants.map((p) => p.nodeType);
+  assert.deepEqual(nodeTypes, ["CONSTRUCT", "HERITAGE_CONCEPT", "CONSTITUENT", "RELATED_SYSTEM"]);
+  // HERITAGE_CONCEPT has no English label registry in Stage 1 (its only
+  // other recorded field is Chinese-language canonicalChineseName, which
+  // this file deliberately never reads — see heritage-view.js's file
+  // header) — the concept's own recorded id is shown as-is.
+  const shen = card.participants.find((p) => p.participantId === "shen");
+  assert.equal(shen.label, "shen");
+  // CONSTITUENT/RELATED_SYSTEM have no label registry in Stage 1 — the
+  // recorded id is shown as-is rather than an invented paraphrase.
+  const constituent = card.participants.find((p) => p.participantId === "someConstituent");
+  assert.equal(constituent.label, "someConstituent");
+  const relatedSystem = card.participants.find((p) => p.participantId === "five-phases");
+  assert.equal(relatedSystem.label, "five-phases");
+});
+
+test("2a (real corpus): a mixed CONSTRUCT/HERITAGE_CONCEPT connector from the real registry keeps every participant", () => {
+  const real = HERITAGE_CONNECTOR_REGISTRY["heritage-qise-modifies-form-shen-mountains-rivers"];
+  assert.ok(real, "the real registry connector this test targets must exist");
+  const card = connectorCard(real);
+  // 5 declared participants: heritageQiSe, form, shen (HERITAGE_CONCEPT) + fiveMountains, fourRivers (CONSTRUCT).
+  assert.equal(card.participants.length, real.participants.length);
+  assert.equal(card.participants.length, 5);
+  assert.ok(card.participants.some((p) => p.participantId === "shen" && p.nodeType === "HERITAGE_CONCEPT"));
+  assert.ok(card.participants.some((p) => p.participantId === "form" && p.nodeType === "HERITAGE_CONCEPT"));
+});
+
+/* ── 2b: DIRECTED/ORDERED relationships are not flattened to a symmetric ↔ ── */
+
+test("2b: heritageConnectorCardMarkup renders a DIRECTED connector as from → to, never as ↔", () => {
+  const directed = entry({
+    connectorId: "directed-connector",
+    relationshipDirection: { kind: "DIRECTED", from: ["fourRivers"], to: ["fiveMountains"] },
+    participants: [
+      { participantId: "fourRivers", nodeType: "CONSTRUCT", constructId: "fourRivers" },
+      { participantId: "fiveMountains", nodeType: "CONSTRUCT", constructId: "fiveMountains" },
+    ],
+  });
+  const html = heritageConnectorCardMarkup(connectorCard(directed, SOURCE_REGISTRY));
+  assert.equal(html.includes("↔"), false, "a DIRECTED relationship must not render the symmetric ↔ separator");
+  assert.match(html, /Four Rivers[^]*→[^]*Five Mountains/);
+});
+
+test("2b: an UNDIRECTED connector still renders the symmetric ↔ (negative control — direction handling did not remove the symmetric case)", () => {
+  const undirected = entry({ relationshipDirection: { kind: "UNDIRECTED" } });
+  const html = heritageConnectorCardMarkup(connectorCard(undirected, SOURCE_REGISTRY));
+  assert.match(html, /↔/);
+});
+
+test("2b (real corpus): the real DIRECTED connector shen-requires-form renders shen → form, not shen ↔ form", () => {
+  const real = HERITAGE_CONNECTOR_REGISTRY["shen-requires-form"];
+  assert.ok(real, "the real registry connector this test targets must exist");
+  assert.equal(real.relationshipDirection.kind, "DIRECTED");
+  const html = heritageConnectorCardMarkup(connectorCard(real));
+  assert.equal(html.includes("↔"), false);
+  assert.match(html, /→/);
+});
+
+/* ── 3: every disagreement position is attributed to its own source ── */
+
+test("3: tier3ConnectorModel resolves each disagreement position's sourceId to its own source title", () => {
+  const tier3Connectors = {
+    suppressed: false, abstained: false,
+    active: [], sourcePanelOnly: [], abstentions: [], editorialJuxtapositions: [],
+    disagreements: [{
+      disagreementId: "four-rivers-eye-mouth",
+      target: { targetType: "CONSTRUCT", targetRef: "fourRivers" },
+      positions: [
+        { positionId: "primary", sourceId: "synthetic-source", summary: "Primary position" },
+        { positionId: "variant", sourceId: "synthetic-source-2", summary: "Variant position" },
+      ],
+    }],
+  };
+  const model = tier3ConnectorModel(tier3Connectors, SOURCE_REGISTRY);
+  const [primary, variant] = model.disagreements[0].positions;
+  assert.equal(primary.sourceTitle, "Synthetic Source Title");
+  assert.equal(variant.sourceTitle, "Synthetic Source Title 2");
+  assert.notEqual(primary.sourceTitle, variant.sourceTitle,
+    "two positions on the same disagreement must not be attributed to the same source");
+
+  const html = heritageConnectorTier3Markup(model);
+  assert.match(html, /Synthetic Source Title(?!\s*2)/);
+  assert.match(html, /Synthetic Source Title 2/);
+});
+
+/* ── 4: editorial juxtapositions resolve every referenced connector, not bare ids ── */
+
+test("4: tier3ConnectorModel resolves each editorial item to its own connector card, not a bare id", () => {
+  const tier3Connectors = {
+    suppressed: false, abstained: false,
+    active: [entry({ connectorId: "active-1", sourceId: "synthetic-source" })],
+    sourcePanelOnly: [entry({ connectorId: "ceilinged-1", sourceId: "synthetic-source-2", disposition: "SOURCE_PANEL_CEILING" })],
+    disagreements: [], abstentions: [],
+    editorialJuxtapositions: [{
+      policyId: "p-1", items: ["active-1", "ceilinged-1"],
+      historicalRelationshipAsserted: false, requiresSeparateAttribution: true,
+      disclosure: "SOURCES_SHOWN_BESIDE_ONE_ANOTHER",
+    }],
+  };
+  const model = tier3ConnectorModel(tier3Connectors, SOURCE_REGISTRY);
+  const items = model.editorial[0].items;
+  assert.equal(items.length, 2);
+  assert.equal(items[0].connectorId, "active-1");
+  assert.equal(items[0].sourceTitle, "Synthetic Source Title");
+  assert.equal(items[1].connectorId, "ceilinged-1");
+  assert.equal(items[1].sourceTitle, "Synthetic Source Title 2");
+
+  const html = heritageConnectorTier3Markup(model);
+  assert.match(html, /Synthetic Source Title(?!\s*2)/);
+  assert.match(html, /Synthetic Source Title 2/);
+  assert.equal(html.includes("active-1, ceilinged-1"), false,
+    "editorial items must not render as a bare, unattributed id list");
+});
+
+/* ── 5: SOURCE_PANEL (policy) reads differently from SOURCE_PANEL_CEILING (evidence) ── */
+
+test("5: a policy-restricted SOURCE_PANEL entry is worded as a standing restriction, never as an evidence backlog", () => {
+  const model = tier3ConnectorModel({
+    suppressed: false, abstained: false,
+    active: [], disagreements: [], abstentions: [], editorialJuxtapositions: [],
+    sourcePanelOnly: [entry({
+      connectorId: "five-officers-one-good-office-ten-years", disposition: "SOURCE_PANEL",
+    })],
+  }, SOURCE_REGISTRY);
+  const html = heritageConnectorTier3Markup(model);
+  assert.match(html, /policy/i);
+  assert.equal(/evidentiary standing has not yet cleared/i.test(html), false,
+    "a permanent policy restriction must not be worded as evidence pending review");
+});
+
+test("5: a SOURCE_PANEL_CEILING entry keeps the evidence-ceiling wording (negative control)", () => {
+  const model = tier3ConnectorModel({
+    suppressed: false, abstained: false,
+    active: [], disagreements: [], abstentions: [], editorialJuxtapositions: [],
+    sourcePanelOnly: [entry({ connectorId: "ceilinged-1", disposition: "SOURCE_PANEL_CEILING" })],
+  }, SOURCE_REGISTRY);
+  const html = heritageConnectorTier3Markup(model);
+  assert.match(html, /evidentiary standing has not yet cleared/i);
+});
+
+/* ── 6: every abstention gate reason survives, not only gateReasons[0] ── */
+
+test("6: heritageConnectorTier3Markup renders every gate reason, not only the first", () => {
+  const model = tier3ConnectorModel({
+    suppressed: false, abstained: false,
+    active: [], sourcePanelOnly: [], disagreements: [], editorialJuxtapositions: [],
+    abstentions: [{
+      connectorId: "blocked-1", disposition: "PARTICIPANT_ABSENT",
+      prohibitedForUserInference: true,
+      gateReasons: ["PARTICIPANT_ABSENT", "LINEAGE_RESEARCH_ONLY"],
+    }],
+  }, SOURCE_REGISTRY);
+  const html = heritageConnectorTier3Markup(model);
+  assert.match(html, /PARTICIPANT_ABSENT/);
+  assert.match(html, /LINEAGE_RESEARCH_ONLY/,
+    "a second, simultaneously-true gate reason must not be discarded");
+});
+
+/* ── 7: evidence/provenance status is preserved for Tier 3, and stays absent from Tier 2 ── */
+
+test("7: connectorEvidenceCard preserves evidenceStrength, textualLayer and the source's locator/citation/authorship/access status", () => {
+  const withEvidence = entry({
+    connectorId: "ceilinged-1",
+    disposition: "SOURCE_PANEL_CEILING",
+    evidenceStrength: "RECORDED_NOT_VERIFIED",
+    textualLayer: "COMMENTARY",
+    folioLocator: "folio 12",
+    sourceId: "synthetic-source",
+  });
+  const card = connectorEvidenceCard(withEvidence, SOURCE_REGISTRY);
+  assert.equal(card.evidenceStrength, "RECORDED_NOT_VERIFIED");
+  assert.equal(card.textualLayer, "COMMENTARY");
+  assert.equal(card.folioLocator, "folio 12");
+  assert.equal(card.sectionLocatorStatus, "VERIFIED");
+  assert.equal(card.citationStatus, "verified");
+  assert.equal(card.authorshipStatus, "ATTRIBUTED");
+  assert.equal(card.sourceAccess, "REFERENCE_ONLY");
+});
+
+test("7: tier3ConnectorModel's sourcePanelOnly/active cards carry evidence status, and it renders in Tier 3's markup", () => {
+  const tier3Connectors = {
+    suppressed: false, abstained: false,
+    active: [], disagreements: [], abstentions: [], editorialJuxtapositions: [],
+    sourcePanelOnly: [entry({
+      connectorId: "ceilinged-1", disposition: "SOURCE_PANEL_CEILING",
+      evidenceStrength: "RECORDED_NOT_VERIFIED", sourceId: "synthetic-source",
+    })],
+  };
+  const model = tier3ConnectorModel(tier3Connectors, SOURCE_REGISTRY);
+  assert.equal(model.sourcePanelOnly[0].evidenceStrength, "RECORDED_NOT_VERIFIED");
+  const html = heritageConnectorTier3Markup(model);
+  assert.match(html, /recorded not verified/i);
+});
+
+test("7: Tier 2 stays bounded — its card never carries evidenceStrength/textualLayer/citationStatus, even for the same connector", () => {
+  const tier2Connectors = {
+    available: true, reason: null,
+    connector: entry({ evidenceStrength: "RECORDED_NOT_VERIFIED", textualLayer: "COMMENTARY", sourceId: "synthetic-source" }),
+    disagreements: [], rotationDisclosure: "x", occurrence: 0,
+  };
+  const model = tier2ConnectorModel(tier2Connectors, SOURCE_REGISTRY);
+  assert.equal("evidenceStrength" in model.card, false);
+  assert.equal("textualLayer" in model.card, false);
+  assert.equal("citationStatus" in model.card, false);
+  const html = heritageConnectorTier2Markup(model);
+  assert.equal(/recorded not verified/i.test(html), false);
+});
+
+/* ── 8: locked invariants this pass must not disturb ─────────────────────── */
+
+test("8: SOURCE_PANEL_CEILING still cannot leak into Tier 2 after the evidence-card change", () => {
+  const tier2Connectors = {
+    available: false, reason: "NO_ACTIVE_CONNECTOR", connector: null,
+    disagreements: [], rotationDisclosure: null, occurrence: 0,
+    sourcePanelOnly: [entry({ connectorId: "ceilinged", disposition: "SOURCE_PANEL_CEILING", evidenceStrength: "RECORDED_NOT_VERIFIED" })],
+  };
+  const model = tier2ConnectorModel(tier2Connectors, SOURCE_REGISTRY);
+  assert.equal(model.available, false);
+  assert.equal(model.card, null);
+  assert.equal(JSON.stringify(model).includes("ceilinged"), false);
+});
+
+test("8: safety UNKNOWN still renders no connector heritage at all after the reordering/attribution changes", () => {
+  const reflection = makeReflection();
+  const tier2Connectors = tierTwoHeritageConnections(reflection, { captureQualityPassed: true });
+  const tier3Connectors = tierThreeHeritageConnections(reflection, { captureQualityPassed: true });
+  assert.equal(heritageConnectorTier2Markup(tier2ConnectorModel(tier2Connectors)), "");
+  assert.equal(heritageConnectorTier3Markup(tier3ConnectorModel(tier3Connectors)), "");
+});
+
+test("8: Tier-1 Qi Se measurement fields still cannot affect the connector markup output", () => {
+  const model = tier3ConnectorModel({
+    suppressed: false, abstained: false,
+    active: [entry({ connectorId: "active-1" })],
+    sourcePanelOnly: [], disagreements: [], abstentions: [], editorialJuxtapositions: [],
+  }, SOURCE_REGISTRY);
+  const withExtraMeasurement = { ...model, compass: { ascendant: "chi", magnitude: 9 }, metrics: { ming: 1 } };
+  assert.equal(heritageConnectorTier3Markup(model), heritageConnectorTier3Markup(withExtraMeasurement));
+});
+
+const hasHan = (value) => [...String(value ?? "")].some((character) => {
+  const code = character.codePointAt(0);
+  return (code >= 0x3400 && code <= 0x4dbf) || (code >= 0x4e00 && code <= 0x9fff) || (code >= 0xf900 && code <= 0xfaff);
+});
+
+test("2a: preserving HERITAGE_CONCEPT participants does not leak Chinese-language canonicalChineseName into reader-facing markup (tests/ui-language.test.js's guard does not scan this file, so this file must guard itself)", () => {
+  const mixed = entry({
+    connectorId: "mixed-participants",
+    participants: [
+      { participantId: "shen", nodeType: "HERITAGE_CONCEPT", conceptId: "shen" },
+      { participantId: "form", nodeType: "HERITAGE_CONCEPT", conceptId: "form" },
+      { participantId: "heritageQiSe", nodeType: "HERITAGE_CONCEPT", conceptId: "heritageQiSe" },
+    ],
+  });
+  const card = connectorCard(mixed, SOURCE_REGISTRY);
+  assert.equal(hasHan(JSON.stringify(card)), false, "connectorCard output must be English-only");
+  const html = heritageConnectorCardMarkup(card);
+  assert.equal(hasHan(html), false, "reader-facing markup must be English-only");
 });
