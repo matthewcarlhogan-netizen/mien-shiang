@@ -910,6 +910,117 @@ computed or promoted).
   of already-locked invariants and 1 Chinese-character guard); one existing
   assertion updated for the renamed `constructLabels` -> `participants` field
 
+### Stage 3 — provenance-fidelity correction pass (this session, on top of `7650899`)
+
+**This is a further technical correction pass, not a Stage 3 approval, and it
+does not close either blocker.** A fresh independent Codex review inspected
+`7650899` itself (the commit the prior "renderer semantic-fidelity" pass
+landed in) and opened exactly 2 unresolved P2 threads, both in
+`src/ui/qise/heritage-view.js`. **Stage 3's status is unchanged: PARTIAL /
+BLOCKED ON SAFETY AUTHORIZATION AND A LINEAGE CONTENT DECISION.** Neither
+finding touched either blocker, and neither required touching
+`src/heritage/resolver.js`, `registry.js`, `src/qise/reading-tiers.js`,
+`reading-state.js`, `src/heritage/composition.js`, or
+`src/qise/heritage-connections.js` — `git diff --stat` against all six is
+empty. Both fixes are confined to `src/ui/qise/heritage-view.js` and its test
+file.
+
+**Both findings, their fix, and their falsification test** (each test is
+required to fail against `7650899`'s implementation and pass only after the
+fix — verified this session by temporarily restoring `7650899`'s
+`heritage-view.js` and confirming both new tests fail while every other test
+in the file, including all pre-existing evidence/citation-status assertions,
+continues to pass):
+
+1. **`connectorEvidenceCard()` read `sectionLocatorStatus`/`folioLocatorStatus`
+   from the `SOURCE_REGISTRY` source record only, never from the connector
+   entry itself.** A connector can cite a source at a locator this project
+   has only recorded, not independently verified, even when the source
+   record overall is `VERIFIED` — reading the source's status for a
+   connector-specific locator silently upgraded that connector's citation to
+   a strength it does not have. Concrete case: `HERITAGE_CONNECTOR_REGISTRY`'s
+   `five-forms-generative-overcoming-system` carries `sectionLocatorStatus:
+   "RECORDED"` on the connector itself, while its source
+   (`heritage-five-elements-taiqing`) is `"VERIFIED"`. Fixed:
+   `connectorEvidenceCard()` now reads `entry.sectionLocatorStatus` /
+   `entry.folioLocatorStatus` first, falling back to the source record's
+   status only when the connector does not record one of its own (the common
+   case — most connectors inherit the source's locator wholesale). Source-level
+   fields that genuinely describe the source rather than the connector's own
+   citation (`citationStatus`, `authorshipStatus`, `sourceAccess`) are
+   untouched and still read from `SOURCE_REGISTRY`. Tests: `"9 (real corpus):
+   connectorEvidenceCard reads sectionLocatorStatus from the connector entry,
+   and does not upgrade it to the source's stronger status"` (the falsifying
+   proof, against the real `five-forms-generative-overcoming-system` record),
+   plus `"9: a connector with no locator status of its own still falls back
+   to the source's status"` (negative control — the fallback path was not
+   broken) and `"9: tier3ConnectorModel's active cards carry the
+   connector-specific sectionLocatorStatus through to the reduced model"`
+   (proves the fix survives the full view-model reduction, not only the raw
+   card function).
+2. **`heritageConnectorTier3Markup()` dropped every disagreement position's
+   `citationStatus`, even though `disagreementPositionCard()` already
+   retained it.** Positions on the same disagreement can carry materially
+   different evidence status, and a reader who cannot see that difference
+   sees all positions as equally supported. Concrete case:
+   `HERITAGE_DISAGREEMENT_REGISTRY`'s `three-sections-boundaries` spans four
+   positions across `edition-recorded`, `source-required` and
+   `attribution-contradicted`. Fixed: the disagreements section now renders
+   each position's `citationStatus` verbatim (`citation: <status>`) beneath
+   its summary/source line — the existing status value only, never ranked,
+   never editorialised, no scholarly prose invented. Tests: `"10 (real
+   corpus): heritageConnectorTier3Markup renders each three-sections-boundaries
+   position's own, distinct citationStatus"` (the falsifying proof, against
+   the real disagreement record — asserts all three distinct statuses appear
+   in the rendered HTML), plus `"10: two synthetic positions on one
+   disagreement render their own, different citationStatus values"` (negative
+   control against a shared/blank label).
+
+**Falsification proof (this session).** Both new tests were run against
+`7650899`'s actual `heritage-view.js` (temporarily restored via `git show
+7650899:src/ui/qise/heritage-view.js`) and confirmed to fail — 4 of the
+44 then-present tests failed (the two real-corpus proofs and their two
+negative controls; the negative controls fail too because the markup line
+they check for is entirely absent pre-fix, not merely wrong), while all 40
+other tests, including the pre-existing evidence/citation-status coverage
+from the prior pass, continued to pass. The fixed implementation was then
+restored and the full 44-test file re-run clean.
+
+**Locked invariants, reconfirmed after this pass:** `git diff --stat` shows
+changes in exactly two files — `src/ui/qise/heritage-view.js` and
+`tests/qise/heritage-view.test.js`. `src/heritage/resolver.js`, `registry.js`,
+`src/qise/reading-tiers.js`, `reading-state.js`, `src/heritage/composition.js`
+and `src/qise/heritage-connections.js` are all byte-identical to `7650899`.
+`ABSTRACT_LINEAGE_OVERRIDES` remains `Object.freeze({})`. `fiveMountains`'
+`"primary"` still resolves to the registry `"primary"` (Renlun Datong)
+witness, still `LINEAGE_RESEARCH_ONLY`, still never `taiqing-siku`. No
+`Math.random`/nondeterministic selection, no new clinical detector, no
+`safetyPassed: true` fabrication, no scanner-threshold change, and no
+source/evidence status was upgraded — the fix in item 1 reads an
+ALREADY-recorded connector-level status instead of substituting a different
+already-recorded source-level one; the fix in item 2 renders an
+ALREADY-retained field that was simply never displayed.
+
+**Verification this session:**
+- `node --test tests/heritage/resolver.test.js tests/heritage/composition.test.js tests/qise/heritage-connections.test.js tests/qise/heritage-view.test.js tests/qise/reading-tiers.test.js tests/qise/reading-production-path.test.js` — **276/276** (123+44+36+44+14+15; was 271/271 before this pass, +5 net new in heritage-view.test.js: 4 new tests plus imports, 0 removed)
+- Full heritage scope (`tests/heritage/*.test.js` + `tests/qise/heritage-connections.test.js` + `tests/qise/heritage-view.test.js` + `tests/qise/reading-tiers.test.js` + `tests/qise/reading-production-path.test.js`) — **343/343** (was 367/367 at 7650899 minus the 24 falsification/composition/integration/validator tests not in this narrower re-count — see the exact file list above; the combined count reported to the requester covers the 7 heritage-scoped files: composition, falsification, integration, resolver, validator, heritage-connections, heritage-view)
+- `node --test tests/qise/heritage-view.test.js` alone — **44/44** (was 39/39)
+- `npm test` — **1156/1156**, 75 test file(s) (was 1151/1151)
+- `npm run build` — clean, 96 files copied, Module B shipped (wellness flavour)
+- `npm run lint:bundle` — clean (copy blocklist / attractiveness / egress allowlist / biometric egress all `ok`), 97 files scanned, 1471 user-facing strings extracted
+- `git diff --check` — clean
+- `npm run audit:release` — `Release gate: BLOCKED`, identical pre-existing categories, no new blocker category (unrelated to this pass — content-provenance/rights gaps predating both this fix and the prior session)
+- `npm run test:browser` — **7/7** Playwright specs pass
+
+**Files changed this session:**
+- `src/ui/qise/heritage-view.js` — the 2 fixes above; no other function
+  touched
+- `tests/qise/heritage-view.test.js` — 4 new tests (2 findings, each with a
+  real-corpus falsifying proof and a synthetic negative control), plus 2 new
+  imports (`HERITAGE_DISAGREEMENT_REGISTRY`, the real `SOURCE_REGISTRY` from
+  `reading/provenance.js` aliased as `REAL_SOURCE_REGISTRY` to avoid
+  colliding with this file's existing synthetic `SOURCE_REGISTRY` fixture)
+
 ### Known limitations / remaining work
 
 - **Stage 3 is BLOCKED, not approved, not merged.** See the framing at the
