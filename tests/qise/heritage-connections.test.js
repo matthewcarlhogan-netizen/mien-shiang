@@ -523,3 +523,41 @@ test("no biometric or raw gate payload is required by captureAuthorizationFromRe
   assert.match(fn, /reading\.captureTier/);
   assert.doesNotMatch(fn, /pixel|landmark|image|embedding|mesh/i);
 });
+
+/*
+ * ── PR #40 technical closeout: same reading, same occurrence, one shared
+ *    composition — and the canonical docs say so ────────────────────────────
+ */
+
+test("readingTiersWithHeritage: tier2 and tier3 report the SAME occurrence for the same reading, through the real production path", () => {
+  const reflection = makeReflection({}, 3);
+  const tiers = readingTiersWithHeritage(reflection, { captureQualityPassed: true, safetyPassed: true });
+  assert.ok(tiers.tier2.connectors);
+  assert.ok(tiers.tier3.connectors);
+  assert.equal(tiers.tier2.connectors.occurrence, 3);
+  assert.equal(tiers.tier3.connectors.occurrence, 3);
+  assert.equal(tiers.tier2.connectors.occurrence, tiers.tier3.connectors.occurrence,
+    "Tier 2 and Tier 3 must report the occurrence of the SAME shared composition, never two independently-driven ones");
+});
+
+test("current documentation: 'What was built (current state)' does not claim Tier 2/Tier 3 independently request separate STANDARD/SOURCE_DEEP compositions", () => {
+  const docPath = fileURLToPath(new URL("../../docs/HERITAGE_CONNECTOR_STAGE_STATUS.md", import.meta.url));
+  const doc = readFileSync(docPath, "utf8");
+  const sectionStart = doc.indexOf("### What was built (current state)");
+  assert.notEqual(sectionStart, -1, "the canonical current-state section must exist");
+  const sectionEnd = doc.indexOf("\n### ", sectionStart + 1);
+  const section = doc.slice(sectionStart, sectionEnd === -1 ? undefined : sectionEnd);
+
+  assert.doesNotMatch(section, /hardcode their `depthMode` \(`STANDARD` \/ `SOURCE_DEEP`\)/,
+    "the current-state summary must not describe Tier 2/Tier 3 as two separately-depthed compositions");
+  // A mention of STANDARD/SOURCE_DEEP together is fine when explicitly framed
+  // as the earlier, now-fixed shape (e.g. "An earlier revision had Tier 2
+  // request..."/"used to call...SEPARATELY") -- only an UNQUALIFIED present-
+  // tense claim that the two tiers currently request different depths is the
+  // defect this test guards against, and that exact phrasing is covered by
+  // the assertion above.
+  assert.match(section, /composeHeritageOnceForReading/,
+    "the current-state summary must name the single shared composition helper");
+  assert.match(section, /exactly once/,
+    "the current-state summary must state the composition happens exactly once per reading");
+});

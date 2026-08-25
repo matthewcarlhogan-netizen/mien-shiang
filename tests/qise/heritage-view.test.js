@@ -25,6 +25,7 @@ import { SOURCE_REGISTRY as REAL_SOURCE_REGISTRY } from "../../src/reading/prove
 import {
   composeHeritageForReading, composeHeritageConnectionsWithRegistries,
 } from "../../src/heritage/composition.js";
+import { ROTATION_DISCLOSURE } from "../../src/qise/reflection-corpus.js";
 
 /* Same real-registry base composeHeritageConnectionsWithRegistries() call
  * tests/heritage/composition.test.js uses, so a "real chain" test here means
@@ -920,4 +921,135 @@ test("12C (real corpus, real chain, combined): complete Tier-3 connector + disag
   const html = heritageConnectorTier3Markup(model);
   assert.ok(html.length > 0, "the combined markup must actually render something to be a meaningful proof");
   assert.equal(hasHan(html), false, "complete Tier-3 markup built from real canonical corpus data must contain zero Han characters");
+});
+
+/*
+ * ── 13: Tier 3 ("Why") discloses the scheduled heritage rotation exactly as
+ *    Tier 2 ("Story") already does, whenever Tier-3 connector material is
+ *    actually rendered — never a second, differently-worded mechanism ──────
+ * PR #40 closeout, Codex finding: the Why tab could render connector/source/
+ * disagreement/abstention/editorial material selected by the day-rotated
+ * heritageConstruct/sourceLineage with no disclosure at all, since the only
+ * `rotationDisclosure` lived on Tier 2's (Story's) bounded selection. That let
+ * Tier-3 material read as selected by the measurement rather than by the
+ * scheduled rotation, contrary to Contract §13. Fixed entirely inside
+ * `tier3ConnectorModel`/`heritageConnectorTier3Markup` — no second rotation
+ * mechanism, no new occurrence, no new prose: the SAME `ROTATION_DISCLOSURE`
+ * string Tier 2 already carries.
+ */
+
+test("13: tier3ConnectorModel sets rotationDisclosure whenever ANY category has material, not only when active is non-empty", () => {
+  const withSourcePanelOnly = tier3ConnectorModel({
+    suppressed: false, abstained: false,
+    active: [], sourcePanelOnly: [entry({ connectorId: "ceilinged-1", disposition: "SOURCE_PANEL_CEILING" })],
+    disagreements: [], abstentions: [], editorialJuxtapositions: [],
+  }, SOURCE_REGISTRY);
+  assert.equal(withSourcePanelOnly.rotationDisclosure, ROTATION_DISCLOSURE);
+
+  const withOnlyAbstentions = tier3ConnectorModel({
+    suppressed: false, abstained: false,
+    active: [], sourcePanelOnly: [], disagreements: [],
+    abstentions: [{ connectorId: "blocked-1", disposition: "LINEAGE_RESEARCH_ONLY", prohibitedForUserInference: true, gateReasons: ["LINEAGE_RESEARCH_ONLY"] }],
+    editorialJuxtapositions: [],
+  }, SOURCE_REGISTRY);
+  assert.equal(withOnlyAbstentions.rotationDisclosure, ROTATION_DISCLOSURE);
+
+  const withOnlyDisagreements = tier3ConnectorModel({
+    suppressed: false, abstained: false,
+    active: [], sourcePanelOnly: [], abstentions: [], editorialJuxtapositions: [],
+    disagreements: [{ disagreementId: "d-1", target: { targetType: "CONSTRUCT", targetRef: "fourRivers" }, positions: [] }],
+  }, SOURCE_REGISTRY);
+  assert.equal(withOnlyDisagreements.rotationDisclosure, ROTATION_DISCLOSURE);
+});
+
+test("13: tier3ConnectorModel's rotationDisclosure is null with nothing to show, and null when suppressed/abstained/absent", () => {
+  const empty = tier3ConnectorModel({
+    suppressed: false, abstained: false,
+    active: [], sourcePanelOnly: [], disagreements: [], abstentions: [], editorialJuxtapositions: [],
+  }, SOURCE_REGISTRY);
+  assert.equal(empty.rotationDisclosure, null);
+
+  const suppressed = tier3ConnectorModel({ suppressed: true, suppressionReason: "SAFETY_GATE_UNKNOWN" });
+  assert.equal(suppressed.rotationDisclosure, null);
+
+  const abstained = tier3ConnectorModel({ suppressed: false, abstained: true, abstentionReasonCode: "UNSUPPORTED_LINEAGE" });
+  assert.equal(abstained.rotationDisclosure, null);
+
+  const noData = tier3ConnectorModel(null);
+  assert.equal(noData.rotationDisclosure, null);
+});
+
+test("13: heritageConnectorTier3Markup renders the rotation disclosure once, BEFORE the material it applies to, exactly when material is shown", () => {
+  const model = tier3ConnectorModel({
+    suppressed: false, abstained: false,
+    active: [entry({ connectorId: "active-1" })],
+    sourcePanelOnly: [], disagreements: [], abstentions: [], editorialJuxtapositions: [],
+  }, SOURCE_REGISTRY);
+  const html = heritageConnectorTier3Markup(model);
+  assert.match(html, /rotation through the traditional systems/);
+  // The disclosure must precede the material it is disclosing, so a reader
+  // opening Why sees it before anything that could otherwise read as
+  // measurement-derived.
+  assert.ok(html.indexOf("rotation through the traditional systems") < html.indexOf("corresponds to"),
+    "the rotation disclosure must render before the connector card, not after");
+  // Exactly one occurrence — not once per section.
+  assert.equal(html.split("rotation through the traditional systems").length - 1, 1);
+});
+
+test("13: heritageConnectorTier3Markup renders no disclosure when there is no material (an empty model gains no stray paragraph)", () => {
+  const model = tier3ConnectorModel({
+    suppressed: false, abstained: false,
+    active: [], sourcePanelOnly: [], disagreements: [], abstentions: [], editorialJuxtapositions: [],
+  }, SOURCE_REGISTRY);
+  assert.equal(heritageConnectorTier3Markup(model), "");
+});
+
+test("13: Tier 2 and Tier 3 render the SAME rotation-disclosure string — no second, independently authored disclosure mechanism", () => {
+  const tier2Model = tier2ConnectorModel({
+    available: true, reason: null, connector: entry(), disagreements: [],
+    rotationDisclosure: ROTATION_DISCLOSURE, occurrence: 0,
+  }, SOURCE_REGISTRY);
+  const tier3Model = tier3ConnectorModel({
+    suppressed: false, abstained: false,
+    active: [entry({ connectorId: "active-1" })],
+    sourcePanelOnly: [], disagreements: [], abstentions: [], editorialJuxtapositions: [],
+  }, SOURCE_REGISTRY);
+  assert.equal(tier2Model.rotationDisclosure, ROTATION_DISCLOSURE);
+  assert.equal(tier3Model.rotationDisclosure, ROTATION_DISCLOSURE);
+  assert.equal(tier2Model.rotationDisclosure, tier3Model.rotationDisclosure);
+  // esc() HTML-encodes the apostrophe in ROTATION_DISCLOSURE, so the markup
+  // is matched on a stable, punctuation-free substring rather than the raw
+  // constant (see the apostrophe-free assertions elsewhere in this file).
+  assert.match(heritageConnectorTier2Markup(tier2Model), /rotation through the traditional systems/);
+  assert.match(heritageConnectorTier3Markup(tier3Model), /rotation through the traditional systems/);
+});
+
+test("13 (real corpus, real chain): fourRivers/primary has real sourcePanelOnly material with no active connector — Tier 3 discloses the rotation even though Tier 2 has nothing to disclose", () => {
+  const reflection = makeReflection({ heritageConstruct: "fourRivers", sourceLineage: "primary" });
+  const tier2Connectors = tierTwoHeritageConnections(reflection, { captureQualityPassed: true, safetyPassed: true });
+  const tier3Connectors = tierThreeHeritageConnections(reflection, { captureQualityPassed: true, safetyPassed: true });
+
+  // Fixture assumption: today's real corpus has no ACTIVE connector for any
+  // construct (see docs/HERITAGE_CONNECTOR_STAGE_STATUS.md), so Tier 2 has
+  // nothing to select and nothing to disclose -- exactly the asymmetric case
+  // the Codex finding described, reproduced with zero synthetic data.
+  assert.equal(tier2Connectors.available, false);
+  assert.equal(tier2ConnectorModel(tier2Connectors).rotationDisclosure, null);
+
+  const tier3Model = tier3ConnectorModel(tier3Connectors, REAL_SOURCE_REGISTRY);
+  assert.ok(tier3Model.sourcePanelOnly.some((c) => c.connectorId === "four-rivers-flow-and-banks"),
+    "fixture assumption: fourRivers/primary's real sourcePanelOnly material must include this connector");
+  assert.equal(tier3Model.rotationDisclosure, ROTATION_DISCLOSURE);
+  const html = heritageConnectorTier3Markup(tier3Model);
+  assert.match(html, /rotation through the traditional systems/,
+    "Tier 3 must disclose the scheduled rotation whenever it renders heritage material, even when Tier 2 selected nothing");
+});
+
+test("13: safety UNKNOWN still renders neither heritage material NOR a misleading rotation disclosure in Tier 3", () => {
+  const reflection = makeReflection();
+  const tier3Connectors = tierThreeHeritageConnections(reflection, { captureQualityPassed: true });
+  const model = tier3ConnectorModel(tier3Connectors);
+  assert.equal(model.suppressed, true);
+  assert.equal(model.rotationDisclosure, null);
+  assert.equal(heritageConnectorTier3Markup(model), "");
 });

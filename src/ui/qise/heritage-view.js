@@ -57,7 +57,7 @@
  * `active` by `renderPlan.relationshipOrder` before building cards, so both
  * tiers agree on which connector comes first, by construction.
  */
-import { HERITAGE_CONSTRUCT_LABEL } from "../../qise/reflection-corpus.js";
+import { HERITAGE_CONSTRUCT_LABEL, ROTATION_DISCLOSURE } from "../../qise/reflection-corpus.js";
 import { SOURCE_REGISTRY } from "../../reading/provenance.js";
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
@@ -310,6 +310,21 @@ export function tier2ConnectorModel(tier2Connectors, sourceRegistry = SOURCE_REG
  * referenced connector resolved to its own card, not left as a bare id),
  * each reduced to a display-safe shape. `tier3Connectors` is `tier3.connectors`
  * from `readingTiersWithHeritage()` — the full Stage 3 composition result.
+ *
+ * `rotationDisclosure` carries the SAME `ROTATION_DISCLOSURE` string Tier 2
+ * already shows (`deriveTier2FromComposition`/`tier2ConnectorModel`) — never
+ * a second, independently authored sentence for the same fact (Contract §13).
+ * Every category here (active, source-panel-only, disagreements, abstentions,
+ * editorial) is selected from the SAME day-rotated `heritageConstruct`/
+ * `sourceLineage` composition, so it is set whenever ANY of them is
+ * non-empty — not only when `active` is, and not only when Tier 2 happened to
+ * select a connector. Without this, opening Why could show source-panel
+ * material, a disagreement or an abstention chip with no disclosure at all
+ * (the exact gap Tier 2 already having material and Tier 3 having none, or
+ * vice versa, would otherwise leave open), letting it read as selected by the
+ * measurement rather than by the scheduled rotation. `null` whenever nothing
+ * is shown, so a fail-closed suppression never renders a disclosure about
+ * material that was never displayed.
  */
 export function tier3ConnectorModel(tier3Connectors, sourceRegistry = SOURCE_REGISTRY) {
   if (!tier3Connectors) {
@@ -317,7 +332,7 @@ export function tier3ConnectorModel(tier3Connectors, sourceRegistry = SOURCE_REG
       suppressed: true, abstained: false, reason: "NO_CONNECTOR_DATA",
       active: Object.freeze([]), sourcePanelOnly: Object.freeze([]),
       disagreements: Object.freeze([]), abstentions: Object.freeze([]),
-      editorial: Object.freeze([]),
+      editorial: Object.freeze([]), rotationDisclosure: null,
     });
   }
   if (tier3Connectors.suppressed || tier3Connectors.abstained) {
@@ -327,7 +342,7 @@ export function tier3ConnectorModel(tier3Connectors, sourceRegistry = SOURCE_REG
       reason: tier3Connectors.suppressionReason || tier3Connectors.abstentionReasonCode || null,
       active: Object.freeze([]), sourcePanelOnly: Object.freeze([]),
       disagreements: Object.freeze([]), abstentions: Object.freeze([]),
-      editorial: Object.freeze([]),
+      editorial: Object.freeze([]), rotationDisclosure: null,
     });
   }
 
@@ -351,6 +366,11 @@ export function tier3ConnectorModel(tier3Connectors, sourceRegistry = SOURCE_REG
     items: Object.freeze((j.items || []).map((id) => cardById.get(id)
       || Object.freeze({ connectorId: id, participants: Object.freeze([]), relationshipLabel: "", sourceTitle: null, sectionLocator: null, disposition: null }))),
   })));
+  const disagreements = Object.freeze((tier3Connectors.disagreements || []).map((d) => disagreementCard(d, sourceRegistry)));
+  const abstentions = Object.freeze(tier3Connectors.abstentions || []);
+
+  const hasVisibleMaterial = activeCards.length > 0 || sourcePanelCards.length > 0
+    || disagreements.length > 0 || abstentions.length > 0 || editorial.length > 0;
 
   return Object.freeze({
     suppressed: false,
@@ -358,9 +378,10 @@ export function tier3ConnectorModel(tier3Connectors, sourceRegistry = SOURCE_REG
     reason: null,
     active: Object.freeze(activeCards),
     sourcePanelOnly: Object.freeze(sourcePanelCards),
-    disagreements: Object.freeze((tier3Connectors.disagreements || []).map((d) => disagreementCard(d, sourceRegistry))),
-    abstentions: Object.freeze(tier3Connectors.abstentions || []),
+    disagreements,
+    abstentions,
     editorial,
+    rotationDisclosure: hasVisibleMaterial ? ROTATION_DISCLOSURE : null,
   });
 }
 
@@ -462,6 +483,15 @@ export function heritageConnectorTier2Markup(model) {
  * Returns "" when the composition is suppressed or abstained — a fail-closed
  * gate must render nothing, not an empty-looking section that invites a
  * reader to wonder what is missing.
+ *
+ * `model.rotationDisclosure` (`tier3ConnectorModel`, above) renders once, at
+ * the top, whenever any section below is about to render — Contract §13's
+ * "the UX must distinguish this appeared because your measurement changed
+ * from this is today's scheduled heritage study" applies here exactly as it
+ * already does to Tier 2's `heritageConnectorTier2Markup`, using the SAME
+ * disclosure string, not a second one. Placed first, not last, so a reader
+ * opening Why sees the disclosure before any connector/source/disagreement
+ * material that could otherwise read as selected by their measurement.
  */
 export function heritageConnectorTier3Markup(model) {
   if (model.suppressed || model.abstained) return "";
@@ -503,5 +533,9 @@ export function heritageConnectorTier3Markup(model) {
           ${j.items.map(heritageConnectorCardMarkup).join("")}
         </div>`).join("")}`);
   }
-  return sections.join("");
+  if (!sections.length) return "";
+  const disclosure = model.rotationDisclosure
+    ? `<p class="muted">${esc(model.rotationDisclosure)}</p>`
+    : "";
+  return disclosure + sections.join("");
 }

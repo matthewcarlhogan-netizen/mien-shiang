@@ -398,16 +398,33 @@ connector graph and the actual reading path:
   take the full `reflection` object (`{state, composed, occurrence}`) rather
   than a bare `state`, and read `occurrence` only from
   `reflection.occurrence` — a `compose.occurrence` is always overridden.
-- Both hardcode their `depthMode` (`STANDARD` / `SOURCE_DEEP`) after
-  spreading `compose`, so a caller cannot leak `SOURCE_PANEL_CEILING`
-  material into Tier 2. Tier 2 exposes at most **one** bounded connector —
-  the resolver's own deterministic top pick, `renderPlan.relationshipOrder[0]`,
-  via the separately exported pure function `deriveTier2FromComposition`.
+- **There is no second, independently-requested `depthMode` for Tier 2.**
+  Both are thin wrappers around `composeHeritageOnceForReading()` — the ONE
+  place `depthMode` is ever chosen, always `"SOURCE_DEEP"` (the deepest, a
+  strict superset of any shallower depth's `active`/`abstentions`, which are
+  already depth-independent in Stage 2's resolver). An earlier revision had
+  Tier 2 request `depthMode: "STANDARD"` and Tier 3 request `"SOURCE_DEEP"` as
+  two SEPARATE `composeHeritageForReading` calls; because Stage 2's own
+  rotation seed includes `depthMode`, those two calls could rotate
+  `renderPlan.relationshipOrder` differently for the same reading whenever a
+  construct has 2+ ACTIVE connectors and `occurrence > 0` — see "Stage 3 —
+  single-selection-lifecycle and connector-rendering fix" below for that
+  now-closed defect. Tier 2 exposes at most **one** bounded connector — the
+  resolver's own deterministic top pick, `renderPlan.relationshipOrder[0]`,
+  off that SAME `SOURCE_DEEP` result — via the separately exported pure
+  function `deriveTier2FromComposition`, which reads only `active` and
+  `renderPlan.relationshipOrder` (itself built from `active` alone) and never
+  `sourcePanelOnly`/`editorialJuxtapositions`, so reusing the deeper result
+  does not leak `SOURCE_PANEL_CEILING` material into Tier 2. Tier 3 receives
+  that same composition result in full.
 - `readingTiersWithHeritage(reflection, compose)` wraps the frozen
-  `readingTiers()` unchanged (`tier1` is copied through verbatim) and adds
-  `.connectors` onto `tier2`/`tier3`. This is the one function product code
-  should call instead of calling `readingTiers()` and the connector boundary
-  separately.
+  `readingTiers()` unchanged (`tier1` is copied through verbatim), calls
+  `composeHeritageOnceForReading()` **exactly once**, and hands that single
+  result to both `deriveTier2FromComposition` (Tier 2's bounded projection)
+  and `tier3.connectors` (Tier 3's full projection) — never two resolver
+  calls at different depths for one reading. This is the one function product
+  code should call instead of calling `readingTiers()` and the connector
+  boundary separately.
 - `src/qise/reading-tiers.js` itself is untouched — `git diff` against the
   Stage 2 baseline is empty.
 
@@ -1218,6 +1235,136 @@ never inventing or translating text.
   the remaining canonical registries, a `realBase()` helper matching
   `tests/heritage/composition.test.js`'s own, and a single top-level `hasHan()`
   consolidating what had been a duplicate later in the file)
+
+### Stage 3 — technical consistency closeout pass (this session, on top of `606a25c`)
+
+**This is a technical consistency closeout pass, not a Stage 3 approval, and it
+does not close either product blocker.** A fresh live review against `606a25c`
+produced exactly 2 unresolved Codex threads, both P2, both fixed. Neither
+touched either blocker. **Stage 3's status is unchanged: PARTIAL / BLOCKED ON
+SAFETY AUTHORIZATION AND A LINEAGE CONTENT DECISION.** This pass is
+TECHNICAL CONNECTOR INTEGRATION work; it does not resolve, and does not claim
+to resolve, either of the two intentional product blockers (safety
+authorization, lineage content routing) — both remain exactly as described
+above.
+
+**`src/heritage/resolver.js`, `registry.js`, `src/qise/reading-tiers.js`,
+`reading-state.js`, `src/heritage/composition.js` and
+`src/qise/heritage-connections.js` are all byte-identical to `606a25c`** —
+`git diff --stat` against all six is empty. The entire fix is confined to one
+production file, `src/ui/qise/heritage-view.js`, plus this document and two
+test files.
+
+1. **Stale current-state documentation.** The "What was built (current
+   state)" section above still described Tier 2 and Tier 3 as two SEPARATE
+   `composeHeritageForReading` calls at `depthMode: "STANDARD"` and
+   `"SOURCE_DEEP"` respectively — the pre-fix architecture, superseded by
+   `composeHeritageOnceForReading()` in an earlier session (see "Stage 3 —
+   single-selection-lifecycle and connector-rendering fix" above) but never
+   updated in this canonical summary. Left uncorrected, it risked a future
+   session reintroducing the two-call divergence this document's own later
+   sections record as fixed. Fixed by rewriting the bullet to describe the
+   single shared `SOURCE_DEEP` composition, with the old two-call shape kept
+   only as explicitly-labelled history. Audited the rest of this document, the
+   PR body, and the JSDoc in `heritage-connections.js`/`composition.js`/
+   `heritage-view.js` for the same class of claim (Tier 2/Tier 3 composing
+   separately, `STANDARD` as Tier 2's current product composition,
+   `SOURCE_DEEP` independently recomputed for Tier 3, two rotation
+   lifecycles) — found no other current-state instance; every other mention
+   of `STANDARD`/`SOURCE_DEEP` together is already framed as historical
+   (a past defect and its fix), which this pass leaves untouched per its own
+   instruction not to erase history that is clearly labelled as such.
+2. **Rotation disclosure did not follow heritage content onto the Why
+   surface (Codex).** `deriveTier2FromComposition` (`heritage-connections.js`,
+   unchanged) has always attached `rotationDisclosure` to Tier 2's ("Story"'s)
+   bounded selection, and `heritageConnectorTier2Markup` has always rendered
+   it. Tier 3's ("Why"'s) full projection — active connectors, source-panel
+   material, disagreements, abstentions, editorial juxtapositions — carried no
+   disclosure at all, so once safety authorization exists, opening Why could
+   show heritage-connector material selected by the scheduled
+   `heritageConstruct`/`sourceLineage` rotation with nothing distinguishing it
+   from something the measurement produced — contrary to
+   `docs/READING_EXPERIENCE_CONTRACT.md` §13. Confirmed live: for the real
+   `fourRivers`/`primary` reading, Tier 2 has no active connector to select
+   (so nothing to disclose today) while Tier 3's `sourcePanelOnly` genuinely
+   contains `four-rivers-flow-and-banks` — exactly the asymmetric case the
+   finding described, reproduced with zero synthetic data.
+
+   **Fixed entirely inside `src/ui/qise/heritage-view.js`** — no other
+   production file changed, per this round's preferred architecture (reuse
+   the single shared composition and the ONE existing `ROTATION_DISCLOSURE`
+   string; no second rotation mechanism, no new occurrence, no new prose).
+   `tier3ConnectorModel()` now sets `rotationDisclosure` to the SAME
+   `ROTATION_DISCLOSURE` constant Tier 2 imports from `reflection-corpus.js`
+   whenever any of its five categories (active, source-panel-only,
+   disagreements, abstentions, editorial) is non-empty — not only when
+   `active` is — and to `null` whenever nothing is shown, including every
+   suppressed/abstained/no-data branch, so a fail-closed gate never renders a
+   disclosure about material that was never displayed.
+   `heritageConnectorTier3Markup()` renders it once, as the FIRST thing in the
+   block, before any of the five sections, so a reader opening Why sees the
+   disclosure before any connector/source/disagreement material that could
+   otherwise read as selected by their measurement. `app.js`'s existing call
+   site (`heritageConnectorTier3Markup(heritageTier3)`, unchanged) needed no
+   edit — the fix is entirely inside the function it already calls.
+
+**Bounded whole-surface audit, before this pass was pushed** (the connector
+path: `reflectionFor()` → `readingTiersWithHeritage()` → shared composition →
+Tier 2/Tier 3 projections → `tier2ConnectorModel`/`tier3ConnectorModel` →
+`heritageConnectorTier2Markup`/`heritageConnectorTier3Markup` →
+`app.js`'s Story/Why rendering): reconfirmed exactly one heritage composition
+per reading with the same `occurrence` reaching both tiers
+(`readingTiersWithHeritage` calls `composeHeritageOnceForReading` exactly
+once; a new runtime test — not only the pre-existing source-text checks —
+asserts `tier2.connectors.occurrence === tier3.connectors.occurrence` through
+the real production path); Tier 2 stays structurally bounded (no
+`sourcePanelOnly`/`editorialJuxtapositions` field exists on its model at all);
+`SOURCE_PANEL_CEILING` still cannot leak into Tier 2; every `gateReasons[]`
+entry, DIRECTED/ORDERED participant direction, and non-CONSTRUCT participant
+still survives rendering; safety `UNKNOWN` still renders neither heritage
+material nor — now additionally verified — a misleading rotation disclosure;
+Tier 1 fields are untouched and no heritage output reaches or replaces them;
+no Han character can reach this English reader-facing surface. No further
+defect was found inside this bounded surface.
+
+**Falsification.** Both new tests classes were run against `606a25c`'s actual
+`heritage-view.js` (temporarily restored) and confirmed to fail — 6 of the 7
+new `tests/qise/heritage-view.test.js` "13:" tests, plus the new
+`tests/qise/heritage-connections.test.js` documentation test — while the
+pre-existing "no disclosure when there is no material" negative control
+passed both before and after (it asserts an absence that was already true).
+The fixed implementation was then restored and the full run re-verified
+clean.
+
+**Locked invariants, reconfirmed after this pass:** `ABSTRACT_LINEAGE_OVERRIDES`
+remains `Object.freeze({})`. `fiveMountains`'s `"primary"` still resolves to
+the registry `"primary"` (Renlun Datong) witness and is still blocked at
+`LINEAGE_RESEARCH_ONLY`, never `taiqing-siku`. No `Math.random`, no
+`rotationState` reintroduced, no new detector, no `safetyPassed: true`
+fabrication, no scanner-threshold change, and no source/evidence status was
+upgraded — this pass reuses an already-recorded constant
+(`ROTATION_DISCLOSURE`) and an already-computed condition (which categories
+are non-empty), inventing nothing.
+
+**Verification this session:**
+- `node --test tests/heritage/resolver.test.js tests/heritage/composition.test.js tests/qise/heritage-connections.test.js tests/qise/heritage-view.test.js tests/qise/reading-tiers.test.js tests/qise/reading-production-path.test.js` — **290/290** (was 281/281; +9: 7 rotation-disclosure tests in heritage-view.test.js, 2 in heritage-connections.test.js — 1 occurrence-equality behavioural check, 1 documentation-consistency check)
+- Full heritage scope (`tests/heritage/*.test.js` + `tests/qise/heritage-connections.test.js` + `tests/qise/heritage-view.test.js` + `tests/qise/reading-tiers.test.js` + `tests/qise/reading-production-path.test.js`) — **386/386** (was 348/348)
+- `npm test` — **1170/1170**, `Running 75 test file(s)` (was 1161/1161)
+- `npm run build` — clean, 96 files copied, Module B shipped (wellness flavour)
+- `npm run lint:bundle` — clean, 97 files scanned, 1471 user-facing strings extracted
+- `git diff --check` — clean
+- `npm run audit:release` — `Release gate: BLOCKED`, identical pre-existing categories, no new blocker category
+- `npm run test:browser` — **7/7** Playwright specs pass
+
+**Files changed this session:**
+- `docs/HERITAGE_CONNECTOR_STAGE_STATUS.md` — the stale depth-mode paragraph,
+  and this section
+- `src/ui/qise/heritage-view.js` — `tier3ConnectorModel()`'s `rotationDisclosure`
+  field and `heritageConnectorTier3Markup()`'s rendering of it; no other
+  function touched
+- `tests/qise/heritage-view.test.js` — 7 new tests under the `"13:"` banner
+- `tests/qise/heritage-connections.test.js` — 2 new tests (occurrence-equality
+  behavioural check, documentation-consistency check)
 
 ### Known limitations / remaining work
 
