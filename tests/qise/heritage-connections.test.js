@@ -23,6 +23,7 @@ import {
   tierThreeHeritageConnections,
   readingTiersWithHeritage,
   deriveTier2FromComposition,
+  captureAuthorizationFromReading,
 } from "../../src/qise/heritage-connections.js";
 import { readingTiers } from "../../src/qise/reading-tiers.js";
 import { deriveReadingState } from "../../src/qise/reading-state.js";
@@ -247,4 +248,84 @@ test("src/ui/qise/app.js calls readingTiersWithHeritage, not bare readingTiers, 
   assert.match(source, /readingTiersWithHeritage\(/, "app.js must call the Stage 3-integrated function");
   assert.doesNotMatch(source, /\breadingTiers\(reflection\)/, "the bare, non-heritage-aware call must be gone from app.js");
   assert.match(source, /from ["']\.\.\/\.\.\/qise\/heritage-connections\.js["']/);
+});
+
+test("src/ui/qise/app.js derives captureQualityPassed from captureAuthorizationFromReading, not from Boolean(reading)", () => {
+  const source = readSrc("ui/qise/app.js");
+  assert.match(source, /captureAuthorizationFromReading\(reading\)/);
+  assert.doesNotMatch(source, /captureQualityPassed:\s*Boolean\(reading\)/,
+    "object existence must not stand in for proven capture-quality authorization");
+});
+
+/*
+ * ── Blocker 1: capture-quality authorization, derived from captureTier ────
+ *
+ * `captureTier` is written ONLY by src/qise/gates.js's evaluateGates() and
+ * persisted verbatim by src/qise/store.js's toRecord() — no new field is
+ * added here; this proves the EXISTING field is a strict enough signal on
+ * its own.
+ */
+
+test("captureAuthorizationFromReading: a 'clean' or 'assisted' captureTier is the only thing that authorizes", () => {
+  assert.equal(captureAuthorizationFromReading({ captureTier: "clean" }), true);
+  assert.equal(captureAuthorizationFromReading({ captureTier: "assisted" }), true);
+});
+
+test("captureAuthorizationFromReading: an explicit 'waiting' captureTier fails closed as a known negative", () => {
+  assert.equal(captureAuthorizationFromReading({ captureTier: "waiting" }), false);
+});
+
+test("captureAuthorizationFromReading: object existence alone is NOT enough — a reading with no captureTier is unknown, not authorized", () => {
+  assert.equal(captureAuthorizationFromReading({}), undefined);
+  assert.equal(captureAuthorizationFromReading({ compass: { ascendant: "chi" }, confidence: 0.95 }), undefined,
+    "rich measurement data on the object must not stand in for proof the capture-quality gates passed");
+});
+
+test("captureAuthorizationFromReading: missing/null reading, or a malformed captureTier value, is unknown", () => {
+  assert.equal(captureAuthorizationFromReading(null), undefined);
+  assert.equal(captureAuthorizationFromReading(undefined), undefined);
+  assert.equal(captureAuthorizationFromReading({ captureTier: "not-a-real-tier" }), undefined);
+  assert.equal(captureAuthorizationFromReading({ captureTier: true }), undefined);
+});
+
+test("captureAuthorizationFromReading: changing Qi Se measurement values cannot fabricate or change capture authorization", () => {
+  const base = { captureTier: "clean", compass: { ascendant: "ping", magnitude: 0 } };
+  const differentMeasurement = { captureTier: "clean", compass: { ascendant: "chi", magnitude: 3.4 }, confidence: 0.99 };
+  assert.equal(captureAuthorizationFromReading(base), captureAuthorizationFromReading(differentMeasurement));
+
+  const sameMeasurementDifferentTier = { captureTier: "waiting", compass: base.compass };
+  assert.notEqual(captureAuthorizationFromReading(base), captureAuthorizationFromReading(sameMeasurementDifferentTier));
+});
+
+test("a missing/unknown capture authorization suppresses connector output end to end; an actually gate-approved one does not", () => {
+  const reflection = makeReflection();
+  const unauthorized = tierTwoHeritageConnections(reflection, {
+    captureQualityPassed: captureAuthorizationFromReading({}), // no captureTier at all
+    safetyPassed: true,
+  });
+  assert.equal(unauthorized.available, false);
+  assert.equal(unauthorized.reason, "CAPTURE_QUALITY_GATE_UNKNOWN");
+
+  const waiting = tierTwoHeritageConnections(reflection, {
+    captureQualityPassed: captureAuthorizationFromReading({ captureTier: "waiting" }),
+    safetyPassed: true,
+  });
+  assert.equal(waiting.available, false);
+  assert.equal(waiting.reason, "CAPTURE_QUALITY_GATE_FAILED");
+
+  const authorized = tierThreeHeritageConnections(reflection, {
+    captureQualityPassed: captureAuthorizationFromReading({ captureTier: "clean" }),
+    safetyPassed: true,
+  });
+  assert.equal(authorized.suppressed, false, "an actually gate-approved reading must not be suppressed");
+});
+
+test("no biometric or raw gate payload is required by captureAuthorizationFromReading — it reads exactly one scalar field", () => {
+  const source = readSrc("qise/heritage-connections.js");
+  const fn = source.slice(
+    source.indexOf("export function captureAuthorizationFromReading"),
+    source.indexOf("export function captureAuthorizationFromReading") + 400,
+  );
+  assert.match(fn, /reading\.captureTier/);
+  assert.doesNotMatch(fn, /pixel|landmark|image|embedding|mesh/i);
 });

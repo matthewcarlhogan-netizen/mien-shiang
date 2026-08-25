@@ -16,9 +16,12 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import {
   composeHeritageForReading,
   composeHeritageConnectionsWithRegistries,
+  resolveHeritageLineage,
   SUPPRESSION_REASONS,
 } from "../../src/heritage/composition.js";
 import {
@@ -594,4 +597,169 @@ test("identical inputs produce a deep-equal Stage 3 composition result", () => {
   const c = composeHeritageForReading(productArgs);
   const d = composeHeritageForReading(productArgs);
   assert.deepEqual(c, d);
+});
+
+/* ── Blocker 2: rotationState cannot be a second selection lifecycle ─────── */
+
+test("composeHeritageForReading throws if a caller tries to inject rotationState", () => {
+  assert.throws(() => composeHeritageForReading({
+    captureQualityPassed: true,
+    safetyPassed: true,
+    heritageConstruct: "fourRivers",
+    sourceLineage: "primary",
+    rotationState: { recentConnectorIds: ["anything"] },
+  }), TypeError);
+});
+
+test("arbitrary rotationState has no effect on the product-facing entry point at all — it is rejected, not silently accepted", () => {
+  // Confirm the field genuinely isn't in the accepted contract, rather than
+  // merely being ignored: the throw IS the proof it cannot influence
+  // anything, since the call never completes.
+  let threw = false;
+  try {
+    composeHeritageForReading({
+      captureQualityPassed: true, safetyPassed: true,
+      heritageConstruct: "fourRivers", sourceLineage: "primary",
+      rotationState: { recentConnectorIds: ["four-rivers-flow-and-banks"] },
+    });
+  } catch {
+    threw = true;
+  }
+  assert.equal(threw, true);
+});
+
+test("the same reflection-equivalent inputs (construct/lineage/occurrence) give identical ordering regardless of the (rejected) rotationState concept", () => {
+  const args = { captureQualityPassed: true, safetyPassed: true, heritageConstruct: "fourRivers", sourceLineage: "primary", occurrence: 2 };
+  const a = composeHeritageForReading(args);
+  const b = composeHeritageForReading(args);
+  assert.deepEqual(a.renderPlan, b.renderPlan);
+});
+
+test("no Math.random / Date.now / unstable ordering was introduced by the lineage adapter or gate changes", () => {
+  const source = readFileSync(
+    fileURLToPath(new URL("../../src/heritage/composition.js", import.meta.url)), "utf8");
+  assert.doesNotMatch(source, /Math\.random/);
+  assert.doesNotMatch(source, /Date\.now/);
+});
+
+/* ── Blocker 3: the lineage adapter ───────────────────────────────────────── */
+
+test("resolveHeritageLineage: the abstract 'primary' label resolves for every construct that declares one (all six today)", () => {
+  for (const construct of Object.keys(HERITAGE_REGISTRY)) {
+    const resolved = resolveHeritageLineage({ heritageConstruct: construct, sourceLineage: "primary" }, HERITAGE_REGISTRY);
+    assert.equal(resolved, "primary", `${construct} must resolve its own "primary" lineage`);
+  }
+});
+
+test("resolveHeritageLineage: 'variant' resolves only for fourRivers, the one construct that actually declares it", () => {
+  assert.equal(
+    resolveHeritageLineage({ heritageConstruct: "fourRivers", sourceLineage: "variant" }, HERITAGE_REGISTRY),
+    "variant",
+  );
+  assert.equal(
+    resolveHeritageLineage({ heritageConstruct: "fiveMountains", sourceLineage: "variant" }, HERITAGE_REGISTRY),
+    null,
+    "fiveMountains declares no 'variant' lineage — must abstain, never fall back to 'primary' or invent one",
+  );
+});
+
+test("resolveHeritageLineage: an explicit canonical lineage id is reachable when it genuinely exists on that construct", () => {
+  assert.equal(
+    resolveHeritageLineage({ heritageConstruct: "fiveMountains", sourceLineage: "taiqing-siku" }, HERITAGE_REGISTRY),
+    "taiqing-siku",
+  );
+});
+
+test("resolveHeritageLineage: no cross-construct inheritance — a lineage id real on one construct is not borrowed by another", () => {
+  // "taiqing-siku" is a genuine fiveMountains lineage; fourRivers has no
+  // lineage of that name at all.
+  assert.equal(
+    resolveHeritageLineage({ heritageConstruct: "fourRivers", sourceLineage: "taiqing-siku" }, HERITAGE_REGISTRY),
+    null,
+  );
+});
+
+test("resolveHeritageLineage: an unknown construct abstains rather than guessing", () => {
+  assert.equal(
+    resolveHeritageLineage({ heritageConstruct: "notARealConstruct", sourceLineage: "primary" }, HERITAGE_REGISTRY),
+    null,
+  );
+});
+
+test("resolveHeritageLineage: fourRivers primary vs variant are genuinely different, deliberate resolutions", () => {
+  const primary = resolveHeritageLineage({ heritageConstruct: "fourRivers", sourceLineage: "primary" }, HERITAGE_REGISTRY);
+  const variant = resolveHeritageLineage({ heritageConstruct: "fourRivers", sourceLineage: "variant" }, HERITAGE_REGISTRY);
+  assert.equal(primary, "primary");
+  assert.equal(variant, "variant");
+  assert.notEqual(primary, variant);
+});
+
+test("an unsupported construct/lineage pairing fails closed as an abstention, before the resolver ever runs — never suppressed, never silently substituted", () => {
+  const result = composeHeritageForReading({
+    captureQualityPassed: true, safetyPassed: true,
+    heritageConstruct: "fiveMountains", sourceLineage: "variant",
+  });
+  assert.equal(result.suppressed, false, "this is not a gate concern");
+  assert.equal(result.abstained, true);
+  assert.equal(result.abstentionReasonCode, "UNSUPPORTED_LINEAGE");
+  assert.deepEqual(result.active, []);
+  assert.deepEqual(result.sourcePanelOnly, []);
+});
+
+test("an unresolvable lineage on a real construct never falls back to that construct's own 'primary' data — no silent substitution", () => {
+  const explicit = composeHeritageForReading({
+    captureQualityPassed: true, safetyPassed: true,
+    heritageConstruct: "fiveMountains", sourceLineage: "taiqing-siku", depthMode: "SOURCE_DEEP",
+  });
+  const unsupported = composeHeritageForReading({
+    captureQualityPassed: true, safetyPassed: true,
+    heritageConstruct: "fiveMountains", sourceLineage: "variant", depthMode: "SOURCE_DEEP",
+  });
+  // If "variant" had silently fallen back to "primary" (RESEARCH_ONLY) or to
+  // "taiqing-siku" (SOURCE_PANEL_CEILING), this would show SOME content.
+  // Failing closed means it shows none at all, and says so.
+  assert.notDeepEqual(explicit.primaryLineage, unsupported.primaryLineage);
+  assert.equal(unsupported.primaryLineage, null);
+});
+
+test("fiveMountains -> taiqing-siku is reachable through the REAL Stage-3 production composition path, with evidence unchanged", () => {
+  const result = composeHeritageForReading({
+    captureQualityPassed: true, safetyPassed: true,
+    heritageConstruct: "fiveMountains", sourceLineage: "taiqing-siku", depthMode: "SOURCE_DEEP",
+  });
+  assert.equal(result.primaryLineage, "taiqing-siku");
+  const ceilinged = result.sourcePanelOnly.find((e) => e.connectorId === "five-mountains-mutual-facing-fullness");
+  assert.ok(ceilinged, "must reach SOURCE_PANEL_CEILING through the product-facing entry point with zero registries injected");
+  assert.equal(ceilinged.disposition, "SOURCE_PANEL_CEILING");
+  // Evidence standing is exactly what the real connector record declares —
+  // the adapter must not have upgraded or altered it.
+  assert.equal(ceilinged.evidenceStrength, HERITAGE_CONNECTOR_REGISTRY["five-mountains-mutual-facing-fullness"].evidenceStrength);
+  assert.equal(result.active.some((e) => e.connectorId === "five-mountains-mutual-facing-fullness"), false);
+});
+
+test("five-mountains-mutual-facing-fullness never becomes Tier-2-eligible via any reachable lineage — it is SOURCE_PANEL_CEILING or fully blocked, never ACTIVE", () => {
+  for (const lineage of Object.keys(HERITAGE_REGISTRY.fiveMountains.lineages)) {
+    const result = composeHeritageForReading({
+      captureQualityPassed: true, safetyPassed: true,
+      heritageConstruct: "fiveMountains", sourceLineage: lineage, depthMode: "SOURCE_DEEP",
+    });
+    assert.equal(result.active.some((e) => e.connectorId === "five-mountains-mutual-facing-fullness"), false,
+      `must never be ACTIVE under lineage "${lineage}"`);
+  }
+});
+
+test("the lineage adapter does not change concept-only connector eligibility — no cross-construct inheritance introduced by the adapter itself", () => {
+  const conceptOnly = synConnector({
+    connectorId: "syn-concept-only-lineage-check",
+    participants: [{ participantId: "gamma", nodeType: "HERITAGE_CONCEPT", conceptId: "gamma", memberScope: "NODE" }],
+  });
+  const conceptRegistry = { gamma: { conceptId: "gamma", measurementAvailability: "UNMEASURABLE", modernMeasurementBinding: null } };
+  const result = composeHeritageConnectionsWithRegistries(synBase({
+    heritageConstruct: "alpha",
+    connectorRegistry: { "syn-concept-only-lineage-check": conceptOnly },
+    conceptRegistry,
+    conditionContext: { participants: { gamma: "PRESENT" } },
+  }));
+  assert.equal(result.abstained, false);
+  assert.equal(result.active[0]?.connectorId, "syn-concept-only-lineage-check");
 });

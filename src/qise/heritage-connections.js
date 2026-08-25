@@ -37,6 +37,41 @@ import { readingTiers } from "./reading-tiers.js";
 import { composeHeritageForReading } from "../heritage/composition.js";
 import { ROTATION_DISCLOSURE } from "./reflection-corpus.js";
 
+/*
+ * ── CAPTURE-QUALITY AUTHORIZATION: DERIVED FROM captureTier, NEVER FROM
+ *    OBJECT EXISTENCE ──────────────────────────────────────────────────────
+ * A stored `reading` object existing is not proof its OWN capture-quality
+ * gates passed — it proves nothing about its own history. `captureTier` is
+ * the field that IS that proof: `src/qise/gates.js`'s `evaluateGates()` is
+ * the only thing that ever produces it, and it is only ever "clean" or
+ * "assisted" when `evaluateGates().pass` was true; "waiting" is an explicit
+ * record that the gates did NOT pass. `src/qise/store.js`'s `toRecord()`
+ * already persists this field on every stored reading (it is a plain
+ * category string — not biometric, not raw, not a gate report), so no new
+ * persisted field is needed; this is a pure reinterpretation of a field the
+ * capture path already writes and `readingConfidence()` (baseline.js)
+ * already trusts for exactly this purpose.
+ */
+const CAPTURE_TIER_AUTHORIZED = Object.freeze(["clean", "assisted"]);
+
+/**
+ * The authoritative capture-quality gate boolean for Stage 3, derived from
+ * an already-persisted `reading` record. Returns `true` only for an
+ * explicit "clean"/"assisted" `captureTier`; `false` for an explicit
+ * "waiting" (the gates are recorded as NOT having passed); `undefined`
+ * (unknown — fails closed identically to `false` in
+ * `src/heritage/composition.js`'s `gateStatus()`) for anything else,
+ * including a missing field, a malformed value, or `reading` itself being
+ * absent. Changing Qi Se MEASUREMENT values (compass, metrics, confidence)
+ * has no effect here at all — only `captureTier` is read.
+ */
+export function captureAuthorizationFromReading(reading) {
+  const tier = reading && reading.captureTier;
+  if (CAPTURE_TIER_AUTHORIZED.includes(tier)) return true;
+  if (tier === "waiting") return false;
+  return undefined;
+}
+
 const NO_CONNECTOR_TIER2 = Object.freeze({
   available: false,
   reason: "NO_READING",

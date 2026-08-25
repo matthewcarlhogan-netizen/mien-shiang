@@ -59,6 +59,36 @@
  * `occurrence` is shared with reflection.js's own rotation rather than driven
  * independently. It does not persist anything; every field is recomputed on
  * every call.
+ *
+ * ── WHY `rotationState` IS NOT IN THE PRODUCT-FACING CONTRACT ───────────────
+ * Stage 2's resolver accepts an optional `rotationState.recentConnectorIds`
+ * to deprioritise recently-shown connectors ahead of its own deterministic
+ * rotation. Exposing that on the product-facing contract would hand a caller
+ * a SECOND, independently-suppliable selection input alongside `occurrence`
+ * — exactly the "two independently driven rotation lifecycles" Stage 3 must
+ * not create. There is also no canonical source for "recently shown
+ * connector ids" today (Stage 3 deliberately persists nothing — see
+ * docs/HERITAGE_CONNECTOR_STAGE_STATUS.md's "keep reading-state small"), so
+ * there is nothing legitimate to derive it from yet. `occurrence` alone
+ * already provides full, deterministic variation via
+ * `rotateDeterministically`'s coprime-stride walk. `rotationState` remains
+ * available ONLY on `composeHeritageConnectionsWithRegistries`, the
+ * test/internal seam, for exercising the resolver's own already-tested
+ * behaviour directly.
+ *
+ * ── THE LINEAGE ADAPTER ──────────────────────────────────────────────────────
+ * `reading-state.js`'s `sourceLineage` is a two-value ABSTRACT rotation label
+ * (`"primary"` / `"variant"`), general across all six constructs. The
+ * canonical heritage registry's OWN lineages are construct-specific and
+ * often richer (e.g. fiveMountains also has `"taiqing-siku"`, `"sxqb-chin"`,
+ * `"shenyi-lower-face-zone"`). `resolveHeritageLineage()` is the explicit,
+ * finite gate between the two: it accepts either the abstract label or an
+ * explicit canonical lineage id, and returns that same string ONLY if it is
+ * a lineage this SPECIFIC construct actually declares — never a different,
+ * silently substituted witness, never a value borrowed from another
+ * construct, and never Stage 2's own permissive "primary, else lexically
+ * first" fallback (which never fails closed). An unresolvable pairing
+ * abstains before the resolver is ever called.
  */
 
 import { resolveHeritageConnections, DEPTH_MODES } from "./resolver.js";
@@ -132,6 +162,65 @@ function suppressedResult(reason, depthMode, occurrence) {
     depthMode: resolveDepthMode(depthMode),
     occurrence: resolveOccurrence(occurrence),
   });
+}
+
+/*
+ * A Stage-3-level abstention: distinct from `suppressedResult` (an upstream
+ * gate decision — see file header) and distinct from the resolver's own
+ * `abstained` verdicts (which only exist once the resolver has actually run).
+ * This one fires BEFORE the resolver is called, when the lineage adapter
+ * cannot resolve the requested (construct, lineage) pairing at all.
+ */
+function unsupportedLineageResult(depthMode, occurrence) {
+  return Object.freeze({
+    suppressed: false,
+    suppressionReason: null,
+    abstained: true,
+    abstentionReasonCode: "UNSUPPORTED_LINEAGE",
+    primaryConstruct: null,
+    primaryLineage: null,
+    active: Object.freeze([]),
+    sourcePanelOnly: Object.freeze([]),
+    disagreements: Object.freeze([]),
+    editorialJuxtapositions: Object.freeze([]),
+    abstentions: Object.freeze([]),
+    renderPlan: null,
+    depthMode: resolveDepthMode(depthMode),
+    occurrence: resolveOccurrence(occurrence),
+  });
+}
+
+/*
+ * Deliberately empty. Every abstract label maps only to the identically
+ * named key on that construct today (`"primary"` on every construct;
+ * `"variant"` only where the construct itself declares one — currently
+ * fourRivers alone). A future PRODUCT-OWNER decision to route a construct's
+ * abstract rotation slot to a DIFFERENT named witness lineage (e.g. routing
+ * fiveMountains' "variant" to one of its several competing witnesses) is a
+ * content/editorial decision this module has no authority to make on its
+ * own — it belongs here, one explicit entry per decision, never inferred.
+ */
+const ABSTRACT_LINEAGE_OVERRIDES = Object.freeze({});
+
+const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj || {}, key);
+
+/**
+ * The lineage adapter (see file header). Returns the canonical heritage
+ * registry lineage id for this EXACT construct, or `null` (abstain) if the
+ * pairing cannot be resolved. Accepts either an abstract Reflection Engine
+ * label (`"primary"`/`"variant"`) or an explicit canonical lineage id
+ * (e.g. `"taiqing-siku"`) — both are validated identically: the result must
+ * be a lineage key THIS construct's own registry record actually declares.
+ * Never falls back to a different construct's data, never falls back to
+ * "primary" when the request was for something else, and never upgrades or
+ * alters what the resolved lineage record says.
+ */
+export function resolveHeritageLineage({ heritageConstruct, sourceLineage } = {}, heritageRegistry) {
+  const record = heritageRegistry?.[heritageConstruct];
+  if (!record || !record.lineages) return null;
+  const override = ABSTRACT_LINEAGE_OVERRIDES[heritageConstruct]?.[sourceLineage];
+  const candidate = override ?? sourceLineage;
+  return hasOwn(record.lineages, candidate) ? candidate : null;
 }
 
 /*
@@ -231,6 +320,15 @@ function composeHeritageConnectionsInternal({
     );
   }
 
+  // The lineage adapter: fail closed on an unresolvable (construct, lineage)
+  // pairing BEFORE the resolver is ever invoked — see file header. This
+  // deliberately pre-empts Stage 2's own permissive fallback
+  // ("primary, else lexically first"), which never fails closed.
+  const canonicalLineage = resolveHeritageLineage({ heritageConstruct, sourceLineage }, heritageRegistry);
+  if (canonicalLineage === null) {
+    return unsupportedLineageResult(depthMode, occurrence);
+  }
+
   const result = resolveHeritageConnections({
     heritageRegistry,
     conceptRegistry,
@@ -240,8 +338,10 @@ function composeHeritageConnectionsInternal({
     compositionPolicies,
     sourceRegistry,
     // The narrow reconstruction described in the file header: exactly the
-    // resolver's own declared RESOLVER_DEPENDS_ON fields, nothing else.
-    readingState: { heritageConstruct, sourceLineage },
+    // resolver's own declared RESOLVER_DEPENDS_ON fields, using the
+    // ADAPTER's resolved canonical lineage rather than the caller's raw
+    // (possibly abstract) sourceLineage string.
+    readingState: { heritageConstruct, sourceLineage: canonicalLineage },
     conditionContext,
     runtimeBindingContext,
     rotationState,
@@ -274,7 +374,9 @@ const RUNTIME_CONTRACT_KEYS = Object.freeze([
   "occurrence",
   "conditionContext",
   "runtimeBindingContext",
-  "rotationState",
+  // `rotationState` deliberately excluded — see the file header's "WHY
+  // rotationState IS NOT IN THE PRODUCT-FACING CONTRACT" section. Passing it
+  // here throws via the "unexpected field" check below, same as a registry.
 ]);
 
 /**
