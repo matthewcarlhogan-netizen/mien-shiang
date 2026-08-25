@@ -15,7 +15,8 @@ import {
 } from "../../src/qise/heritage-connections.js";
 import { deriveReadingState } from "../../src/qise/reading-state.js";
 import { composeReading } from "../../src/qise/reflection.js";
-import { HERITAGE_CONNECTOR_REGISTRY } from "../../src/heritage/registry.js";
+import { HERITAGE_CONNECTOR_REGISTRY, HERITAGE_DISAGREEMENT_REGISTRY } from "../../src/heritage/registry.js";
+import { SOURCE_REGISTRY as REAL_SOURCE_REGISTRY } from "../../src/reading/provenance.js";
 
 const SOURCE_REGISTRY = Object.freeze({
   "synthetic-source": Object.freeze({
@@ -629,4 +630,91 @@ test("2a: preserving HERITAGE_CONCEPT participants does not leak Chinese-languag
   assert.equal(hasHan(JSON.stringify(card)), false, "connectorCard output must be English-only");
   const html = heritageConnectorCardMarkup(card);
   assert.equal(hasHan(html), false, "reader-facing markup must be English-only");
+});
+
+/* ── 9: connector-level locator status is the CONNECTOR's own, not the source's ── */
+
+test("9 (real corpus): connectorEvidenceCard reads sectionLocatorStatus from the connector entry, and does not upgrade it to the source's stronger status", () => {
+  const real = HERITAGE_CONNECTOR_REGISTRY["five-forms-generative-overcoming-system"];
+  assert.ok(real, "the real registry connector this test targets must exist");
+  assert.equal(real.sectionLocatorStatus, "RECORDED",
+    "fixture assumption: the connector itself records RECORDED, not VERIFIED");
+  const source = REAL_SOURCE_REGISTRY[real.sourceId];
+  assert.ok(source, "the connector's cited source record must exist");
+  assert.equal(source.sectionLocatorStatus, "VERIFIED",
+    "fixture assumption: the source record is stronger than the connector's own status — " +
+    "this is what makes the test meaningful, not a coincidence of equal values");
+
+  const card = connectorEvidenceCard(real, REAL_SOURCE_REGISTRY);
+  assert.equal(card.sectionLocatorStatus, "RECORDED",
+    "the connector's own weaker locator status must survive, not be upgraded to the source's VERIFIED");
+});
+
+test("9: a connector with no locator status of its own still falls back to the source's status (negative control — the fallback path still works)", () => {
+  const withoutOwnStatus = entry({ connectorId: "no-own-status", sourceId: "synthetic-source" });
+  assert.equal("sectionLocatorStatus" in withoutOwnStatus, false);
+  const card = connectorEvidenceCard(withoutOwnStatus, SOURCE_REGISTRY);
+  assert.equal(card.sectionLocatorStatus, "VERIFIED",
+    "with no connector-specific status recorded, the source's status is the only one available");
+});
+
+test("9: tier3ConnectorModel's active cards carry the connector-specific sectionLocatorStatus through to the reduced model", () => {
+  const tier3Connectors = {
+    suppressed: false, abstained: false,
+    active: [entry({ connectorId: "weak-locator", sourceId: "synthetic-source", sectionLocatorStatus: "RECORDED" })],
+    sourcePanelOnly: [], disagreements: [], abstentions: [], editorialJuxtapositions: [],
+  };
+  const model = tier3ConnectorModel(tier3Connectors, SOURCE_REGISTRY);
+  assert.equal(model.active[0].sectionLocatorStatus, "RECORDED",
+    "SOURCE_REGISTRY's synthetic-source is VERIFIED — the connector's own RECORDED must not be lost in the reduction");
+});
+
+/* ── 10: each disagreement position renders its OWN citationStatus, not a shared one ── */
+
+test("10 (real corpus): heritageConnectorTier3Markup renders each three-sections-boundaries position's own, distinct citationStatus", () => {
+  const real = HERITAGE_DISAGREEMENT_REGISTRY["three-sections-boundaries"];
+  assert.ok(real, "the real registry disagreement this test targets must exist");
+  assert.ok(real.positions.length >= 3, "fixture assumption: several positions, spanning several statuses");
+
+  const model = tier3ConnectorModel({
+    suppressed: false, abstained: false,
+    active: [], sourcePanelOnly: [], abstentions: [], editorialJuxtapositions: [],
+    disagreements: [real],
+  }, REAL_SOURCE_REGISTRY);
+
+  const statuses = model.disagreements[0].positions.map((p) => p.citationStatus);
+  // Fixture assumption: this disagreement spans materially different evidence
+  // status, which is the entire point of showing it per-position rather than
+  // once for the disagreement.
+  assert.ok(statuses.includes("edition-recorded"), "expected an edition-recorded position");
+  assert.ok(statuses.includes("source-required"), "expected a source-required position");
+  assert.ok(statuses.includes("attribution-contradicted"), "expected an attribution-contradicted position");
+  assert.ok(new Set(statuses).size >= 3, "positions must carry genuinely different statuses, not one repeated value");
+
+  const html = heritageConnectorTier3Markup(model);
+  assert.match(html, /edition-recorded/, "an edition-recorded position's status must render");
+  assert.match(html, /source-required/, "a source-required position's status must render");
+  assert.match(html, /attribution-contradicted/, "an attribution-contradicted position's status must render");
+});
+
+test("10: two synthetic positions on one disagreement render their own, different citationStatus values (negative control against a shared/blank label)", () => {
+  const model = tier3ConnectorModel({
+    suppressed: false, abstained: false,
+    active: [], sourcePanelOnly: [], abstentions: [], editorialJuxtapositions: [],
+    disagreements: [{
+      disagreementId: "synthetic-status-spread",
+      positions: [
+        { positionId: "strong", sourceId: "synthetic-source", summary: "Strong-citation position" },
+        { positionId: "weak", sourceId: "synthetic-source-2", summary: "Weaker-citation position" },
+      ],
+    }],
+  }, SOURCE_REGISTRY);
+  const [strong, weak] = model.disagreements[0].positions;
+  assert.equal(strong.citationStatus, "verified");
+  assert.equal(weak.citationStatus, "edition-recorded");
+  assert.notEqual(strong.citationStatus, weak.citationStatus);
+
+  const html = heritageConnectorTier3Markup(model);
+  assert.match(html, /citation:\s*verified/i);
+  assert.match(html, /citation:\s*edition-recorded/i);
 });

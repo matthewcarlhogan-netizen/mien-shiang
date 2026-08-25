@@ -123,12 +123,24 @@ export function connectorCard(entry, sourceRegistry = SOURCE_REGISTRY) {
  * bounded evidence/provenance fields needed to explain a connector's
  * standing in the scholarly view — `evidenceStrength`/`textualLayer`/
  * `folioLocator` from the resolved connector entry itself, and
- * `sectionLocatorStatus`/`folioLocatorStatus`/`citationStatus`/
- * `authorshipStatus`/`sourceAccess` from the cited source record. All are
- * already-recorded fields (`resolver.js`'s `toResolvedEntry` /
- * `reading/provenance.js`'s `sourceRecord`) — nothing here computes a new
+ * `citationStatus`/`authorshipStatus`/`sourceAccess` from the cited source
+ * record. All are already-recorded fields (`resolver.js`'s `toResolvedEntry`
+ * / `reading/provenance.js`'s `sourceRecord`) — nothing here computes a new
  * status or upgrades an existing one. Deliberately NOT used by
  * `tier2ConnectorModel` — see the file header.
+ *
+ * `sectionLocatorStatus`/`folioLocatorStatus` are two DIFFERENT provenance
+ * levels and must not collapse into one. A source record's status describes
+ * how well THAT SOURCE, in general, is located; a connector can cite the
+ * same source at a locator this project has only recorded, not verified —
+ * `five-forms-generative-overcoming-system` carries `sectionLocatorStatus:
+ * "RECORDED"` on the connector itself while its source
+ * (`heritage-five-elements-taiqing`) is `"VERIFIED"`. Reading the source's
+ * status for a connector-specific locator would silently upgrade that
+ * connector's citation to a strength it does not have. So the connector's
+ * OWN recorded status is read first; the source's status is used only as a
+ * fallback when the connector does not record one of its own (most
+ * connectors don't — they inherit the source's locator wholesale).
  */
 export function connectorEvidenceCard(entry, sourceRegistry = SOURCE_REGISTRY) {
   const base = connectorCard(entry, sourceRegistry);
@@ -139,8 +151,8 @@ export function connectorEvidenceCard(entry, sourceRegistry = SOURCE_REGISTRY) {
     evidenceStrength: entry.evidenceStrength || null,
     textualLayer: entry.textualLayer || null,
     folioLocator: entry.folioLocator || null,
-    sectionLocatorStatus: source ? source.sectionLocatorStatus : null,
-    folioLocatorStatus: source ? source.folioLocatorStatus : null,
+    sectionLocatorStatus: entry.sectionLocatorStatus ?? (source ? source.sectionLocatorStatus : null),
+    folioLocatorStatus: entry.folioLocatorStatus ?? (source ? source.folioLocatorStatus : null),
     citationStatus: source ? source.citationStatus : null,
     authorshipStatus: source ? source.authorshipStatus : null,
     sourceAccess: source ? source.sourceAccess : null,
@@ -378,10 +390,16 @@ export function heritageConnectorTier2Markup(model) {
  * Tier 3's expanded contract: active connectors, source-panel-only material
  * (each entry labelled per its OWN disposition — policy restriction vs.
  * evidence ceiling, never one blanket label — see `sourcePanelDisclosureFor`),
- * disagreements (each position attributed to its source), abstentions (every
- * gate reason), and editorial juxtapositions (each referenced connector
- * resolved to its own card, clearly labelled as not a historical claim, per
- * the policy's own `disclosure`/`historicalRelationshipAsserted: false`).
+ * disagreements (each position attributed to its source AND carrying its own
+ * `citationStatus`, mechanically labelled — positions on the same
+ * disagreement can carry materially different evidence status, e.g.
+ * `three-sections-boundaries` spans edition-recorded, source-required and
+ * attribution-contradicted, and a reader who cannot see that difference sees
+ * all positions as equally supported; the status is shown verbatim, never
+ * ranked or editorialised), abstentions (every gate reason), and editorial
+ * juxtapositions (each referenced connector resolved to its own card,
+ * clearly labelled as not a historical claim, per the policy's own
+ * `disclosure`/`historicalRelationshipAsserted: false`).
  * Returns "" when the composition is suppressed or abstained — a fail-closed
  * gate must render nothing, not an empty-looking section that invites a
  * reader to wonder what is missing.
@@ -405,7 +423,8 @@ export function heritageConnectorTier3Markup(model) {
         <details class="source-note"><summary>${esc(d.disagreementId || "")}</summary>
           ${(d.positions || []).map((p) => `
             <p class="muted">${esc(p.summary || "")}</p>
-            ${(p.sourceTitle || p.sectionLocator) ? `<p class="muted">${esc([p.sourceTitle, p.sectionLocator].filter(Boolean).join(", "))}</p>` : ""}`).join("")}
+            ${(p.sourceTitle || p.sectionLocator) ? `<p class="muted">${esc([p.sourceTitle, p.sectionLocator].filter(Boolean).join(", "))}</p>` : ""}
+            ${p.citationStatus ? `<p class="muted">citation: ${esc(p.citationStatus)}</p>` : ""}`).join("")}
         </details>`).join("")}`);
   }
   if (model.abstentions.length) {
