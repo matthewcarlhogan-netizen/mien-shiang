@@ -32,7 +32,15 @@ import { deriveReadingState } from "../../src/qise/reading-state.js";
 import { composeReading } from "../../src/qise/reflection.js";
 
 const srcPath = (relative) => fileURLToPath(new URL(`../../src/${relative}`, import.meta.url));
-const readSrc = (relative) => readFileSync(srcPath(relative), "utf8");
+// Normalised to LF: several assertions below slice source text at a literal
+// "/**\n * ..." JSDoc boundary. A Windows checkout with core.autocrlf=true
+// (no .gitattributes forces LF in this repo) reads the same file as "\r\n",
+// so the raw string never matches, indexOf returns -1, and slice(start, -1)
+// silently returns nearly the WHOLE REST of the file instead of just the one
+// function body — which is exactly wide enough to leak later JSDoc prose
+// mentioning the very term the slice was built to exclude. Confirmed against
+// CI: this broke two tests on windows-latest (20/22/24) starting at 9e7f28c.
+const readSrc = (relative) => readFileSync(srcPath(relative), "utf8").replace(/\r\n/g, "\n");
 
 function makeReflection(stateOverrides = {}, occurrence = 0) {
   const state = deriveReadingState({
@@ -689,7 +697,11 @@ test("readingTiersWithHeritage: tier2 and tier3 report the SAME occurrence for t
 
 test("current documentation: 'What was built (current state)' does not claim Tier 2/Tier 3 independently request separate STANDARD/SOURCE_DEEP compositions", () => {
   const docPath = fileURLToPath(new URL("../../docs/HERITAGE_CONNECTOR_STAGE_STATUS.md", import.meta.url));
-  const doc = readFileSync(docPath, "utf8");
+  // Same CRLF hazard as readSrc() above: a literal "\n### " boundary search
+  // silently matches nothing on a Windows (core.autocrlf) checkout, and
+  // slice(start, -1-from-undefined) would then run to the END OF THE FILE
+  // rather than to the next section heading.
+  const doc = readFileSync(docPath, "utf8").replace(/\r\n/g, "\n");
   const sectionStart = doc.indexOf("### What was built (current state)");
   assert.notEqual(sectionStart, -1, "the canonical current-state section must exist");
   const sectionEnd = doc.indexOf("\n### ", sectionStart + 1);

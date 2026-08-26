@@ -36,7 +36,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const read = (rel) => readFileSync(fileURLToPath(new URL(`../../src/${rel}`, import.meta.url)), "utf8");
+// Normalised to LF: test 9 below slices source text at a literal
+// "/**\n * ..." JSDoc boundary. A Windows checkout with core.autocrlf=true
+// (no .gitattributes forces LF in this repo) reads the same file as "\r\n",
+// so the raw string never matches — confirmed against CI, where this broke
+// that test on windows-latest (20/22/24) starting at 9e7f28c.
+const read = (rel) => readFileSync(fileURLToPath(new URL(`../../src/${rel}`, import.meta.url)), "utf8").replace(/\r\n/g, "\n");
 const APP = read("ui/qise/app.js");
 
 /** The body of `renderReflection`, so the audit is scoped to what it touches — same helper as reading-wiring.test.js. */
