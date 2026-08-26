@@ -1639,6 +1639,186 @@ This pass is a load-boundary/performance correction, not a step toward
 resolving either open blocker (safety authorization; lineage content
 routing) — both remain exactly as Round 9 left them.
 
+### Round 11 (this revision — two fresh-review findings against Round 10's load boundary)
+
+Round 10's PR picked up two fresh, independent review findings, both against
+the load boundary itself rather than against connector semantics. Neither
+touches either open architectural blocker.
+
+**1. Copilot: the Round 10 Playwright proof could false-green.** The single
+test in `e2e/qise-integration.spec.js` seeded consent/IndexedDB via
+`page.goto("/qise.html")` with no query string, THEN attached the request
+listener, THEN navigated a second time with `?reflection=off`/`?reflection=on`
+in the URL. `127.0.0.1` (the test server) is an `INTERNAL_HOST_PATTERNS`
+match, whose default is `reflection=on`, and the "on" case reused the SAME
+`context.newPage()` as the "off" case (run first, in the same shared
+`context`) — so by the "on" case's untracked first navigation, consent and a
+reading were already seeded, and 127.0.0.1's own default could carry that
+navigation straight to the reading screen and issue the exact Stage-3 requests
+the SECOND (tracked) navigation was supposed to be the one proving.
+Instrumented and confirmed empirically (see Falsification below): that
+untracked first navigation genuinely fetched both
+`qise/heritage-connections.js` and `ui/qise/heritage-view.js` before the real
+listener ever attached.
+
+Fixed per the review's own prescription: consent/IndexedDB are now seeded from
+`privacy.html` — a neutral same-origin page with zero `<script>` tags, so it
+cannot load `app.js` or any qise module at all — via the real
+`openStore()`/`.put()` (`src/qise/store.js`, pure/DOM-free), not a hand-rolled
+`indexedDB.open()`. The request listener attaches BEFORE the first-ever
+navigation to `qise.html` in that browser context, and the mode is in the URL
+of that first navigation. "off" and "on" are now separate `test()` blocks
+inside one `test.describe`, each with `serviceWorkers: "block"` — Playwright
+gives each `test()` its own fresh, isolated `BrowserContext` by default, so
+there is no shared storage for one case to warm a cache the other reads from.
+(`serviceWorkers: "block"` was added for an unrelated, second reason found
+while building the Round 11 fallback test below — see the note there.)
+
+**2. Codex (P2): a Stage-3 import failure erased the pre-existing Reflection
+Engine, not just the connector extension.** Round 10's fallback for a rejected
+dynamic import routed straight to `teardownReflectionSurfaces()` — the same
+path as `reflectionMode() === "off"`. That conflated two unrelated things: no
+connector-module response, and no reading to reflect on. The base Reflection
+Engine (Today/Story/Why over `readingTiers()`, `src/qise/reading-tiers.js`)
+predates Stage 3 entirely and does not depend on `heritage-connections.js`,
+`heritage-view.js`, `composition.js` or `resolver.js` — a dropped request for
+those four files is not a reason for a reader to lose Today/Story/Why.
+
+**Fix, and the explicitly-rejected alternative.** The brief for this pass
+ruled out precaching the Stage-3 connector graph in `sw.js` as the fix — that
+would make every reflection-off visitor's service-worker install/update
+download the dormant connector graph, which is the exact eager-load regression
+Round 10 exists to prevent, just moved from the JS module graph to the
+precache list. Implemented instead: `renderReflection()` now branches on
+whether `heritageStage3` loaded. On success, unchanged from Round 10 —
+`readingTiersWithHeritage()`, both connector-markup functions called, their
+output carried into two new local bindings (`connectorTier2Markup`,
+`connectorTier3Markup`). On failure, `readingTiers(reflection)` — the exact
+same base tiers `readingTiersWithHeritage()` itself computes internally as its
+first step (confirmed by reading `heritage-connections.js`:
+`readingTiersWithHeritage()` is `const base = readingTiers(reflection); ...`)
+— with both connector-markup bindings set to `""`. Both branches feed the
+SAME shared Today/Story/Why template below them, which already interpolates
+`connectorTier2Markup`/`connectorTier3Markup` rather than calling the
+connector-markup functions inline, so there is exactly one render path, not
+two. `readingTiers` is imported statically from `../../qise/reading-tiers.js`
+— explicitly authorized for this pass (it carries no connector dependency at
+all; `heritage-connections.js`'s own file header already documents and pins
+that `reading-tiers.js`'s source contains no reference to `composition.js`).
+
+**"No stale prior connector content" is structural, not separately tested
+live.** Both branches write `storyNode`/`whyNode` via one full
+`innerHTML = \`...\`` template assignment each — never an incremental append —
+so there is no code path by which a fallback render could retain markup from
+an earlier render even in principle. Reproducing that specific claim with a
+live two-render browser harness would need a second real capture through the
+camera/gate pipeline inside one page session; the static shape (pinned by
+`tests/qise/heritage-lazy-load.test.js` "8c") already proves the property that
+matters, so no separate live test was built for it — documented rather than
+asserted twice, per the brief's own allowance for exactly this tradeoff.
+
+**Debugging note, because it materially affected this pass's own build.**
+Building the new Playwright fallback test surfaced a bug in the TEST itself,
+not the product: `page.route().abort()` silently never fired on the first two
+attempts, because `app.js` registers a service worker on boot
+(`navigator.serviceWorker.register("./sw.js")`) and a live SW sitting in front
+of the aborted request is not the same network-layer event Playwright's
+page-level route hooks patch — the "failed import" premise wasn't actually
+true yet when the assertions were first written. Fixed by adding
+`serviceWorkers: "block"` to the `test.describe` covering all three Round
+10/11 load-boundary tests (also incidentally strengthening the off/on tests
+from the Copilot fix above, by removing SW install/activate/fetch timing as a
+variable from all three). Separately, the neutral-page seeding fix above
+(`privacy.html` + raw `indexedDB.open()`) initially failed with
+`NotFoundError: One of the specified object stores was not found` — a raw
+`indexedDB.open("qise", 2)` with no `onupgradeneeded` handler creates the
+`qise` database with no object store on a page that never ran the app's own
+`openStore()` first, which the OLD test's `page.goto("/qise.html")`-first
+construction had been masking. Fixed by seeding through the real
+`openStore()`/`.put()` instead, which is also more correct than the original
+raw write (it runs `toRecord()`'s allow-list on the way in, matching what
+production actually persists).
+
+**Falsification.** Two independent falsification passes, both against
+`fcdd3fe` (this branch's own prior commit — Round 10's landed state), using a
+git worktree so the working tree's own fixed state was never disturbed:
+
+- *Node side*: the 5 modified/new assertions (3 rewritten in
+  `tests/qise/heritage-connections.test.js`, 2 new — "8b"/"8c" — in
+  `tests/qise/heritage-lazy-load.test.js`) were copied into the worktree and
+  run against `fcdd3fe`'s `app.js`. Result: **5/5 failed** — the exact 5 that
+  depend on the fallback branch/binding shape this pass adds; the 48 other
+  tests in those two files (unaffected by this pass) continued to pass.
+- *Browser side*: the current, fixed `e2e/qise-integration.spec.js` was copied
+  into the same worktree and run against `fcdd3fe`'s `app.js`/`dist/`. Result:
+  **7/8 passed, 1 failed** — the off and on load-boundary tests (proving the
+  Copilot-fix rewrite is not itself dependent on the Codex fix, and that
+  Round 10's off/on gating was already correct) passed; the new fallback test
+  failed exactly as expected, with `#reflection-today` itself staying
+  `hidden` — Round 10's immediate teardown-on-import-failure erasing even the
+  Today surface, precisely the Codex P2 defect.
+- *The Copilot contamination claim specifically*: instrumented a throwaway
+  copy of `fcdd3fe`'s ORIGINAL (pre-fix) Playwright test with a listener
+  attached before its "untracked" first navigation. Confirmed: on the second
+  `requestsFor("?reflection=on")` call (sharing the first call's `context`),
+  that untracked navigation fetched both
+  `http://127.0.0.1:4173/qise/heritage-connections.js` and
+  `.../ui/qise/heritage-view.js` — real requests, before the tracked listener
+  for that call existed. (The original test's own assertion still happened to
+  pass in this run, because Chromium does not persist the ES-module registry
+  across a full navigation reload, so the second, tracked navigation reissued
+  its own requests regardless — but the contamination pathway Copilot
+  described is real and reproducible, which is what made the test's PASS not
+  trustworthy as proof, independent of whether it happened to reach the right
+  answer this particular run.)
+
+The worktree was removed after both passes; the fixed tree was then re-run in
+full: `npm test` — **1187/1187** (61/61 in the two touched files); `npm run
+test:browser` — **10/10** (8/8 in `qise-integration.spec.js`); `npm run build`
+and `npm run lint:bundle` clean.
+
+**Locked invariants, reconfirmed after this pass:** the same nine files Round
+10 pinned (`src/heritage/resolver.js`, `registry.js`, `validator.js`,
+`src/qise/reading-tiers.js`, `reading-state.js`, `reading-pipeline.js`,
+`reflection.js`, `src/qise/heritage-connections.js`,
+`src/ui/qise/heritage-view.js`) are byte-identical to `fcdd3fe` (`git diff
+fcdd3fe` against all nine is empty). `ABSTRACT_LINEAGE_OVERRIDES` remains
+`Object.freeze({})`. Disclosure ownership (Story/Why each render
+`rotationDisclosure` exactly once, from the same binding, regardless of which
+branch rendered; connector markup renders none) is unchanged. Locator-status
+precedence is unchanged. No `Math.random`, no `rotationState`, no
+`safetyPassed: true` fabrication, no Stage 4.
+
+**Files changed this session:**
+- `src/ui/qise/app.js` — added a static import of `readingTiers`
+  (`../../qise/reading-tiers.js`); `renderReflection()` now branches on
+  `heritageStage3` into a Stage-3-success path (unchanged from Round 10,
+  minus two local-variable renames) and a new fallback path
+  (`readingTiers(reflection)`, zero connector markup); the shared render
+  template below both branches now interpolates
+  `connectorTier2Markup`/`connectorTier3Markup` instead of calling the
+  connector-markup functions inline
+- `tests/qise/heritage-lazy-load.test.js` — 1 test reworded (still passes,
+  behaviour unchanged), 3 new ("8b", "8c" plus the reworded "8")
+- `tests/qise/heritage-connections.test.js` — 3 tests updated for the new
+  branch/binding shape (bare `readingTiers` now legitimately appears in the
+  fallback branch; the shared template interpolates carried bindings, not
+  direct function calls)
+- `e2e/qise-integration.spec.js` — the single Round 10 test replaced with
+  three, inside one `test.describe("Stage-3 connector-integration load
+  boundary")` with `serviceWorkers: "block"`: the Copilot-fixed off/on tests,
+  plus a new fallback test (aborts `qise/heritage-connections.js`, proves the
+  ordinary reading and the base Reflection Engine still render with zero
+  connector markup)
+- `docs/HERITAGE_CONNECTOR_STAGE_STATUS.md` — this section
+
+This pass is a correction to Round 10's own load-boundary work, not a step
+toward resolving either open blocker (safety authorization; lineage content
+routing) — both remain exactly as Round 9 left them. The pre-existing
+`reading-pipeline.js -> reflection.js -> heritage/registry.js` import path
+remains unchanged and out of scope, exactly as Round 10 stated — this pass
+does not claim that path was narrowed, removed, or otherwise touched.
+
 ### Known limitations / remaining work
 
 - **Stage 3 is BLOCKED, not approved, not merged.** See the framing at the

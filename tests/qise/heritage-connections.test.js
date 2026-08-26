@@ -351,10 +351,39 @@ test("deriveTier2FromComposition applies tier2VisibleDisagreements — an unfilt
 
 /* ── the actual production reading path calls the integrated function ────── */
 
-test("src/ui/qise/app.js calls readingTiersWithHeritage, not bare readingTiers, at the reflection render site", () => {
+/*
+ * Round 11 (Codex P2, PR #40): a Stage-3 import failure must fall back to the
+ * BASE tiers (`readingTiers(reflection)`) rather than tearing the whole
+ * Reflection surface down — see tests/qise/heritage-lazy-load.test.js "8b".
+ * So `readingTiers(reflection)` legitimately appears in app.js now, scoped to
+ * the `else` branch of `if (heritageStage3)`. What this test still must prove
+ * is that the SUCCESS path — when the Stage-3 modules did load — keeps
+ * calling the heritage-aware function and never silently downgrades to the
+ * bare one.
+ */
+test("src/ui/qise/app.js calls readingTiersWithHeritage on the Stage-3-success path, and readingTiers only in the fallback branch", () => {
   const source = readSrc("ui/qise/app.js");
   assert.match(source, /readingTiersWithHeritage\(/, "app.js must call the Stage 3-integrated function");
-  assert.doesNotMatch(source, /\breadingTiers\(reflection\)/, "the bare, non-heritage-aware call must be gone from app.js");
+
+  const ifAt = source.indexOf("if (heritageStage3) {");
+  const elseAt = source.indexOf("} else {", ifAt);
+  const successBranch = source.slice(ifAt, elseAt);
+  assert.ok(ifAt >= 0 && elseAt > ifAt, "fixture assumption: the Stage-3-success branch must be findable");
+  assert.match(successBranch, /readingTiersWithHeritage\(/,
+    "the Stage-3-success branch must derive tiers from the heritage-aware function");
+  assert.doesNotMatch(successBranch, /\breadingTiers\(reflection\)/,
+    "the Stage-3-success branch must not fall back to the bare function — the modules loaded");
+
+  const fallbackBranch = source.slice(
+    elseAt,
+    source.indexOf("\n  }\n  // One reading-level disclosure", elseAt),
+  );
+  assert.ok(fallbackBranch.length > 0, "fixture assumption: the fallback branch must be findable");
+  assert.match(fallbackBranch, /\breadingTiers\(reflection\)/,
+    "the fallback branch must derive tiers from the base function — the heritage-aware one is unavailable");
+  assert.doesNotMatch(fallbackBranch, /readingTiersWithHeritage/,
+    "the fallback branch must not call the Stage-3 function — its module failed to load");
+
   // Round 10 (Codex, PR #40 discussion r3856061462): this module is loaded
   // via a dynamic import(), deferred behind reflectionMode(), instead of a
   // static import — see tests/qise/heritage-lazy-load.test.js for the full
@@ -384,6 +413,18 @@ test("src/ui/qise/app.js derives captureQualityPassed from captureAuthorizationF
  * assigns the result into the DOM nodes real users see, not into a variable
  * that is computed and discarded.
  */
+/*
+ * Round 11 restructured this: `renderReflection()` now has two branches (the
+ * Stage-3-success path and the import-failure fallback), and only ONE shared
+ * render template below both of them. So `heritageConnectorTier2Markup`/
+ * `heritageConnectorTier3Markup` are called from inside the success branch
+ * only, and their result is carried into the shared template through
+ * `connectorTier2Markup`/`connectorTier3Markup` — plain `let` bindings set to
+ * `""` on the fallback path (tests/qise/heritage-lazy-load.test.js "8b"/"8c").
+ * What this test proves is unchanged in substance: the actual computed
+ * connector output reaches storyNode/whyNode, not a variable that is computed
+ * and discarded.
+ */
 test("src/ui/qise/app.js imports the heritage-view render functions and actually assigns their output into storyNode/whyNode", () => {
   const source = readSrc("ui/qise/app.js");
   // Round 10: heritage-view.js is loaded via the same dynamic-import() Stage-3
@@ -395,20 +436,24 @@ test("src/ui/qise/app.js imports the heritage-view render functions and actually
     "app.js must build Tier 2's view model from the actual computed tier2.connectors");
   assert.match(source, /tier3ConnectorModel\(tier3\.connectors\)/,
     "app.js must build Tier 3's view model from the actual computed tier3.connectors");
+  assert.match(source, /connectorTier2Markup = heritageConnectorTier2Markup\(tier2ConnectorModel\(tier2\.connectors\)\)/,
+    "app.js must assign heritageConnectorTier2Markup's actual return value into connectorTier2Markup");
+  assert.match(source, /connectorTier3Markup = heritageConnectorTier3Markup\(tier3ConnectorModel\(tier3\.connectors\)\)/,
+    "app.js must assign heritageConnectorTier3Markup's actual return value into connectorTier3Markup");
 
   const storyAssignment = source.slice(
     source.indexOf("storyNode.innerHTML = `"),
     source.indexOf("`;", source.indexOf("storyNode.innerHTML = `")),
   );
-  assert.match(storyAssignment, /\$\{heritageConnectorTier2Markup\(heritageTier2\)\}/,
-    "storyNode's innerHTML template must interpolate heritageConnectorTier2Markup's actual return value, not merely reference it");
+  assert.match(storyAssignment, /\$\{connectorTier2Markup\}/,
+    "storyNode's innerHTML template must interpolate connectorTier2Markup, which carries the actual computed markup");
 
   const whyAssignment = source.slice(
     source.indexOf("whyNode.innerHTML = `"),
     source.lastIndexOf("`;"),
   );
-  assert.match(whyAssignment, /\$\{heritageConnectorTier3Markup\(heritageTier3\)\}/,
-    "whyNode's innerHTML template must interpolate heritageConnectorTier3Markup's actual return value, not merely reference it");
+  assert.match(whyAssignment, /\$\{connectorTier3Markup\}/,
+    "whyNode's innerHTML template must interpolate connectorTier3Markup, which carries the actual computed markup");
 });
 
 test("src/ui/qise/app.js no longer owns the connector markup-building logic itself — it is imported, not redeclared", () => {
@@ -496,7 +541,11 @@ test("surface owns disclosure exactly once; connector markup owns none", () => {
 
   const disclosureIndex = whySlice.indexOf("${esc(rotationDisclosure)}");
   const byLayerIndex = whySlice.indexOf("byLayer");
-  const connectorMarkupIndex = whySlice.indexOf("heritageConnectorTier3Markup(heritageTier3)");
+  // Round 11: the shared template interpolates connectorTier3Markup (the
+  // carried connector-render output — "" on the fallback path), not a direct
+  // call to heritageConnectorTier3Markup — see the "imports the heritage-view
+  // render functions" test above for where that call itself is asserted.
+  const connectorMarkupIndex = whySlice.indexOf("${connectorTier3Markup}");
   assert.ok(disclosureIndex >= 0 && byLayerIndex > disclosureIndex && connectorMarkupIndex > disclosureIndex,
     "the disclosure must render before both the heritage-layer trace and the connector block");
 });

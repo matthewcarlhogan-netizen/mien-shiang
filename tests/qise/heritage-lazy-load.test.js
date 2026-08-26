@@ -135,7 +135,7 @@ test("7: renderReflection is async, and a render-generation guard sits around th
     "overwrite a faster later one's DOM");
 });
 
-test("8: a Stage-3 import failure is caught, logged, and reaches the shared teardown without throwing", () => {
+test("8: a Stage-3 import failure is caught and logged, without throwing", () => {
   const body = renderReflectionBody();
   const heritageVarAt = body.indexOf("let heritageStage3 = null;");
   assert.ok(heritageVarAt >= 0, "no local heritageStage3 binding found");
@@ -150,11 +150,51 @@ test("8: a Stage-3 import failure is caught, logged, and reaches the shared tear
   const catchBlockEnd = body.indexOf("}", catchAt + 6);
   const catchBlock = body.slice(catchAt, catchBlockEnd);
   assert.match(catchBlock, /console\.error\(/, "the catch block must log the failure, not swallow it silently");
+});
 
-  const afterCatch = body.slice(catchBlockEnd);
-  assert.match(afterCatch, /if\s*\(!heritageStage3\)\s*\{\s*teardownReflectionSurfaces\(surfaces\);\s*return;/,
-    "a failed import must fall through to the shared teardown and return — no fake connector output, " +
-    "no stale Story/Why content");
+/*
+ * ROUND 11 (Codex P2, PR #40): a Stage-3 import failure must NOT be treated
+ * as equivalent to "nothing to reflect on". The pre-existing Reflection
+ * Engine (Today/Story/Why over the BASE tiers) predates Stage 3 entirely and
+ * has nothing to do with whether a connector-module request succeeded — so
+ * a dropped request degrades ONLY the connector extension, never the reading
+ * itself. This is `readingTiers()` (reading-tiers.js), the same base tiers
+ * `readingTiersWithHeritage()` itself wraps — not a hand-rolled substitute.
+ */
+test("8b: a Stage-3 import failure falls back to the BASE tiers (readingTiers), not to teardown", () => {
+  assert.match(APP, /^import \{ readingTiers \} from "\.\.\/\.\.\/qise\/reading-tiers\.js";$/m,
+    "app.js must statically import readingTiers from reading-tiers.js for the fallback path");
+
+  const body = renderReflectionBody();
+  const elseAt = body.indexOf("} else {", body.indexOf("if (heritageStage3) {"));
+  assert.ok(elseAt > 0, "no else branch found for a failed Stage-3 load");
+  const elseBlockEnd = body.indexOf("\n  }", elseAt);
+  const elseBlock = body.slice(elseAt, elseBlockEnd);
+
+  assert.match(elseBlock, /readingTiers\(reflection\)/,
+    "the fallback branch must derive tiers with the base readingTiers(), not readingTiersWithHeritage");
+  assert.doesNotMatch(elseBlock, /readingTiersWithHeritage/,
+    "the fallback branch must not call the Stage-3 tiers function — its module failed to load");
+  assert.doesNotMatch(elseBlock, /heritageConnectorTier2Markup|heritageConnectorTier3Markup/,
+    "the fallback branch must not call connector-markup functions — it never has them, by construction");
+
+  // Falls through to teardown only when there is genuinely no reflection
+  // state (e.g. a calibrating/never-read reading) — the SAME condition that
+  // gates the Stage-3-success branch, not a new, stricter one.
+  assert.match(elseBlock, /if\s*\(!tiers\)\s*\{\s*teardownReflectionSurfaces\(surfaces\);\s*return;/,
+    "the fallback branch must still tear down when there is no reflection state at all");
+});
+
+test("8c: both the Stage-3 and fallback branches feed the same render below them — one template, two tier sources", () => {
+  const body = renderReflectionBody();
+  // Exactly one destructuring assignment of tier1/tier2/tier3 per branch,
+  // both writing into the SAME outer `let` bindings the shared template
+  // below reads — never two separate render templates.
+  const destructureCount = (body.match(/\(\{\s*tier1, tier2, tier3\s*\}\s*=\s*tiers\);/g) || []).length;
+  assert.equal(destructureCount, 2,
+    "expected exactly one tier1/tier2/tier3 destructure in the Stage-3 branch and one in the fallback branch");
+  assert.match(body, /const rotationDisclosure = tier2\.rotationDisclosure;/,
+    "a single shared render must still read tier2.rotationDisclosure after both branches");
 });
 
 test("9: disclosure ownership is unchanged — Story and Why each render the bound disclosure exactly once, connector markup renders none", () => {

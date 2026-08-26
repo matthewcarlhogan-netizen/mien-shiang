@@ -48,6 +48,7 @@ import { interpretReading, readingConfidence, axesOf, planSegment, BASELINE_VERS
 import { passageFor } from "../../qise/passages.js";
 import { reflectionMode } from "../../qise/reading-flags.js";
 import { reflectionFor } from "../../qise/reading-pipeline.js";
+import { readingTiers } from "../../qise/reading-tiers.js";
 import { openStore } from "../../qise/store.js";
 import { readingScreenModel, historyColumnModel } from "./screens.js";
 import { SHARE_CADENCES, shareReadings } from "./share.js";
@@ -1080,6 +1081,20 @@ function integratedStoryMarkup(model) {
  * Memoized so two readings rendered back to back share one import; a failed
  * load clears the memo so the next reading gets a fresh attempt rather than
  * a session permanently wedged by one dropped request.
+ *
+ * ── WHAT A FAILED LOAD DOES, AND WHY THIS IS NOT `readingTiersWithHeritage`
+ *    OR NOTHING ─────────────────────────────────────────────────────────────
+ * The pre-existing Reflection Engine (Today/Story/Why over the BASE tiers)
+ * predates Stage 3 and does not depend on any of these four files — it is
+ * `readingTiers()` (`reading-tiers.js`) over `reflectionFor()`'s output,
+ * both already imported statically above. Treating a Stage-3 import failure
+ * as equivalent to `reflection === null` (Codex P2, PR #40) would erase that
+ * pre-existing experience for a reason that has nothing to do with it — a
+ * dropped connector-module request, not a missing reading. So a failed load
+ * falls back to `readingTiers(reflection)` and renders exactly what Round 10
+ * renders when the modules loaded, MINUS the two connector-markup calls:
+ * same Today, same Story passage, same Why trace, zero connector content,
+ * nothing fabricated. See `renderReflection()` below.
  */
 let heritageStage3ModulesPromise = null;
 function loadHeritageStage3Modules() {
@@ -1149,48 +1164,62 @@ async function renderReflection(reading, history) {
     console.error("qise: heritage connector modules failed to load", error);
   }
   if (epoch !== reflectionRenderEpoch) return;
-  if (!heritageStage3) {
-    teardownReflectionSurfaces(surfaces);
-    return;
-  }
-
-  const {
-    readingTiersWithHeritage, captureAuthorizationFromReading,
-    tier2ConnectorModel, tier3ConnectorModel,
-    heritageConnectorTier2Markup, heritageConnectorTier3Markup,
-  } = heritageStage3;
 
   const reflection = reflectionFor(reading, history);
-  /*
-   * Stage 3: heritage-connector material rides alongside tier2/tier3 as
-   * `.connectors` (see src/qise/heritage-connections.js). Gates fail closed
-   * on anything other than an explicit `true`.
-   *
-   * `captureQualityPassed` is derived from `reading.captureTier` — the field
-   * `src/qise/gates.js`'s `evaluateGates()` writes, and the ONLY thing that
-   * ever writes it. An object existing is not proof its own gates passed;
-   * `captureTier` is that proof (`captureAuthorizationFromReading` fails
-   * closed to `undefined` for anything other than an explicit "clean" or
-   * "assisted").
-   *
-   * `safetyPassed` is deliberately left unset: the Qi Se tracker has no
-   * safety-referral gate of its own yet (unlike the legacy Module A/B malar
-   * gate), so there is nothing true to assert, and an unasserted gate must
-   * suppress rather than silently pass. Wire a real safety signal here if
-   * and when one is built for Qi Se — capture-quality passing must never be
-   * treated as a substitute for it.
-   */
-  const tiers = reflection && readingTiersWithHeritage(reflection, {
-    captureQualityPassed: captureAuthorizationFromReading(reading),
-  });
-  if (!tiers) {
-    teardownReflectionSurfaces(surfaces);
-    return;
-  }
 
-  const { tier1, tier2, tier3 } = tiers;
-  const heritageTier2 = tier2ConnectorModel(tier2.connectors);
-  const heritageTier3 = tier3ConnectorModel(tier3.connectors);
+  let tier1, tier2, tier3, connectorTier2Markup, connectorTier3Markup;
+  if (heritageStage3) {
+    const {
+      readingTiersWithHeritage, captureAuthorizationFromReading,
+      tier2ConnectorModel, tier3ConnectorModel,
+      heritageConnectorTier2Markup, heritageConnectorTier3Markup,
+    } = heritageStage3;
+    /*
+     * Stage 3: heritage-connector material rides alongside tier2/tier3 as
+     * `.connectors` (see src/qise/heritage-connections.js). Gates fail
+     * closed on anything other than an explicit `true`.
+     *
+     * `captureQualityPassed` is derived from `reading.captureTier` — the
+     * field `src/qise/gates.js`'s `evaluateGates()` writes, and the ONLY
+     * thing that ever writes it. An object existing is not proof its own
+     * gates passed; `captureTier` is that proof
+     * (`captureAuthorizationFromReading` fails closed to `undefined` for
+     * anything other than an explicit "clean" or "assisted").
+     *
+     * `safetyPassed` is deliberately left unset: the Qi Se tracker has no
+     * safety-referral gate of its own yet (unlike the legacy Module A/B
+     * malar gate), so there is nothing true to assert, and an unasserted
+     * gate must suppress rather than silently pass. Wire a real safety
+     * signal here if and when one is built for Qi Se — capture-quality
+     * passing must never be treated as a substitute for it.
+     */
+    const tiers = reflection && readingTiersWithHeritage(reflection, {
+      captureQualityPassed: captureAuthorizationFromReading(reading),
+    });
+    if (!tiers) {
+      teardownReflectionSurfaces(surfaces);
+      return;
+    }
+    ({ tier1, tier2, tier3 } = tiers);
+    connectorTier2Markup = heritageConnectorTier2Markup(tier2ConnectorModel(tier2.connectors));
+    connectorTier3Markup = heritageConnectorTier3Markup(tier3ConnectorModel(tier3.connectors));
+  } else {
+    // The Stage-3 import failed (logged above). Fall back to the BASE
+    // Reflection Engine — the same tiers this function rendered before
+    // Round 10 ever existed — rather than tearing the whole surface down
+    // for a reason (a dropped connector-module request) that has nothing to
+    // do with whether there is a reading to reflect on. Zero connector
+    // markup, nothing fabricated: see the `loadHeritageStage3Modules`
+    // comment above.
+    const tiers = reflection && readingTiers(reflection);
+    if (!tiers) {
+      teardownReflectionSurfaces(surfaces);
+      return;
+    }
+    ({ tier1, tier2, tier3 } = tiers);
+    connectorTier2Markup = "";
+    connectorTier3Markup = "";
+  }
   // One reading-level disclosure value, bound once. Story and Why each
   // render it exactly once; neither connector-markup function renders its
   // own copy (see heritage-view.js) — the surface owns disclosure, not the
@@ -1214,7 +1243,7 @@ async function renderReflection(reading, history) {
     <p class="muted">${esc(rotationDisclosure)}</p>
     <p>${esc(tier2.bridge)}</p>
     <p class="reflection">${esc(tier2.question)}</p>
-    ${heritageConnectorTier2Markup(heritageTier2)}`;
+    ${connectorTier2Markup}`;
 
   if (compareNode) {
     const comparing = mode === "compare";
@@ -1243,7 +1272,7 @@ async function renderReflection(reading, history) {
     <div class="chips">${tier3.dimensions.map((d) =>
       `<span class="chip">${esc(d.field)}: ${esc(String(d.value))}</span>`).join("")}</div>
     <p class="muted">Carried but not part of the state: ${esc(tier3.notIdentifying.join(", "))}.</p>
-    ${heritageConnectorTier3Markup(heritageTier3)}`;
+    ${connectorTier3Markup}`;
 }
 
 async function renderReading(reading) {

@@ -143,11 +143,36 @@ test("inference dependencies are pinned and requested only from this origin", as
  * the "off" case meaningful rather than vacuous: renderReading() -> await
  * renderReflection() genuinely runs on a real reading, so a request's absence
  * is evidence the gate held, not evidence the code path was never reached.
+ *
+ * ── ROUND 11 CORRECTION (Copilot, PR #40, on this test file itself) ────────
+ * The original version of this test seeded consent/IndexedDB by first
+ * `page.goto("/qise.html")` with NO query string, THEN attached the request
+ * listener, THEN navigated a SECOND time with the mode in the query string.
+ * 127.0.0.1 is an INTERNAL_HOST_PATTERNS match, whose default is
+ * "reflection=on" — so that untracked first navigation could, given
+ * already-seeded storage (the "on" case reused the SAME shared
+ * `context.newPage()` as the "off" case, run second, so consent/IndexedDB
+ * were already populated from the "off" run), reach the reading screen and
+ * request/cache the Stage-3 modules BEFORE the listener existed. A cache hit
+ * on the tracked second navigation could then either mask a genuine "on"
+ * regression (module already warm, so no fresh request needed to satisfy the
+ * assertion) or, in the other direction, make an "off" run look clean for the
+ * wrong reason.
+ *
+ * Fixed per the review's own prescription: seed consent/IndexedDB from a
+ * NEUTRAL same-origin page that loads no JavaScript at all
+ * (`privacy.html` — zero `<script>` tags, confirmed by reading it), attach
+ * the request listener BEFORE the first-ever navigation to `qise.html` in
+ * this browser context, and put the mode in the URL of THAT first
+ * navigation. "off" and "on" are now separate `test()` blocks — Playwright
+ * Test gives each `test()` its own fresh, isolated `BrowserContext` by
+ * default, so there is no shared storage for a positive control to warm a
+ * cache the negative control then reads from.
  */
-test("reflection=off issues no request for the Stage-3 connector-integration modules; reflection=on does", async ({ context }) => {
-  const points = canonicalFace();
+const NEUTRAL_PAGE = "/privacy.html";
 
-  const buildReading = async (page, canonicalDay) => page.evaluate(async ([pts, day]) => {
+async function buildReading(page, points, canonicalDay) {
+  return page.evaluate(async ([pts, day]) => {
     const { readRois } = await import("/qise/rois.js");
     const { trimmedMedianLab } = await import("/qise/camera.js");
     const color = await import("/qise/color.js");
@@ -185,49 +210,148 @@ test("reflection=off issues no request for the Stage-3 connector-integration mod
       frameJitter: null, confidence: 0.9, valid: true,
     };
   }, [points, canonicalDay]);
+}
 
-  const seedConsentAndReading = async (page, record) => page.evaluate(async (rec) => {
+/*
+ * Writes through the real `openStore()`/`.put()` (src/qise/store.js) rather
+ * than a hand-rolled `indexedDB.open()` — both pure, DOM-free modules,
+ * loadable from any same-origin page including the neutral one, so this is
+ * not a step back from "no app.js on the neutral page". This is not merely
+ * cleaner: a raw `indexedDB.open("qise", 2)` with no `onupgradeneeded`
+ * handler creates the "qise" database with NO object store on a page that
+ * never ran `openStore()` before — which the neutral-page fix below makes
+ * true for the first time. On the OLD `page.goto("/qise.html")`-first flow
+ * this went unnoticed because app.js's own boot path had already run
+ * `openStore()` and created the schema before the test's raw open() reused
+ * it. `openStore()` also runs `toRecord()`'s allow-list on the way in, which
+ * is what production actually persists, rather than the test's raw object
+ * verbatim.
+ */
+async function seedConsentAndReading(page, record) {
+  return page.evaluate(async (rec) => {
     // The current, non-stale consent shape — see src/qise/consent.js's
     // CONSENT_VERSION. Using the "qise-consent-v2"/2026-08-01 fixture from the
     // "stale grant" test above would be wrong here: that fixture is
     // DELIBERATELY stale, to prove the app forces re-consent on it.
     const { CONSENT_VERSION } = await import("/qise/consent.js");
+    const { openStore } = await import("/qise/store.js");
     localStorage.setItem("qise.consent", JSON.stringify({
       granted: true, version: CONSENT_VERSION, timestampIso: new Date().toISOString(),
     }));
-    await new Promise((resolve, reject) => {
-      const request = indexedDB.open("qise", 2);
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => {
-        const db = request.result;
-        const tx = db.transaction("qise_readings", "readwrite");
-        tx.objectStore("qise_readings").put(rec);
-        tx.oncomplete = resolve;
-        tx.onerror = () => reject(tx.error);
-      };
-    });
+    const store = await openStore();
+    await store.put(rec);
   }, record);
+}
 
-  const requestsFor = async (query) => {
-    const page = await context.newPage();
-    await page.goto("/qise.html");
-    const reading = await buildReading(page, "2026-08-17");
+/** Seeds via the neutral page, THEN attaches the listener, THEN makes the one, mode-bearing qise.html navigation. */
+async function seedThenColdNavigate(page, points, canonicalDay, query) {
+  await page.goto(NEUTRAL_PAGE);
+  const reading = await buildReading(page, points, canonicalDay);
+  await seedConsentAndReading(page, reading);
+
+  const requested = [];
+  page.on("request", (r) => requested.push(r.url()));
+  await page.goto(`/qise.html${query}`);
+  await expect(page.locator("#screen-reading")).toHaveAttribute("data-active", "true");
+  return requested;
+}
+
+/*
+ * All three Round 10/11 load-boundary tests below run with the service
+ * worker blocked. app.js registers one on boot (`navigator.serviceWorker
+ * .register("./sw.js")`), and a live SW sitting in front of these requests
+ * turned out to be exactly the kind of hidden interference Copilot's review
+ * warned about, one layer further down: `page.route()`'s abort in the
+ * fallback test below silently never fired once a SW was actually
+ * intercepting the fetch for `heritage-connections.js` (a SW-mediated fetch
+ * is not the same network-layer event Playwright's page-level route hooks
+ * patch), so the "failed import" premise wasn't actually true when first
+ * written — the import was silently succeeding underneath the unfired route,
+ * and the test failed for an unrelated DOM-timing reason while investigating
+ * why. Blocking the SW for this describe block removes that whole dimension
+ * of install/activate/fetch-interception timing from all three assertions,
+ * which is the right scope for tests about the PAGE's own module-loading
+ * behaviour specifically.
+ */
+test.describe("Stage-3 connector-integration load boundary", () => {
+  test.use({ serviceWorkers: "block" });
+
+  test("reflection=off issues no request for the Stage-3 connector-integration modules, on a genuinely cold qise.html navigation", async ({ page }) => {
+    const requested = await seedThenColdNavigate(page, canonicalFace(), "2026-08-17", "?reflection=off");
+    for (const marker of ["qise/heritage-connections.js", "ui/qise/heritage-view.js", "heritage/composition.js", "heritage/resolver.js"]) {
+      expect(requested.some((url) => url.includes(marker)), `unexpected request for ${marker} with reflection=off`).toBe(false);
+    }
+  });
+
+  test("reflection=on reaches the Stage-3 loader, from an independent context with no prior warm cache", async ({ page }) => {
+    const requested = await seedThenColdNavigate(page, canonicalFace(), "2026-08-18", "?reflection=on");
+    expect(requested.some((url) => url.includes("qise/heritage-connections.js")), "reflection=on must load heritage-connections.js").toBe(true);
+    expect(requested.some((url) => url.includes("ui/qise/heritage-view.js")), "reflection=on must load heritage-view.js").toBe(true);
+  });
+
+  /*
+   * ROUND 11 (Codex P2, PR #40): the Round 10 lazy loader's failure path used
+   * to tear the whole Reflection surface down on any dropped connector-module
+   * request — erasing the pre-existing base Reflection Engine (Today/Story/Why)
+   * for a reason that has nothing to do with whether there was a reading to
+   * show. Fixed in src/ui/qise/app.js's renderReflection(): a failed Stage-3
+   * import now falls back to readingTiers(reflection) — the same base tiers
+   * the app rendered before Stage 3 ever existed — with zero connector markup,
+   * nothing fabricated (tests/qise/heritage-lazy-load.test.js "8b"/"8c" pin the
+   * static shape of this). This is the one behavioural browser proof that a
+   * source-text check cannot give: a REAL aborted module request, in a REAL
+   * page, still leaves an ordinary reading on screen.
+   *
+   * "No stale prior connector content remains" is covered structurally rather
+   * than by a second live render in this same test: both branches of
+   * renderReflection() write storyNode/whyNode with a single, full
+   * `innerHTML = \`...\`` template assignment (never an incremental append), so
+   * there is no code path by which a fallback render could retain markup from
+   * an earlier render even in principle — pinned by
+   * tests/qise/heritage-lazy-load.test.js "8c". Reproducing that live would
+   * mean driving two renderReading() calls inside one page session, which
+   * needs a second real capture through the camera/gate pipeline — a much
+   * heavier and flakier harness for a property the static test already proves.
+   */
+  test("a failed Stage-3 import falls back to the base Reflection Engine, not a blank one", async ({ page }) => {
+    await page.goto(NEUTRAL_PAGE);
+    const reading = await buildReading(page, canonicalFace(), "2026-08-19");
     await seedConsentAndReading(page, reading);
 
-    const requested = [];
-    page.on("request", (r) => requested.push(r.url()));
-    await page.goto(`/qise.html${query}`);
+    await page.route("**/qise/heritage-connections.js", (route) => route.abort());
+
+    await page.goto("/qise.html?reflection=on");
     await expect(page.locator("#screen-reading")).toHaveAttribute("data-active", "true");
-    await page.close();
-    return requested;
-  };
 
-  const offRequests = await requestsFor("?reflection=off");
-  for (const marker of ["qise/heritage-connections.js", "ui/qise/heritage-view.js", "heritage/composition.js", "heritage/resolver.js"]) {
-    expect(offRequests.some((url) => url.includes(marker)), `unexpected request for ${marker} with reflection=off`).toBe(false);
-  }
+    // Ordinary reading rendering continues — this text comes from the
+    // pre-existing, Reflection-independent passage path (readingScreenModel),
+    // not from anything this pass touches.
+    await expect(page.locator("#reading-passage")).not.toBeEmpty();
 
-  const onRequests = await requestsFor("?reflection=on");
-  expect(onRequests.some((url) => url.includes("qise/heritage-connections.js")), "reflection=on must still load heritage-connections.js").toBe(true);
-  expect(onRequests.some((url) => url.includes("ui/qise/heritage-view.js")), "reflection=on must still load heritage-view.js").toBe(true);
+    // The base Reflection Engine still renders. "Today" is the default
+    // selected tab, so its surface is visible without any interaction.
+    // Story and Why sit inside OTHER `[data-reading-panel]` tabpanels that
+    // ship `hidden` until their own tab is selected (qise.html) — that
+    // tab-selection gate is a pre-existing, Reflection-independent UI
+    // mechanism, so this follows a real reader's path (select the tab) to
+    // prove the surface actually renders, rather than asserting full visual
+    // visibility on an element nested in a panel nothing has selected yet.
+    await expect(page.locator("#reflection-today")).toBeVisible();
+
+    await page.locator('[data-reading-tab="story"]').click();
+    await expect(page.locator("#reflection-story")).toBeVisible();
+
+    const whyTab = page.locator("#reading-tab-why");
+    await expect(whyTab).not.toHaveAttribute("hidden", "");
+    await whyTab.click();
+    await expect(page.locator("#reflection-why")).toBeVisible();
+
+    // No Stage-3 connector markup — the specific eyebrow strings
+    // heritageConnectorTier2Markup/heritageConnectorTier3Markup emit, and only
+    // they emit (src/ui/qise/heritage-view.js).
+    const storyHtml = await page.locator("#reflection-story").innerHTML();
+    expect(storyHtml).not.toContain("A related historical connection");
+    const whyHtml = await page.locator("#reflection-why").innerHTML();
+    expect(whyHtml).not.toContain("Historical connector graph");
+  });
 });
