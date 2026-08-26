@@ -48,11 +48,6 @@ import { interpretReading, readingConfidence, axesOf, planSegment, BASELINE_VERS
 import { passageFor } from "../../qise/passages.js";
 import { reflectionMode } from "../../qise/reading-flags.js";
 import { reflectionFor } from "../../qise/reading-pipeline.js";
-import { readingTiersWithHeritage, captureAuthorizationFromReading } from "../../qise/heritage-connections.js";
-import {
-  tier2ConnectorModel, tier3ConnectorModel,
-  heritageConnectorTier2Markup, heritageConnectorTier3Markup,
-} from "./heritage-view.js";
 import { openStore } from "../../qise/store.js";
 import { readingScreenModel, historyColumnModel } from "./screens.js";
 import { SHARE_CADENCES, shareReadings } from "./share.js";
@@ -90,6 +85,7 @@ let lightOverrideRequested = false;
 let screenFlashThemeColour = null;
 let exposureHalo = null;
 let releasePalaceExperience = () => {};
+let reflectionRenderEpoch = 0;
 
 /* ── screens ─────────────────────────────────────────────────────────────── */
 
@@ -1065,7 +1061,67 @@ function integratedStoryMarkup(model) {
  * comparison flag: if the new path is wrong, the evidence is visible rather
  * than shipped.
  */
-function renderReflection(reading, history) {
+/*
+ * Stage 3 connector-integration modules — loaded ONLY once Reflection is
+ * confirmed not "off". `heritage-connections.js` pulls in
+ * `../heritage/composition.js` -> `resolver.js` -> the full connector/source
+ * registries and their import-time validation; `heritage-view.js` pulls in
+ * `reflection-corpus.js`/`reading/provenance.js` for its own reductions. None
+ * of that is public/reflection-off cold-load weight (Codex, PR #40 discussion
+ * r3856061462: a static import here made every Tier-1-only visit pay the
+ * connector graph's download/parse/validation cost even though the public
+ * default is off and the safety gate suppresses all connector output).
+ *
+ * This does NOT touch `reading-pipeline.js`/`reflection.js`, which import
+ * `heritage/registry.js` on their own, separate, pre-existing path (see
+ * docs/HERITAGE_CONNECTOR_STAGE_STATUS.md) — narrowing that path is a
+ * different, larger change and is out of scope here.
+ *
+ * Memoized so two readings rendered back to back share one import; a failed
+ * load clears the memo so the next reading gets a fresh attempt rather than
+ * a session permanently wedged by one dropped request.
+ */
+let heritageStage3ModulesPromise = null;
+function loadHeritageStage3Modules() {
+  if (!heritageStage3ModulesPromise) {
+    heritageStage3ModulesPromise = Promise.all([
+      import("../../qise/heritage-connections.js"),
+      import("./heritage-view.js"),
+    ]).then(([connections, view]) => ({
+      readingTiersWithHeritage: connections.readingTiersWithHeritage,
+      captureAuthorizationFromReading: connections.captureAuthorizationFromReading,
+      tier2ConnectorModel: view.tier2ConnectorModel,
+      tier3ConnectorModel: view.tier3ConnectorModel,
+      heritageConnectorTier2Markup: view.heritageConnectorTier2Markup,
+      heritageConnectorTier3Markup: view.heritageConnectorTier3Markup,
+    })).catch((error) => {
+      heritageStage3ModulesPromise = null;
+      throw error;
+    });
+  }
+  return heritageStage3ModulesPromise;
+}
+
+/**
+ * ONE teardown for every path that leaves Reflection with nothing authorised
+ * to show — off, a Stage 3 load failure, or an unauthorised/abstained tiers
+ * result. Written once so a branch cannot drift from its siblings the way
+ * the `off`/`!tiers` branches once did (CLAUDE.md item 51): hiding the Why
+ * tab without also hiding the Why panel leaves a reader who already opened
+ * it looking at the previous reading's text, presented as current.
+ */
+function teardownReflectionSurfaces({ todayNode, storyNode, compareNode, whyTab, whyPanel }) {
+  for (const node of [todayNode, storyNode, compareNode]) if (node) node.hidden = true;
+  whyTab.hidden = true;
+  whyPanel.hidden = true;
+}
+
+async function renderReflection(reading, history) {
+  // Bumped unconditionally, before the `off` return: a LATER call — including
+  // one that resolves "off" — must win over an earlier call still awaiting
+  // the Stage 3 import below. Checked once, right after that await, which is
+  // the only await this function introduces.
+  const epoch = ++reflectionRenderEpoch;
   const todayNode = $("reflection-today");
   const storyNode = $("reflection-story");
   const compareNode = $("reflection-compare");
@@ -1073,6 +1129,7 @@ function renderReflection(reading, history) {
   const whyTab = $("reading-tab-why");
   const whyPanel = document.querySelector('[data-reading-panel="why"]');
   if (!todayNode || !storyNode || !whyNode || !whyTab || !whyPanel) return;
+  const surfaces = { todayNode, storyNode, compareNode, whyTab, whyPanel };
 
   const mode = reflectionMode({
     search: location.search,
@@ -1081,11 +1138,27 @@ function renderReflection(reading, history) {
   });
 
   if (mode === "off") {
-    for (const node of [todayNode, storyNode, compareNode]) if (node) node.hidden = true;
-    whyTab.hidden = true;
-    whyPanel.hidden = true;
+    teardownReflectionSurfaces(surfaces);
     return;
   }
+
+  let heritageStage3 = null;
+  try {
+    heritageStage3 = await loadHeritageStage3Modules();
+  } catch (error) {
+    console.error("qise: heritage connector modules failed to load", error);
+  }
+  if (epoch !== reflectionRenderEpoch) return;
+  if (!heritageStage3) {
+    teardownReflectionSurfaces(surfaces);
+    return;
+  }
+
+  const {
+    readingTiersWithHeritage, captureAuthorizationFromReading,
+    tier2ConnectorModel, tier3ConnectorModel,
+    heritageConnectorTier2Markup, heritageConnectorTier3Markup,
+  } = heritageStage3;
 
   const reflection = reflectionFor(reading, history);
   /*
@@ -1111,14 +1184,7 @@ function renderReflection(reading, history) {
     captureQualityPassed: captureAuthorizationFromReading(reading),
   });
   if (!tiers) {
-    for (const node of [todayNode, storyNode, compareNode]) if (node) node.hidden = true;
-    whyTab.hidden = true;
-    // The panel is hidden alongside its tab, exactly as the `off` branch
-    // above does. Hiding only the tab leaves a reader who already opened Why
-    // looking at the PREVIOUS reading's text with no way to dismiss it —
-    // stale content presented as current. Item 51's shape: a teardown
-    // written into one branch of a conditional and not the other.
-    whyPanel.hidden = true;
+    teardownReflectionSurfaces(surfaces);
     return;
   }
 
@@ -1237,7 +1303,7 @@ async function renderReading(reading) {
      <div class="num">${c.read}/${c.total} read</div></div>`).join("");
 
   $("reading-passage").textContent = m.passage.text;
-  renderReflection(reading, history);
+  await renderReflection(reading, history);
 
   $("reading-tags").innerHTML = m.tags.length
     ? m.tags.map((t) => `<span class="chip">${esc(t)}</span>`).join("")

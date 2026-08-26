@@ -114,3 +114,120 @@ test("inference dependencies are pinned and requested only from this origin", as
   });
   expect(external).toEqual([]);
 });
+
+/*
+ * ROUND 10 — the Stage 3 connector-integration boundary (Codex, PR #40
+ * discussion r3856061462): `heritage-connections.js`/`heritage-view.js` must
+ * load only once reflectionMode() is confirmed not "off". Verified as an
+ * actual network condition, not only a static-source check, because that is
+ * the one thing a source-text grep cannot prove — that the browser's real ES
+ * module loader genuinely never issues the request.
+ *
+ * `heritage-connections.js` and `heritage-view.js` are NOT in sw.js's SHELL
+ * precache list (confirmed by reading it — see CLAUDE.md item 15's own
+ * caution about that file), so there is no precache path that could make this
+ * assertion pass vacuously by serving them from cache before the request
+ * layer ever sees them.
+ *
+ * `?reflection=off`/`?reflection=on` are used explicitly rather than relying
+ * on the host default, because 127.0.0.1 (this test server) is itself an
+ * INTERNAL_HOST_PATTERNS match in reading-flags.js, whose default for an
+ * internal host is "on" — asserting on the query-string-forced mode is what
+ * makes this deterministic regardless of that default.
+ *
+ * The seeded reading is built from the REAL production measurement functions
+ * (readRois -> trimmedMedianLab -> computeReadingMetrics -> interpretReading
+ * -> compositionOf), the same ones tests/qise/reading-production-path.test.js
+ * exercises on the Node side, imported live from `dist/` inside the page —
+ * not a hand-typed object standing in for a measurement. This is what makes
+ * the "off" case meaningful rather than vacuous: renderReading() -> await
+ * renderReflection() genuinely runs on a real reading, so a request's absence
+ * is evidence the gate held, not evidence the code path was never reached.
+ */
+test("reflection=off issues no request for the Stage-3 connector-integration modules; reflection=on does", async ({ context }) => {
+  const points = canonicalFace();
+
+  const buildReading = async (page, canonicalDay) => page.evaluate(async ([pts, day]) => {
+    const { readRois } = await import("/qise/rois.js");
+    const { trimmedMedianLab } = await import("/qise/camera.js");
+    const color = await import("/qise/color.js");
+    const { computeReadingMetrics, lumRatioP90P50 } = await import("/qise/metrics.js");
+    const { interpretReading, axesOf, BASELINE_VERSION } = await import("/qise/baseline.js");
+    const { compositionOf } = await import("/qise/composition.js");
+
+    const width = 768, height = 1024;
+    const data = new Uint8ClampedArray(width * height * 4);
+    for (let i = 0; i < width * height; i++) {
+      data[i * 4] = 198; data[i * 4 + 1] = 152; data[i * 4 + 2] = 138; data[i * 4 + 3] = 255;
+    }
+    const image = { data, width, height };
+    const { rois } = readRois(image, pts, { mirrored: false }, color);
+    const lab = {}, lumRatio = {};
+    for (const [name, r] of Object.entries(rois)) {
+      if (!r.pixels.length) continue;
+      lab[name] = trimmedMedianLab(r.pixels, color);
+      lumRatio[name] = lumRatioP90P50(r.pixels, color);
+    }
+    const metrics = computeReadingMetrics({ rawLab: lab, correctedLab: lab, lumRatio });
+    const timestampIso = `${day}T09:00:00.000Z`;
+    const interpreted = interpretReading(metrics.corrected, [], {
+      confidence: 0.9, timestampIso, captureMode: "auto",
+    });
+    return {
+      timestampIso, canonicalDay: day, lineageId: "seg-e2e-round10", captureClass: "auto",
+      metrics, axes: axesOf(metrics.corrected), deltas: interpreted.deltas,
+      compass: interpreted.compass, z: interpreted.z,
+      composition: compositionOf({ metrics, compass: interpreted.compass }),
+      integrated: null, tags: [], baselineVersion: BASELINE_VERSION, captureTier: "clean",
+      readingState: interpreted.state, baselineProgress: 1, consentVersion: "qise-consent-v3",
+      illumination: null, gateMargins: {}, sclera: null,
+      roiValidity: Object.fromEntries(Object.entries(rois).map(([k, v]) => [k, v.valid])),
+      frameJitter: null, confidence: 0.9, valid: true,
+    };
+  }, [points, canonicalDay]);
+
+  const seedConsentAndReading = async (page, record) => page.evaluate(async (rec) => {
+    // The current, non-stale consent shape — see src/qise/consent.js's
+    // CONSENT_VERSION. Using the "qise-consent-v2"/2026-08-01 fixture from the
+    // "stale grant" test above would be wrong here: that fixture is
+    // DELIBERATELY stale, to prove the app forces re-consent on it.
+    const { CONSENT_VERSION } = await import("/qise/consent.js");
+    localStorage.setItem("qise.consent", JSON.stringify({
+      granted: true, version: CONSENT_VERSION, timestampIso: new Date().toISOString(),
+    }));
+    await new Promise((resolve, reject) => {
+      const request = indexedDB.open("qise", 2);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const db = request.result;
+        const tx = db.transaction("qise_readings", "readwrite");
+        tx.objectStore("qise_readings").put(rec);
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error);
+      };
+    });
+  }, record);
+
+  const requestsFor = async (query) => {
+    const page = await context.newPage();
+    await page.goto("/qise.html");
+    const reading = await buildReading(page, "2026-08-17");
+    await seedConsentAndReading(page, reading);
+
+    const requested = [];
+    page.on("request", (r) => requested.push(r.url()));
+    await page.goto(`/qise.html${query}`);
+    await expect(page.locator("#screen-reading")).toHaveAttribute("data-active", "true");
+    await page.close();
+    return requested;
+  };
+
+  const offRequests = await requestsFor("?reflection=off");
+  for (const marker of ["qise/heritage-connections.js", "ui/qise/heritage-view.js", "heritage/composition.js", "heritage/resolver.js"]) {
+    expect(offRequests.some((url) => url.includes(marker)), `unexpected request for ${marker} with reflection=off`).toBe(false);
+  }
+
+  const onRequests = await requestsFor("?reflection=on");
+  expect(onRequests.some((url) => url.includes("qise/heritage-connections.js")), "reflection=on must still load heritage-connections.js").toBe(true);
+  expect(onRequests.some((url) => url.includes("ui/qise/heritage-view.js")), "reflection=on must still load heritage-view.js").toBe(true);
+});

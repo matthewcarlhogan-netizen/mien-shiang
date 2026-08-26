@@ -355,7 +355,12 @@ test("src/ui/qise/app.js calls readingTiersWithHeritage, not bare readingTiers, 
   const source = readSrc("ui/qise/app.js");
   assert.match(source, /readingTiersWithHeritage\(/, "app.js must call the Stage 3-integrated function");
   assert.doesNotMatch(source, /\breadingTiers\(reflection\)/, "the bare, non-heritage-aware call must be gone from app.js");
-  assert.match(source, /from ["']\.\.\/\.\.\/qise\/heritage-connections\.js["']/);
+  // Round 10 (Codex, PR #40 discussion r3856061462): this module is loaded
+  // via a dynamic import(), deferred behind reflectionMode(), instead of a
+  // static import — see tests/qise/heritage-lazy-load.test.js for the full
+  // load-boundary proof.
+  assert.match(source, /import\(\s*["']\.\.\/\.\.\/qise\/heritage-connections\.js["']\s*\)/,
+    "app.js must dynamically import heritage-connections.js");
 });
 
 test("src/ui/qise/app.js derives captureQualityPassed from captureAuthorizationFromReading, not from Boolean(reading)", () => {
@@ -381,8 +386,11 @@ test("src/ui/qise/app.js derives captureQualityPassed from captureAuthorizationF
  */
 test("src/ui/qise/app.js imports the heritage-view render functions and actually assigns their output into storyNode/whyNode", () => {
   const source = readSrc("ui/qise/app.js");
-  assert.match(source, /import\s*\{[^}]*heritageConnectorTier2Markup[^}]*heritageConnectorTier3Markup[^}]*\}\s*from\s*["']\.\/heritage-view\.js["']/s,
-    "app.js must import both render functions from heritage-view.js");
+  // Round 10: heritage-view.js is loaded via the same dynamic-import() Stage-3
+  // loader as heritage-connections.js (see tests/qise/heritage-lazy-load.test.js)
+  // rather than a static import.
+  assert.match(source, /import\(\s*["']\.\/heritage-view\.js["']\s*\)/,
+    "app.js must dynamically import heritage-view.js");
   assert.match(source, /tier2ConnectorModel\(tier2\.connectors\)/,
     "app.js must build Tier 2's view model from the actual computed tier2.connectors");
   assert.match(source, /tier3ConnectorModel\(tier3\.connectors\)/,

@@ -64,7 +64,15 @@ test("the renderer stands down completely when the flag is off", () => {
   const off = body.slice(body.indexOf('if (mode === "off")'));
   assert.ok(off.length > 0, "there is no off branch; the flag does not gate anything");
   const guarded = off.slice(0, off.indexOf("}"));
-  assert.match(guarded, /hidden = true/, "the off branch does not hide the new surfaces");
+  // Round 10 factored the inline hide-everything code into one shared
+  // helper (see the next test) — the off branch now hands off to it rather
+  // than setting `hidden = true` inline.
+  assert.match(guarded, /teardownReflectionSurfaces\(/,
+    "the off branch does not hand off to the shared teardown");
+  assert.match(guarded, /return;/, "the off branch does not return");
+  assert.doesNotMatch(guarded, /loadHeritageStage3Modules/,
+    "the off branch must return before the Stage-3 connector loader is ever called — " +
+    "an off build must not pay the connector graph's load cost");
   assert.ok(body.indexOf('if (mode === "off")') < body.indexOf("reflectionFor("),
     "the engine runs before the flag is checked; an off build would still pay for it");
 });
@@ -75,23 +83,33 @@ test("EVERY stand-down branch hides the Why panel, not only its tab", () => {
   // presented as current, with no control left to dismiss it. The `off`
   // branch got this right and the `!tiers` branch did not — item 51's
   // shape, a teardown written into one branch of a conditional and not the
-  // other. Asserted over every branch rather than the one that was wrong,
-  // so a third stand-down path cannot reintroduce it.
+  // other.
+  //
+  // Round 10 factored the duplicated inline teardown into ONE shared
+  // `teardownReflectionSurfaces()` helper (CLAUDE.md item 51's own
+  // recommended fix for this exact defect class), used from a third
+  // stand-down branch too (a Stage-3 import failure). So instead of finding
+  // "whyTab.hidden = true" inline at each site, every branch must call the
+  // shared helper and return immediately; the helper itself is checked once,
+  // separately, for actually hiding both elements.
   const body = renderReflectionBody();
 
-  const standDowns = [...body.matchAll(/whyTab\.hidden = true/g)].map((m) => m.index);
-  assert.ok(standDowns.length >= 2,
-    `expected at least two stand-down branches, found ${standDowns.length}`);
+  const standDownCount = (body.match(/teardownReflectionSurfaces\(surfaces\);/g) || []).length;
+  assert.ok(standDownCount >= 3,
+    `expected at least three stand-down branches (off, Stage-3 load failure, !tiers), found ${standDownCount}`);
 
-  for (const at of standDowns) {
-    const blockStart = body.lastIndexOf("{", at);
-    const returnAt = body.indexOf("return;", at);
-    assert.ok(returnAt > at, "a stand-down branch hides the tab but never returns");
-    const branch = body.slice(blockStart, returnAt);
-    assert.match(branch, /whyPanel\.hidden = true/,
-      "a stand-down branch hides the Why tab without hiding the Why panel; " +
-      "stale reflection text survives into a reading that produced none");
-  }
+  const immediateReturns = (body.match(/teardownReflectionSurfaces\(surfaces\);\s*return;/g) || []).length;
+  assert.equal(immediateReturns, standDownCount,
+    "every stand-down branch must return immediately after calling the shared teardown");
+
+  const teardownAt = APP.indexOf("function teardownReflectionSurfaces(");
+  assert.ok(teardownAt > 0, "teardownReflectionSurfaces is gone; the shared helper was removed");
+  const teardownBody = APP.slice(teardownAt, APP.indexOf("\n}", teardownAt));
+  assert.match(teardownBody, /whyTab\.hidden = true/,
+    "the shared teardown does not hide the Why tab");
+  assert.match(teardownBody, /whyPanel\.hidden = true/,
+    "the shared teardown does not hide the Why panel; " +
+    "stale reflection text would survive into a reading that produced none");
 });
 
 test("the flagged surfaces ship hidden", () => {

@@ -1517,6 +1517,128 @@ is a precedence correction over already-recorded values, never a new one.
   unconstructable without reopening frozen `resolver.js`) and its schema
   justification (`registry.js`'s status-field defaults are never `null`)
 
+### Round 10 (this revision — load-boundary correction, no connector-semantics change)
+
+A fresh Codex review (PR #40 discussion r3856061462) found that
+`src/ui/qise/app.js` statically imported `../../qise/heritage-connections.js`,
+which transitively imports `../heritage/composition.js` -> `resolver.js` ->
+the full connector/source registries and their import-time validation.
+Because `qise.html` loads `app.js` eagerly, every public-origin Qi Se visit —
+including a Tier-1-only capture with `reflectionMode()` returning `"off"` for
+every non-internal host — paid that download/parse/validation cost, even
+though the public default is off and the safety gate suppresses all connector
+output regardless.
+
+**Fix, confined to one file.** `app.js` no longer imports
+`heritage-connections.js` or `heritage-view.js` statically. A single memoized
+loader, `loadHeritageStage3Modules()`, dynamically imports both — the same
+technique `buildLandmarker()` already uses for the MediaPipe bundle, for the
+same reason (CLAUDE.md item 18a/44: a module-scope import of something heavy
+drags it into the graph unconditionally). `renderReflection()` is now
+`async`; the loader is awaited only AFTER `reflectionMode()` has been read and
+the `"off"` branch has had the chance to return — so an off build never
+references the loader at all. `"on"` and `"compare"` share the identical
+post-gate call site; there is no mode-specific loader.
+
+**Scope, stated precisely.** This defers exactly the four connector-
+INTEGRATION files the finding named: `heritage-connections.js`,
+`heritage-view.js`, and (transitively, through the first of those)
+`composition.js` and `resolver.js`. It does **not** touch, and does not claim
+to touch, `src/qise/reading-pipeline.js` -> `reflection.js` ->
+`src/heritage/registry.js` — a separate, pre-existing import path unrelated to
+the finding, which the Reflection Engine itself needs regardless of connector
+integration. Narrowing that path is a materially larger refactor of
+`reading-pipeline.js`/`reflection.js` that was not authorized for this pass
+and was explicitly ruled out. Anyone reading "Stage 3 connector modules
+deferred" should not infer "the heritage registry/validator graph is no
+longer loaded" — it still loads, on that separate path, for a separate reason
+(Reflection Engine rotation/state, not connector rendering).
+
+**A new hazard the async boundary introduces, and its fix.** Making
+`renderReflection()` async creates one new await point that did not exist
+before; without a guard, a slow first render (cold import) resolving after a
+faster later render (memoized import, or a mode change to `"off"`) would
+overwrite the newer render's DOM with stale content — a version of the exact
+class of bug item 43/51 already documents elsewhere in this codebase, just at
+a new call site. Fixed with a per-invocation render-generation counter
+(`reflectionRenderEpoch`), bumped unconditionally at the top of every
+`renderReflection()` call (including one that resolves `"off"`) and checked
+once, immediately after the loader's await, before any DOM write. A later
+call — of any mode — always wins over an earlier one still in flight.
+
+**Teardown, factored once.** The `"off"` branch and the (pre-existing)
+`!tiers` branch both used to inline the same five lines hiding
+`todayNode`/`storyNode`/`compareNode`/`whyTab`/`whyPanel`. A third stand-down
+path — a Stage-3 import failure — was added by this pass, which would have
+been the third copy of that same logic. Factored into one
+`teardownReflectionSurfaces()` helper instead, called from all three sites,
+each immediately followed by `return;`. CLAUDE.md item 51 names exactly this
+defect class (a teardown written into one branch and not its sibling); the
+fix here is to remove the possibility by removing the duplication, not to
+inline a third correct copy.
+
+**Import failure is fail-closed, not fake.** A rejected dynamic import is
+caught, logged with `console.error`, and routed through the same shared
+teardown as the `"off"`/`!tiers` paths — no fabricated connector output, no
+stale Story/Why content, and the rest of the reading (Tier 1, structure,
+gauges, sparkline, etc.) renders normally regardless, since `renderReading()`'s
+other sections do not depend on Stage 3 at all.
+
+**Falsification.** 20 new/rewritten load-boundary assertions — 11 in a new
+file, `tests/qise/heritage-lazy-load.test.js`; 4 rewritten in
+`tests/qise/heritage-connections.test.js`/`tests/qise/reading-wiring.test.js`
+that had asserted the now-removed static-import/inline-teardown shape; 1 new
+Playwright spec in `e2e/qise-integration.spec.js` asserting the real network
+condition — were run against `9e7f28c`'s actual `app.js` (temporarily
+restored via `git stash`) and confirmed to fail: 9 of 11 in the new
+static-source file (static imports still present; no loader; no
+off-before-loader ordering; `renderReflection` not async; no epoch guard),
+the same 4 rewritten tests (checking for the now-absent
+static-import/inline-hide pattern), and the Playwright spec (an actual
+`qise/heritage-connections.js` network request fired even with
+`?reflection=off`). The 2 tests in the new file that check invariants this
+pass does not change (disclosure ownership; `composition.js`'s locator-status
+precedence helper) correctly continued to pass against `9e7f28c`, since those
+were already true before this pass. The fixed implementation was then
+restored and every suite re-run clean: `npm test` — **1185/1185**, `Running
+76 test file(s)`; `npm run test:browser` — **8/8**; `npm run build` and
+`npm run lint:bundle` clean; `npm run audit:release` — `BLOCKED`, identical
+pre-existing categories, no new blocker category.
+
+**Locked invariants, reconfirmed after this pass:** `src/heritage/resolver.js`,
+`registry.js`, `validator.js`, `src/qise/reading-tiers.js`, `reading-state.js`,
+`reading-pipeline.js`, `reflection.js`, `src/qise/heritage-connections.js` and
+`src/ui/qise/heritage-view.js` are all byte-identical to `9e7f28c`
+(`git diff --stat` against all eight is empty). `ABSTRACT_LINEAGE_OVERRIDES`
+remains `Object.freeze({})`. Disclosure ownership (Story/Why each render
+`rotationDisclosure` exactly once; connector markup renders none) is
+unchanged. Locator-status precedence (`withConnectorLocatorStatus()`, Round 7)
+is unchanged. No `Math.random`, no `rotationState`, no `safetyPassed: true`
+fabrication, no Stage 4, no scope creep beyond the load boundary.
+
+**Files changed this session:**
+- `src/ui/qise/app.js` — removed the two static Stage-3 imports; added
+  `loadHeritageStage3Modules()` (memoized dynamic loader),
+  `teardownReflectionSurfaces()` (shared teardown), and
+  `reflectionRenderEpoch` (stale-render guard); `renderReflection()` is now
+  `async` and is now `await`ed from `renderReading()`
+- `tests/qise/heritage-lazy-load.test.js` — new, 11 tests, static-source
+  (app.js cannot be imported under `node --test` — CLAUDE.md item 44)
+- `tests/qise/heritage-connections.test.js` — 2 tests updated from asserting
+  a static `from "..."` import to asserting the dynamic `import(...)` call
+- `tests/qise/reading-wiring.test.js` — 2 tests updated from asserting inline
+  `hidden = true` text to asserting the shared `teardownReflectionSurfaces()`
+  call sites and the helper's own body
+- `e2e/qise-integration.spec.js` — 1 new Playwright spec: a real reading
+  (built from the production measurement functions, not hand-typed fixture
+  numbers) seeded into IndexedDB, loaded twice (`?reflection=off`/
+  `?reflection=on`), asserting the actual network requests issued
+- `docs/HERITAGE_CONNECTOR_STAGE_STATUS.md` — this section
+
+This pass is a load-boundary/performance correction, not a step toward
+resolving either open blocker (safety authorization; lineage content
+routing) — both remain exactly as Round 9 left them.
+
 ### Known limitations / remaining work
 
 - **Stage 3 is BLOCKED, not approved, not merged.** See the framing at the
