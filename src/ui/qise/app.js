@@ -837,14 +837,28 @@ async function runSelfie(file) {
  * already pass an explicit, gate-derived tier; this assertion is what keeps
  * that true for the next one too, by failing loudly instead of silently
  * authorising.
+ *
+ * `"waiting"` is deliberately NOT in this list (Codex, PR #40). `gates.js`'s
+ * `evaluateGates()` sets `captureTier: "waiting"` in EXACT lockstep with
+ * `pass: false` (`pass: strictPass || assistedPass`, `captureTier: ... :
+ * "waiting"` — the same two booleans decide both), so a `captureTier` of
+ * `"waiting"` reaching here means the gates did not pass, full stop. Both
+ * current callers already check `gates.pass` before ever calling `finish()`,
+ * so this never fires today — but relying on every caller to remember that
+ * check, rather than `finish()` enforcing it on the one value it actually
+ * receives, is exactly the "flag gates the adapter but not the legacy path"
+ * shape (CLAUDE.md item 17): the connector layer's own suppression on
+ * `captureTier === "waiting"` is real, but it is a courtesy on top of an
+ * already-computed, already-persisted, already-rendered base reading — not a
+ * substitute for refusing to compute one from a capture the gates rejected.
  */
-const VALID_CAPTURE_TIERS = Object.freeze(["clean", "assisted", "waiting"]);
+const VALID_CAPTURE_TIERS = Object.freeze(["clean", "assisted"]);
 
 async function finish(burst, rois, sclera, opened, history, gateMargins, illumination,
   captureTier, acceptedImage = null, acceptedPoints = null) {
   if (!VALID_CAPTURE_TIERS.includes(captureTier)) {
     throw new Error(
-      `finish() requires an explicit gate-derived captureTier ("clean"/"assisted"/"waiting"); received ${JSON.stringify(captureTier)}`,
+      `finish() requires a passing gate-derived captureTier ("clean"/"assisted"); received ${JSON.stringify(captureTier)}`,
     );
   }
   const reduced = reduceBurst(burst);
@@ -1157,6 +1171,23 @@ async function renderReflection(reading, history) {
     return;
   }
 
+  /*
+   * Computed BEFORE the Stage-3 await, not after (Copilot, PR #40): a
+   * calibrating/never-read reading has no usable reflection state
+   * (`readingStateFromRecord()` returns null), and `renderReflection()` was
+   * always going to tear down in that case regardless of whether the
+   * connector graph loaded — so awaiting the loader first paid its
+   * download/parse cost for a render that could never have used it. This is
+   * a cheap, synchronous, purely-local computation (no DOM, no network), so
+   * checking it before the one expensive await is strictly cheaper and
+   * changes nothing about what gets rendered when there IS a reflection.
+   */
+  const reflection = reflectionFor(reading, history);
+  if (!reflection) {
+    teardownReflectionSurfaces(surfaces);
+    return;
+  }
+
   let heritageStage3 = null;
   try {
     heritageStage3 = await loadHeritageStage3Modules();
@@ -1164,8 +1195,6 @@ async function renderReflection(reading, history) {
     console.error("qise: heritage connector modules failed to load", error);
   }
   if (epoch !== reflectionRenderEpoch) return;
-
-  const reflection = reflectionFor(reading, history);
 
   let tier1, tier2, tier3, connectorTier2Markup, connectorTier3Markup;
   if (heritageStage3) {
@@ -1193,7 +1222,7 @@ async function renderReflection(reading, history) {
      * signal here if and when one is built for Qi Se — capture-quality
      * passing must never be treated as a substitute for it.
      */
-    const tiers = reflection && readingTiersWithHeritage(reflection, {
+    const tiers = readingTiersWithHeritage(reflection, {
       captureQualityPassed: captureAuthorizationFromReading(reading),
     });
     if (!tiers) {
@@ -1211,7 +1240,7 @@ async function renderReflection(reading, history) {
     // do with whether there is a reading to reflect on. Zero connector
     // markup, nothing fabricated: see the `loadHeritageStage3Modules`
     // comment above.
-    const tiers = reflection && readingTiers(reflection);
+    const tiers = readingTiers(reflection);
     if (!tiers) {
       teardownReflectionSurfaces(surfaces);
       return;

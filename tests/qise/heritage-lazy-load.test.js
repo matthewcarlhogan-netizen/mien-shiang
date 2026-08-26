@@ -103,6 +103,35 @@ test("4: reflectionMode() is checked, and the off branch returns, BEFORE the Sta
   assert.match(offBlock, /return;/, "the off branch must return without falling through to the loader");
 });
 
+/*
+ * ROUND 12 (Copilot, PR #40): a calibrating/never-read reading has no usable
+ * reflection state, and the function was always going to tear down in that
+ * case regardless of whether the Stage-3 modules loaded — so computing
+ * `reflection` (cheap, synchronous, local) and returning early on `null`
+ * BEFORE the Stage-3 await avoids paying the connector graph's download/parse
+ * cost for a render that could never have used it. Same shape as test 4
+ * above, one gate later: a cheap check that can make the expensive await
+ * moot must run before it, not after.
+ */
+test("4b: reflectionFor() is computed and null-checked BEFORE the Stage-3 loader is ever referenced", () => {
+  const body = renderReflectionBody();
+  const offAt = body.indexOf('if (mode === "off")');
+  const reflectionAt = body.indexOf("const reflection = reflectionFor(reading, history);");
+  const reflectionNullCheckAt = body.indexOf("if (!reflection)", reflectionAt);
+  const firstLoaderRefAt = body.indexOf("loadHeritageStage3Modules(");
+
+  assert.ok(reflectionAt > offAt, "reflectionFor() must be computed after the off branch, not before it");
+  assert.ok(reflectionNullCheckAt > reflectionAt && reflectionNullCheckAt < firstLoaderRefAt,
+    "a null reflection must be checked, and must return, before the Stage-3 loader is ever referenced");
+
+  const nullCheckBlockEnd = body.indexOf("}", reflectionNullCheckAt);
+  const nullCheckBlock = body.slice(reflectionNullCheckAt, nullCheckBlockEnd);
+  assert.doesNotMatch(nullCheckBlock, /loadHeritageStage3Modules/,
+    "the null-reflection branch itself must not call the Stage-3 loader");
+  assert.match(nullCheckBlock, /teardownReflectionSurfaces\(surfaces\);\s*return;/,
+    "a null reflection must tear down and return, the same as any other stand-down branch");
+});
+
 test("5: 'on' and 'compare' share exactly one post-gate loader call site — no mode-specific loader exists", () => {
   const body = renderReflectionBody();
   const loaderCallCount = (body.match(/loadHeritageStage3Modules\(\)/g) || []).length;

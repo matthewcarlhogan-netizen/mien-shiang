@@ -594,7 +594,7 @@ test("src/ui/qise/app.js no longer seeds lastCaptureTier with a permissive defau
     "lastCaptureTier must not default to an authorised-looking tier before any gate has run");
 });
 
-test("src/ui/qise/app.js's finish() fails closed on a captureTier that is not an explicit clean/assisted/waiting", () => {
+test("src/ui/qise/app.js's finish() fails closed on any captureTier that is not an explicit clean/assisted", () => {
   const source = readSrc("ui/qise/app.js");
   const fn = source.slice(
     source.indexOf("async function finish("),
@@ -604,6 +604,37 @@ test("src/ui/qise/app.js's finish() fails closed on a captureTier that is not an
     "finish() must validate captureTier against the explicit gate-derived set before proceeding");
   assert.match(fn, /throw new Error/,
     "an invalid/omitted captureTier must throw, not silently proceed as if gated");
+});
+
+/*
+ * ── Codex, PR #40: a "waiting" captureTier must be REJECTED at finish()'s
+ *    own boundary, not merely suppressed downstream by the connector layer ──
+ *
+ * `gates.js`'s `evaluateGates()` sets `captureTier: "waiting"` in exact
+ * lockstep with `pass: false` (`pass: strictPass || assistedPass`,
+ * `captureTier: strictPass ? "clean" : (assistedPass ? "assisted" :
+ * "waiting")` — the same two booleans decide both), so `captureTier ===
+ * "waiting"` reaching `finish()` means the gates did not pass, full stop.
+ * Before this fix, `VALID_CAPTURE_TIERS` included `"waiting"`, so `finish()`
+ * would compute, persist and render a full base reading for a capture the
+ * gates rejected — `captureAuthorizationFromReading()` only suppresses the
+ * connector EXTENSION afterward (see the tests below), which is not the same
+ * as never having completed the base reading at all. Both current callers
+ * already check `gates.pass` before ever calling `finish()`, so this was not
+ * reachable through today's UI — but `finish()` relying on every caller to
+ * remember that check, rather than enforcing it on the one value it directly
+ * receives, is the exact "gates the adapter but not the legacy path" shape
+ * CLAUDE.md item 17 names.
+ */
+test("Codex fix: VALID_CAPTURE_TIERS no longer includes 'waiting' — finish() rejects a failed-gate capture itself", () => {
+  const source = readSrc("ui/qise/app.js");
+  const declAt = source.indexOf("const VALID_CAPTURE_TIERS = Object.freeze(");
+  assert.ok(declAt >= 0, "VALID_CAPTURE_TIERS declaration not found");
+  const decl = source.slice(declAt, source.indexOf(";", declAt) + 1);
+  assert.doesNotMatch(decl, /"waiting"/,
+    "\"waiting\" must not be a captureTier finish() accepts — it means the gates did not pass");
+  assert.match(decl, /"clean"/);
+  assert.match(decl, /"assisted"/);
 });
 
 /*

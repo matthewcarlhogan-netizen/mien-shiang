@@ -440,6 +440,23 @@ function evidenceStatusText(card) {
  * omitted as not English-safe (see `connectorCard`'s `englishSafe()` use) —
  * provenance identity must still be shown, per the English-only boundary,
  * even when the prose describing it cannot be.
+ *
+ * `card.prohibitedForUserInference` renders as an explicit third-person
+ * notice, not merely a field the model carries. `connectorCard()` already
+ * reduces it from the resolver's own record (`resolver.js`'s `toResolvedEntry`
+ * sets it from `connector.prohibitedForUserInference`, and `validator.js`
+ * requires it `true` on every "prohibited" safety status), so it was correct
+ * and present all the way to this function — but this function is the ACTUAL
+ * reader-facing render boundary, and it read every other field on `card`
+ * except this one. Without this line, a connector the resolver flags as
+ * "must never be presented as an inference about the reader" would render
+ * beside a personalised reading as an ordinary "related"/"attested"
+ * relationship, with nothing distinguishing it from the measured content
+ * around it — the exact framing AGENTS.md's product-scope line rules out
+ * ("not diagnosis, identity ... or a fixed judgement of character"). This is
+ * the single function every connector card renders through (Tier 2's one
+ * selection, Tier 3's active/source-panel/editorial lists all call this),
+ * so one line here covers every render site at once.
  */
 export function heritageConnectorCardMarkup(card) {
   const constructs = participantsLineText(card);
@@ -448,7 +465,8 @@ export function heritageConnectorCardMarkup(card) {
   return `
     <p>${esc(constructs)}${constructs && card.relationshipLabel ? " — " : ""}${esc(card.relationshipLabel)}</p>
     ${citation ? `<p class="muted">${esc(citation)}</p>` : ""}
-    ${evidence ? `<p class="muted">${esc(evidence)}</p>` : ""}`;
+    ${evidence ? `<p class="muted">${esc(evidence)}</p>` : ""}
+    ${card.prohibitedForUserInference ? `<p class="muted">Historical source material — not a reading of you.</p>` : ""}`;
 }
 
 /**

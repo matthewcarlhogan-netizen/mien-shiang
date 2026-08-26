@@ -188,8 +188,8 @@ neither required touching Stage 1/2 or either intentional product blocker:**
   DOM assignment sites. See "Connector production rendering" below.
 
 - **Branch:** `feature/heritage-stage3-reflection-integration`
-- **Base:** `main` at `f1fc55e8e9bae082ac2fa7e89e256f6b95609138`
-- **This revision's parent commit (previously reviewed, PR #40):** `2f1491283c36708f8c8c0e608c5dd63e6c4644f3`
+- **Base (this revision's actual git parent):** `main` at `f1fc55e8e9bae082ac2fa7e89e256f6b95609138`
+- **Prior review snapshot referenced below (PR #40, an earlier round — NOT this revision's git parent):** `2f1491283c36708f8c8c0e608c5dd63e6c4644f3`. Corrected here (Codex, PR #40): an earlier version of this line called `2f14912` "this revision's parent commit". Git disagrees — `git log 546c429^` shows `f1fc55e` (the Base above) as the sole parent, and `git merge-base --is-ancestor 2f14912 546c429` reports `2f14912` is not even an ancestor; it is chronologically LATER, a snapshot from a subsequent review round on the same branch, not an ancestor of the commit this section originally described. Kept only because later text in this section references it by name — treat it as "the commit an earlier round was reviewed against," not as parentage evidence for reconstructing a diff.
 
 ### The four architecture blockers from the second review pass
 
@@ -1818,6 +1818,108 @@ routing) — both remain exactly as Round 9 left them. The pre-existing
 `reading-pipeline.js -> reflection.js -> heritage/registry.js` import path
 remains unchanged and out of scope, exactly as Round 10 stated — this pass
 does not claim that path was narrowed, removed, or otherwise touched.
+
+### Round 12 (this revision, on top of `9b8f9fa`) — four fresh findings, none touching either open blocker
+
+**1. Codex, P1-equivalent (labelled P2 by the bot, treated as must-fix here) —
+a failed-gate capture could still reach `finish()`.** `gates.js`'s
+`evaluateGates()` sets `captureTier: "waiting"` in EXACT lockstep with
+`pass: false` — one expression decides both (`pass: strictPass ||
+assistedPass`, `captureTier: strictPass ? "clean" : (assistedPass ?
+"assisted" : "waiting")`). Before this pass, `VALID_CAPTURE_TIERS` in
+`src/ui/qise/app.js` included `"waiting"`, so `finish()` would compute,
+persist and render a full base reading for a capture the gates had rejected;
+only the connector layer's own `captureAuthorizationFromReading()` suppressed
+the Stage-3 extension afterward, which is not the same as never having
+completed the base reading. Both current callers of `finish()` already check
+`gates.pass` before calling it, so this was not reachable through today's UI —
+but that made it correct by caller discipline, not by the boundary's own
+enforcement (CLAUDE.md item 17's shape: a gate that covers the adapter but
+not the path underneath). **Fixed:** `VALID_CAPTURE_TIERS` is now
+`["clean", "assisted"]` — `finish()` itself now throws on `"waiting"`,
+exactly as it already threw on any other non-gate-derived value.
+
+**2. Codex, P2 — `prohibitedForUserInference` was preserved but never shown
+to the reader.** `connectorCard()` (`src/ui/qise/heritage-view.js`) already
+reduced this field correctly from the resolver's record — every real
+registry connector today carries it `true` — but
+`heritageConnectorCardMarkup()`, the ONE function every connector card
+renders through (Tier 2's selection, and Tier 3's active/source-panel/
+editorial lists), never read it. Once a real safety signal exists and this
+path is reachable, a connector flagged "must never be presented as an
+inference about the reader" would have rendered beside a personalised
+reading as an ordinary "related"/"attested" relationship, indistinguishable
+from measured content — exactly the framing AGENTS.md's product-scope line
+rules out. **Fixed:** one line in `heritageConnectorCardMarkup()`, gated on
+`card.prohibitedForUserInference`, renders an explicit third-person notice
+("Historical source material — not a reading of you."). One change point
+covers all four render sites (Tier 2's card; Tier 3's active, source-panel,
+and editorial cards) because they all already funnel through this one
+function.
+
+**3. Copilot — an unusable-reflection reading still paid the Stage-3 import
+cost.** `renderReflection()` awaited `loadHeritageStage3Modules()` before
+checking whether `reflectionFor(reading, history)` returned anything usable.
+A calibrating/never-read reading (`readingStateFromRecord()` returns `null`)
+was always going to tear down regardless of whether the connector modules
+loaded, so the await bought nothing for that case — every calibrating
+reading on an `on`/`compare` host paid the connector graph's download/parse
+cost for a render that could never have used it. **Fixed:** `reflectionFor()`
+now runs (and is null-checked, with the same fail-closed teardown) BEFORE the
+Stage-3 loader is ever referenced — mirroring the existing `reflection=off`
+gate's own shape one check later. Purely a performance correction; nothing
+about what renders when there IS a reflection changed, and the reflection=off
+gate's ordering relative to the loader (Round 10/11's own subject) is
+unaffected.
+
+**4. Codex, P2 — a documentation line misattributed git parentage.** The
+"This revision's parent commit" line in this section's Round-4-era metadata
+block named `2f14912` — but `2f14912` is not an ancestor of the commit that
+block described at all; it is chronologically LATER on this branch. The
+commit's actual sole parent is `f1fc55e` (already correctly recorded on the
+"Base" line directly above it). **Fixed:** relabelled `2f14912` as a prior
+review snapshot referenced by later text in that block, not as git
+parentage — see the corrected lines themselves for the full `git log`/
+`git merge-base` evidence.
+
+**Falsification.** All four fixes' new/modified assertions (2 in
+`tests/qise/heritage-connections.test.js`, 1 in
+`tests/qise/heritage-lazy-load.test.js`, 3 in `tests/qise/heritage-view.test.js`
+— finding 4 is documentation-only and has no test) were run, via an isolated
+git worktree, against `9b8f9fa`'s actual source: **5/5 failed**, with the
+other 111 tests in those three files continuing to pass (**116 total**,
+matching the fixed tree's own count). Worktree removed; fixed tree re-run in
+full: `npm test` — **1194/1194**; `npm run test:browser` — **10/10**; `npm run
+build`/`npm run lint:bundle` clean.
+
+**Locked invariants, reconfirmed.** `src/heritage/resolver.js`, `registry.js`,
+`validator.js`, `src/qise/reading-tiers.js`, `reading-state.js`,
+`reading-pipeline.js`, `reflection.js`, `src/qise/heritage-connections.js` are
+byte-identical to `9b8f9fa`. `src/ui/qise/heritage-view.js` is intentionally
+NOT on that list this round — finding 2 required editing it, and that edit is
+scoped to one function, adding one conditional line, covered by 4 new/
+modified tests. No Stage 4, no lineage-content decision, no safety-signal
+fabrication, no `Math.random`, no `rotationState`. Disclosure ownership and
+locator-status precedence are unchanged (neither finding touches them).
+
+**Files changed this session:**
+- `src/ui/qise/app.js` — `VALID_CAPTURE_TIERS` narrowed to
+  `["clean", "assisted"]`; `reflectionFor()`'s computation and null-check
+  moved ahead of the Stage-3 loader's await
+- `src/ui/qise/heritage-view.js` — `heritageConnectorCardMarkup()` renders an
+  explicit non-inference notice when `card.prohibitedForUserInference` is
+  `true`
+- `tests/qise/heritage-connections.test.js` — 1 test retitled (behaviour
+  unchanged), 1 new (`VALID_CAPTURE_TIERS` excludes `"waiting"`)
+- `tests/qise/heritage-lazy-load.test.js` — 1 new (`4b`: reflection computed
+  and null-checked before the loader)
+- `tests/qise/heritage-view.test.js` — 5 new (`2c`: positive, negative
+  control, real-corpus sweep, Tier 2 end-to-end, Tier 3 all-three-sections)
+- `docs/HERITAGE_CONNECTOR_STAGE_STATUS.md` — the git-parentage correction
+  above, and this section
+
+None of the four findings bear on either open blocker (safety authorization;
+lineage content routing) — both remain exactly as Round 9 left them.
 
 ### Known limitations / remaining work
 

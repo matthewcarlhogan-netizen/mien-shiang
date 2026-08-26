@@ -466,6 +466,69 @@ test("2b (real corpus): the real DIRECTED connector shen-requires-form renders s
   assert.match(html, /→/);
 });
 
+/*
+ * ── 2c: prohibitedForUserInference reaches the actual reader-facing render
+ *    boundary, not only the card model (Codex, PR #40) ────────────────────
+ * `connectorCard()` already reduced this field correctly — the gap was that
+ * `heritageConnectorCardMarkup()`, the ONE function every connector card
+ * renders through, never read it. Every real registry connector today
+ * carries `prohibitedForUserInference: true` (`src/heritage/registry.js`),
+ * so the positive case is the one that matters in production; the negative
+ * case is synthetic, the same way 2b's DIRECTED/UNDIRECTED split is, because
+ * the real corpus does not yet contain a `false` case either.
+ */
+
+test("2c: heritageConnectorCardMarkup renders an explicit non-inference notice when prohibitedForUserInference is true", () => {
+  const html = heritageConnectorCardMarkup(connectorCard(entry({ prohibitedForUserInference: true }), SOURCE_REGISTRY));
+  assert.match(html, /not a reading of you/i);
+});
+
+test("2c: heritageConnectorCardMarkup renders NO notice when prohibitedForUserInference is false (negative control)", () => {
+  const html = heritageConnectorCardMarkup(connectorCard(entry({ prohibitedForUserInference: false }), SOURCE_REGISTRY));
+  assert.doesNotMatch(html, /not a reading of you/i);
+});
+
+test("2c (real corpus): every real registry connector is prohibitedForUserInference:true, and its card carries that through unchanged", () => {
+  const ids = Object.keys(HERITAGE_CONNECTOR_REGISTRY);
+  assert.ok(ids.length > 0, "fixture assumption: the real connector registry must be non-empty");
+  for (const id of ids) {
+    const card = connectorCard(HERITAGE_CONNECTOR_REGISTRY[id]);
+    assert.equal(card.prohibitedForUserInference, true,
+      `${id}: real registry connectors are expected to be prohibitedForUserInference:true`);
+  }
+});
+
+test("2c: the notice reaches Tier 2's actual markup (the selected connector, not just the card model)", () => {
+  const tier2Model = {
+    available: true,
+    reason: null,
+    card: connectorCard(entry(), SOURCE_REGISTRY),
+    rotationDisclosure: "x",
+  };
+  const html = heritageConnectorTier2Markup(tier2Model);
+  assert.match(html, /not a reading of you/i);
+});
+
+test("2c: the notice reaches Tier 3's active, source-panel, AND editorial sections, not only one of the three", () => {
+  const activeCard = connectorCard(entry({ connectorId: "active-x" }), SOURCE_REGISTRY);
+  const panelCard = connectorCard(entry({ connectorId: "panel-x", disposition: "SOURCE_PANEL" }), SOURCE_REGISTRY);
+  const model = {
+    suppressed: false, abstained: false, reason: null,
+    active: [activeCard],
+    sourcePanelOnly: [panelCard],
+    disagreements: [],
+    abstentions: [],
+    editorial: [{
+      policyId: "p1", historicalRelationshipAsserted: false, requiresSeparateAttribution: true,
+      disclosure: "editorial only", items: [activeCard],
+    }],
+    rotationDisclosure: "x",
+  };
+  const html = heritageConnectorTier3Markup(model);
+  const count = (html.match(/not a reading of you/gi) || []).length;
+  assert.equal(count, 3, "the notice must render once per card — active, source-panel, and editorial each carry one");
+});
+
 /* ── 3: every disagreement position is attributed to its own source ── */
 
 test("3: tier3ConnectorModel resolves each disagreement position's sourceId to its own source title", () => {
