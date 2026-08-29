@@ -1,0 +1,820 @@
+{
+  "acquisitionTimestamp": "2026-08-29T05:38:07.399Z",
+  "dossier": {
+    "path": "MIEN_SHIANG_PINNING_PASS.md",
+    "sha256": "c67d1ca45a51acaaf7444a25a70ad64c3d54116cf9131727092c596f586e65ed"
+  },
+  "repos": [
+    {
+      "id": "KR3g0043",
+      "title": "月波洞中記",
+      "remote": "https://github.com/kanripo/KR3g0043",
+      "expectedCommit": "f69732902fc82fb6b1f759cb7bf5a910c0b903a3",
+      "actualCommit": "f69732902fc82fb6b1f759cb7bf5a910c0b903a3",
+      "commitMatch": true,
+      "commitDate": "2016-02-05T19:15:36+09:00",
+      "fileCount": 5
+    },
+    {
+      "id": "KR3g0044",
+      "title": "玉管照神局",
+      "remote": "https://github.com/kanripo/KR3g0044",
+      "expectedCommit": "0fa9edb26dc77e9068a7dbf8af9ce6844ea96d74",
+      "actualCommit": "0fa9edb26dc77e9068a7dbf8af9ce6844ea96d74",
+      "commitMatch": true,
+      "commitDate": "2016-02-05T19:15:43+09:00",
+      "fileCount": 6
+    },
+    {
+      "id": "KR3g0045",
+      "title": "太清神鑑",
+      "remote": "https://github.com/kanripo/KR3g0045",
+      "expectedCommit": "b3e5b69beb95f575bb47e9eaed1e6aadd23bffe5",
+      "actualCommit": "b3e5b69beb95f575bb47e9eaed1e6aadd23bffe5",
+      "commitMatch": true,
+      "commitDate": "2016-02-05T19:15:51+09:00",
+      "fileCount": 9
+    },
+    {
+      "id": "KR3g0046",
+      "title": "人倫大統賦",
+      "remote": "https://github.com/kanripo/KR3g0046",
+      "expectedCommit": "b408ea0b969672a1f52e5ec371f9fe3250976e58",
+      "actualCommit": "b408ea0b969672a1f52e5ec371f9fe3250976e58",
+      "commitMatch": true,
+      "commitDate": "2016-02-05T19:15:59+09:00",
+      "fileCount": 5
+    }
+  ],
+  "hashTable": [
+    {
+      "file": "KR3g0043_000.txt",
+      "expected": "8a6d691c920337f7e9f4aa38abc3861cb67df49fe4ef4a88e26bec3330e123e3",
+      "actual": "8a6d691c920337f7e9f4aa38abc3861cb67df49fe4ef4a88e26bec3330e123e3",
+      "match": true
+    },
+    {
+      "file": "KR3g0043_001.txt",
+      "expected": "0949bfb991e41969459bb33d18486afb1af75c1c317c013f12792a9fc8647d87",
+      "actual": "0949bfb991e41969459bb33d18486afb1af75c1c317c013f12792a9fc8647d87",
+      "match": true
+    },
+    {
+      "file": "KR3g0043_002.txt",
+      "expected": "2a8081bd08e903fbe4663fa6ff07e4cd79e4469653f4d32644d84062e30c3251",
+      "actual": "2a8081bd08e903fbe4663fa6ff07e4cd79e4469653f4d32644d84062e30c3251",
+      "match": true
+    },
+    {
+      "file": "KR3g0044_000.txt",
+      "expected": "f5282f5b527ff1272c9496cd7de7fad4de49e643da39df4ac77717c2603ceb1d",
+      "actual": "f5282f5b527ff1272c9496cd7de7fad4de49e643da39df4ac77717c2603ceb1d",
+      "match": true
+    },
+    {
+      "file": "KR3g0044_001.txt",
+      "expected": "17b56dac2b3946af53707a20cecb42e956eff7a88b8e9b806a35ea19f95ad9f3",
+      "actual": "17b56dac2b3946af53707a20cecb42e956eff7a88b8e9b806a35ea19f95ad9f3",
+      "match": true
+    },
+    {
+      "file": "KR3g0044_002.txt",
+      "expected": "3552be8d0e553471250d5a4fd6f21e3f454ebffd8249c027d744cda0e4f8c5cc",
+      "actual": "3552be8d0e553471250d5a4fd6f21e3f454ebffd8249c027d744cda0e4f8c5cc",
+      "match": true
+    },
+    {
+      "file": "KR3g0044_003.txt",
+      "expected": "3631ca4efadab24550d72543b2d282627f67ebe0b48dc855977e65479994abd2",
+      "actual": "3631ca4efadab24550d72543b2d282627f67ebe0b48dc855977e65479994abd2",
+      "match": true
+    },
+    {
+      "file": "KR3g0045_000.txt",
+      "expected": "9f51d7ff776db4e7a9d819bb607c0e9c3a8f5c27cf861aab54f3d452c912c894",
+      "actual": "9f51d7ff776db4e7a9d819bb607c0e9c3a8f5c27cf861aab54f3d452c912c894",
+      "match": true
+    },
+    {
+      "file": "KR3g0045_001.txt",
+      "expected": "c8f0b607e00a9e2d02bf788dc2c6c820714351228f8ec820cbf389861ea0ed3c",
+      "actual": "c8f0b607e00a9e2d02bf788dc2c6c820714351228f8ec820cbf389861ea0ed3c",
+      "match": true
+    },
+    {
+      "file": "KR3g0045_002.txt",
+      "expected": "bdacf64e6dbd7dc9f9a4058137b057355862a65b3227e79b8cd8afef443492a9",
+      "actual": "bdacf64e6dbd7dc9f9a4058137b057355862a65b3227e79b8cd8afef443492a9",
+      "match": true
+    },
+    {
+      "file": "KR3g0045_003.txt",
+      "expected": "fd37503591c2a4cf1c8f0d3926122c9c2f0cff84119ca064b4c09bd52e98357b",
+      "actual": "fd37503591c2a4cf1c8f0d3926122c9c2f0cff84119ca064b4c09bd52e98357b",
+      "match": true
+    },
+    {
+      "file": "KR3g0045_004.txt",
+      "expected": "84231b131823701455abf6ce63bad56c6638c5c15b5d6b0730dfd710a01f8d47",
+      "actual": "84231b131823701455abf6ce63bad56c6638c5c15b5d6b0730dfd710a01f8d47",
+      "match": true
+    },
+    {
+      "file": "KR3g0045_005.txt",
+      "expected": "b02b8bee6fd5cbabe98f0e064f3487d3585019e10b0b5fe1efcb559f46d33dc7",
+      "actual": "b02b8bee6fd5cbabe98f0e064f3487d3585019e10b0b5fe1efcb559f46d33dc7",
+      "match": true
+    },
+    {
+      "file": "KR3g0045_006.txt",
+      "expected": "d9ba7fbfe9c6422a5cec36ae134d693d95cc7cfd036674bddf3996aab6a7ca35",
+      "actual": "d9ba7fbfe9c6422a5cec36ae134d693d95cc7cfd036674bddf3996aab6a7ca35",
+      "match": true
+    },
+    {
+      "file": "KR3g0046_000.txt",
+      "expected": "1727a126b7cc496022001d9189bcf9ef187d3b862d02f2cf3339fecc0492a5bb",
+      "actual": "1727a126b7cc496022001d9189bcf9ef187d3b862d02f2cf3339fecc0492a5bb",
+      "match": true
+    },
+    {
+      "file": "KR3g0046_001.txt",
+      "expected": "61234896eb42479e01e9629042564137a64fdf465c459a4e8d7da2437adada2f",
+      "actual": "61234896eb42479e01e9629042564137a64fdf465c459a4e8d7da2437adada2f",
+      "match": true
+    },
+    {
+      "file": "KR3g0046_002.txt",
+      "expected": "f0ce21224063b6cd2c385d3e9ad80f70452f449b1f7853af39bf280343e7c613",
+      "actual": "f0ce21224063b6cd2c385d3e9ad80f70452f449b1f7853af39bf280343e7c613",
+      "match": true
+    }
+  ],
+  "hashAllMatch": true,
+  "pbCounts": {
+    "KR3g0043_000.txt": 6,
+    "KR3g0043_001.txt": 29,
+    "KR3g0043_002.txt": 36,
+    "KR3g0044_000.txt": 4,
+    "KR3g0044_001.txt": 50,
+    "KR3g0044_002.txt": 73,
+    "KR3g0044_003.txt": 43,
+    "KR3g0045_000.txt": 7,
+    "KR3g0045_001.txt": 36,
+    "KR3g0045_002.txt": 46,
+    "KR3g0045_003.txt": 59,
+    "KR3g0045_004.txt": 33,
+    "KR3g0045_005.txt": 32,
+    "KR3g0045_006.txt": 27,
+    "KR3g0046_000.txt": 7,
+    "KR3g0046_001.txt": 57,
+    "KR3g0046_002.txt": 55
+  },
+  "pbTotal": 600,
+  "passageResults": [
+    {
+      "passageId": "tq-j2-wuyue",
+      "filePath": "KR3g0045_002.txt",
+      "juan": "卷二",
+      "section": "五嶽",
+      "pbMarker": "<pb:KR3g0045_WYG_002-17b> to <pb:KR3g0045_WYG_002-18a>",
+      "textualLayer": "base-text",
+      "markersPresent": [
+        {
+          "marker": "KR3g0045_WYG_002-17b",
+          "present": true
+        },
+        {
+          "marker": "KR3g0045_WYG_002-18a",
+          "present": true
+        }
+      ],
+      "contiguousInSpan": true,
+      "segCount": 2,
+      "runsInMarkerSpan": [
+        [
+          112
+        ],
+        [
+          5
+        ]
+      ],
+      "matchOrderInMarkerSpan": true,
+      "matchOrderInFile": true,
+      "firstDivergence": null,
+      "transcriptionNote": null,
+      "status": "VERIFIED"
+    },
+    {
+      "passageId": "tq-j2-sidu",
+      "filePath": "KR3g0045_002.txt",
+      "juan": "卷二",
+      "section": "四瀆",
+      "pbMarker": "<pb:KR3g0045_WYG_002-18a> to <pb:KR3g0045_WYG_002-18b>",
+      "textualLayer": "base-text",
+      "markersPresent": [
+        {
+          "marker": "KR3g0045_WYG_002-18a",
+          "present": true
+        },
+        {
+          "marker": "KR3g0045_WYG_002-18b",
+          "present": true
+        }
+      ],
+      "contiguousInSpan": true,
+      "segCount": 2,
+      "runsInMarkerSpan": [
+        [
+          82
+        ],
+        [
+          5
+        ]
+      ],
+      "matchOrderInMarkerSpan": true,
+      "matchOrderInFile": true,
+      "firstDivergence": null,
+      "transcriptionNote": null,
+      "status": "VERIFIED"
+    },
+    {
+      "passageId": "tq-j2-wuguan",
+      "filePath": "KR3g0045_002.txt",
+      "juan": "卷二",
+      "section": "五官",
+      "pbMarker": "<pb:KR3g0045_WYG_002-18b>",
+      "textualLayer": "base-text",
+      "markersPresent": [
+        {
+          "marker": "KR3g0045_WYG_002-18b",
+          "present": true
+        }
+      ],
+      "contiguousInSpan": true,
+      "segCount": 1,
+      "runsInMarkerSpan": [
+        [
+          56
+        ]
+      ],
+      "matchOrderInMarkerSpan": true,
+      "matchOrderInFile": true,
+      "firstDivergence": null,
+      "transcriptionNote": null,
+      "status": "VERIFIED"
+    },
+    {
+      "passageId": "tq-j5-mianbu-santing",
+      "filePath": "KR3g0045_005.txt",
+      "juan": "卷五",
+      "section": "論靣部",
+      "pbMarker": "<pb:KR3g0045_WYG_005-7b> to <pb:KR3g0045_WYG_005-8a>",
+      "textualLayer": "base-text",
+      "markersPresent": [
+        {
+          "marker": "KR3g0045_WYG_005-7b",
+          "present": true
+        },
+        {
+          "marker": "KR3g0045_WYG_005-8a",
+          "present": true
+        }
+      ],
+      "contiguousInSpan": true,
+      "segCount": 1,
+      "runsInMarkerSpan": [
+        [
+          171
+        ]
+      ],
+      "matchOrderInMarkerSpan": true,
+      "matchOrderInFile": true,
+      "firstDivergence": null,
+      "transcriptionNote": null,
+      "status": "VERIFIED"
+    },
+    {
+      "passageId": "tq-j6-shen-santing",
+      "filePath": "KR3g0045_006.txt",
+      "juan": "卷六",
+      "section": "三停",
+      "pbMarker": "<pb:KR3g0045_WYG_006-6a> to <pb:KR3g0045_WYG_006-6b>",
+      "textualLayer": "base-text",
+      "markersPresent": [
+        {
+          "marker": "KR3g0045_WYG_006-6a",
+          "present": true
+        },
+        {
+          "marker": "KR3g0045_WYG_006-6b",
+          "present": true
+        }
+      ],
+      "contiguousInSpan": true,
+      "segCount": 1,
+      "runsInMarkerSpan": [
+        [
+          78
+        ]
+      ],
+      "matchOrderInMarkerSpan": true,
+      "matchOrderInFile": true,
+      "firstDivergence": null,
+      "transcriptionNote": null,
+      "status": "VERIFIED"
+    },
+    {
+      "passageId": "tq-j1-shuoge-xiangcheng",
+      "filePath": "KR3g0045_001.txt",
+      "juan": "卷一",
+      "section": "說歌",
+      "pbMarker": "<pb:KR3g0045_WYG_001-2a>",
+      "textualLayer": "base-text",
+      "markersPresent": [
+        {
+          "marker": "KR3g0045_WYG_001-2a",
+          "present": true
+        }
+      ],
+      "contiguousInSpan": true,
+      "segCount": 1,
+      "runsInMarkerSpan": [
+        [
+          14
+        ]
+      ],
+      "matchOrderInMarkerSpan": true,
+      "matchOrderInFile": true,
+      "firstDivergence": null,
+      "transcriptionNote": null,
+      "status": "VERIFIED"
+    },
+    {
+      "passageId": "tq-j1-miaojue-xiangying",
+      "filePath": "KR3g0045_001.txt",
+      "juan": "卷一",
+      "section": "相法妙訣",
+      "pbMarker": "<pb:KR3g0045_WYG_001-6b>",
+      "textualLayer": "base-text",
+      "markersPresent": [
+        {
+          "marker": "KR3g0045_WYG_001-6b",
+          "present": true
+        }
+      ],
+      "contiguousInSpan": true,
+      "segCount": 1,
+      "runsInMarkerSpan": [
+        [
+          21
+        ]
+      ],
+      "matchOrderInMarkerSpan": true,
+      "matchOrderInFile": true,
+      "firstDivergence": null,
+      "transcriptionNote": null,
+      "status": "VERIFIED"
+    },
+    {
+      "passageId": "tq-j1-sidu-cosmological",
+      "filePath": "KR3g0045_001.txt",
+      "juan": "卷一",
+      "section": "說歌",
+      "pbMarker": "<pb:KR3g0045_WYG_001-1a>",
+      "textualLayer": "base-text",
+      "markersPresent": [
+        {
+          "marker": "KR3g0045_WYG_001-1a",
+          "present": true
+        }
+      ],
+      "contiguousInSpan": true,
+      "segCount": 1,
+      "runsInMarkerSpan": [
+        [
+          14
+        ]
+      ],
+      "matchOrderInMarkerSpan": true,
+      "matchOrderInFile": true,
+      "firstDivergence": null,
+      "transcriptionNote": null,
+      "status": "VERIFIED"
+    },
+    {
+      "passageId": "tq-j3-lunxin-zeshu",
+      "filePath": "KR3g0045_003.txt",
+      "juan": "卷三",
+      "section": "心術論",
+      "pbMarker": "<pb:KR3g0045_WYG_003-1b>",
+      "textualLayer": "base-text",
+      "markersPresent": [
+        {
+          "marker": "KR3g0045_WYG_003-1b",
+          "present": true
+        }
+      ],
+      "contiguousInSpan": true,
+      "segCount": 1,
+      "runsInMarkerSpan": [
+        [
+          11
+        ]
+      ],
+      "matchOrderInMarkerSpan": true,
+      "matchOrderInFile": true,
+      "firstDivergence": null,
+      "transcriptionNote": null,
+      "status": "VERIFIED"
+    },
+    {
+      "passageId": "yb-j1-heyue",
+      "filePath": "KR3g0043_001.txt",
+      "juan": "卷上",
+      "section": "河嶽",
+      "pbMarker": "<pb:KR3g0043_WYG_001-5a> to <pb:KR3g0043_WYG_001-5b>",
+      "textualLayer": "base-text",
+      "markersPresent": [
+        {
+          "marker": "KR3g0043_WYG_001-5a",
+          "present": true
+        },
+        {
+          "marker": "KR3g0043_WYG_001-5b",
+          "present": true
+        }
+      ],
+      "contiguousInSpan": true,
+      "segCount": 1,
+      "runsInMarkerSpan": [
+        [
+          83
+        ]
+      ],
+      "matchOrderInMarkerSpan": true,
+      "matchOrderInFile": true,
+      "firstDivergence": null,
+      "transcriptionNote": null,
+      "status": "VERIFIED"
+    },
+    {
+      "passageId": "yb-j2-wuyue-similes",
+      "filePath": "KR3g0043_002.txt",
+      "juan": "卷下",
+      "section": "(五嶽及有小氣所管屬者)",
+      "pbMarker": "<pb:KR3g0043_WYG_002-10a> to <pb:KR3g0043_WYG_002-10b>",
+      "textualLayer": "base-text",
+      "markersPresent": [
+        {
+          "marker": "KR3g0043_WYG_002-10a",
+          "present": true
+        },
+        {
+          "marker": "KR3g0043_WYG_002-10b",
+          "present": true
+        }
+      ],
+      "contiguousInSpan": true,
+      "segCount": 1,
+      "runsInMarkerSpan": [
+        [
+          56
+        ]
+      ],
+      "matchOrderInMarkerSpan": true,
+      "matchOrderInFile": true,
+      "firstDivergence": null,
+      "transcriptionNote": null,
+      "status": "VERIFIED"
+    },
+    {
+      "passageId": "yb-j2-jiuzhou-colour",
+      "filePath": "KR3g0043_002.txt",
+      "juan": "卷下",
+      "section": "(九州)",
+      "pbMarker": "<pb:KR3g0043_WYG_002-10b>",
+      "textualLayer": "base-text",
+      "markersPresent": [
+        {
+          "marker": "KR3g0043_WYG_002-10b",
+          "present": true
+        }
+      ],
+      "contiguousInSpan": true,
+      "segCount": 1,
+      "runsInMarkerSpan": [
+        [
+          34
+        ]
+      ],
+      "matchOrderInMarkerSpan": true,
+      "matchOrderInFile": true,
+      "firstDivergence": null,
+      "transcriptionNote": null,
+      "status": "VERIFIED"
+    },
+    {
+      "passageId": "rl-j1-sidu",
+      "filePath": "KR3g0046_001.txt",
+      "juan": "卷上",
+      "section": "四瀆",
+      "pbMarker": "<pb:KR3g0046_WYG_001-10b> to <pb:KR3g0046_WYG_001-11a>",
+      "textualLayer": "xue-yannian-commentary",
+      "markersPresent": [
+        {
+          "marker": "KR3g0046_WYG_001-10b",
+          "present": true
+        },
+        {
+          "marker": "KR3g0046_WYG_001-11a",
+          "present": true
+        }
+      ],
+      "contiguousInSpan": false,
+      "segCount": 2,
+      "runsInMarkerSpan": [
+        [
+          2,
+          5
+        ],
+        [
+          49
+        ]
+      ],
+      "matchOrderInMarkerSpan": true,
+      "matchOrderInFile": true,
+      "firstDivergence": null,
+      "transcriptionNote": "dossier quote is a reading-through: flattens Mandoku double-column notes and/or splices the base text across 2 note/gloss gap(s); every substantive run present under the marker, in order; runsPerSeg=[[2,5],[49]]",
+      "status": "VERIFIED_WITH_TRANSCRIPTION_NOTE"
+    },
+    {
+      "passageId": "rl-j1-wuyue",
+      "filePath": "KR3g0046_001.txt",
+      "juan": "卷上",
+      "section": "五嶽",
+      "pbMarker": "<pb:KR3g0046_WYG_001-11a>",
+      "textualLayer": "xue-yannian-commentary",
+      "markersPresent": [
+        {
+          "marker": "KR3g0046_WYG_001-11a",
+          "present": true
+        }
+      ],
+      "contiguousInSpan": false,
+      "segCount": 3,
+      "runsInMarkerSpan": [
+        [
+          2,
+          3,
+          2
+        ],
+        [
+          46
+        ],
+        [
+          42
+        ]
+      ],
+      "matchOrderInMarkerSpan": true,
+      "matchOrderInFile": true,
+      "firstDivergence": null,
+      "transcriptionNote": "dossier quote is a reading-through: flattens Mandoku double-column notes and/or splices the base text across 4 note/gloss gap(s); every substantive run present under the marker, in order; runsPerSeg=[[2,3,2],[46],[42]]",
+      "status": "VERIFIED_WITH_TRANSCRIPTION_NOTE"
+    },
+    {
+      "passageId": "rl-j1-wuguan",
+      "filePath": "KR3g0046_001.txt",
+      "juan": "卷上",
+      "section": "五官",
+      "pbMarker": "<pb:KR3g0046_WYG_001-11a> to <pb:KR3g0046_WYG_001-11b>",
+      "textualLayer": "xue-yannian-commentary",
+      "markersPresent": [
+        {
+          "marker": "KR3g0046_WYG_001-11a",
+          "present": true
+        },
+        {
+          "marker": "KR3g0046_WYG_001-11b",
+          "present": true
+        }
+      ],
+      "contiguousInSpan": false,
+      "segCount": 4,
+      "runsInMarkerSpan": [
+        [
+          2
+        ],
+        [
+          9
+        ],
+        [
+          5
+        ],
+        [
+          52
+        ]
+      ],
+      "matchOrderInMarkerSpan": true,
+      "matchOrderInFile": true,
+      "firstDivergence": null,
+      "transcriptionNote": "dossier quote is a reading-through: flattens Mandoku double-column notes and/or splices the base text across 3 note/gloss gap(s); every substantive run present under the marker, in order; runsPerSeg=[[2],[9],[5],[52]]",
+      "status": "VERIFIED_WITH_TRANSCRIPTION_NOTE"
+    },
+    {
+      "passageId": "yg-j1-wuxingxing",
+      "filePath": "KR3g0044_001.txt",
+      "juan": "卷上",
+      "section": "(呂洞賓賦)",
+      "pbMarker": "<pb:KR3g0044_WYG_001-4b> to <pb:KR3g0044_WYG_001-5a>",
+      "textualLayer": "base-text",
+      "markersPresent": [
+        {
+          "marker": "KR3g0044_WYG_001-4b",
+          "present": true
+        },
+        {
+          "marker": "KR3g0044_WYG_001-5a",
+          "present": true
+        }
+      ],
+      "contiguousInSpan": true,
+      "segCount": 1,
+      "runsInMarkerSpan": [
+        [
+          83
+        ]
+      ],
+      "matchOrderInMarkerSpan": true,
+      "matchOrderInFile": true,
+      "firstDivergence": null,
+      "transcriptionNote": null,
+      "status": "VERIFIED"
+    },
+    {
+      "passageId": "yg-j3-santing-pingdeng",
+      "filePath": "KR3g0044_003.txt",
+      "juan": "卷下",
+      "section": "(詩曰; adjacent to 鴿形)",
+      "pbMarker": "<pb:KR3g0044_WYG_003-13a>",
+      "textualLayer": "base-text-verse",
+      "markersPresent": [
+        {
+          "marker": "KR3g0044_WYG_003-13a",
+          "present": true
+        }
+      ],
+      "contiguousInSpan": true,
+      "segCount": 1,
+      "runsInMarkerSpan": [
+        [
+          30
+        ]
+      ],
+      "matchOrderInMarkerSpan": true,
+      "matchOrderInFile": true,
+      "firstDivergence": null,
+      "transcriptionNote": null,
+      "status": "VERIFIED"
+    }
+  ],
+  "passageAllVerified": false,
+  "checks": {
+    "十二宮_U+5BAE": {
+      "term": "十二宮",
+      "total": 0,
+      "per": {}
+    },
+    "十二宫_U+5BAB": {
+      "term": "十二宫",
+      "total": 2,
+      "per": {
+        "KR3g0045_001.txt": 2
+      }
+    },
+    "面有十二宫": {
+      "term": "面有十二宫",
+      "total": 1,
+      "per": {
+        "KR3g0045_001.txt": 1
+      }
+    },
+    "面有十二宮": {
+      "term": "面有十二宮",
+      "total": 0,
+      "per": {}
+    },
+    "人倫風鑑": {
+      "term": "人倫風鑑",
+      "total": 17,
+      "per": {
+        "KR3g0044_001.txt": 1,
+        "KR3g0045_001.txt": 16
+      }
+    },
+    "二十五": {
+      "term": "二十五",
+      "total": 2,
+      "per": {
+        "KR3g0043_002.txt": 1,
+        "KR3g0046_001.txt": 1
+      }
+    },
+    "五形": {
+      "term": "五形",
+      "total": 7,
+      "per": {
+        "KR3g0044_003.txt": 1,
+        "KR3g0045_003.txt": 1,
+        "KR3g0045_004.txt": 5
+      }
+    },
+    "五行形": {
+      "term": "五行形",
+      "total": 1,
+      "per": {
+        "KR3g0045_004.txt": 1
+      }
+    },
+    "似金得": {
+      "term": "似金得",
+      "total": 1,
+      "per": {
+        "KR3g0044_001.txt": 1
+      }
+    },
+    "似木得": {
+      "term": "似木得",
+      "total": 1,
+      "per": {
+        "KR3g0044_001.txt": 1
+      }
+    },
+    "似水得": {
+      "term": "似水得",
+      "total": 1,
+      "per": {
+        "KR3g0044_001.txt": 1
+      }
+    },
+    "似火得": {
+      "term": "似火得",
+      "total": 1,
+      "per": {
+        "KR3g0044_001.txt": 1
+      }
+    },
+    "似土得": {
+      "term": "似土得",
+      "total": 1,
+      "per": {
+        "KR3g0044_001.txt": 1
+      }
+    },
+    "荀子": {
+      "term": "荀子",
+      "total": 3,
+      "per": {
+        "KR3g0044_002.txt": 1,
+        "KR3g0045_003.txt": 1,
+        "KR3g0046_001.txt": 1
+      }
+    },
+    "荀子曰": {
+      "term": "荀子曰",
+      "total": 2,
+      "per": {
+        "KR3g0044_002.txt": 1,
+        "KR3g0045_003.txt": 1
+      }
+    },
+    "論心擇術": {
+      "term": "論心擇術",
+      "total": 1,
+      "per": {
+        "KR3g0045_003.txt": 1
+      }
+    },
+    "三停平等": {
+      "term": "三停平等",
+      "total": 1,
+      "per": {
+        "KR3g0044_003.txt": 1
+      }
+    },
+    "五嶽四瀆要相應": {
+      "term": "五嶽四瀆要相應",
+      "total": 0,
+      "per": {}
+    }
+  },
+  "atlasArith": {
+    "rows": 38,
+    "verifiedPrimary": 35,
+    "recordedNotVerified": 3,
+    "prohibitedTrue": 13,
+    "eligible": 23,
+    "productDecisionRequired": 12,
+    "historicalEvidenceOnly": 3
+  }
+}
