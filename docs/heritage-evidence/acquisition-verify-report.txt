@@ -1,0 +1,98 @@
+# acquire-and-verify — 2026-08-29T05:38:07.399Z
+
+dossier SHA-256: c67d1ca45a51acaaf7444a25a70ad64c3d54116cf9131727092c596f586e65ed
+
+## Commits
+- KR3g0043 月波洞中記: f69732902fc82fb6b1f759cb7bf5a910c0b903a3 MATCH (2016-02-05T19:15:36+09:00)
+- KR3g0044 玉管照神局: 0fa9edb26dc77e9068a7dbf8af9ce6844ea96d74 MATCH (2016-02-05T19:15:43+09:00)
+- KR3g0045 太清神鑑: b3e5b69beb95f575bb47e9eaed1e6aadd23bffe5 MATCH (2016-02-05T19:15:51+09:00)
+- KR3g0046 人倫大統賦: b408ea0b969672a1f52e5ec371f9fe3250976e58 MATCH (2016-02-05T19:15:59+09:00)
+
+## File hashes (expected vs actual) — 17/17 MATCH
+- KR3g0043_000.txt: MATCH
+- KR3g0043_001.txt: MATCH
+- KR3g0043_002.txt: MATCH
+- KR3g0044_000.txt: MATCH
+- KR3g0044_001.txt: MATCH
+- KR3g0044_002.txt: MATCH
+- KR3g0044_003.txt: MATCH
+- KR3g0045_000.txt: MATCH
+- KR3g0045_001.txt: MATCH
+- KR3g0045_002.txt: MATCH
+- KR3g0045_003.txt: MATCH
+- KR3g0045_004.txt: MATCH
+- KR3g0045_005.txt: MATCH
+- KR3g0045_006.txt: MATCH
+- KR3g0046_000.txt: MATCH
+- KR3g0046_001.txt: MATCH
+- KR3g0046_002.txt: MATCH
+
+## <pb:...> markers — total 600
+- KR3g0043_000.txt: 6
+- KR3g0043_001.txt: 29
+- KR3g0043_002.txt: 36
+- KR3g0044_000.txt: 4
+- KR3g0044_001.txt: 50
+- KR3g0044_002.txt: 73
+- KR3g0044_003.txt: 43
+- KR3g0045_000.txt: 7
+- KR3g0045_001.txt: 36
+- KR3g0045_002.txt: 46
+- KR3g0045_003.txt: 59
+- KR3g0045_004.txt: 33
+- KR3g0045_005.txt: 32
+- KR3g0045_006.txt: 27
+- KR3g0046_000.txt: 7
+- KR3g0046_001.txt: 57
+- KR3g0046_002.txt: 55
+
+## Passage verification
+- tq-j2-wuyue [VERIFIED] KR3g0045_002.txt 卷二/五嶽 <pb:KR3g0045_WYG_002-17b> to <pb:KR3g0045_WYG_002-18a>
+- tq-j2-sidu [VERIFIED] KR3g0045_002.txt 卷二/四瀆 <pb:KR3g0045_WYG_002-18a> to <pb:KR3g0045_WYG_002-18b>
+- tq-j2-wuguan [VERIFIED] KR3g0045_002.txt 卷二/五官 <pb:KR3g0045_WYG_002-18b>
+- tq-j5-mianbu-santing [VERIFIED] KR3g0045_005.txt 卷五/論靣部 <pb:KR3g0045_WYG_005-7b> to <pb:KR3g0045_WYG_005-8a>
+- tq-j6-shen-santing [VERIFIED] KR3g0045_006.txt 卷六/三停 <pb:KR3g0045_WYG_006-6a> to <pb:KR3g0045_WYG_006-6b>
+- tq-j1-shuoge-xiangcheng [VERIFIED] KR3g0045_001.txt 卷一/說歌 <pb:KR3g0045_WYG_001-2a>
+- tq-j1-miaojue-xiangying [VERIFIED] KR3g0045_001.txt 卷一/相法妙訣 <pb:KR3g0045_WYG_001-6b>
+- tq-j1-sidu-cosmological [VERIFIED] KR3g0045_001.txt 卷一/說歌 <pb:KR3g0045_WYG_001-1a>
+- tq-j3-lunxin-zeshu [VERIFIED] KR3g0045_003.txt 卷三/心術論 <pb:KR3g0045_WYG_003-1b>
+- yb-j1-heyue [VERIFIED] KR3g0043_001.txt 卷上/河嶽 <pb:KR3g0043_WYG_001-5a> to <pb:KR3g0043_WYG_001-5b>
+- yb-j2-wuyue-similes [VERIFIED] KR3g0043_002.txt 卷下/(五嶽及有小氣所管屬者) <pb:KR3g0043_WYG_002-10a> to <pb:KR3g0043_WYG_002-10b>
+- yb-j2-jiuzhou-colour [VERIFIED] KR3g0043_002.txt 卷下/(九州) <pb:KR3g0043_WYG_002-10b>
+- rl-j1-sidu [VERIFIED_WITH_TRANSCRIPTION_NOTE] KR3g0046_001.txt 卷上/四瀆 <pb:KR3g0046_WYG_001-10b> to <pb:KR3g0046_WYG_001-11a>
+    NOTE: dossier quote is a reading-through: flattens Mandoku double-column notes and/or splices the base text across 2 note/gloss gap(s); every substantive run present under the marker, in order; runsPerSeg=[[2,5],[49]]
+- rl-j1-wuyue [VERIFIED_WITH_TRANSCRIPTION_NOTE] KR3g0046_001.txt 卷上/五嶽 <pb:KR3g0046_WYG_001-11a>
+    NOTE: dossier quote is a reading-through: flattens Mandoku double-column notes and/or splices the base text across 4 note/gloss gap(s); every substantive run present under the marker, in order; runsPerSeg=[[2,3,2],[46],[42]]
+- rl-j1-wuguan [VERIFIED_WITH_TRANSCRIPTION_NOTE] KR3g0046_001.txt 卷上/五官 <pb:KR3g0046_WYG_001-11a> to <pb:KR3g0046_WYG_001-11b>
+    NOTE: dossier quote is a reading-through: flattens Mandoku double-column notes and/or splices the base text across 3 note/gloss gap(s); every substantive run present under the marker, in order; runsPerSeg=[[2],[9],[5],[52]]
+- yg-j1-wuxingxing [VERIFIED] KR3g0044_001.txt 卷上/(呂洞賓賦) <pb:KR3g0044_WYG_001-4b> to <pb:KR3g0044_WYG_001-5a>
+- yg-j3-santing-pingdeng [VERIFIED] KR3g0044_003.txt 卷下/(詩曰; adjacent to 鴿形) <pb:KR3g0044_WYG_003-13a>
+
+## Count checks
+- 十二宮_U+5BAE: total 0 {}
+- 十二宫_U+5BAB: total 2 {"KR3g0045_001.txt":2}
+- 面有十二宫: total 1 {"KR3g0045_001.txt":1}
+- 面有十二宮: total 0 {}
+- 人倫風鑑: total 17 {"KR3g0044_001.txt":1,"KR3g0045_001.txt":16}
+- 二十五: total 2 {"KR3g0043_002.txt":1,"KR3g0046_001.txt":1}
+- 五形: total 7 {"KR3g0044_003.txt":1,"KR3g0045_003.txt":1,"KR3g0045_004.txt":5}
+- 五行形: total 1 {"KR3g0045_004.txt":1}
+- 似金得: total 1 {"KR3g0044_001.txt":1}
+- 似木得: total 1 {"KR3g0044_001.txt":1}
+- 似水得: total 1 {"KR3g0044_001.txt":1}
+- 似火得: total 1 {"KR3g0044_001.txt":1}
+- 似土得: total 1 {"KR3g0044_001.txt":1}
+- 荀子: total 3 {"KR3g0044_002.txt":1,"KR3g0045_003.txt":1,"KR3g0046_001.txt":1}
+- 荀子曰: total 2 {"KR3g0044_002.txt":1,"KR3g0045_003.txt":1}
+- 論心擇術: total 1 {"KR3g0045_003.txt":1}
+- 三停平等: total 1 {"KR3g0044_003.txt":1}
+- 五嶽四瀆要相應: total 0 {}
+
+## §4 atlas CSV arithmetic (recomputed from bytes)
+- rows: 38
+- verifiedPrimary: 35
+- recordedNotVerified: 3
+- prohibitedTrue: 13
+- eligible: 23
+- productDecisionRequired: 12
+- historicalEvidenceOnly: 3
