@@ -86,6 +86,7 @@ let lightOverrideRequested = false;
 let screenFlashThemeColour = null;
 let exposureHalo = null;
 let releasePalaceExperience = () => {};
+let reflectionRenderEpoch = 0;
 
 /* ── screens ─────────────────────────────────────────────────────────────── */
 
@@ -325,7 +326,7 @@ async function runCapture() {
 
   const burst = {};
   let collecting = 0;
-  let lastSclera = null, lastRois = null, lastMargins = null, lastCaptureTier = "clean";
+  let lastSclera = null, lastRois = null, lastMargins = null, lastCaptureTier = null;
 
   /**
    * Abandon a running screen-light session, wherever the loop noticed.
@@ -824,8 +825,42 @@ async function runSelfie(file) {
 
 /* ── finishing a reading ─────────────────────────────────────────────────── */
 
+/*
+ * `captureTier` has NO DEFAULT on purpose. `src/qise/gates.js`'s
+ * `evaluateGates()` is the only thing that ever produces a real value here
+ * ("clean"/"assisted" when the gates passed, "waiting" when they did not),
+ * and `captureAuthorizationFromReading()` (heritage-connections.js) trusts
+ * this field as PROOF the capture-quality gates ran. A default parameter
+ * that silently supplied "clean" would manufacture that proof for any call
+ * site that forgot to derive it from real gate evidence — the reading would
+ * look authorised without ever having been gated. Both current call sites
+ * already pass an explicit, gate-derived tier; this assertion is what keeps
+ * that true for the next one too, by failing loudly instead of silently
+ * authorising.
+ *
+ * `"waiting"` is deliberately NOT in this list (Codex, PR #40). `gates.js`'s
+ * `evaluateGates()` sets `captureTier: "waiting"` in EXACT lockstep with
+ * `pass: false` (`pass: strictPass || assistedPass`, `captureTier: ... :
+ * "waiting"` — the same two booleans decide both), so a `captureTier` of
+ * `"waiting"` reaching here means the gates did not pass, full stop. Both
+ * current callers already check `gates.pass` before ever calling `finish()`,
+ * so this never fires today — but relying on every caller to remember that
+ * check, rather than `finish()` enforcing it on the one value it actually
+ * receives, is exactly the "flag gates the adapter but not the legacy path"
+ * shape (CLAUDE.md item 17): the connector layer's own suppression on
+ * `captureTier === "waiting"` is real, but it is a courtesy on top of an
+ * already-computed, already-persisted, already-rendered base reading — not a
+ * substitute for refusing to compute one from a capture the gates rejected.
+ */
+const VALID_CAPTURE_TIERS = Object.freeze(["clean", "assisted"]);
+
 async function finish(burst, rois, sclera, opened, history, gateMargins, illumination,
-  captureTier = "clean", acceptedImage = null, acceptedPoints = null) {
+  captureTier, acceptedImage = null, acceptedPoints = null) {
+  if (!VALID_CAPTURE_TIERS.includes(captureTier)) {
+    throw new Error(
+      `finish() requires a passing gate-derived captureTier ("clean"/"assisted"); received ${JSON.stringify(captureTier)}`,
+    );
+  }
   const reduced = reduceBurst(burst);
   const rawLab = reduced.lab;
   // A still image has no temporal samples. Do not report duplicated analysis
@@ -1041,7 +1076,81 @@ function integratedStoryMarkup(model) {
  * comparison flag: if the new path is wrong, the evidence is visible rather
  * than shipped.
  */
-function renderReflection(reading, history) {
+/*
+ * Stage 3 connector-integration modules — loaded ONLY once Reflection is
+ * confirmed not "off". `heritage-connections.js` pulls in
+ * `../heritage/composition.js` -> `resolver.js` -> the full connector/source
+ * registries and their import-time validation; `heritage-view.js` pulls in
+ * `reflection-corpus.js`/`reading/provenance.js` for its own reductions. None
+ * of that is public/reflection-off cold-load weight (Codex, PR #40 discussion
+ * r3856061462: a static import here made every Tier-1-only visit pay the
+ * connector graph's download/parse/validation cost even though the public
+ * default is off and the safety gate suppresses all connector output).
+ *
+ * This does NOT touch `reading-pipeline.js`/`reflection.js`, which import
+ * `heritage/registry.js` on their own, separate, pre-existing path (see
+ * docs/HERITAGE_CONNECTOR_STAGE_STATUS.md) — narrowing that path is a
+ * different, larger change and is out of scope here.
+ *
+ * Memoized so two readings rendered back to back share one import; a failed
+ * load clears the memo so the next reading gets a fresh attempt rather than
+ * a session permanently wedged by one dropped request.
+ *
+ * ── WHAT A FAILED LOAD DOES, AND WHY THIS IS NOT `readingTiersWithHeritage`
+ *    OR NOTHING ─────────────────────────────────────────────────────────────
+ * The pre-existing Reflection Engine (Today/Story/Why over the BASE tiers)
+ * predates Stage 3 and does not depend on any of these four files — it is
+ * `readingTiers()` (`reading-tiers.js`) over `reflectionFor()`'s output,
+ * both already imported statically above. Treating a Stage-3 import failure
+ * as equivalent to `reflection === null` (Codex P2, PR #40) would erase that
+ * pre-existing experience for a reason that has nothing to do with it — a
+ * dropped connector-module request, not a missing reading. So a failed load
+ * falls back to `readingTiers(reflection)` and renders exactly what Round 10
+ * renders when the modules loaded, MINUS the two connector-markup calls:
+ * same Today, same Story passage, same Why trace, zero connector content,
+ * nothing fabricated. See `renderReflection()` below.
+ */
+let heritageStage3ModulesPromise = null;
+function loadHeritageStage3Modules() {
+  if (!heritageStage3ModulesPromise) {
+    heritageStage3ModulesPromise = Promise.all([
+      import("../../qise/heritage-connections.js"),
+      import("./heritage-view.js"),
+    ]).then(([connections, view]) => ({
+      readingTiersWithHeritage: connections.readingTiersWithHeritage,
+      captureAuthorizationFromReading: connections.captureAuthorizationFromReading,
+      tier2ConnectorModel: view.tier2ConnectorModel,
+      tier3ConnectorModel: view.tier3ConnectorModel,
+      heritageConnectorTier2Markup: view.heritageConnectorTier2Markup,
+      heritageConnectorTier3Markup: view.heritageConnectorTier3Markup,
+    })).catch((error) => {
+      heritageStage3ModulesPromise = null;
+      throw error;
+    });
+  }
+  return heritageStage3ModulesPromise;
+}
+
+/**
+ * ONE teardown for every path that leaves Reflection with nothing authorised
+ * to show — off, a Stage 3 load failure, or an unauthorised/abstained tiers
+ * result. Written once so a branch cannot drift from its siblings the way
+ * the `off`/`!tiers` branches once did (CLAUDE.md item 51): hiding the Why
+ * tab without also hiding the Why panel leaves a reader who already opened
+ * it looking at the previous reading's text, presented as current.
+ */
+function teardownReflectionSurfaces({ todayNode, storyNode, compareNode, whyTab, whyPanel }) {
+  for (const node of [todayNode, storyNode, compareNode]) if (node) node.hidden = true;
+  whyTab.hidden = true;
+  whyPanel.hidden = true;
+}
+
+async function renderReflection(reading, history) {
+  // Bumped unconditionally, before the `off` return: a LATER call — including
+  // one that resolves "off" — must win over an earlier call still awaiting
+  // the Stage 3 import below. Checked once, right after that await, which is
+  // the only await this function introduces.
+  const epoch = ++reflectionRenderEpoch;
   const todayNode = $("reflection-today");
   const storyNode = $("reflection-story");
   const compareNode = $("reflection-compare");
@@ -1049,6 +1158,7 @@ function renderReflection(reading, history) {
   const whyTab = $("reading-tab-why");
   const whyPanel = document.querySelector('[data-reading-panel="why"]');
   if (!todayNode || !storyNode || !whyNode || !whyTab || !whyPanel) return;
+  const surfaces = { todayNode, storyNode, compareNode, whyTab, whyPanel };
 
   const mode = reflectionMode({
     search: location.search,
@@ -1057,27 +1167,93 @@ function renderReflection(reading, history) {
   });
 
   if (mode === "off") {
-    for (const node of [todayNode, storyNode, compareNode]) if (node) node.hidden = true;
-    whyTab.hidden = true;
-    whyPanel.hidden = true;
+    teardownReflectionSurfaces(surfaces);
     return;
   }
 
+  /*
+   * Computed BEFORE the Stage-3 await, not after (Copilot, PR #40): a
+   * calibrating/never-read reading has no usable reflection state
+   * (`readingStateFromRecord()` returns null), and `renderReflection()` was
+   * always going to tear down in that case regardless of whether the
+   * connector graph loaded — so awaiting the loader first paid its
+   * download/parse cost for a render that could never have used it. This is
+   * a cheap, synchronous, purely-local computation (no DOM, no network), so
+   * checking it before the one expensive await is strictly cheaper and
+   * changes nothing about what gets rendered when there IS a reflection.
+   */
   const reflection = reflectionFor(reading, history);
-  const tiers = reflection && readingTiers(reflection);
-  if (!tiers) {
-    for (const node of [todayNode, storyNode, compareNode]) if (node) node.hidden = true;
-    whyTab.hidden = true;
-    // The panel is hidden alongside its tab, exactly as the `off` branch
-    // above does. Hiding only the tab leaves a reader who already opened Why
-    // looking at the PREVIOUS reading's text with no way to dismiss it —
-    // stale content presented as current. Item 51's shape: a teardown
-    // written into one branch of a conditional and not the other.
-    whyPanel.hidden = true;
+  if (!reflection) {
+    teardownReflectionSurfaces(surfaces);
     return;
   }
 
-  const { tier1, tier2, tier3 } = tiers;
+  let heritageStage3 = null;
+  try {
+    heritageStage3 = await loadHeritageStage3Modules();
+  } catch (error) {
+    console.error("qise: heritage connector modules failed to load", error);
+  }
+  if (epoch !== reflectionRenderEpoch) return;
+
+  let tier1, tier2, tier3, connectorTier2Markup, connectorTier3Markup;
+  if (heritageStage3) {
+    const {
+      readingTiersWithHeritage, captureAuthorizationFromReading,
+      tier2ConnectorModel, tier3ConnectorModel,
+      heritageConnectorTier2Markup, heritageConnectorTier3Markup,
+    } = heritageStage3;
+    /*
+     * Stage 3: heritage-connector material rides alongside tier2/tier3 as
+     * `.connectors` (see src/qise/heritage-connections.js). Gates fail
+     * closed on anything other than an explicit `true`.
+     *
+     * `captureQualityPassed` is derived from `reading.captureTier` — the
+     * field `src/qise/gates.js`'s `evaluateGates()` writes, and the ONLY
+     * thing that ever writes it. An object existing is not proof its own
+     * gates passed; `captureTier` is that proof
+     * (`captureAuthorizationFromReading` fails closed to `undefined` for
+     * anything other than an explicit "clean" or "assisted").
+     *
+     * `safetyPassed` is deliberately left unset: the Qi Se tracker has no
+     * safety-referral gate of its own yet (unlike the legacy Module A/B
+     * malar gate), so there is nothing true to assert, and an unasserted
+     * gate must suppress rather than silently pass. Wire a real safety
+     * signal here if and when one is built for Qi Se — capture-quality
+     * passing must never be treated as a substitute for it.
+     */
+    const tiers = readingTiersWithHeritage(reflection, {
+      captureQualityPassed: captureAuthorizationFromReading(reading),
+    });
+    if (!tiers) {
+      teardownReflectionSurfaces(surfaces);
+      return;
+    }
+    ({ tier1, tier2, tier3 } = tiers);
+    connectorTier2Markup = heritageConnectorTier2Markup(tier2ConnectorModel(tier2.connectors));
+    connectorTier3Markup = heritageConnectorTier3Markup(tier3ConnectorModel(tier3.connectors));
+  } else {
+    // The Stage-3 import failed (logged above). Fall back to the BASE
+    // Reflection Engine — the same tiers this function rendered before
+    // Round 10 ever existed — rather than tearing the whole surface down
+    // for a reason (a dropped connector-module request) that has nothing to
+    // do with whether there is a reading to reflect on. Zero connector
+    // markup, nothing fabricated: see the `loadHeritageStage3Modules`
+    // comment above.
+    const tiers = readingTiers(reflection);
+    if (!tiers) {
+      teardownReflectionSurfaces(surfaces);
+      return;
+    }
+    ({ tier1, tier2, tier3 } = tiers);
+    connectorTier2Markup = "";
+    connectorTier3Markup = "";
+  }
+  // One reading-level disclosure value, bound once. Story and Why each
+  // render it exactly once; neither connector-markup function renders its
+  // own copy (see heritage-view.js) — the surface owns disclosure, not the
+  // connector card.
+  const rotationDisclosure = tier2.rotationDisclosure;
 
   todayNode.hidden = false;
   todayNode.innerHTML = `
@@ -1093,9 +1269,10 @@ function renderReflection(reading, history) {
     <p class="eyebrow">The tradition\u2019s reading</p>
     <p class="story-passage">${esc(tier2.passage)}</p>
     <p class="muted">${esc(tier2.attribution)}</p>
-    <p class="muted">${esc(tier2.rotationDisclosure)}</p>
+    <p class="muted">${esc(rotationDisclosure)}</p>
     <p>${esc(tier2.bridge)}</p>
-    <p class="reflection">${esc(tier2.question)}</p>`;
+    <p class="reflection">${esc(tier2.question)}</p>
+    ${connectorTier2Markup}`;
 
   if (compareNode) {
     const comparing = mode === "compare";
@@ -1113,6 +1290,7 @@ function renderReflection(reading, history) {
 
   whyTab.hidden = false;
   whyNode.innerHTML = `
+    <p class="muted">${esc(rotationDisclosure)}</p>
     <div class="section-label"><h2>What produced each line</h2><span class="muted">${esc(tier3.provenance.corpus)}</span></div>
     ${["observation", "heritage", "reflection"].map((layer) => `
       <p class="eyebrow">${esc(layer)}</p>
@@ -1122,7 +1300,8 @@ function renderReflection(reading, history) {
     <div class="section-label"><h2>Today\u2019s state</h2><span class="muted">what makes this reading this reading</span></div>
     <div class="chips">${tier3.dimensions.map((d) =>
       `<span class="chip">${esc(d.field)}: ${esc(String(d.value))}</span>`).join("")}</div>
-    <p class="muted">Carried but not part of the state: ${esc(tier3.notIdentifying.join(", "))}.</p>`;
+    <p class="muted">Carried but not part of the state: ${esc(tier3.notIdentifying.join(", "))}.</p>
+    ${connectorTier3Markup}`;
 }
 
 async function renderReading(reading) {
@@ -1182,7 +1361,7 @@ async function renderReading(reading) {
      <div class="num">${c.read}/${c.total} read</div></div>`).join("");
 
   $("reading-passage").textContent = m.passage.text;
-  renderReflection(reading, history);
+  await renderReflection(reading, history);
 
   $("reading-tags").innerHTML = m.tags.length
     ? m.tags.map((t) => `<span class="chip">${esc(t)}</span>`).join("")
