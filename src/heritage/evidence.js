@@ -701,10 +701,10 @@ export const HERITAGE_EVIDENCE = deepFreeze({
       "renlun-xue": {
         definition: "人倫大統賦 薛延年注 (Yuan commentary) Five Officers titles, ordered 一口二鼻三耳四目五人中: 口=出納官 鼻=嗅臭官 耳=審聽官 目=監察官 人中=保夀官. Four of five office titles differ from the Taiqing set (監察≠鑒察, 審聽≠採聽, 嗅臭≠審辨, member 人中≠眉).",
         source: "人倫大統賦, 薛延年注",
-        sourceId: "heritage-five-mountains-renlun-datong",
+        sourceId: "heritage-five-officers-renlun-datong",
         evidenceKind: "DISAGREEMENT",
         evidenceStrength: "VERIFIED_SECONDARY",
-        runtimeStatus: "RESEARCH_ONLY",
+        runtimeStatus: "HERITAGE_ONLY",
         measurementAvailability: "NOT_RECORDED",
         folioLocator: "<pb:KR3g0046_WYG_001_11a>",
         constituents: [

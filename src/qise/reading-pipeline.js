@@ -25,6 +25,7 @@
 
 import {
   deriveReadingState, magnitudeBandOf, historyStageOf, HERITAGE_CONSTRUCTS,
+  SOURCE_LINEAGE_SPLIT_CONSTRUCTS,
 } from "./reading-state.js";
 import { composeReading } from "./reflection.js";
 import { stateKey } from "./reading-state.js";
@@ -40,7 +41,7 @@ export function dayIndex(canonicalDay) {
  * Today's heritage study. Deterministic, legible, and disclosed as a rotation.
  *
  * The lineage alternates on a slower cycle than the construct, so a user who
- * reaches Four Rivers twice sees the two competing readings of 目 and 口 rather
+ * reaches Four Rivers or Five Officers twice sees the competing witness rather
  * than the same one forever. The disagreement is the point (B-020 §7).
  */
 export function heritageRotation(canonicalDay) {
@@ -48,7 +49,8 @@ export function heritageRotation(canonicalDay) {
   const n = HERITAGE_CONSTRUCTS.length;
   const heritageConstruct = HERITAGE_CONSTRUCTS[((d % n) + n) % n];
   const cycle = Math.floor(d / n);
-  const sourceLineage = heritageConstruct === "fourRivers" && (((cycle % 2) + 2) % 2) === 1
+  const sourceLineage = SOURCE_LINEAGE_SPLIT_CONSTRUCTS.includes(heritageConstruct)
+    && (((cycle % 2) + 2) % 2) === 1
     ? "variant"
     : "primary";
   return { heritageConstruct, sourceLineage };

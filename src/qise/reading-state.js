@@ -77,11 +77,14 @@ export const HERITAGE_CONSTRUCTS = Object.freeze([
 ]);
 
 /**
- * Which textual lineage the heritage passage came from. Only Four Rivers has a
- * live split (目/口 swap between 河 and 淮), but the field is general because
- * B-020 found the disagreement is the interesting part, not an embarrassment.
+ * Which textual lineage the heritage passage came from. Four Rivers and Five
+ * Officers have live, pinned disagreements; the field is general because
+ * B-020 found that preserving disagreement is more honest and more useful
+ * than silently choosing one witness.
  */
 export const SOURCE_LINEAGES = Object.freeze(["primary", "variant"]);
+
+export const SOURCE_LINEAGE_SPLIT_CONSTRUCTS = Object.freeze(["fourRivers", "fiveOfficers"]);
 
 /**
  * Contract §12: an unavailable reading is not a broken reading. Each value
@@ -412,8 +415,7 @@ export function isReachable(s) {
   if (s.magnitudeBand === "level" && s.region !== "overall") return false;
   if (s.magnitudeBand !== "level" && s.region === "overall") return false;
 
-  // Only Four Rivers currently carries a live lineage split (B-020 §7).
-  if (s.sourceLineage === "variant" && s.heritageConstruct !== "fourRivers") return false;
+  if (s.sourceLineage === "variant" && !SOURCE_LINEAGE_SPLIT_CONSTRUCTS.includes(s.heritageConstruct)) return false;
 
   return true;
 }

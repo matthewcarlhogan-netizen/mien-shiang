@@ -13,6 +13,7 @@ export const ABSTRACT_LINEAGE_OVERRIDES = Object.freeze({
   threeSections: Object.freeze({ primary: "taiqing-mianbu-facial" }),
   twelvePalaces: Object.freeze({ primary: "taiqing-yuguan" }),
   fiveMountains: Object.freeze({ primary: "taiqing-siku" }),
+  fiveOfficers: Object.freeze({ variant: "renlun-xue" }),
 });
 
 /*
@@ -32,6 +33,9 @@ const RUNTIME_LINEAGE_PRESENTATIONS = Object.freeze({
   fiveMountains: Object.freeze({
     "taiqing-siku": "Taiqing Shenjian records Five Mountains across the face: forehead, jaw contour, left and right cheekbones, and nose. It also describes their fullness and orientation, which this camera cannot measure. This is attributed historical material, not a judgment about the reader.",
   }),
+  fiveOfficers: Object.freeze({
+    "renlun-xue": "Renlun Datong Fu's commentary records Five Officers as an ordered set across the mouth, nose, ear, eye and philtrum, with several titles differing from the Taiqing witness. This is an attributed historical disagreement; the camera supplies no evidence about those offices.",
+  }),
 });
 
 const RUNTIME_LINEAGE_ATTRIBUTIONS = Object.freeze({
@@ -44,6 +48,9 @@ const RUNTIME_LINEAGE_ATTRIBUTIONS = Object.freeze({
   fiveMountains: Object.freeze({
     "taiqing-siku": "Taiqing Shenjian, Book 2, Five Mountains Section",
   }),
+  fiveOfficers: Object.freeze({
+    "renlun-xue": "Renlun Datong Fu, Xue Yannian commentary, Book 1, Five Officers Section",
+  }),
 });
 
 const RUNTIME_LINEAGE_NOTES = Object.freeze({
@@ -55,6 +62,9 @@ const RUNTIME_LINEAGE_NOTES = Object.freeze({
   }),
   fiveMountains: Object.freeze({
     "taiqing-siku": "The source's fullness and orientation language is retained as historical context; the lower-face mapping remains contested across witnesses.",
+  }),
+  fiveOfficers: Object.freeze({
+    "renlun-xue": "The alternate witness is shown to preserve a documented title and membership disagreement; it is not a judgment about the reader.",
   }),
 });
 

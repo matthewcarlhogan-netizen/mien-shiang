@@ -1,7 +1,9 @@
 # Decision cards
 
-**Status: open decision cards, 30 August 2026. None of these is decided by this document or by
-this pass.** Per brief and per `docs/AGENTS.md`'s standing rule, absence of a decision is
+**Status: historical decision-card inventory, 30 August 2026.** The closed-beta runtime amendment
+dated 31 August 2026 is recorded in `docs/DECISION_REGISTER.md`; the cards below remain the
+underlying evidence/options record and are not a claim that beta runtime is disabled. Per brief
+and per `docs/AGENTS.md`'s standing rule, absence of a decision is
 `UNDECIDED`, never inferred by an agent. Each card states options, evidence, the consequence both
 ways, and — where research supports one — a labelled recommendation that is **not** an approval.
 The product owner records approval, if given, as a new dated entry in `docs/DECISION_REGISTER.md`
@@ -140,6 +142,11 @@ before a simpler, safer version has shipped and been used. **Not an approval.**
 
 ## CARD 6 — Qi Se safety authorisation
 
+**Closed-beta status:** superseded as a runtime off-switch by
+`DR-2026-08-31-REFLECTION-BETA-RUNTIME`. The card remains the historical options/evidence record;
+the beta uses the named `QISE_BETA_SAFETY_AUTHORIZATION` policy while commercial and legal review
+remain separate.
+
 **Carried forward, unchanged by this session**, from
 `docs/heritage-evidence/SAFETY_AUTHORIZATION_INTERFACE.md` §3(a)/(b). The question remains exactly
 as that document states it: either **(a)** a product-owner determination that Qi Se needs no
@@ -147,18 +154,20 @@ safety-referral gate (with `safetyPassed` supplied as `true` only via a single n
 constant, never a bare literal), or **(b)** an actual Qi Se safety signal designed and built — out
 of scope for this program.
 
-**Current status, stated in the governance vocabulary this PR introduces (see
-`docs/HERITAGE_CONNECTOR_STAGE_STATUS.md`):** `SAFETY_AUTHORIZED = NOT_GRANTED`. Recorded
-separately, because it is a different fact: the authoritative safety signal itself is currently
-ABSENT/UNSET in production — `gateStatus(undefined)` evaluates to `"UNKNOWN"`, which fails closed.
-The chain is: no authoritative signal is currently supplied → therefore safety authorisation has
-not been granted → therefore Stage 3 remains fail-closed → none of this prejudges the open
-decision about the future safety architecture. This session neither implements a signal nor
-supplies a literal `true` anywhere in production code.
+**Pre-amendment status (historical):** the earlier implementation recorded
+`SAFETY_AUTHORIZED = NOT_GRANTED` because no authoritative safety signal was supplied and
+`gateStatus(undefined)` failed closed. That was the pre-beta runtime state. The 31 August
+closed-beta amendment explicitly supersedes that off-switch with the named
+`QISE_BETA_SAFETY_AUTHORIZATION` policy; it does not claim a clinical signal exists or clear
+commercial/legal obligations.
 
 ---
 
 ## CARD 7 — Five Mountains lineage routing
+
+**Closed-beta status:** the historical recommendation below is superseded for the beta runtime by
+the explicit Taiqing witness route recorded in `DR-2026-08-31-REFLECTION-BETA-RUNTIME`. The card's
+disagreement and multi-witness caution remain valid analytical context.
 
 **Carried forward, unchanged by this session**, from
 `docs/heritage-evidence/PRODUCT_OWNER_DECISIONS.md` (renamed in this PR to

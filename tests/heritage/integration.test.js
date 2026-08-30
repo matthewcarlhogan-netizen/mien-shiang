@@ -222,3 +222,14 @@ test("explicitly routed heritage-only material enters beta prose with its source
   assert.match(heritage.text, /camera cannot measure/i);
   assert.equal(reading.heritageAbstentions.length, 0);
 });
+
+test("Five Officers alternate witness is pinned separately and remains a heritage-only beta lineage", () => {
+  const source = SOURCE_REGISTRY["heritage-five-officers-renlun-datong"];
+  const lineage = HERITAGE_REGISTRY.fiveOfficers.lineages["renlun-xue"];
+  assert.equal(source.citationStatus, "verified");
+  assert.equal(source.folioLocatorStatus, "VERIFIED");
+  assert.equal(source.rightsStatus, "public-domain-by-age");
+  assert.equal(lineage.sourceId, "heritage-five-officers-renlun-datong");
+  assert.equal(lineage.runtimeStatus, "HERITAGE_ONLY");
+  assert.equal(lineage.evidenceStrength, "VERIFIED_SECONDARY");
+});

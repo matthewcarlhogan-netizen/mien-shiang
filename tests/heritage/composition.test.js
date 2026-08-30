@@ -673,15 +673,19 @@ test("resolveHeritageLineage: abstract primary slots use the explicit beta routi
   }
 });
 
-test("resolveHeritageLineage: 'variant' resolves only for fourRivers, the one construct that actually declares it", () => {
+test("resolveHeritageLineage: abstract variants resolve only where beta has an explicit pinned witness", () => {
   assert.equal(
     resolveHeritageLineage({ heritageConstruct: "fourRivers", sourceLineage: "variant" }, HERITAGE_REGISTRY),
     "variant",
   );
   assert.equal(
+    resolveHeritageLineage({ heritageConstruct: "fiveOfficers", sourceLineage: "variant" }, HERITAGE_REGISTRY),
+    "renlun-xue",
+  );
+  assert.equal(
     resolveHeritageLineage({ heritageConstruct: "fiveMountains", sourceLineage: "variant" }, HERITAGE_REGISTRY),
     null,
-    "fiveMountains declares no 'variant' lineage — must abstain, never fall back to 'primary' or invent one",
+    "fiveMountains has no beta variant route — must abstain, never fall back to 'primary' or invent one",
   );
 });
 
@@ -797,6 +801,14 @@ test("fiveMountains keeps its source records distinct while beta routing selects
     resolveHeritageLineage({ heritageConstruct: "fiveMountains", sourceLineage: "primary" }, HERITAGE_REGISTRY),
     "taiqing-siku",
   );
+});
+
+test("resolveHeritageLineage: Five Officers primary vs variant preserve the pinned title disagreement", () => {
+  const primary = resolveHeritageLineage({ heritageConstruct: "fiveOfficers", sourceLineage: "primary" }, HERITAGE_REGISTRY);
+  const variant = resolveHeritageLineage({ heritageConstruct: "fiveOfficers", sourceLineage: "variant" }, HERITAGE_REGISTRY);
+  assert.equal(primary, "primary");
+  assert.equal(variant, "renlun-xue");
+  assert.notEqual(primary, variant);
 });
 
 test("beta fiveMountains routing exposes structural connectors while preserving their safety boundary", () => {

@@ -125,9 +125,9 @@ continues to carry its non-inference boundary.
 Current beta graph snapshot: **30 registered connectors, zero exact source-text collisions**.
 The routed production slots expose bounded attributed material for all six daily constructs;
 current Tier 2 material diversity is 3 (Three Sections), 2 (Five Elements), 2 (Twelve Palaces),
-7 (Five Mountains), 7 (Four Rivers), and 1 (Five Officers). The last value is intentional until
-another genuinely bounded-safe Five Officers relationship is supported; source-panel material
-is not silently promoted to inflate the count.
+7 (Five Mountains), 7 (Four Rivers), and 2 (Five Officers) across its pinned primary/alternate
+rotation. Five Officers' alternate is the dedicated, byte-pinned Renlun/Xue witness; its fortune/
+rank relationship remains source-panel-only and is not silently promoted to inflate the count.
 
 ### Six-axis status (amended 31 August 2026 — read this before the historical record below)
 

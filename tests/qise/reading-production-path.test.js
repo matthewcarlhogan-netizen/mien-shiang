@@ -364,3 +364,18 @@ test("fiveMountains/primary through the REAL reflectionFor()/readingTiersWithHer
     "Tier 3 must expand the Tier 2 selection rather than independently reroll it",
   );
 });
+
+test("Five Officers uses its pinned alternate witness on the second lineage rotation", () => {
+  const primaryDay = "2026-08-28";
+  const variantDay = "2026-08-22";
+  assert.deepEqual(heritageRotation(primaryDay), { heritageConstruct: "fiveOfficers", sourceLineage: "primary" });
+  assert.deepEqual(heritageRotation(variantDay), { heritageConstruct: "fiveOfficers", sourceLineage: "variant" });
+
+  const primary = reflectionFor(scan({ history: BASE_HISTORY, canonicalDay: primaryDay }), BASE_HISTORY);
+  const variant = reflectionFor(scan({ history: BASE_HISTORY, canonicalDay: variantDay }), BASE_HISTORY);
+  assert.equal(primary.state.sourceLineage, "primary");
+  assert.equal(variant.state.sourceLineage, "variant");
+  assert.match(variant.composed.text, /Renlun Datong Fu/i);
+  assert.notEqual(primary.composed.text, variant.composed.text);
+  assert.doesNotMatch(variant.composed.text, /[\u3400-\u9fff]/);
+});

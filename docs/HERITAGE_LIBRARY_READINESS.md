@@ -6,7 +6,7 @@ identical except `generatedAt` (see "Idempotency" below). They measure GOLD cont
 the internal analytical seam; the product runtime uses the canonical Stage-3 entry point and a
 separate named closed-beta policy.
 
-Commit measured during this repair: `4b8f935aef500e7e4856887c99cb131e982ff07c`.
+Commit measured during this repair: `4354875bea2ecaf8f453609fa2cc444c9dd0721a`.
 
 **Read this alongside, never instead of:**
 `docs/heritage-evidence/EVIDENCE_TRANSITION_LEDGER.md` (what changed and why),
@@ -22,7 +22,8 @@ path. Explicit runtime routing resolves the abstract `primary` slots for Three S
 Palaces and Five Mountains; it does not rewrite their evidence or clear their rights status.
 The graph contains **30 connectors with zero exact source-text collisions**. The current
 production-depth measurements are: Three Sections residue 3 / Tier 2 material 3, Five Elements
-2 / 2, Twelve Palaces 2 / 2, Five Mountains 8 / 7, Four Rivers 8 / 7, and Five Officers 1 / 1.
+2 / 2, Twelve Palaces 2 / 2, Five Mountains 8 / 7, Four Rivers 8 / 7, and Five Officers now
+has a pinned primary/alternate rotation with 3 distinct Tier 2 presentations.
 Five Mountains and Four Rivers have eight structural relationships but seven distinct bounded
 Tier 2 presentations because two relationships render the same reader-facing card; the harness
 now measures that distinction honestly.
@@ -54,7 +55,7 @@ below); a rich future timeline would not excuse a shallow heritage library eithe
 
 ```
 Gates: A_evidenceIntegrity=true  B_requiredConstructCoverage=false
-       C_heritageRelationshipDepth=false  D_materialPresentationDiversity=false
+       C_heritageRelationshipDepth=true  D_materialPresentationDiversity=true
        E_deterministicCorrectness=true
 RESULT: NOT_READY
 ```
@@ -86,15 +87,16 @@ left intact rather than rewritten to manufacture a pass.
 | Construct | Taxonomy |
 |---|---|
 | threeSections | `COVERAGE_GAP` |
-| fiveElements | `RELATIONSHIP_DEPTH_LIMITED` |
+| fiveElements | `NONE — BETA_RUNTIME_ACTIVE` |
 | twelvePalaces | `LINEAGE_DECISION_BLOCKED` (CARD 10) |
 | fiveMountains | `LINEAGE_DECISION_BLOCKED` (CARD 7) |
-| fourRivers | `RELATIONSHIP_DEPTH_LIMITED` |
-| fiveOfficers | `RELATIONSHIP_DEPTH_LIMITED` |
+| fourRivers | `NONE — BETA_RUNTIME_ACTIVE` |
+| fiveOfficers | `NONE — BETA_RUNTIME_ACTIVE` |
 
-### Why the fixed GOLD scope still fails gates C and D
+### What the fixed GOLD scope now measures
 
-The expanded beta graph now has real rotation in five constructs. The fixed GOLD gates still
+The expanded beta graph now has real rotation in all six constructs when its pinned alternate
+Five Officers witness is included. The fixed GOLD gates still
 apply their original 250 combined-material target and coverage taxonomy; they are not used to
 disable the beta runtime. Concretely, per construct (exhaustive walk over the full derived
 period, corrected methodology — see "A defect found and fixed" below):
@@ -106,15 +108,17 @@ period, corrected methodology — see "A defect found and fixed" below):
 | twelvePalaces | 216 | 2 | 2 | 432 |
 | fiveMountains | 216 | 7 | 8 | 594 |
 | fourRivers | 216 | 7 | 8 | 594 |
-| fiveOfficers | 216 | 1 | 1 | 216 |
+| fiveOfficers | 216 | 3 | 3 | 648 |
 
-The heritage layer now contributes genuine rotation: residues are 3, 2, 2, 8, 8 and 1. Five
+The heritage layer now contributes genuine rotation: residues are 3, 2, 2, 8, 8 and 3 in the
+closed-beta runtime. The fixed GOLD primary-lineage walk now records 3 for Five Officers. Five
 Mountains and Four Rivers have 8 active structural relationships but only 7 distinct bounded
 Tier 2 cards; this is a presentation-level equivalence, not hidden-state inflation. Five
-Officers remains intentionally single-active because its additional fortune/rank and
-edition-recorded material is source-panel-only. Gate D's fixed target of 250 is therefore still
-not met, but the runtime now has meaningful lineage diversity where the evidence and policy allow
-it.
+Officers' fortune/rank maxim remains source-panel-only. The pinned Renlun commentary witness now
+rotates against the Taiqing witness under an explicit beta lineage route. Gate D's fixed target of
+250 is met for the six-construct material walk; Gate B still fails only because the fixed taxonomy
+retains three non-`RUNTIME_SUPPORTED` classifications. The runtime has meaningful lineage diversity
+where the evidence and policy allow it.
 
 ### A defect found and fixed this session, in the harness itself
 
@@ -135,8 +139,9 @@ tier-scoped functions (`heritageTier2MaterialSignature()`, `heritageTier3Materia
 rather than one merged blob, since Tier 2 (Reading) and Tier 3 (Why/Study) are separate consumer
 surfaces. After the fix, base raw and base material are equal everywhere — material is exactly as
 fine as raw, never finer, as required. This did **not** change the overall
-`NOT_READY` result (gate D now fails only because Five Officers remains below the fixed 250-state
-target; the signature fix corrected the *reported* numbers rather than manufacturing diversity).
+`NOT_READY` result now reflects the fixed required-scope taxonomy only: gates C and D pass after
+the Five Officers alternate witness was added. The signature fix corrected the *reported* numbers
+rather than manufacturing diversity.
 Pinned by
 `tests/heritage/readiness-material-signature.test.js`, including a regression test that mines
 the real fiveElements corpus for occurrences sharing an identical Tier 2 output and asserts they
@@ -208,9 +213,9 @@ current table above), confirming the two harnesses agree, as they must, since bo
 
 The calendar cross-check walks the real per-day occurrence value through the same analytical seam.
 It now observes genuine exhaustion/rotation for Three Sections, Five Elements, Twelve Palaces,
-Five Mountains and Four Rivers. Five Officers correctly reports no rotation because only one
-active Tier 2 relationship is currently permitted; the remaining material is retained for study
-and source-panel disclosure rather than promoted into the bounded daily card.
+Five Mountains and Four Rivers. Five Officers now reports genuine rotation across three bounded
+Tier 2 presentations, including the pinned Renlun alternate; its fortune/rank material remains
+retained for study and source-panel disclosure rather than promoted into the bounded daily card.
 
 ### D. `DAILY_PORTRAIT_COMPOUNDING_MODEL` (modelled projection — no runtime code exists)
 
@@ -235,11 +240,10 @@ this table is more than a projection.
 
 Ordered by the largest gap this session's measurements actually found, not by construct name:
 
-1. **Deepen Five Officers with a second genuinely distinct bounded-safe relationship.** Its
-   current single active Tier 2 connector is the only construct still without heritage rotation;
-   fortune/rank material and edition-recorded witnesses remain source-panel-only until their
-   policies/evidence support a bounded daily presentation. Do not fragment one proposition into
-   duplicate connector records.
+1. **Resolved 31 August: deepen Five Officers with a genuinely distinct bounded-safe witness.**
+   The dedicated byte-pinned Renlun/Xue record now supplies a deterministic alternate route and
+   three distinct Tier 2 presentations. Fortune/rank material remains source-panel-only. Do not
+   fragment one proposition into duplicate connector records.
 2. **Increase materially distinct bounded presentations where the graph already rotates.** Five
    Mountains and Four Rivers have eight active structural relationships but seven distinct Tier 2
    cards. Any expansion must change reader-facing content, not merely hidden ids; the corrected

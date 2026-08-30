@@ -1,6 +1,6 @@
 # Evidence transition ledger
 
-**Status: applied 30 August 2026, this session, against `docs/heritage-evidence/
+**Status: applied 30 August 2026, with the 31 August closed-beta lineage amendment, against `docs/heritage-evidence/
 REPO_RECONCILIATION_MATRIX.md` and `docs/heritage-evidence/GEMINI_IMPLEMENTATION_MANIFEST.md`.**
 Every row states: construct · record · field(s) · old → new · source · reason · runtime
 consequence, plus two independent classifications required by this program (see below). No code
@@ -20,7 +20,9 @@ is written by this document; it records what the four registry files (`src/readi
   applied — routed to a decision card.**
 - `ARCHITECTURE_AFFECTING` — would require a schema/resolver change. **Stops entirely.**
 
-Only `EVIDENCE_FACT_ONLY`, `PROVENANCE_ONLY` and `LOCATOR_ONLY` rows were applied this pass.
+Only `EVIDENCE_FACT_ONLY`, `PROVENANCE_ONLY` and `LOCATOR_ONLY` rows were applied in the
+original evidence pass. The later closed-beta amendment is recorded separately below because
+it intentionally changes runtime eligibility/selection under the product-owner decision record.
 
 **Impact** — traced from actual current consumers, never inferred from a field's name:
 
@@ -62,6 +64,7 @@ from a genuine regression. See "Regression fixtures" below.
 | SR-16 | `xunzi-feixiang` | `authorshipNote` | added: how the physiognomy manuals cite 荀子·非相 (3 witnesses, disagreeing on the second clause); `citationStatus` unchanged at `work-recorded` | same | PROVENANCE_ONLY | NO_RUNTIME_OR_READER_EFFECT (field-level finding only, not consumed by a rendered lineage) |
 | SR-17 | `heritage-five-elements` | — | **KEEP**, not a Kanripo witness | — | — | — |
 | SR-18 | all Kanripo-pinned records | `surrogateRights` | **NOT APPLIED** — stays `SURROGATE_RIGHTS_NOT_DECLARED` | — | PRODUCT_POLICY_AFFECTING | Routed to `docs/DECISION_CARDS.md` CARD 11 |
+| SR-19 | `heritage-five-officers-renlun-datong` *(new, 31 Aug amendment)* | full record, including dedicated Five Officers section locator | absent → byte-pinned Renlun Datong Fu / Xue Yannian commentary witness; `citationStatus: VERIFIED`, `rightsStatus: PUBLIC_DOMAIN_BY_AGE`, `sourceAccess: STABLE_REMOTE`, folio `<pb:KR3g0046_WYG_001_11a>`/`VERIFIED` | fresh pinned Kanripo acquisition (`KR3g0046_001.txt`) | EVIDENCE_FACT_ONLY + LOCATOR_ONLY + PROVENANCE_ONLY | READER_METADATA_VISIBLE; runtime use is separately authorised by `DR-2026-08-31-REFLECTION-BETA-RUNTIME` |
 
 ### Consistency corrections beyond the manifest's literal text
 
@@ -113,6 +116,18 @@ touched.
 | EV-16 | `fiveElements.lineages["yuguan-like-with-like"]` *(new)* | new lineage, `VERIFIED_PRIMARY`, `RESEARCH_ONLY` | EVIDENCE_FACT_ONLY | READER_METADATA_VISIBLE if ever authorised |
 | DR-02 | `fourRivers.primary.disagreements["four-rivers-eye-mouth"].positions["primary-eye-huai-mouth-he"]` | note added: now 3 byte-pinned witnesses agree | EVIDENCE_FACT_ONLY | ANALYTICAL_ONLY |
 | DR-05 | `twelvePalaces.primary.disagreements["twelve-palaces-constituents"].positions["taiqing-yuguan"]` | note added: byte-pinned, `VERIFIED_PRIMARY` | EVIDENCE_FACT_ONLY | ANALYTICAL_ONLY |
+
+### 31 August closed-beta lineage amendment
+
+The product-owner decision record permits the complete Reflection Engine to run in closed beta,
+but does not permit the evidence layer to be rewritten or a research-only relationship to be
+silently promoted. Accordingly, the pinned Five Officers disagreement now has an explicit
+`renlun-xue` alternate witness backed by SR-19. `src/heritage/runtime-routing.js` selects that
+witness on the deterministic alternate cycle, while `src/heritage/runtime-connectors.js` exposes
+only its bounded, attributed structural relationships. The fortune/rank relationship remains
+`SOURCE_PANEL_ONLY`; it is not part of the daily Tier 2 card. This amendment is therefore both a
+provenance correction and a runtime-selection change, with the latter authorised by the decision
+record rather than smuggled into the evidence ledger.
 
 ### English reader boundary — one defect found and fixed before commit
 

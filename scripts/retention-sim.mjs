@@ -95,10 +95,12 @@ export function runScenario(n, weatherFn) {
     const oldOut = oldReading(record, history);
     const fresh = reflectionFor(record, history);
     const canonicalDay = record.canonicalDay;
+    const rotation = heritageRotation(canonicalDay);
     days.push({
       i,
       canonicalDay,
-      heritageConstruct: heritageRotation(canonicalDay).heritageConstruct,
+      heritageConstruct: rotation.heritageConstruct,
+      sourceLineage: rotation.sourceLineage,
       stateKey: fresh ? deriveStateKey(fresh.state) : null,
       occurrence: fresh ? fresh.occurrence : 0,
       oldText: oldOut.text,
@@ -281,7 +283,7 @@ export function exhaustionTimeline(days, constructId) {
   for (const day of days) {
     if (day.heritageConstruct !== constructId) continue;
     onConstructDays++;
-    const result = composeLatent({ heritageConstruct: constructId, sourceLineage: "primary", depthMode: "SOURCE_DEEP", occurrence: day.occurrence });
+    const result = composeLatent({ heritageConstruct: constructId, sourceLineage: day.sourceLineage || "primary", depthMode: "SOURCE_DEEP", occurrence: day.occurrence });
     const tier2Connectors = deriveTier2FromComposition(result);
     const tier2Model = tier2ConnectorModel(tier2Connectors, SOURCE_REGISTRY);
     const sig = heritageTier2MaterialSignature(tier2Model);
@@ -325,9 +327,9 @@ function analysisC() {
   const calendarExhaustionVariable = HERITAGE_CONSTRUCT_IDS.map((id) => exhaustionTimeline(variableDays, id));
 
   // This is a content-depth cross-check, not a runtime authorization check.
-  // The expanded beta graph now rotates in constructs with more than one
-  // active connector; fiveOfficers deliberately remains single-active because
-  // its other material is source-panel-only under its recorded policies.
+  // The expanded beta graph now rotates across the pinned source disagreements
+  // that have an explicit runtime route. Source-panel-only fortune material
+  // remains source-panel-only under its recorded policy.
   const noConnectorRotationAnywhere = perConstructExhaustive.every((p) => p.error || p.connectorResidue === 1);
 
   return {
