@@ -125,7 +125,7 @@ test("the comparison mode renders both engines, not one relabelled", () => {
   // evidenced. Evidence needs both outputs on the same record.
   const body = renderReflectionBody();
   assert.match(body, /passageFor\(/, "compare mode does not run the current engine");
-  assert.match(APP, /import \{ passageFor \}/, "the current engine is not imported");
+  assert.match(APP, /import \{ passageFor(?:, passageOccurrenceFor)? \}/, "the current engine is not imported");
   assert.match(body, /mode === "compare"/);
 });
 

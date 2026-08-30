@@ -192,11 +192,13 @@ export function courseKey(mingZ, runZ, threshold = 1) {
 }
 
 /**
- * Deterministic pick, seeded from the reading's own timestamp.
+ * Deterministic pick, seeded from an explicit occurrence in real reading
+ * history.
  *
- * The same reading must always render the same passage. A random pick would
- * quietly rewrite history every time a screen was reopened, which turns a
- * record into a slot machine.
+ * A timestamp is deliberately not accepted as a novelty source. The date a
+ * reading happened is metadata, not a reason for its words to change. The
+ * same saved reading therefore stays stable when reopened, while a genuine
+ * repeat of the same passage cell can receive the next deterministic variant.
  */
 export function seededIndex(seed, length) {
   let h = 2166136261;
@@ -209,24 +211,68 @@ export function seededIndex(seed, length) {
 }
 
 /**
+ * The material cell used by the legacy passage engine.
+ *
+ * Keeping this identity here means the production screen, comparison view,
+ * and retention simulator all count the same thing. It intentionally contains
+ * only what the legacy passage actually presents: colour, band, and the
+ * lustre/moisture course.
+ */
+export function passageCellKey(compass, z) {
+  const ascendant = (compass && compass.ascendant) || "ping";
+  const band = ascendant === "ping" ? "level" : ((compass && compass.band) || "slight");
+  return `${ascendant}|${band}|${courseKey(z && z.ming, z && z.run)}`;
+}
+
+/**
+ * Count earlier valid readings in the same legacy passage cell.
+ *
+ * `history` is oldest-first. The current reading may be present in that
+ * array (the production store path) or may be the not-yet-appended record
+ * (the simulator path); both forms are handled without using its timestamp as
+ * a content seed. If a historic reading is reopened, its position in history
+ * preserves the variant it earned at the time.
+ */
+export function passageOccurrenceFor(reading, history) {
+  const rows = Array.isArray(history) ? history : [];
+  const target = passageCellKey(reading && reading.compass, reading && reading.z);
+
+  let currentIndex = rows.findIndex((candidate) => candidate === reading);
+  if (currentIndex < 0 && reading && reading.timestampIso) {
+    currentIndex = rows.findIndex((candidate) => candidate && candidate.timestampIso === reading.timestampIso);
+  }
+  const prior = currentIndex >= 0 ? rows.slice(0, currentIndex) : rows;
+  return prior.reduce((count, candidate) => {
+    if (!candidate || candidate.valid === false || !candidate.compass) return count;
+    const candidateZ = candidate.z || (candidate.compass && candidate.compass.z) || {};
+    return count + (passageCellKey(candidate.compass, candidateZ) === target ? 1 : 0);
+  }, 0);
+}
+
+function normaliseOccurrence(occurrence) {
+  return Number.isSafeInteger(occurrence) && occurrence >= 0 ? occurrence : 0;
+}
+
+/**
  * Build the passage for one reading.
  *
  * @param {{ascendant:string, band:string|null}} compass
  * @param {{ming:number, run:number}} z normalised lustre/moisture deltas
- * @param {string} seed usually the reading's timestamp
+ * @param {number} occurrence zero-based occurrence of this cell in real history
  */
-export function passageFor(compass, z, seed) {
+export function passageFor(compass, z, occurrence = 0) {
   const ascendant = (compass && compass.ascendant) || "ping";
   const cores = CORE[ascendant] || CORE.ping;
   const bandKey = ascendant === "ping" ? "level" : ((compass && compass.band) || "slight");
   const bands = BAND[bandKey] || BAND.slight;
   const course = COURSE[courseKey(z && z.ming, z && z.run)];
+  const variant = normaliseOccurrence(occurrence);
 
-  // Three different offsets from one seed, so the parts vary independently
-  // rather than marching in lockstep across readings.
-  const core = cores[seededIndex(`${seed}|core`, cores.length)];
-  const band = bands[seededIndex(`${seed}|band`, bands.length)];
-  const tail = course[seededIndex(`${seed}|course`, course.length)];
+  // Three different offsets from one real occurrence, so the parts vary
+  // independently rather than marching in lockstep across readings.
+  const core = cores[seededIndex(`${variant}|core`, cores.length)];
+  const band = bands[seededIndex(`${variant}|band`, bands.length)];
+  const tail = course[seededIndex(`${variant}|course`, course.length)];
 
   return {
     provenanceId: "qise-passages-v1",

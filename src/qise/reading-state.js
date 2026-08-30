@@ -17,19 +17,18 @@
  * the output is either promoted to reading-affecting or deleted — it does not
  * get to sit in the middle looking useful.
  *
- * ── WHY THE SEED IS THE STATE KEY, NOT THE TIMESTAMP ───────────────────────
- * `passages.js` seeded its variation from the reading's timestamp. That is
- * deterministic in the weak sense — reopening a screen gives the same words —
- * but it means the SAME interpreted state produces DIFFERENT prose on two
- * different days, and two DIFFERENT states can land on the same words. It makes
- * variation decorative rather than meaningful, and it makes collision detection
- * impossible, because the text is a function of the clock rather than of the
- * state.
+ * ── WHY PASSAGE VARIATION IS HISTORY-BACKED, NOT CLOCK-BACKED ──────────────
+ * `passages.js` used to seed its variation from the reading's timestamp. That
+ * was deterministic only in the weak sense: the same saved row reopened to the
+ * same words, but the same interpreted state on another day received different
+ * prose for no reader-observable reason. A date is metadata, not novelty.
  *
- * Seeding from the state key inverts that: same state, same reading, always;
- * different state, different reading, provably. Repetition across days is
- * handled where it belongs — in `trajectory`, which already knows this is the
- * third time something has appeared and says so.
+ * The Reflection Engine still derives its identity from this state key. The
+ * compatibility passage engine now receives an explicit occurrence counted
+ * from the reader's preceding valid history. That preserves stable reopening,
+ * gives genuine repeat exposure a bounded deterministic variant, and keeps
+ * the two identities separate: state identity proves semantic change; passage
+ * occurrence controls only which equivalent presentation is shown.
  */
 
 /* ── the declared dimensions ─────────────────────────────────────────────── */

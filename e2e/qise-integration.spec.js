@@ -283,6 +283,17 @@ test.describe("Stage-3 connector-integration load boundary", () => {
     }
   });
 
+  test("reflection=off discloses the fuller engine while keeping the base reading visible", async ({ page }) => {
+    await seedThenColdNavigate(page, canonicalFace(), "2026-08-17", "?reflection=off");
+    await expect(page.locator("#reading-passage")).not.toBeEmpty();
+    await expect(page.locator("#reflection-off-notice")).toBeVisible();
+    await expect(page.locator("#reflection-off-notice")).toHaveText(
+      "The fuller Reflection Engine is off for this view. The base reading remains available.",
+    );
+    await expect(page.locator("#reflection-today")).toBeHidden();
+    await expect(page.locator("#reading-tab-why")).toBeHidden();
+  });
+
   test("reflection=on reaches the Stage-3 loader, from an independent context with no prior warm cache", async ({ page }) => {
     const requested = await seedThenColdNavigate(page, canonicalFace(), "2026-08-18", "?reflection=on");
     expect(requested.some((url) => url.includes("qise/heritage-connections.js")), "reflection=on must load heritage-connections.js").toBe(true);

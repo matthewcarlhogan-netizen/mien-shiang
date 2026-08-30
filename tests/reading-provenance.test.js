@@ -117,6 +117,6 @@ test("known coverage gaps are an explicit expansion queue", () => {
 
 test("a composed Qi Se passage carries its stable content provenance ID", () => {
   const passage = passageFor(
-    { ascendant: "chi", band: "clear" }, { ming: 1, run: 1 }, "2026-08-11");
+    { ascendant: "chi", band: "clear" }, { ming: 1, run: 1 }, 0);
   assert.equal(passage.provenanceId, "qise-passages-v1");
 });

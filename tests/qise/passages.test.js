@@ -10,7 +10,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  CORE, BAND, COURSE, ATTRIBUTION, passageFor, courseKey, seededIndex, wordCount,
+  CORE, BAND, COURSE, ATTRIBUTION, passageFor, passageOccurrenceFor, courseKey, seededIndex, wordCount,
 } from "../../src/qise/passages.js";
 
 /** Every passage the corpus can produce. */
@@ -141,17 +141,34 @@ test("courseKey names the shape of the lustre/moisture pair", () => {
 
 /* ───────────────────────────────────────────────────────────── determinism ── */
 
-test("the same reading always renders the same passage", () => {
-  // A random pick would rewrite history every time a screen was reopened,
-  // which turns a record into a slot machine.
+test("the same reading always renders the same passage regardless of its timestamp", () => {
+  // A date-derived pick rewrites the words when the same semantic record is
+  // imported with a different timestamp. The occurrence is the only novelty
+  // input; timestamps remain metadata.
   const compass = { ascendant: "chi", band: "clear" };
   const z = { ming: 2, run: 2 };
-  const a = passageFor(compass, z, "2026-08-09T02:30:00.000Z");
-  const b = passageFor(compass, z, "2026-08-09T02:30:00.000Z");
+  const a = passageFor(compass, z, 0);
+  const b = passageFor(compass, z, 0);
   assert.deepEqual(a, b);
 
-  const other = passageFor(compass, z, "2026-08-10T02:30:00.000Z");
-  assert.equal(typeof other.text, "string");
+  const movedTimestamp = passageFor(compass, z, "2026-08-10T02:30:00.000Z");
+  assert.deepEqual(movedTimestamp, a, "a timestamp must not become a hidden variation seed");
+});
+
+test("passage occurrence comes from the reader's real preceding cell history", () => {
+  const cell = { ascendant: "chi", band: "clear" };
+  const z = { ming: 2, run: 2 };
+  const first = { timestampIso: "2026-08-01T09:00:00.000Z", valid: true, compass: cell, z };
+  const other = { timestampIso: "2026-08-02T09:00:00.000Z", valid: true,
+    compass: { ascendant: "hei", band: "slight" }, z: { ming: 0, run: 0 } };
+  const third = { timestampIso: "2026-08-03T09:00:00.000Z", valid: true, compass: cell, z };
+  const history = [first, other, third];
+  assert.equal(passageOccurrenceFor(first, history), 0);
+  assert.equal(passageOccurrenceFor(third, history), 1);
+  assert.equal(passageOccurrenceFor({ ...third, timestampIso: "2026-08-04T09:00:00.000Z" }, history), 2,
+    "an appended record counts the prior matching rows even when it is not stored yet");
+  assert.equal(passageOccurrenceFor({ ...third, valid: false }, history), 1,
+    "invalid prior rows do not create a presentation occurrence");
 });
 
 test("the three parts vary independently across seeds", () => {
@@ -173,14 +190,14 @@ test("the three parts vary independently across seeds", () => {
 });
 
 test("an unknown ascendant falls back to the level reading rather than throwing", () => {
-  const p = passageFor({ ascendant: "nonsense", band: "clear" }, { ming: 0, run: 0 }, "seed");
+  const p = passageFor({ ascendant: "nonsense", band: "clear" }, { ming: 0, run: 0 }, 0);
   assert.equal(p.ascendant, "nonsense");
   assert.ok(p.text.startsWith(ATTRIBUTION));
-  assert.equal(passageFor(null, null, "seed").ascendant, "ping");
+  assert.equal(passageFor(null, null, 0).ascendant, "ping");
 });
 
 test("ping never renders an intensity band, because nothing is showing", () => {
-  const p = passageFor({ ascendant: "ping", band: "marked" }, { ming: 0, run: 0 }, "seed");
+  const p = passageFor({ ascendant: "ping", band: "marked" }, { ming: 0, run: 0 }, 0);
   assert.equal(p.band, "level");
   assert.doesNotMatch(p.text, /pronounced|strong|far clear/i);
 });

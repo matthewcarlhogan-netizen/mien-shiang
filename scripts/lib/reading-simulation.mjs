@@ -24,7 +24,7 @@ import * as color from "../../src/qise/color.js";
 import { syntheticFace } from "../../tests/qise/fixtures/synthetic.js";
 
 import { interpretReading, axesOf, BASELINE_VERSION } from "../../src/qise/baseline.js";
-import { passageFor } from "../../src/qise/passages.js";
+import { passageFor, passageOccurrenceFor } from "../../src/qise/passages.js";
 import { reflectionFor } from "../../src/qise/reading-pipeline.js";
 import { stateKey } from "../../src/qise/reading-state.js";
 
@@ -118,7 +118,7 @@ export function oldReading(record, history) {
     };
   }
   if (!record.compass) return { text: "", calibration: false, renderable: false };
-  const p = passageFor(record.compass, record.z || {}, record.timestampIso);
+  const p = passageFor(record.compass, record.z || {}, passageOccurrenceFor(record, history));
   return { text: p.text, calibration: false, renderable: true, provenanceId: p.provenanceId };
 }
 

@@ -116,6 +116,12 @@ substitute for a real state dimension, cosmetic noise injected into otherwise-id
 fabricated "daily fortune" content unconnected to any measured or historical fact. Any future
 retention mechanism proposed against this contract is checked against this list before it ships.
 
+The compatibility passage path follows the same rule: `passageFor()` accepts an explicit numeric
+occurrence, and `passageOccurrenceFor()` derives that number from the reader's preceding valid
+history in the same visible passage cell. A timestamp may identify a stored row for reopening, but
+it cannot select new words. The Reflection Engine's state identity and the passage engine's
+presentation occurrence are therefore separate by design.
+
 ## Steady days are a first-class experience
 
 Retention must work when the face does not materially change — most days, for most users, this is

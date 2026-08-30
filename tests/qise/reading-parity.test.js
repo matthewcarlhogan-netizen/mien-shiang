@@ -78,11 +78,13 @@ test("the new engine expresses every dimension the old one collapsed", () => {
 test("the measurement is capable of showing a dimension as unexpressed", () => {
   // Otherwise the previous test proves nothing. The old engine is the control:
   // it must score zero on the dimensions it structurally cannot see.
-  const blind = ["confidenceBand", "historyStage", "trajectory", "heritageConstruct", "availability"];
+  const blind = ["confidenceBand", "trajectory", "heritageConstruct", "availability"];
   for (const field of blind) {
     assert.equal(REPORT.personalisation[field].oldExpresses, 0,
       `the control engine scored above zero on "${field}"; the measure is not discriminating`);
   }
+  assert.ok(REPORT.personalisation.historyStage.oldExpresses > 0,
+    "the occurrence-indexed passage should respond to a real change in preceding history");
   assert.equal(REPORT.personalisation.ascendant.oldExpresses, 1,
     "the control engine scored zero on a dimension it does see; the measure is broken");
 });

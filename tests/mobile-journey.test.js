@@ -34,10 +34,11 @@ test("the mobile journey leads with a promise before the consent detail", () => 
 
 test("results are split into three short views with one primary story surface", () => {
   /*
-   * The count is three SHIPPED views. The reflection engine's "Why" panel is a
-   * fourth in the markup and is not a fourth in the journey: it ships with the
-   * `hidden` attribute and is only revealed when the rollout flag is on, so a
-   * user on the default path meets the same three tabs they always did.
+   * The boot markup starts with three primary views. The Reflection Engine's
+   * "Why" panel is a fourth, flag-gated-at-markup surface: the closed-beta
+   * runtime reveals it after a reading, while an explicit off/compatibility
+   * path keeps it hidden. The source-level guard below protects that initial
+   * mobile shape without claiming the richer beta runtime is absent.
    *
    * The guard is therefore counted over shipped panels rather than relaxed to
    * "three or four" — a relaxed count would let a genuine fourth tab in on the

@@ -136,8 +136,18 @@ export function classify(entry) {
   return { classification: "needs review", reasons: ["divergence did not match any declared rule"] };
 }
 
-/** Dimensions the passage engine is structurally able to see. */
-export const ENGINE_EXPRESSES_OLD = new Set(["ascendant", "magnitudeBand", "direction"]);
+/**
+ * Dimensions the passage engine is structurally able to see.
+ *
+ * The legacy passage's variant is now occurrence-indexed from the real
+ * preceding history. That gives it a bounded, honest history signal as well
+ * as its direct colour/band/course dimensions; it still does not see the
+ * Reflection Engine's confidence, trajectory, heritage, or availability
+ * state.
+ */
+export const ENGINE_EXPRESSES_OLD = new Set([
+  "ascendant", "magnitudeBand", "direction", "historyStage",
+]);
 
 /* ── question 3: dimension sensitivity, measured not assumed ─────────────── */
 
@@ -401,13 +411,10 @@ export function migrationGates({ coverage, preservation, safety, personalisation
      * engine passes all of them. They do not measure whether the product is
      * worth opening on day 200, which is what §1 and MARKER 2 actually promise.
      *
-     * Seeding variation from the state key — the change that made collision
-     * detection possible — has the exact side effect that a returning state
-     * returns the same words. Measured over a simulated year that is 69% of
-     * days showing prose already read, against 27% for the engine being
-     * replaced. The old engine's advantage here is accidental (it seeds from
-     * the timestamp, so it rewords itself without meaning to) but the user
-     * cannot tell an accident from a courtesy.
+     * Seeding the Reflection Engine from the state key makes equivalent states
+     * stable, while the compatibility passage engine now uses a real preceding
+     * occurrence to choose among equivalent presentations. Both paths are
+     * deterministic; neither uses a wall-clock date as decorative novelty.
      *
      * Threshold set at the old engine's own measured rate: whatever else
      * changes, a returning user must not meet MORE repetition than today.

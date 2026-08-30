@@ -43,6 +43,7 @@ import { fileURLToPath } from "node:url";
 // that test on windows-latest (20/22/24) starting at 9e7f28c.
 const read = (rel) => readFileSync(fileURLToPath(new URL(`../../src/${rel}`, import.meta.url)), "utf8").replace(/\r\n/g, "\n");
 const APP = read("ui/qise/app.js");
+const QISE_HTML = read("qise.html");
 
 /** The body of `renderReflection`, so the audit is scoped to what it touches — same helper as reading-wiring.test.js. */
 function renderReflectionBody() {
@@ -101,6 +102,21 @@ test("4: reflectionMode() is checked, and the off branch returns, BEFORE the Sta
   assert.doesNotMatch(offBlock, /loadHeritageStage3Modules/,
     "the off branch itself must not call the Stage-3 loader");
   assert.match(offBlock, /return;/, "the off branch must return without falling through to the loader");
+});
+
+test("4a: explicit off mode discloses the fuller engine instead of silently removing it", () => {
+  const body = renderReflectionBody();
+  const offAt = body.indexOf('if (mode === "off")');
+  const firstLoaderRefAt = body.indexOf("loadHeritageStage3Modules(");
+  const offBlock = body.slice(offAt, firstLoaderRefAt);
+  assert.match(QISE_HTML, /id="reflection-off-notice"/,
+    "the reading screen must have a dedicated disclosure surface");
+  assert.match(body, /const offNotice = \$\("reflection-off-notice"\);/,
+    "renderReflection must bind the disclosure surface");
+  assert.match(offBlock, /surfaces\.discloseOff = true/,
+    "explicit off mode must tell the reader the fuller engine is unavailable in this view");
+  assert.match(body, /setReflectionOffDisclosure\(offNotice, false\)/,
+    "enabled paths must clear a stale off disclosure");
 });
 
 /*

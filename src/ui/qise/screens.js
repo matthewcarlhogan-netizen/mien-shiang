@@ -8,7 +8,7 @@
  */
 import { PALETTE, COLOUR_ORDER } from "./palette.js";
 import { sealModel, sealSvg } from "./seal.js";
-import { passageFor } from "../../qise/passages.js";
+import { passageFor, passageOccurrenceFor } from "../../qise/passages.js";
 import { isLowConfidence } from "../../qise/baseline.js";
 import { compositionOf, COMPOSITION_COLOURS } from "../../qise/composition.js";
 
@@ -372,7 +372,7 @@ export function readingScreenModel(reading, history, options = {}) {
     courts: courtsStrip(reading.roiValidity),
     passage: calibration.active
       ? { text: calibration.story, source: "Mian Xiang context", calibration: true }
-      : passageFor(compass, z, reading.timestampIso),
+      : passageFor(compass, z, passageOccurrenceFor(reading, history)),
     tags: Array.isArray(reading.tags) ? [...reading.tags] : [],
     sparkline: sparklineModel(history, "ming"),
   };

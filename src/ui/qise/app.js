@@ -45,7 +45,7 @@ import {
 import { frameStats } from "../../qise/framestats.js";
 import { computeReadingMetrics, lumRatioP90P50 } from "../../qise/metrics.js";
 import { interpretReading, readingConfidence, axesOf, planSegment, BASELINE_VERSION } from "../../qise/baseline.js";
-import { passageFor } from "../../qise/passages.js";
+import { passageFor, passageOccurrenceFor } from "../../qise/passages.js";
 import { reflectionMode, QISE_BETA_SAFETY_AUTHORIZATION } from "../../qise/reading-flags.js";
 import { reflectionFor } from "../../qise/reading-pipeline.js";
 import { readingTiers } from "../../qise/reading-tiers.js";
@@ -1068,24 +1068,20 @@ function integratedStoryMarkup(model) {
 /*
  * THE REFLECTION ENGINE SURFACES, BEHIND THE ROLLOUT FLAG.
  *
- * Off by default. `?reflection=on` runs the new path; `?reflection=compare`
- * renders both engines against the same stored reading so the two can be read
- * side by side before the old one is retired. Nothing here mutates the record
- * or the existing panels — the current engine keeps writing what it always
- * wrote, and this adds surfaces beside it. That is the whole point of a
- * comparison flag: if the new path is wrong, the evidence is visible rather
- * than shipped.
+ * On by default for closed beta. `?reflection=off` keeps the compatibility
+ * passage path available; `?reflection=compare` renders both engines against
+ * the same stored reading so they can be read side by side. Nothing here
+ * mutates the record or the existing panels.
  */
 /*
  * Stage 3 connector-integration modules — loaded ONLY once Reflection is
  * confirmed not "off". `heritage-connections.js` pulls in
  * `../heritage/composition.js` -> `resolver.js` -> the full connector/source
  * registries and their import-time validation; `heritage-view.js` pulls in
- * `reflection-corpus.js`/`reading/provenance.js` for its own reductions. None
- * of that is public/reflection-off cold-load weight (Codex, PR #40 discussion
- * r3856061462: a static import here made every Tier-1-only visit pay the
- * connector graph's download/parse/validation cost even though the public
- * default is off and the safety gate suppresses all connector output).
+ * `reflection-corpus.js`/`reading/provenance.js` for its own reductions. The
+ * compatibility/reflection-off path does not pay that cold-load weight
+ * (Codex, PR #40 discussion r3856061462); the closed-beta default deliberately
+ * loads it so the authorized heritage surfaces can run at full capacity.
  *
  * This does NOT touch `reading-pipeline.js`/`reflection.js`, which import
  * `heritage/registry.js` on their own, separate, pre-existing path (see
@@ -1139,10 +1135,19 @@ function loadHeritageStage3Modules() {
  * tab without also hiding the Why panel leaves a reader who already opened
  * it looking at the previous reading's text, presented as current.
  */
-function teardownReflectionSurfaces({ todayNode, storyNode, compareNode, whyTab, whyPanel }) {
+function setReflectionOffDisclosure(offNotice, discloseOff) {
+  if (!offNotice) return;
+  offNotice.hidden = !discloseOff;
+  offNotice.textContent = discloseOff
+    ? "The fuller Reflection Engine is off for this view. The base reading remains available."
+    : "";
+}
+
+function teardownReflectionSurfaces({ todayNode, storyNode, compareNode, whyTab, whyPanel, offNotice, discloseOff = false }) {
   for (const node of [todayNode, storyNode, compareNode]) if (node) node.hidden = true;
   whyTab.hidden = true;
   whyPanel.hidden = true;
+  setReflectionOffDisclosure(offNotice, discloseOff);
 }
 
 async function renderReflection(reading, history) {
@@ -1156,9 +1161,10 @@ async function renderReflection(reading, history) {
   const compareNode = $("reflection-compare");
   const whyNode = $("reflection-why");
   const whyTab = $("reading-tab-why");
+  const offNotice = $("reflection-off-notice");
   const whyPanel = document.querySelector('[data-reading-panel="why"]');
   if (!todayNode || !storyNode || !whyNode || !whyTab || !whyPanel) return;
-  const surfaces = { todayNode, storyNode, compareNode, whyTab, whyPanel };
+  const surfaces = { todayNode, storyNode, compareNode, whyTab, whyPanel, offNotice };
 
   const mode = reflectionMode({
     search: location.search,
@@ -1167,9 +1173,14 @@ async function renderReflection(reading, history) {
   });
 
   if (mode === "off") {
+    surfaces.discloseOff = true;
     teardownReflectionSurfaces(surfaces);
     return;
   }
+
+  // A previous explicit-off render may have left its disclosure visible.
+  // Clear it before any enabled path, including a later Stage-3 fallback.
+  setReflectionOffDisclosure(offNotice, false);
 
   /*
    * Computed BEFORE the Stage-3 await, not after (Copilot, PR #40): a
@@ -1293,7 +1304,7 @@ async function renderReflection(reading, history) {
     const comparing = mode === "compare";
     compareNode.hidden = !comparing;
     if (comparing) {
-      const previous = passageFor(reading.compass, reading.z || {}, reading.timestampIso);
+      const previous = passageFor(reading.compass, reading.z || {}, passageOccurrenceFor(reading, history));
       compareNode.innerHTML = `
         <p class="eyebrow">Side by side</p>
         <div class="section-label"><h2>Current engine</h2><span class="muted">${esc(previous.provenanceId)}</span></div>

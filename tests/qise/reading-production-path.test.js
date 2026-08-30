@@ -295,7 +295,7 @@ test("the existing passage engine still runs on the same record", () => {
   // path has parity evidence. Both must work on the same input, so the flag
   // comparison has something to compare.
   const record = scan({ skin: WARM, history: BASE_HISTORY });
-  const old = passageFor(record.compass, record.z || {}, record.timestampIso);
+  const old = passageFor(record.compass, record.z || {}, 0);
   assert.ok(old.text.length > 0);
   assert.equal(old.provenanceId, "qise-passages-v1");
 
