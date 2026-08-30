@@ -90,6 +90,27 @@ export const DOC_LINK_ALLOWLIST = [
  */
 export const IDENTIFIER_URI_ALLOWLIST = [
   /^https:\/\/json-schema\.org\/draft\/2020-12\/schema$/,
+  /*
+   * Kanripo evidence-source locators — `sourceUrl` on records in
+   * `src/reading/provenance.js`, added by the 2026-08-29 project-owned
+   * acquisition (docs/heritage-evidence/acquisition-verify.json). Each
+   * record cites the exact GitHub blob it was hashed from; nothing in the
+   * app fetches these or renders them as a tappable link today (verified:
+   * no `sourceUrl` read exists under src/ui/ or src/qise/) — they exist so
+   * a human reviewer can independently re-verify a citation, the same
+   * purpose a footnote serves.
+   *
+   * A single exact-string entry per URL, like the JSON Schema one above,
+   * would need a new line for every future pinned source and would drift
+   * silently. This pattern is anchored just as tightly instead: it can
+   * match ONLY one of the four pinned Kanripo repos, a 40-character git
+   * commit SHA (any value — the pin is enforced by
+   * `acquisition-verify.json` and its own test, not by this lint), and the
+   * `KR3g00NN_NNN.txt` filename convention those repos actually use. No
+   * query string or fragment can match, so it cannot smuggle a value the
+   * way a tappable link could.
+   */
+  /^https:\/\/github\.com\/kanripo\/KR3g00(?:43|44|45|46)\/blob\/[0-9a-f]{40}\/KR3g00(?:43|44|45|46)_\d{3}\.txt$/,
 ];
 
 import {

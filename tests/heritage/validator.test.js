@@ -229,7 +229,12 @@ test("every source record preserves independent section and folio states", () =>
     assert.ok(source.sectionLocatorStatus);
     assert.ok(source.folioLocatorStatus);
   }
-  const taiqing = SOURCE_REGISTRY["heritage-five-mountains"];
+  // heritage-taiqing-form-qise-interaction (SR-08, 2026-08-29 project-owned
+  // reconciliation) still has a verified section locator and an unpinned folio —
+  // its specific 卷四 predicate was not read this pass — which is what this test
+  // exercises. heritage-five-mountains (formerly used here) now has a verified
+  // folio too (SR-01/SR-01b); see the dedicated test in integration.test.js.
+  const taiqing = SOURCE_REGISTRY["heritage-taiqing-form-qise-interaction"];
   assert.equal(taiqing.sectionLocatorStatus, "VERIFIED");
   assert.equal(taiqing.folioLocatorStatus, "NOT_RECORDED");
   assert.equal(taiqing.folioLocator, null);

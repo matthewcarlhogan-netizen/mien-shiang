@@ -467,7 +467,10 @@ test("12d: heritageQiSe's STATE cannot be satisfied by 'read' modern availabilit
 test("13: fiveElements candidates are exactly the registered connectors, no synthesized pairwise edges", () => {
   const result = resolveHeritageConnections(realArgs({ readingState: { heritageConstruct: "fiveElements", sourceLineage: "primary" }, depthMode: "SOURCE_DEEP" }));
   const allIds = [...result.activeConnectors, ...result.unavailableRelations, ...result.sourcePanels].map((e) => e.connectorId);
-  assert.deepEqual(allIds.sort(), ["five-forms-generative-overcoming-system"]);
+  // five-forms-like-with-like added by the 2026-08-29 project-owned Kanripo
+  // acquisition (matrix CR-09, errata E-7) — a genuinely distinct 玉管照神局
+  // like-with-like relation, not a synthesized pairwise edge.
+  assert.deepEqual(allIds.sort(), ["five-forms-generative-overcoming-system", "five-forms-like-with-like"]);
 });
 
 /* ── 14. Twelve Palaces does not import ZWDS ──────────────────────────────── */
@@ -521,9 +524,12 @@ test("17: an OPEN disagreement keeps every position, picks no winner", () => {
   const panel = result.disagreementPanels.find((d) => d.disagreementId === "five-mountains-northern-region");
   assert.ok(panel);
   assert.equal(panel.status, "OPEN");
-  assert.equal(panel.positions.length, 4);
+  // yuebo-yi added by the 2026-08-29 project-owned Kanripo acquisition (matrix
+  // DR-01): a fifth, independently-worded, byte-pinned witness (月波洞中記
+  // 卷上, <pb:KR3g0043_WYG_001_5a>) for the disputed northern/lower-face mountain.
+  assert.equal(panel.positions.length, 5);
   const ids = panel.positions.map((p) => p.positionId).sort();
-  assert.deepEqual(ids, ["renlun-datong-chin", "shenyi-lower-face-zone", "sxqb-chin", "taiqing-han"]);
+  assert.deepEqual(ids, ["renlun-datong-chin", "shenyi-lower-face-zone", "sxqb-chin", "taiqing-han", "yuebo-yi"]);
 });
 
 /* ── 18. Four Rivers disagreement does not duplicate high-level connector ── */
@@ -1925,32 +1931,55 @@ test("resolveSourceEligibility: item 5 — connector.evidenceStrength gates too;
 
 /*
  * Item 5 (Stage 2 review, round 3): the specific real connector named in the
- * review. Its own evidenceStrength is RECORDED_NOT_VERIFIED — the weakest
- * rung — even though the source it cites (heritage-five-mountains) is fully
- * VERIFIED. Under the corrected ladder this now ceilings at SOURCE_PANEL,
- * not ACTIVE. This is a real, honest behaviour change, not a test-fitting
- * exercise — see the delivery report for why this is flagged for
- * source-review rather than silently reinterpreted.
+ * review was five-mountains-mutual-facing-fullness. Its own evidenceStrength
+ * was RECORDED_NOT_VERIFIED — the weakest rung — even though the source it
+ * cited (heritage-five-mountains) was fully VERIFIED. That review explicitly
+ * flagged it FOR SOURCE-REVIEW rather than silently reinterpreting the ceiling.
+ *
+ * The 2026-08-29 project-owned Kanripo acquisition IS that source review: the
+ * connector was split into five-mountains-mutual-facing / five-mountains-fullness
+ * (errata E-8) and both halves were byte-pinned to VERIFIED_PRIMARY (folio
+ * <pb:KR3g0045_WYG_002_17b>). The flagged item is resolved, honestly, by
+ * actually doing the review the flag asked for — not by loosening the ladder.
+ * See docs/heritage-evidence/EVIDENCE_TRANSITION_LEDGER.md.
  */
-test("five-mountains-mutual-facing-fullness: RECORDED_NOT_VERIFIED evidenceStrength ceilings it at SOURCE_PANEL even under its own well-sourced lineage", () => {
-  const connector = HERITAGE_CONNECTOR_REGISTRY["five-mountains-mutual-facing-fullness"];
-  assert.equal(connector.evidenceStrength, "RECORDED_NOT_VERIFIED");
-  assert.equal(connector.runtimePolicy, "HERITAGE_PRESENTATION_ALLOWED");
+test("five-mountains-mutual-facing / five-mountains-fullness: the item 5 source-review flag is resolved — both now reach ACTIVE on verified evidence", () => {
+  for (const connectorId of ["five-mountains-mutual-facing", "five-mountains-fullness"]) {
+    const connector = HERITAGE_CONNECTOR_REGISTRY[connectorId];
+    assert.equal(connector.evidenceStrength, "VERIFIED_PRIMARY");
+    assert.equal(connector.folioLocatorStatus, "VERIFIED");
+    const source = SOURCE_REGISTRY[connector.sourceId];
+    assert.equal(source.citationStatus, "verified");
+  }
 
   const result = resolveHeritageConnections(realArgs({
     readingState: { heritageConstruct: "fiveMountains", sourceLineage: "taiqing-siku" },
     depthMode: "SOURCE_DEEP",
   }));
-  assert.equal(result.activeConnectors.some((e) => e.connectorId === "five-mountains-mutual-facing-fullness"), false);
-  const panel = result.sourcePanels.find((e) => e.connectorId === "five-mountains-mutual-facing-fullness");
-  assert.ok(panel, "held at SOURCE_PANEL_CEILING, not simply dropped — it is still fully traceable");
-  assert.equal(panel.disposition, "SOURCE_PANEL_CEILING");
-
-  // Confirm it is genuinely a SOURCE-EVIDENCE ceiling, not some other gate:
-  // the source itself IS independently verified.
-  const source = SOURCE_REGISTRY[connector.sourceId];
-  assert.equal(source.citationStatus, "verified");
+  for (const connectorId of ["five-mountains-mutual-facing", "five-mountains-fullness"]) {
+    assert.ok(result.activeConnectors.some((e) => e.connectorId === connectorId),
+      `${connectorId} should now be ACTIVE — the source-review flag is resolved, not standing`);
+    assert.equal(result.sourcePanels.some((e) => e.connectorId === connectorId), false);
+  }
 });
+
+/*
+ * Verified this session: after the 2026-08-29 project-owned Kanripo
+ * acquisition, no real connector with runtimePolicy HERITAGE_PRESENTATION_ALLOWED
+ * still sits at RECORDED_NOT_VERIFIED evidenceStrength — the item-5 pattern
+ * (a verified source, an unreviewed connector) has been genuinely resolved
+ * corpus-wide, not merely relocated. five-forms-generative-overcoming-system
+ * still has RECORDED_NOT_VERIFIED evidence (matrix CR-08: "NO CHANGE" — its
+ * 相生/相尅 predicate was not read this pass) but its runtimePolicy is
+ * RESEARCH_ONLY, which gates it as "RESEARCH_ONLY"/unavailableRelations
+ * BEFORE the SOURCE_PANEL_CEILING evidence-strength check is even reached —
+ * a different code path, not a substitute for this mechanism.
+ *
+ * The mechanism itself (a verified source cannot upgrade a connector whose
+ * own evidenceStrength is weaker) remains fully covered by the synthetic
+ * "resolveSourceEligibility: item 5" test above, which does not depend on
+ * the corpus continuing to contain a real, currently-unresolved instance.
+ */
 
 test("resolveSourceEligibility: item 1 — a weak/held LINEAGE ceilings an otherwise-solid connector source; the weaker side always wins", () => {
   const conn = (sourceId) => synConnector({ connectorId: "x", sourceId, participants: [] });

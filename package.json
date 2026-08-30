@@ -12,7 +12,9 @@
     "audit:release": "node scripts/check-release.js",
     "release:check": "node scripts/check-release.js --require-ready",
     "build": "node scripts/build.js",
-    "lint:bundle": "node scripts/lint-bundle.js"
+    "lint:bundle": "node scripts/lint-bundle.js",
+    "heritage:readiness": "node scripts/heritage-readiness.mjs",
+    "retention:sim": "node scripts/retention-sim.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "0.10.18"

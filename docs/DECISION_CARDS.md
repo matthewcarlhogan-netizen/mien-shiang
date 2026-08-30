@@ -215,6 +215,54 @@ shipped code**, per B1.
 
 ---
 
+## CARD 10 — Twelve Palaces construct runtime status
+
+**The question.** `docs/heritage-evidence/REPO_RECONCILIATION_MATRIX.md`'s EV-13 promotes the
+`twelvePalaces.lineages["taiqing-yuguan"]` lineage's evidence to `VERIFIED_PRIMARY` (the 十二宮
+system is now byte-pinned at `<pb:KR3g0045_WYG_001_17b>`, 太清神鑑 卷一 成和子統論). This is a
+factual, applied correction (B1: `EVIDENCE_FACT_ONLY`/`LOCATOR_ONLY`). Separately — and not applied
+by this pass — is whether the **construct's** overall `runtimeStatus` (currently
+`RECORDED_NOT_VERIFIED` at the `twelvePalaces` record level; the `taiqing-yuguan` lineage itself is
+`HERITAGE_ONLY`) should change as a result, i.e. whether Twelve Palaces should become eligible for
+a stronger runtime presentation than it has today.
+
+**Why this is a decision card, not an automatic promotion.** A single lineage's evidence being
+byte-pinned is a fact about that lineage. Whether the *construct* — which still carries an open,
+unresolved disagreement (`twelve-palaces-constituents`) between the byte-pinned Taiqing witness and
+the unpinned received-Mayi/神相全編 mapping — should be presented more assertively at runtime is a
+product/content decision about how much weight one witness's strength should carry for the whole
+construct, not a mechanical consequence of that witness's own promotion.
+
+**Options.**
+- **A. No change.** Leave `twelvePalaces`'s construct-level `verificationStatus` and every
+  lineage's `runtimeStatus` exactly as they are; the `taiqing-yuguan` lineage's evidence strength is
+  corrected, but nothing about what is eligible to render changes.
+- **B. Promote the construct's presentation** to reflect that at least one lineage now has
+  fully verified, byte-pinned evidence, while explicitly retaining the open disagreement's
+  unresolved status alongside it.
+
+**Research recommendation:** A (no change) for this pass, because the open
+`twelve-palaces-constituents` disagreement is exactly the kind of thing a promoted presentation
+could obscure if not designed carefully — and designing that presentation is scoped work, not a
+side effect of an evidence correction. **Not an approval.**
+
+---
+
+## CARD 11 — Kanripo surrogate rights (project-owned acquisition, all pinned records)
+
+**Carried forward, unchanged by this session**, from matrix row SR-18. The project-owned Kanripo
+acquisition (KR3g0043/0044/0045/0046) found an explicit **organisation-level CC BY-SA 4.0
+declaration** covering the source repositories — not carried in-surrogate on individual files, and
+ShareAlike's commercial-use implications for this product are unresolved. Every `SOURCE_REGISTRY`
+record pinned by this acquisition (SR-01 through SR-16, plus the three new records SR-05/14/15)
+keeps `surrogateRights: "SURROGATE_RIGHTS_NOT_DECLARED"` exactly as before — **not** moved to
+`CLEARED`, and not touched by this pass's evidence-strength or locator corrections, which are
+citation-ladder facts, not rights determinations. This requires product-owner and/or counsel
+review before any of this content could be treated as commercially cleared, independent of how
+well-attested the underlying scholarship now is.
+
+---
+
 ## CARD 9 — Analytics boundary
 
 **The question.** Should any event in `docs/SECURITY_PRIVACY_THREAT_MODEL.md`'s named-but-

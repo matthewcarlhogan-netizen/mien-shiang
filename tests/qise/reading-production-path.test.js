@@ -308,7 +308,7 @@ test("the existing passage engine still runs on the same record", () => {
  * ── 7. the lineage adapter through the REAL production path ─────────────────
  *
  * A prior test (tests/heritage/composition.test.js) claimed to prove
- * `five-mountains-mutual-facing-fullness` reaches `SOURCE_PANEL_CEILING`
+ * `five-mountains-mutual-facing` reaches `SOURCE_PANEL_CEILING`
  * "through the REAL Stage-3 production composition path" — but it called
  * `composeHeritageForReading` with the explicit canonical id "taiqing-siku"
  * supplied directly. Nothing in the real reading pipeline ever supplies
@@ -327,13 +327,20 @@ test("the existing passage engine still runs on the same record", () => {
  * 人倫大統賦 (Renlun Datong) directional-naming witness, `runtimeStatus:
  * "RESEARCH_ONLY"` — never to "taiqing-siku" (太清神鑑, HERITAGE_ONLY,
  * the mountain-name-to-region witness the connector actually cites). The
- * resolver therefore blocks `five-mountains-mutual-facing-fullness` at
- * `LINEAGE_RESEARCH_ONLY`, not `SOURCE_PANEL_CEILING` — it is fully
- * traceable (present in `abstentions`) but never shown. If a product owner
- * later authorises routing fiveMountains' abstract "primary" to
- * "taiqing-siku" via `ABSTRACT_LINEAGE_OVERRIDES`, this test's asserted
- * outcome will correctly start failing, which is the intended signal to
- * update it alongside that decision.
+ * resolver therefore blocks the connector at `LINEAGE_RESEARCH_ONLY`, not
+ * `SOURCE_PANEL_CEILING` — it is fully traceable (present in `abstentions`)
+ * but never shown. If a product owner later authorises routing fiveMountains'
+ * abstract "primary" to "taiqing-siku" via `ABSTRACT_LINEAGE_OVERRIDES`, this
+ * test's asserted outcome will correctly start failing, which is the intended
+ * signal to update it alongside that decision.
+ *
+ * Updated 2026-08-29 (project-owned Kanripo reconciliation, errata E-8): the
+ * former `five-mountains-mutual-facing-fullness` connector referenced above
+ * was split into `five-mountains-mutual-facing` and `five-mountains-fullness`,
+ * both byte-pinned to VERIFIED_PRIMARY. This LINEAGE_RESEARCH_ONLY abstention is
+ * a whole-construct routing gate, evaluated before either connector's own
+ * evidence strength — so the split and the evidence promotion change neither
+ * mechanism nor outcome here, only the id under test.
  */
 test("fiveMountains/primary through the REAL reflectionFor()/readingTiersWithHeritage() path does NOT reach taiqing-siku or SOURCE_PANEL_CEILING today", () => {
   const canonicalDay = "2026-08-20";
@@ -359,11 +366,11 @@ test("fiveMountains/primary through the REAL reflectionFor()/readingTiersWithHer
   assert.equal(tier3Connectors.primaryLineage, "primary",
     "the resolver received the abstract label verbatim, not \"taiqing-siku\"");
   assert.equal(
-    tier3Connectors.active.some((e) => e.connectorId === "five-mountains-mutual-facing-fullness"), false);
+    tier3Connectors.active.some((e) => e.connectorId === "five-mountains-mutual-facing"), false);
   assert.equal(
-    tier3Connectors.sourcePanelOnly.some((e) => e.connectorId === "five-mountains-mutual-facing-fullness"), false,
+    tier3Connectors.sourcePanelOnly.some((e) => e.connectorId === "five-mountains-mutual-facing"), false,
     "SOURCE_PANEL_CEILING is not reached through the real abstract-label path");
-  const blocked = tier3Connectors.abstentions.find((e) => e.connectorId === "five-mountains-mutual-facing-fullness");
+  const blocked = tier3Connectors.abstentions.find((e) => e.connectorId === "five-mountains-mutual-facing");
   assert.ok(blocked, "the connector must still be fully traceable, even though it is never shown");
   assert.equal(blocked.gateReasons[0], "LINEAGE_RESEARCH_ONLY");
 });

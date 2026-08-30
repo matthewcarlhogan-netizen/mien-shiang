@@ -274,17 +274,21 @@ test("composeHeritageForReading resolves against the REAL canonical registries w
   const result = composeHeritageForReading({
     captureQualityPassed: true,
     safetyPassed: true,
-    heritageConstruct: "fiveMountains",
-    sourceLineage: "taiqing-siku",
+    heritageConstruct: "fiveOfficers",
+    sourceLineage: "primary",
     depthMode: "SOURCE_DEEP",
   });
   assert.equal(result.suppressed, false);
-  // The real corpus's flagship SOURCE_PANEL_CEILING record (see
-  // docs/HERITAGE_CONNECTOR_STAGE_STATUS.md) — present here with zero
-  // registries injected proves canonical binding actually happened, not
-  // just that the call didn't throw.
-  assert.ok(result.sourcePanelOnly.some((e) => e.connectorId === "five-mountains-mutual-facing-fullness"),
-    "the real five-mountains-mutual-facing-fullness connector must resolve with no registries injected");
+  // The real corpus's flagship SOURCE_PANEL_CEILING record. Formerly
+  // five-mountains-mutual-facing-fullness, but the 2026-08-29 project-owned
+  // Kanripo reconciliation split that connector and byte-pinned both halves
+  // to VERIFIED_PRIMARY, which legitimately promotes them out of the ceiling
+  // under fiveMountains/taiqing-siku (see EVIDENCE_TRANSITION_LEDGER.md).
+  // five-officers-one-good-office-ten-years is ceilinged by a fixed
+  // SOURCE_PANEL_ONLY runtimePolicy (fortune-typed content), not by evidence
+  // strength, so it is unaffected and a stable replacement fixture.
+  assert.ok(result.sourcePanelOnly.some((e) => e.connectorId === "five-officers-one-good-office-ten-years"),
+    "the real five-officers-one-good-office-ten-years connector must resolve with no registries injected");
 });
 
 test("composeHeritageForReading also fails closed exactly like the injectable seam", () => {
@@ -417,14 +421,26 @@ test("an invalid runtimeBindingContext aborts the whole Stage 3 composition, eve
 /* ── 6: SOURCE_PANEL_CEILING material is correctly categorised ───────────── */
 
 test("SOURCE_PANEL_CEILING material surfaces only in sourcePanelOnly, at SOURCE_DEEP, never in active", () => {
-  const standard = composeHeritageConnectionsWithRegistries(realBase({ depthMode: "STANDARD" }));
+  // fiveOfficers/primary, not the realBase() default (fiveMountains/taiqing-siku):
+  // the 2026-08-29 project-owned Kanripo reconciliation byte-pinned both halves
+  // of the former five-mountains-mutual-facing-fullness connector to
+  // VERIFIED_PRIMARY, legitimately promoting them out of the ceiling under
+  // that lineage. five-officers-one-good-office-ten-years is ceilinged by a
+  // fixed SOURCE_PANEL_ONLY runtimePolicy, unaffected by that change.
+  const fixture = { heritageConstruct: "fiveOfficers", sourceLineage: "primary" };
+  const standard = composeHeritageConnectionsWithRegistries(realBase({ ...fixture, depthMode: "STANDARD" }));
   assert.equal(standard.sourcePanelOnly.length, 0);
 
-  const deep = composeHeritageConnectionsWithRegistries(realBase({ depthMode: "SOURCE_DEEP" }));
-  const ceilinged = deep.sourcePanelOnly.find((e) => e.connectorId === "five-mountains-mutual-facing-fullness");
-  assert.ok(ceilinged, "five-mountains-mutual-facing-fullness must surface at SOURCE_DEEP");
-  assert.equal(ceilinged.disposition, "SOURCE_PANEL_CEILING");
-  assert.equal(deep.active.some((e) => e.connectorId === "five-mountains-mutual-facing-fullness"), false);
+  const deep = composeHeritageConnectionsWithRegistries(realBase({ ...fixture, depthMode: "SOURCE_DEEP" }));
+  const ceilinged = deep.sourcePanelOnly.find((e) => e.connectorId === "five-officers-one-good-office-ten-years");
+  assert.ok(ceilinged, "five-officers-one-good-office-ten-years must surface at SOURCE_DEEP");
+  // "SOURCE_PANEL" — a fixed SOURCE_PANEL_ONLY runtimePolicy ceiling, verified
+  // against the real value this session. Distinct from "SOURCE_PANEL_CEILING"
+  // (an evidence-STRENGTH ceiling on an otherwise HERITAGE_PRESENTATION_ALLOWED
+  // connector) — after the 2026-08-29 reconciliation no real connector of that
+  // second kind remains in the corpus; see tests/heritage/resolver.test.js.
+  assert.equal(ceilinged.disposition, "SOURCE_PANEL");
+  assert.equal(deep.active.some((e) => e.connectorId === "five-officers-one-good-office-ten-years"), false);
 });
 
 /* ── 7: prohibitedForUserInference stays true on every surfaced entry ────── */
@@ -743,18 +759,27 @@ test("an unresolvable lineage on a real construct never falls back to that const
  * for what the real path actually produces.
  */
 test("fiveMountains -> taiqing-siku is reachable when the explicit canonical id is requested directly, with evidence unchanged (NOT the abstract Reflection Engine rotation)", () => {
+  // The 2026-08-29 project-owned Kanripo reconciliation split the former
+  // five-mountains-mutual-facing-fullness connector into five-mountains-mutual-facing
+  // and five-mountains-fullness, and byte-pinned both to VERIFIED_PRIMARY — a
+  // real, legitimate strengthening of the evidence, which now resolves as
+  // ACTIVE rather than SOURCE_PANEL_CEILING under this direct lineage request.
+  // This test's actual point survives unchanged: direct-lineage resolution
+  // against the real registries works, and reports evidence exactly as the
+  // registry declares it — not a claim about which disposition that evidence
+  // lands on. See EVIDENCE_TRANSITION_LEDGER.md.
   const result = composeHeritageForReading({
     captureQualityPassed: true, safetyPassed: true,
     heritageConstruct: "fiveMountains", sourceLineage: "taiqing-siku", depthMode: "SOURCE_DEEP",
   });
   assert.equal(result.primaryLineage, "taiqing-siku");
-  const ceilinged = result.sourcePanelOnly.find((e) => e.connectorId === "five-mountains-mutual-facing-fullness");
-  assert.ok(ceilinged, "must reach SOURCE_PANEL_CEILING through the product-facing entry point with zero registries injected");
-  assert.equal(ceilinged.disposition, "SOURCE_PANEL_CEILING");
+  const active = result.active.find((e) => e.connectorId === "five-mountains-mutual-facing");
+  assert.ok(active, "must reach the product-facing entry point with zero registries injected");
+  assert.equal(active.disposition, "ACTIVE");
   // Evidence standing is exactly what the real connector record declares —
   // the adapter must not have upgraded or altered it.
-  assert.equal(ceilinged.evidenceStrength, HERITAGE_CONNECTOR_REGISTRY["five-mountains-mutual-facing-fullness"].evidenceStrength);
-  assert.equal(result.active.some((e) => e.connectorId === "five-mountains-mutual-facing-fullness"), false);
+  assert.equal(active.evidenceStrength, HERITAGE_CONNECTOR_REGISTRY["five-mountains-mutual-facing"].evidenceStrength);
+  assert.equal(result.sourcePanelOnly.some((e) => e.connectorId === "five-mountains-mutual-facing"), false);
 });
 
 test("fiveMountains's registry-key 'primary' lineage is NOT the same claim as 'taiqing-siku' — routing the abstract label there would be a content substitution, not a bug fix", () => {

@@ -51,12 +51,23 @@ test("a weaker provenance status never satisfies the stronger gate", () => {
   assert.ok(result.issues.includes("citation-source-required:mianxiang-unspecified"));
   assert.ok(result.issues.includes("source-rights-unverified:mianxiang-unspecified"));
 
-  const identifiedWork = SOURCE_REGISTRY["heritage-four-rivers-renlun-datong"];
+  // heritage-four-rivers-renlun-datong (formerly used here) was promoted
+  // work-recorded -> edition-recorded by the 2026-08-29 project-owned Kanripo
+  // reconciliation (matrix SR-11): it now has a byte-pinned folio locator. See
+  // docs/heritage-evidence/EVIDENCE_TRANSITION_LEDGER.md. heritage-five-mountains-shenyi
+  // is untouched by that reconciliation and still demonstrates the same rung.
+  const identifiedWork = SOURCE_REGISTRY["heritage-five-mountains-shenyi"];
   assert.equal(identifiedWork.citationStatus, CITATION_STATUS.WORK_RECORDED);
   assert.notEqual(CITATION_STATUS.WORK_RECORDED, CITATION_STATUS.EDITION_RECORDED);
   assert.match(
-    explainProvenanceIssue("citation-work-recorded:heritage-four-rivers-renlun-datong"),
+    explainProvenanceIssue("citation-work-recorded:heritage-five-mountains-shenyi"),
     /edition-level locator not recorded/,
+  );
+
+  // Intentional evidence-caused promotion, recorded rather than silently lost:
+  assert.equal(
+    SOURCE_REGISTRY["heritage-four-rivers-renlun-datong"].citationStatus,
+    CITATION_STATUS.EDITION_RECORDED,
   );
 });
 

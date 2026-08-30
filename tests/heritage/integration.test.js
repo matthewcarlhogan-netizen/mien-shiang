@@ -142,10 +142,14 @@ test("parallel source assignments remain distinct machine-readable lineages", ()
   assert.ok(HERITAGE_REGISTRY.fiveMountains.lineages["sxqb-chin"]);
   assert.ok(HERITAGE_REGISTRY.fiveMountains.lineages["shenyi-lower-face-zone"]);
   assert.equal(HERITAGE_REGISTRY.fiveOfficers.lineages["philtrum-variant"], undefined);
-  assert.equal(
-    HERITAGE_REGISTRY.fiveOfficers.lineages.primary.unverifiedClaims[0].attestationStatus,
-    "NONE_ATTESTED",
-  );
+  // 2026-08-29 project-owned Kanripo reconciliation (matrix EV-08): the
+  // philtrum-longevity-office claim (formerly NONE_ATTESTED in
+  // unverifiedClaims) is now a witnessed position — 人中=保夀官 — inside the
+  // new renlun-xue lineage. unverifiedClaims is correctly empty as a result.
+  assert.deepEqual(HERITAGE_REGISTRY.fiveOfficers.lineages.primary.unverifiedClaims, []);
+  assert.ok(HERITAGE_REGISTRY.fiveOfficers.lineages["renlun-xue"]);
+  assert.ok(HERITAGE_REGISTRY.fiveOfficers.lineages["renlun-xue"].constituents
+    .some((member) => member.canonicalChineseName === "保夀官" && member.definition.includes("人中")));
   assert.equal(
     HERITAGE_REGISTRY.twelvePalaces.lineages["taiqing-yuguan"].constituents
       .some((member) => member.canonicalChineseName === "田宅宮"),
@@ -158,9 +162,24 @@ test("source corrections keep section and folio evidence independent", () => {
   assert.match(SOURCE_REGISTRY["heritage-four-rivers-primary"].sectionLocator, /Four Rivers.*juan 2/i);
   assert.match(SOURCE_REGISTRY["heritage-five-officers"].sectionLocator, /Five Officers.*juan 2/i);
   assert.match(SOURCE_REGISTRY["heritage-twelve-palaces"].sectionLocator, /十二宮訣.*十二宮絡/);
-  assert.equal(SOURCE_REGISTRY["heritage-five-mountains"].folioLocator, null);
-  assert.equal(SOURCE_REGISTRY["heritage-five-mountains"].folioLocatorStatus, "NOT_RECORDED");
+  // heritage-taiqing-form-qise-interaction (SR-08 in the 2026-08-29 project-owned
+  // reconciliation) is untouched by folio pinning — its specific 卷四 predicate was
+  // not read this pass — so it still demonstrates a verified section alongside a
+  // not-yet-recorded folio, which is what this test is actually about.
+  assert.equal(SOURCE_REGISTRY["heritage-taiqing-form-qise-interaction"].citationStatus, "verified");
+  assert.equal(SOURCE_REGISTRY["heritage-taiqing-form-qise-interaction"].folioLocator, null);
+  assert.equal(SOURCE_REGISTRY["heritage-taiqing-form-qise-interaction"].folioLocatorStatus, "NOT_RECORDED");
   assert.doesNotMatch(SOURCE_REGISTRY["heritage-twelve-palaces"].title, /十二宮相論/);
+});
+
+test("project-owned acquisition (2026-08-29): heritage-five-mountains now carries a verified folio locator", () => {
+  // Intentional evidence-caused change (matrix SR-01/SR-01b), not a regression:
+  // see docs/heritage-evidence/EVIDENCE_TRANSITION_LEDGER.md.
+  const source = SOURCE_REGISTRY["heritage-five-mountains"];
+  assert.equal(source.folioLocatorStatus, "VERIFIED");
+  assert.equal(source.folioLocator, "<pb:KR3g0045_WYG_002_17b>");
+  assert.equal(source.repository, "kanripo/KR3g0045");
+  assert.equal(source.sha256, "bdacf64e6dbd7dc9f9a4058137b057355862a65b3227e79b8cd8afef443492a9");
 });
 
 test("Claude corrections preserve contested attribution and distinct witnesses", () => {
