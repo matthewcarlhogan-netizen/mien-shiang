@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { extractFencedCsv, normaliseNewlines } from "../../scripts/lib/heritage-dossier.mjs";
+import { extractFencedCsv, normaliseNewlines, parseCsv } from "../../scripts/lib/heritage-dossier.mjs";
 
 const HEADER = "passageId,sourceId,repoUrl";
 const DOSSIER = [
@@ -63,5 +63,33 @@ test("an optional section with its header but no closing fence fails closed", ()
   assert.throws(
     () => extractFencedCsv("```csv\nrelationshipId,family,relationshipClass\nrow", "relationshipId,family,relationshipClass", { optional: true }),
     /missing or malformed fenced CSV block headed by relationshipId,family,relationshipClass/,
+  );
+});
+
+test("required CSV rejects an empty table instead of passing vacuously", () => {
+  assert.throws(
+    () => parseCsv(HEADER, { label: "required passage CSV", expectedHeader: HEADER, expectedRows: 1 }),
+    /required passage CSV: expected 1 data rows; got 0/,
+  );
+});
+
+test("required CSV rejects malformed row shapes", () => {
+  assert.throws(
+    () => parseCsv(`${HEADER}\nonly,two`, { label: "required passage CSV", expectedHeader: HEADER, expectedRows: 1 }),
+    /required passage CSV: row 2 has 2 fields; expected 3/,
+  );
+});
+
+test("CSV rejects unterminated quoted fields", () => {
+  assert.throws(
+    () => parseCsv(`${HEADER}\n"unterminated`, { label: "required passage CSV", expectedHeader: HEADER, expectedRows: 1 }),
+    /required passage CSV: unterminated quoted field/,
+  );
+});
+
+test("CSV rejects non-empty text after a closing quote", () => {
+  assert.throws(
+    () => parseCsv(`${HEADER}\n"value"oops,source,test`, { label: "required passage CSV", expectedHeader: HEADER, expectedRows: 1 }),
+    /required passage CSV: unexpected character after closing quote/,
   );
 });

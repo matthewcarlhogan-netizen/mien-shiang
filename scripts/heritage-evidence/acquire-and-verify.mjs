@@ -32,7 +32,7 @@ import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { extractFencedCsv, normaliseNewlines } from "../lib/heritage-dossier.mjs";
+import { extractFencedCsv, normaliseNewlines, parseCsv } from "../lib/heritage-dossier.mjs";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const DOSSIER = join(REPO_ROOT, "MIEN_SHIANG_PINNING_PASS.md");
@@ -43,6 +43,11 @@ const KANRIPO = [
   { id: "KR3g0045", title: "太清神鑑",   commit: "b3e5b69beb95f575bb47e9eaed1e6aadd23bffe5" },
   { id: "KR3g0046", title: "人倫大統賦", commit: "b408ea0b969672a1f52e5ec371f9fe3250976e58" },
 ];
+const PASSAGE_HEADER = "passageId,sourceId,repoUrl,commitSha,fileSha256,filePath,juan,section,pbMarker,textualLayer,passageChinese,translation,retrievedAt";
+const ATLAS_HEADER = "relationshipId,family,relationshipClass,fromParticipant,toParticipant,direction,condition,historicalClaim,sourceId,lineageId,sourcePassageChinese,translation,juan,section,folio,sectionLocatorStatus,folioLocatorStatus,citationStatus,evidenceStrength,textualLayer,disagreementId,prohibitedForUserInference,runtimePotential,notes";
+const PASSAGE_ROW_COUNT = 17;
+const ATLAS_ROW_COUNT = 38;
+const PASSAGE_ACCEPTED_STATUSES = new Set(["VERIFIED", "VERIFIED_WITH_TRANSCRIPTION_NOTE"]);
 
 const args = process.argv.slice(2);
 const scratch = args[0] ? resolve(args[0]) : null;
@@ -73,38 +78,28 @@ for (const m of dossier.matchAll(/^([0-9a-f]{64})\s+(KR3g004\d_\d{3}\.txt)$/gm))
 // §2 CSV: the fenced blocks beginning with their stable headers
 const passagesCsv = extractFencedCsv(
   dossier,
-  "passageId,sourceId,repoUrl,commitSha,fileSha256,filePath,juan,section,pbMarker,textualLayer,passageChinese,translation,retrievedAt",
+  PASSAGE_HEADER,
 );
 // The atlas was historically optional while the dossier was being assembled;
 // preserve that deliberate degraded-but-runnable state. Passage evidence is
 // required and therefore still fails closed when its section is absent.
 const atlasCsv = extractFencedCsv(
   dossier,
-  "relationshipId,family,relationshipClass,fromParticipant,toParticipant,direction,condition,historicalClaim,sourceId,lineageId,sourcePassageChinese,translation,juan,section,folio,sectionLocatorStatus,folioLocatorStatus,citationStatus,evidenceStrength,textualLayer,disagreementId,prohibitedForUserInference,runtimePotential,notes",
+  ATLAS_HEADER,
   { optional: true },
 );
 
-function parseCsv(text) {
-  const rows = [];
-  let row = [], field = "", q = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (q) {
-      if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
-      else if (c === '"') q = false;
-      else field += c;
-    } else if (c === '"') q = true;
-    else if (c === ",") { row.push(field); field = ""; }
-    else if (c === "\n") { row.push(field); rows.push(row); row = []; field = ""; }
-    else field += c;
-  }
-  if (field.length || row.length) { row.push(field); rows.push(row); }
-  const header = rows.shift();
-  return rows.filter(r => r.length > 1).map(r => Object.fromEntries(header.map((h, i) => [h, r[i]])));
-}
-
-const passages = parseCsv(passagesCsv);
-const atlas = atlasCsv ? parseCsv(atlasCsv) : [];
+const passages = parseCsv(passagesCsv, {
+  label: "required passage CSV",
+  expectedHeader: PASSAGE_HEADER,
+  expectedRows: PASSAGE_ROW_COUNT,
+  nonEmptyColumns: Array.from({ length: 13 }, (_, i) => i),
+});
+const atlas = atlasCsv ? parseCsv(atlasCsv, {
+  label: "optional atlas CSV",
+  expectedHeader: ATLAS_HEADER,
+  expectedRows: ATLAS_ROW_COUNT,
+}) : [];
 
 // ---------------------------------------------------------------------------
 // 2. Clone + checkout + verify commits, hash every file
@@ -337,7 +332,10 @@ const result = {
   hashTable, hashAllMatch,
   pbCounts, pbTotal,
   passageResults,
-  passageAllVerified: passageResults.every(p => p.status === "VERIFIED"),
+  passageAllVerified: passageResults.length === PASSAGE_ROW_COUNT
+    && passageResults.every(p => PASSAGE_ACCEPTED_STATUSES.has(p.status)),
+  passageAllContiguous: passageResults.length === PASSAGE_ROW_COUNT
+    && passageResults.every(p => p.status === "VERIFIED"),
   checks,
   atlasArith,
 };
@@ -359,6 +357,9 @@ L.push(`## <pb:...> markers — total ${pbTotal}`);
 for (const [f, n] of Object.entries(pbCounts)) L.push(`- ${f}: ${n}`);
 L.push("");
 L.push(`## Passage verification`);
+L.push(`- rows: ${passageResults.length}/${PASSAGE_ROW_COUNT}`);
+L.push(`- all accepted: ${result.passageAllVerified ? "YES" : "NO"}`);
+L.push(`- all contiguous: ${result.passageAllContiguous ? "YES" : "NO"}`);
 for (const p of passageResults) {
   L.push(`- ${p.passageId} [${p.status}] ${p.filePath} ${p.juan}/${p.section} ${p.pbMarker}`);
   if (p.transcriptionNote) L.push(`    NOTE: ${p.transcriptionNote}`);

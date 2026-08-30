@@ -26,3 +26,87 @@ export function extractFencedCsv(text, header, { optional = false } = {}) {
   }
   return matches[0][1];
 }
+
+export function parseCsv(text, {
+  label = "CSV",
+  expectedHeader = null,
+  expectedRows = null,
+  nonEmptyColumns = [],
+} = {}) {
+  const canonical = normaliseNewlines(text);
+  const rows = [];
+  let row = [];
+  let field = "";
+  let inQuotes = false;
+  let afterQuote = false;
+
+  const fail = (message) => {
+    throw new Error(`${label}: ${message}`);
+  };
+  const pushField = () => {
+    row.push(field);
+    field = "";
+    afterQuote = false;
+  };
+  const pushRow = () => {
+    pushField();
+    rows.push(row);
+    row = [];
+  };
+
+  for (let i = 0; i < canonical.length; i++) {
+    const c = canonical[i];
+    if (inQuotes) {
+      if (c === '"' && canonical[i + 1] === '"') {
+        field += '"';
+        i++;
+      } else if (c === '"') {
+        inQuotes = false;
+        afterQuote = true;
+      } else {
+        field += c;
+      }
+    } else if (afterQuote) {
+      if (c === ",") pushField();
+      else if (c === "\n") pushRow();
+      else fail(`unexpected character after closing quote at offset ${i}`);
+    } else if (c === '"') {
+      if (field.length) fail(`quote may only begin a field at offset ${i}`);
+      inQuotes = true;
+    } else if (c === ",") {
+      pushField();
+    } else if (c === "\n") {
+      pushRow();
+    } else {
+      field += c;
+    }
+  }
+
+  if (inQuotes) fail("unterminated quoted field");
+  if (afterQuote || field.length || row.length) pushRow();
+
+  const header = rows.shift();
+  if (!header) fail("missing header");
+
+  const expectedColumns = expectedHeader === null
+    ? null
+    : Array.isArray(expectedHeader) ? expectedHeader : String(expectedHeader).split(",");
+  if (expectedColumns && (header.length !== expectedColumns.length
+    || header.some((value, i) => value !== expectedColumns[i]))) {
+    fail("header does not match exactly");
+  }
+
+  for (const [i, dataRow] of rows.entries()) {
+    if (dataRow.length !== header.length) {
+      fail(`row ${i + 2} has ${dataRow.length} fields; expected ${header.length}`);
+    }
+    for (const column of nonEmptyColumns) {
+      if (dataRow[column] === "") fail(`row ${i + 2} has an empty required field at column ${column + 1}`);
+    }
+  }
+  if (expectedRows !== null && rows.length !== expectedRows) {
+    fail(`expected ${expectedRows} data rows; got ${rows.length}`);
+  }
+
+  return rows.map(dataRow => Object.fromEntries(header.map((h, i) => [h, dataRow[i]])));
+}
