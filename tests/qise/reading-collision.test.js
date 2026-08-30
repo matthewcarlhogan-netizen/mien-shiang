@@ -38,6 +38,7 @@ import {
   COMPONENTS, composeReading, consumedFields, DECLARED_EQUIVALENCES,
   explainReading, LAYERS,
 } from "../../src/qise/reflection.js";
+import { readingTiers } from "../../src/qise/reading-tiers.js";
 
 const STATES = enumerateReachableStates();
 
@@ -172,6 +173,28 @@ test("no two materially different states produce the same reading", () => {
 
   assert.deepEqual(collisions, [],
     `${collisions.length} undeclared reading collisions. Either differentiate the corpus or add an entry to DECLARED_EQUIVALENCES with a sharedReadingReason.`);
+});
+
+test("the visible Tier 2 material distinguishes every reachable state", () => {
+  const seen = new Map();
+  const collisions = [];
+
+  for (const state of STATES) {
+    const composed = composeReading(state);
+    const tier2 = readingTiers({ state, composed }).tier2;
+    const material = JSON.stringify(tier2);
+    const prior = seen.get(material);
+    if (prior && stateKey(prior) !== stateKey(state)) {
+      collisions.push(`${stateKey(prior)} == ${stateKey(state)}`);
+    } else if (!prior) {
+      seen.set(material, state);
+    }
+  }
+
+  assert.deepEqual(collisions, [],
+    `${collisions.length} reachable states share a visible Tier 2 presentation`);
+  assert.equal(seen.size, STATES.length,
+    "Tier 2 material count must cover every reachable state exactly once");
 });
 
 /* ── 5. no inert dimension ───────────────────────────────────────────────── */

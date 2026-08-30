@@ -56,7 +56,7 @@ test("every reachable state produces all three tiers", () => {
   }
 });
 
-test("tier 1 carries no heritage and tier 2 carries no measurement", () => {
+test("tier 1 carries no heritage and tier 2 keeps personal context separate from heritage", () => {
   // §7 — the layers stay apart in the surface, not only in the data model.
   for (const s of STATES.filter((_, i) => i % 53 === 0)) {
     const t = forState(s);
@@ -65,7 +65,39 @@ test("tier 1 carries no heritage and tier 2 carries no measurement", () => {
       "heritage content leaked into Today");
     assert.ok(!/your own scatter|has risen above|has fallen below/i.test(t.tier2.passage),
       "measurement leaked into the heritage passage");
+    assert.ok(!/太清|神相|麻衣|classical writers|the tradition/i.test(
+      Object.values(t.tier2.personalContext).join(" "),
+    ), "heritage content leaked into personal context");
   }
+});
+
+test("tier 2 carries the existing personal reading context as a separate projection", () => {
+  const state = STATES.find((x) => x.availability === "read");
+  const composed = composeReading(state);
+  const tier2 = readingTiers({ state, composed }).tier2;
+  const textFor = (id) => composed.parts.find((part) => part.id === id)?.text || "";
+
+  assert.deepEqual(tier2.personalContext, {
+    availability: textFor("availability"),
+    observation: textFor("observation"),
+    magnitude: textFor("magnitude"),
+    history: textFor("history"),
+    confidence: textFor("confidence"),
+  });
+  assert.ok(tier2.personalContext.observation.length > 0);
+  assert.ok(tier2.personalContext.history.length > 0);
+  assert.ok(tier2.personalContext.confidence.length > 0);
+  assert.ok(!/your own scatter|has risen above|has fallen below/i.test(tier2.passage),
+    "the heritage passage must remain free of measurement prose");
+});
+
+test("abstained Tier 2 context explains the gap without inventing an observation", () => {
+  const state = STATES.find((x) => x.availability === "abstained_confidence");
+  const tier2 = forState(state).tier2;
+  assert.equal(tier2.personalContext.observation, "");
+  assert.equal(tier2.personalContext.magnitude, "");
+  assert.ok(tier2.personalContext.availability.length > 0);
+  assert.ok(tier2.personalContext.confidence.length > 0);
 });
 
 test("tier 2 always carries its attribution and its rotation disclosure", () => {

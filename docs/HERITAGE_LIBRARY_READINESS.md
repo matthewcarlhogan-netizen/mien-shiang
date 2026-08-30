@@ -125,6 +125,31 @@ falsely inflated 648/72/72 combined-material figure down to the true 9/9/9). Pin
 the real fiveElements corpus for occurrences sharing an identical Tier 2 output and asserts they
 also share one material signature.
 
+### D-1 current-state update — Tier 2 personal context is now visible
+
+The preceding figures are the checkpoint recorded before the D-1 repair. The production Tier 2
+surface now carries a separately named `personalContext` projection of the already-computed
+availability, observation, magnitude, history and confidence components, and the Story and
+compare surfaces render it under **Your record**. The attributed heritage passage remains a
+separate field and is not changed by this repair.
+
+On the current branch, the exhaustive reachable-state sweep reports the following base Tier 2
+raw/material counts:
+
+| Construct | Base (Tier 2) raw=material |
+|---|---:|
+| threeSections | 24 |
+| fiveElements | 216 |
+| twelvePalaces | 24 |
+| fiveMountains | 24 |
+| fourRivers | 216 |
+| fiveOfficers | 216 |
+
+The visible Tier 2 object now distinguishes all **15,288/15,288** reachable states at occurrence
+zero, including the previously indistinguishable capture/anatomy abstention pairs. These are
+presentation-discrimination results, not customer-value evidence; the heritage connector residue
+remains 1 for every construct and the readiness result remains `NOT_READY`.
+
 ---
 
 ## 2. Retention findings — `npm run retention:sim`, four analyses, never merged

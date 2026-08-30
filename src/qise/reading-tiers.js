@@ -33,10 +33,26 @@ export function tierOne(state, composed) {
   };
 }
 
-/** Tier 2 — Reading. Heritage, then the bridge and the question. */
+/**
+ * Tier 2 — Reading.
+ *
+ * The heritage passage is deliberately kept separate from the personal
+ * context. Tier 1 is the quick report; Tier 2 is where that report is placed
+ * beside the attributed tradition. Reusing the already-computed production
+ * components here makes the richer surface genuinely responsive to the
+ * person's history and confidence without inventing a second interpretation
+ * or letting heritage prose masquerade as measurement.
+ */
 export function tierTwo(state, composed) {
   const material = heritageMaterialFor(state);
   return {
+    personalContext: Object.freeze({
+      availability: textsFor(composed, ["availability"])[0] || "",
+      observation: textsFor(composed, ["observation"])[0] || "",
+      magnitude: textsFor(composed, ["magnitude"])[0] || "",
+      history: textsFor(composed, ["history"])[0] || "",
+      confidence: textsFor(composed, ["confidence"])[0] || "",
+    }),
     passage: composed.layers.heritage.join(" "),
     attribution: material.attribution,
     sourceStatus: material.abstained ? "WITHHELD_PENDING_SOURCE_REVIEW" : "RUNTIME_PROSE",

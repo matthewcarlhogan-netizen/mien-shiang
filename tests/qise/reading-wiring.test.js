@@ -128,3 +128,25 @@ test("the comparison mode renders both engines, not one relabelled", () => {
   assert.match(APP, /import \{ passageFor \}/, "the current engine is not imported");
   assert.match(body, /mode === "compare"/);
 });
+
+test("the richer Tier 2 personal context reaches both Story and compare surfaces", () => {
+  const body = renderReflectionBody();
+  assert.match(body, /tier2\.personalContext/,
+    "renderReflection does not consume the Tier 2 personal context projection");
+  assert.match(body, /const personalContextSection =/,
+    "Tier 2 personal context has no dedicated rendered section");
+
+  const story = body.slice(
+    body.indexOf("storyNode.innerHTML = `"),
+    body.indexOf("`;", body.indexOf("storyNode.innerHTML = `")),
+  );
+  assert.match(story, /\$\{personalContextSection\}/,
+    "Story does not render the richer personal context");
+
+  const compare = body.slice(
+    body.indexOf("compareNode.innerHTML = `"),
+    body.indexOf("`;", body.indexOf("compareNode.innerHTML = `")),
+  );
+  assert.match(compare, /\$\{personalContextSection\}/,
+    "compare mode does not render the richer personal context");
+});

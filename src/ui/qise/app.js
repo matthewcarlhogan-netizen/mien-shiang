@@ -1254,6 +1254,20 @@ async function renderReflection(reading, history) {
   // own copy (see heritage-view.js) — the surface owns disclosure, not the
   // connector card.
   const rotationDisclosure = tier2.rotationDisclosure;
+  const personalContext = tier2.personalContext || {};
+  const personalContextLines = [
+    personalContext.availability,
+    personalContext.observation,
+    personalContext.magnitude,
+    personalContext.history,
+  ].filter(Boolean);
+  const personalContextMarkup = personalContextLines.map((line) => `<p>${esc(line)}</p>`).join("")
+    + (personalContext.confidence
+      ? `<p class="muted">${esc(personalContext.confidence)}</p>`
+      : "");
+  const personalContextSection = personalContextMarkup
+    ? `<p class="eyebrow">Your record</p>${personalContextMarkup}`
+    : "";
 
   todayNode.hidden = false;
   todayNode.innerHTML = `
@@ -1266,6 +1280,7 @@ async function renderReflection(reading, history) {
 
   storyNode.hidden = false;
   storyNode.innerHTML = `
+    ${personalContextSection}
     <p class="eyebrow">The tradition\u2019s reading</p>
     <p class="story-passage">${esc(tier2.passage)}</p>
     <p class="muted">${esc(tier2.attribution)}</p>
@@ -1284,6 +1299,7 @@ async function renderReflection(reading, history) {
         <div class="section-label"><h2>Current engine</h2><span class="muted">${esc(previous.provenanceId)}</span></div>
         <p class="story-passage">${esc(previous.text)}</p>
         <div class="section-label"><h2>Reflection engine</h2><span class="muted">${esc(tier3.provenance.engine)}</span></div>
+        ${personalContextSection}
         <p class="story-passage">${esc(tier2.passage)} ${esc(tier2.bridge)} ${esc(tier2.question)}</p>`;
     }
   }
