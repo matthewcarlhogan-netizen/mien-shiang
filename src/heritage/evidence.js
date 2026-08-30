@@ -214,7 +214,7 @@ export const HERITAGE_EVIDENCE = deepFreeze({
         sourceId: "heritage-three-sections-taiqing-mianbu",
         evidenceKind: "POSITIVE_CLAIM",
         evidenceStrength: "VERIFIED_PRIMARY",
-        runtimeStatus: "RESEARCH_ONLY",
+        runtimeStatus: "HERITAGE_ONLY",
         measurementAvailability: "SUPPORTED_2D",
         folioLocator: "<pb:KR3g0045_WYG_005_7b>",
         constituents: [

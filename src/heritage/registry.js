@@ -21,6 +21,7 @@ import { HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY } from "./negative-relationship
 import { HERITAGE_COMPOSITION_POLICIES } from "./composition-policies-registry.js";
 import { HERITAGE_CONCEPT_REGISTRY } from "./concepts.js";
 import { HERITAGE_CONSTRUCT_IDS } from "./constants.js";
+import { EXPANDED_HERITAGE_CONNECTORS } from "./runtime-connectors.js";
 
 function deepFreeze(value) {
   if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
@@ -391,7 +392,7 @@ export const HERITAGE_CONNECTOR_REGISTRY = deepFreeze({
     folioLocatorStatus: "VERIFIED",
     folioLocatorKind: "WYG_PB",
     measurementAvailability: "CAMERA_GEOMETRY_INSUFFICIENT",
-    runtimePolicy: "RESEARCH_ONLY",
+    runtimePolicy: "HERITAGE_PRESENTATION_ALLOWED",
     prohibitedForUserInference: true,
     note: "太清神鑑 卷一 pairs a Three Sections balance clause with this mountains/rivers correspondence clause; only the mountains/rivers clause is encoded here. Do not merge Three Sections into this connector from this line alone.",
   }),
@@ -423,7 +424,7 @@ export const HERITAGE_CONNECTOR_REGISTRY = deepFreeze({
       measurementAvailability: "UNMEASURABLE",
     }],
     measurementAvailability: "UNMEASURABLE",
-    runtimePolicy: "RESEARCH_ONLY",
+    runtimePolicy: "HERITAGE_PRESENTATION_ALLOWED",
     prohibitedForUserInference: true,
     note: "四瀆...則應於神 — a good state of the Four Rivers is said to manifest (應) in Shen. Directed because the source states the Rivers' standing as antecedent to the Shen appraisal, not a symmetric identity. Shen is unmeasurable and this stays research-only.",
   }),
@@ -495,7 +496,7 @@ export const HERITAGE_CONNECTOR_REGISTRY = deepFreeze({
     sectionLocator: "卷四「論㸔形神體像」",
     sectionLocatorStatus: "VERIFIED",
     measurementAvailability: "CAMERA_GEOMETRY_INSUFFICIENT",
-    runtimePolicy: "RESEARCH_ONLY",
+    runtimePolicy: "HERITAGE_PRESENTATION_ALLOWED",
     prohibitedForUserInference: true,
     note: "Decomposed from the legacy 'taiqing-form-spirit-qise-mountains-rivers' flat cross-family record. Historical Qi Se (氣色) is said to modify the appraisal/context of form, spirit, mountains and rivers per 卷四「論㸔形神體像」. This is a claim about the CLASSICAL predicate only — see the no-qise-to-form-classification negative rule for the explicitly forbidden modern-measurement inference this must not become.",
   }),
@@ -523,7 +524,7 @@ export const HERITAGE_CONNECTOR_REGISTRY = deepFreeze({
     folioLocatorStatus: "VERIFIED",
     folioLocatorKind: "WYG_PB",
     measurementAvailability: "CAMERA_GEOMETRY_INSUFFICIENT",
-    runtimePolicy: "RESEARCH_ONLY",
+    runtimePolicy: "HERITAGE_PRESENTATION_ALLOWED",
     prohibitedForUserInference: true,
     note: "月波洞中記: in appraising a face, the Five Mountains should mutually face, the Four Rivers should not intermingle, and Form and Shen should be fully complete.",
   }),
@@ -544,7 +545,7 @@ export const HERITAGE_CONNECTOR_REGISTRY = deepFreeze({
     sectionLocator: "卷四「五形」",
     sectionLocatorStatus: "RECORDED",
     measurementAvailability: "MODERN_MAPPING_UNSUPPORTED",
-    runtimePolicy: "RESEARCH_ONLY",
+    runtimePolicy: "HERITAGE_PRESENTATION_ALLOWED",
     prohibitedForUserInference: true,
     note: "太清神鑑 discusses the five forms in terms of mutual generation (相生) and mutual overcoming (相尅). Recorded at SYSTEM_AS_WHOLE only: this does not enumerate the ten pairwise edges and does not import the Five Phases (五行) cycle order — see the no-five-forms-five-phases-conflation negative rule. A pairwise breakdown needs a located, quoted predicate for each pair, not yet in the repository record.",
   }),
@@ -574,7 +575,7 @@ export const HERITAGE_CONNECTOR_REGISTRY = deepFreeze({
     folioLocatorStatus: "VERIFIED",
     folioLocatorKind: "WYG_PB",
     measurementAvailability: "CAMERA_GEOMETRY_INSUFFICIENT",
-    runtimePolicy: "RESEARCH_ONLY",
+    runtimePolicy: "HERITAGE_PRESENTATION_ALLOWED",
     prohibitedForUserInference: true,
     note: "相朝 applied to the four rivers (太清神鑑 卷二). 相朝 is not a mountains-only predicate.",
   }),
@@ -599,7 +600,7 @@ export const HERITAGE_CONNECTOR_REGISTRY = deepFreeze({
     folioLocatorStatus: "VERIFIED",
     folioLocatorKind: "WYG_PB",
     measurementAvailability: "MODERN_MAPPING_UNSUPPORTED",
-    runtimePolicy: "RESEARCH_ONLY",
+    runtimePolicy: "HERITAGE_PRESENTATION_ALLOWED",
     prohibitedForUserInference: true,
     note: "玉管照神局: 似X得X like-with-like — an element-resembling form obtaining that same element, one outcome each (5 pairs). NOT generation (相生), overcoming (相尅), a 5x5 grid, or 25 types. See the no-five-forms-five-phases-conflation negative rule.",
   }),
@@ -624,10 +625,11 @@ export const HERITAGE_CONNECTOR_REGISTRY = deepFreeze({
     folioLocatorStatus: "VERIFIED",
     folioLocatorKind: "WYG_PB",
     measurementAvailability: "SUPPORTED_2D",
-    runtimePolicy: "RESEARCH_ONLY",
+    runtimePolicy: "HERITAGE_PRESENTATION_ALLOWED",
     prohibitedForUserInference: true,
     note: "太清神鑑 卷五 論靣部 FACIAL three sections: per-section 主貴/主壽/主富 predicates and 三停皆稱乃上相之人. Distinct from the 卷六 BODY 身三停 material. Fortune-typed.",
   }),
+  ...EXPANDED_HERITAGE_CONNECTORS,
 });
 
 export const HERITAGE_DISAGREEMENT_REGISTRY = deepFreeze({

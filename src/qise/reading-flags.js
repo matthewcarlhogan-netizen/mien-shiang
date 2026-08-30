@@ -1,12 +1,11 @@
 /*
  * The reflection-engine rollout flag.
  *
- * Three states, not two. `off` is today's shipped behaviour, `on` is the new
- * path alone, and `compare` renders BOTH so the two can be read side by side on
- * the same real reading. Compare is the state that matters: the owner's
- * requirement is parity evidence before the old engine is removed, and evidence
- * means looking at the same input through both engines, not trusting a
- * changelog.
+ * Three states, not two. `off` is the compatibility passage path, `on` is the
+ * Reflection Engine path, and `compare` renders BOTH so the two can be read
+ * side by side on the same real reading. The beta default is explicit below;
+ * compare remains available for parity evidence before the old engine is
+ * retired.
  *
  * Pure, so the decision is testable without a browser, and so the precedence
  * between the URL and stored preference is written down once rather than
@@ -15,25 +14,23 @@
 
 export const REFLECTION_FLAG_KEY = "qise.flags.reflectionEngine";
 export const REFLECTION_MODES = Object.freeze(["off", "on", "compare"]);
+export const QISE_BETA_SAFETY_AUTHORIZATION = Object.freeze({
+  policy: "NO_REFERRAL_GATE_BY_DESIGN",
+  heritageConnectors: true,
+});
 
 /*
- * INTERNAL DEFAULT ≠ PUBLIC DEFAULT.
+ * BETA DEFAULT.
  *
- * Development should proceed against the engine we intend to keep, not the one
- * we intend to replace. But the heritage layer paraphrases sources whose
- * commercial rights are recorded as Blocked in `commercial-rights-audit.md`,
- * so "on by default" must not be able to reach a public user by accident.
+ * The product is now being prepared for closed beta, so the Reflection Engine
+ * is the default experience on every origin. This does not relabel any source
+ * as commercially cleared: the reading surfaces carry BETA_PREVIEW metadata
+ * where the source record is not a release approval, and the release audit
+ * remains an independent owner/counsel decision.
  *
- * The split is by HOST rather than by a build flag, and that is deliberate. A
- * build flag is a variable someone can set wrongly in a release pipeline, and
- * the failure is silent and public. A host allowlist inverts the risk: the
- * shipped origin is not on it, so a misconfigured build fails CLOSED. There is
- * no value of any environment variable that turns the engine on for a visitor
- * to the published site.
- *
- * Every entry here is a development origin — a local server, a Codespaces
- * forwarded port, a preview host. The production origin is deliberately absent
- * and a test asserts it stays absent.
+ * `off` remains an explicit compatibility mode and `compare` remains the
+ * diagnostic mode. A query/storage choice can still select either one. The
+ * rights/provenance audit is intentionally independent of this runtime switch.
  */
 export const INTERNAL_HOST_PATTERNS = Object.freeze([
   /^localhost$/i,
@@ -55,11 +52,13 @@ export function isInternalHost(hostname) {
 /**
  * The default when nothing has been chosen.
  *
- * Internal origins get the Reflection Engine. Everywhere else — including any
- * origin this list has never heard of — gets the shipped passage engine.
+ * The closed-beta product gets the Reflection Engine on every origin. The
+ * hostname argument is retained for API compatibility and diagnostics; it is
+ * not a release gate.
  */
 export function defaultMode(hostname) {
-  return isInternalHost(hostname) ? "on" : "off";
+  void hostname;
+  return "on";
 }
 
 const normalise = (v) => (REFLECTION_MODES.includes(String(v)) ? String(v) : null);

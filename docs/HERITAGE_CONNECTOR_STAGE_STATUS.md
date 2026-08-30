@@ -111,9 +111,25 @@ suite.
 **Do not reopen Stage 2 without a demonstrated regression against one of
 these frozen contracts.**
 
-## Stage 3 — PARTIAL / BLOCKED ON SAFETY AUTHORIZATION AND A LINEAGE CONTENT DECISION
+## Stage 3 — BETA RUNTIME ACTIVE / COMMERCIAL RELEASE STILL GATED
 
-### Six-axis status (added 30 August 2026 — read this before the word "Stage 3" anywhere below)
+### Closed-beta amendment (31 August 2026)
+
+The product owner has explicitly chosen to make the complete Reflection Engine and
+the attributed heritage connector path runnable in closed beta. Runtime readiness
+and rights/readiness audit status are separate facts: this change removes the
+runtime off-switch, not the evidence trail or the commercial-release obligations.
+The existing capture-quality gates remain active, and every heritage connector
+continues to carry its non-inference boundary.
+
+Current beta graph snapshot: **30 registered connectors, zero exact source-text collisions**.
+The routed production slots expose bounded attributed material for all six daily constructs;
+current Tier 2 material diversity is 3 (Three Sections), 2 (Five Elements), 2 (Twelve Palaces),
+7 (Five Mountains), 7 (Four Rivers), and 1 (Five Officers). The last value is intentional until
+another genuinely bounded-safe Five Officers relationship is supported; source-panel material
+is not silently promoted to inflate the count.
+
+### Six-axis status (amended 31 August 2026 — read this before the historical record below)
 
 A single word like "merged" or "complete" cannot carry five different facts at once. Six
 independent axes, none inferable from another:
@@ -122,28 +138,20 @@ independent axes, none inferable from another:
 |---|---|---|
 | `CODE_PRESENT` | `YES` | Merged to `main` via PR #40. This is a fact about the git history, nothing more. |
 | `TECHNICAL_ARCHITECTURE_REVIEWED` | `YES` | Stage 3 went through documented, named review rounds and correction passes — the "correction pass" / "Round N" sections below are the evidence trail. This records that the architecture was *reviewed*, not that it was *approved*; a prior draft of this status conflated the two. |
-| `PRODUCT_ARCHITECTURE_APPROVED` | `NOT_RECORDED` | No `docs/DECISION_REGISTER.md` entry approves Stage 3 as a product feature. `DR-2026-08-24-HERITAGE-CONNECTOR-STAGES-1-2-FREEZE` froze Stages 1–2 only and explicitly named Stage 3 as not thereby authorised. |
-| `CONTENT_AUTHORIZATION` | **per construct/lineage — not one global value** | Constructs are in different states. Five Mountains is blocked on the lineage-routing decision (`docs/DECISION_CARDS.md` CARD 7). Others may differ after this PR's evidence reconciliation (`docs/heritage-evidence/EVIDENCE_TRANSITION_LEDGER.md`). Collapsing this to one yes/no would misstate whichever constructs differ from the rest. |
-| `SAFETY_AUTHORIZED` | `NOT_GRANTED` | A deterministic status, not a slash-separated one. Recorded separately, because it is a different fact: the authoritative safety signal itself is currently **ABSENT/UNSET** in production (`gateStatus(undefined)` → `"UNKNOWN"`, which fails closed — see `docs/heritage-evidence/SAFETY_AUTHORIZATION_INTERFACE.md`). No signal supplied → authorisation not granted → Stage 3 stays fail-closed. This does not prejudge `docs/DECISION_CARDS.md` CARD 6. |
-| `PRODUCTION_ACTIVE` | `NO` | `safetyPassed` is never `true` anywhere in `src/ui/qise/app.js`; connector output is suppressed on every real reading today. |
+| `PRODUCT_ARCHITECTURE_APPROVED` | `YES — closed beta` | Recorded in `DR-2026-08-31-REFLECTION-BETA-RUNTIME` in `docs/DECISION_REGISTER.md`. This is beta runtime authority, not commercial clearance. |
+| `CONTENT_AUTHORIZATION` | **per construct/lineage — beta-routed where explicitly mapped** | `runtime-routing.js` maps the abstract daily slots for Three Sections, Twelve Palaces and Five Mountains to named witnesses. The records remain distinct, contested where recorded, and attributed in the UI. |
+| `SAFETY_AUTHORIZED` | `YES — no referral gate by design for Qi Se beta` | `QISE_BETA_SAFETY_AUTHORIZATION` is an explicit product policy. It does not claim a clinical signal exists; it states that Qi Se's non-clinical beta path has no additional referral gate. |
+| `PRODUCTION_ACTIVE` | `YES — closed beta` | `src/ui/qise/app.js` passes the named beta policy into Stage 3. Explicit `off` and `compare` modes remain available. |
 
-Correcting `docs/DECISION_REGISTER.md`'s previously-stale "Stage 3 has not started" line to say
-`CODE_PRESENT` is true does not, as a side effect, make `PRODUCT_ARCHITECTURE_APPROVED` true — the
-correction is scoped to the git-history fact and nothing else.
+The paragraphs below are historical pre-beta analysis. Statements that describe empty runtime
+routing, disabled production output, or an unset safety policy describe the state before the
+31 August 2026 closed-beta amendment and are not current runtime status.
 
-Heritage connector graph integrated with the Reflection Engine's reading
-path, on top of the frozen Stage 1/2 baseline (`df8cf22b9257c2a7fb75affd30b5e7dc6d15caa0`).
+The heritage connector graph remains on top of the frozen Stage 1/2 baseline
+(`df8cf22b9257c2a7fb75affd30b5e7dc6d15caa0`). The historical analysis below
+records the pre-beta state and is retained as an audit trail.
 
-**This section records that code exists and passes its own tests. It is not
-a freeze record, it does not itself approve Stage 3, and it is not a
-product-owner decision.** `docs/DECISION_REGISTER.md`'s
-DR-2026-08-24-HERITAGE-CONNECTOR-STAGES-1-2-FREEZE approves and freezes only
-Stages 1 and 2, and explicitly states that doing so does not authorise Stage
-3 to begin. This document does not change that. Stage 3 remains a proposal —
-code on a review branch, not an approved stage — until a separate,
-independent review and a separate product-owner decision both say otherwise.
-
-**Why the status line reads BLOCKED rather than IMPLEMENTED.** Two of the
+**Why the historical status line read BLOCKED rather than IMPLEMENTED.** Two of the
 four architectural blockers from the second review pass are fully resolved
 (capture authorization, selection lifecycle — both below). The remaining two
 are each blocked on something outside this module's authority to decide, for

@@ -10,22 +10,19 @@
  * ran under the INTERNAL Reflection Engine configuration and reported it as
  * "current retention".
  *
- * `src/qise/reading-flags.js` makes the split explicit: `off` is the
- * PUBLICLY SHIPPED behaviour, `on` is the development Reflection Engine path,
- * and `defaultMode(hostname)` returns "on" only for a named internal-host
- * allowlist — every other origin, including one the allowlist has never
- * heard of, gets `off`. This script never lets an ambient hostname pick the
- * mode: it runs BOTH `oldReading()` (the shipped passage engine) and
- * `reflectionFor()` (the Reflection Engine) explicitly, on the same
- * synthetic history, and reports them as two separate, named analyses.
+ * `src/qise/reading-flags.js` makes the split explicit: `off` remains
+ * available for comparison, while the closed-beta default is `on`. This
+ * script never lets an ambient hostname pick the mode: it runs BOTH
+ * `oldReading()` (the legacy passage engine) and `reflectionFor()` (the
+ * Reflection Engine) explicitly, on the same synthetic history, and reports
+ * them as two separate, named analyses.
  *
  * The four analyses, NEVER collapsed into one verdict:
  *
  *   A. PUBLIC_SHIPPED_RETENTION       — what a public-origin visitor gets today.
- *   B. INTERNAL_REFLECTION_RETENTION  — the development engine path, explicitly
- *                                        not the public default.
- *   C. LATENT_HERITAGE_EXHAUSTION     — heritage depth under hypothetical
- *                                        authorisation via the internal seam.
+ *   B. INTERNAL_REFLECTION_RETENTION  — the closed-beta Reflection Engine path.
+ *   C. LATENT_HERITAGE_EXHAUSTION     — GOLD heritage depth measured through
+ *                                        the internal analytical seam.
  *   D. DAILY_PORTRAIT_COMPOUNDING_MODEL — architecture-level projection only;
  *                                        no runtime code exists to execute
  *                                        against, because Daily Portrait is
@@ -42,7 +39,7 @@
 
 import { writeFileSync } from "node:fs";
 import { execSync } from "node:child_process";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
   MEASURED, recordFor, oldReading, exposureStats, dayString, repeatExposure,
@@ -60,13 +57,13 @@ import { tier2ConnectorModel } from "../src/ui/qise/heritage-view.js";
 import { SOURCE_REGISTRY } from "../src/reading/provenance.js";
 import { enumerateReachableStates } from "../src/qise/reading-state.js";
 
-const SIM_VERSION = "1.0.0";
+const SIM_VERSION = "1.1.0";
 const HORIZONS = [30, 90, 365];
 const DAILY_PORTRAIT_HORIZONS = [7, 30, 90, 365];
 
 function gitCommit() {
   try {
-    return execSync("git rev-parse HEAD", { cwd: new URL("..", import.meta.url).pathname }).toString().trim();
+    return execSync("git rev-parse HEAD", { cwd: fileURLToPath(new URL("..", import.meta.url)) }).toString().trim();
   } catch {
     return "UNKNOWN";
   }
@@ -231,8 +228,9 @@ function analysesAB() {
   // Cross-reference, not a simulation: which construct is naturally on
   // rotation on each of a 365-day run's calendar days, classified against
   // the B2 required-scope coverage — i.e. on how many days would the
-  // heritage layer show nothing at all REGARDLESS of engine, today, because
-  // the construct on rotation is not RUNTIME_SUPPORTED.
+  // The fixed GOLD scope classifies some constructs outside
+  // RUNTIME_SUPPORTED. That is an analytical label; the closed-beta runtime
+  // has explicit routes for those slots and can still render material.
   const rotationHorizon = 365;
   const constructDayCounts = Object.fromEntries(HERITAGE_CONSTRUCT_IDS.map((id) => [id, 0]));
   for (let i = 0; i < rotationHorizon; i++) {
@@ -254,8 +252,8 @@ function analysesAB() {
         + "6-day heritageRotation() cycle is exercised inherently — this is a classification of "
         + "that rotation against B2's REQUIRED_HERITAGE_SCOPE, not a tenth separate scenario. "
         + `${unavailableConstructDays}/${rotationHorizon} days over a year land on a construct `
-        + "not currently RUNTIME_SUPPORTED, meaning heritage content is absent on those days "
-        + "regardless of which engine (A or B) is running.",
+        + "outside the fixed GOLD RUNTIME_SUPPORTED class. Closed-beta routing still renders "
+        + "bounded attributed material for those slots; this is an analytical scope warning.",
     },
   };
 }
@@ -326,44 +324,31 @@ function analysisC() {
   const calendarExhaustionSteady = HERITAGE_CONSTRUCT_IDS.map((id) => exhaustionTimeline(steadyDays, id));
   const calendarExhaustionVariable = HERITAGE_CONSTRUCT_IDS.map((id) => exhaustionTimeline(variableDays, id));
 
-  // Every construct's connectorResidue is 1 (see perConstructExhaustive) —
-  // deriveTier2FromComposition's top pick does not rotate at all for any
-  // required construct's "primary" lineage under current evidence, because
-  // there are 0 or 1 active candidates to rotate between. That is WHY both
-  // calendar cross-checks report NO_ROTATION_OBSERVED for every construct
-  // regardless of scenario, and it is why the exhaustive combined-material
-  // counts above (1, 1, 9, 1, 9, 9) equal the BASE READING's own material
-  // count exactly — every unit of combined diversity currently comes from
-  // the base reading's prose variation, none from the heritage connector
-  // layer. This is a genuine content-depth finding, not a harness defect:
-  // it is the same fact B3's RELATIONSHIP_DEPTH_LIMITED taxonomy already
-  // names for fiveElements/fourRivers/fiveOfficers.
+  // This is a content-depth cross-check, not a runtime authorization check.
+  // The expanded beta graph now rotates in constructs with more than one
+  // active connector; fiveOfficers deliberately remains single-active because
+  // its other material is source-panel-only under its recorded policies.
   const noConnectorRotationAnywhere = perConstructExhaustive.every((p) => p.error || p.connectorResidue === 1);
 
   return {
-    disclaimer: "LATENT — uses the same internal composition seam as scripts/heritage-readiness.mjs "
-      + "(composeHeritageConnectionsWithRegistries, hypothetical safetyPassed/captureQualityPassed=true). "
-      + "Does not claim this currently renders in production. Safety authorization is currently "
-      + "UNKNOWN/unset and remains fail-closed until an explicit approved safety decision or "
-      + "implemented authoritative signal changes that state.",
+    disclaimer: "GOLD analytical depth — uses the same internal composition seam as "
+      + "scripts/heritage-readiness.mjs (composeHeritageConnectionsWithRegistries). Closed-beta "
+      + "runtime uses the canonical Stage-3 path and named beta policy; this analysis does not "
+      + "clear source rights, provenance, or commercial-release obligations.",
     exhaustiveDepthPerConstruct: perConstructExhaustive,
-    note: "The exhaustive figures above are the library's full latent depth (every occurrence "
+    note: "The exhaustive figures above are the library's full measured depth (every occurrence "
       + "residue class visited). The two calendar cross-checks below show what a REAL 365-day user "
       + "would actually encounter, which depends on how often their own reading repeats an exact "
       + "prior state (occurrence only advances on a repeat) — a steady user and a variable one can "
       + "see very different slices of the same latent depth.",
     noConnectorRotationAnywhereUnderCurrentEvidence: noConnectorRotationAnywhere,
     noConnectorRotationExplanation: noConnectorRotationAnywhere
-      ? "Every required construct's connectorResidue is 1 (0 or 1 active candidate for its "
-        + "\"primary\" lineage) — there is currently nothing for the Tier 2 heritage connector to "
-        + "rotate BETWEEN, for any construct, so both calendar cross-checks correctly report "
-        + "NO_ROTATION_OBSERVED regardless of scenario. Every unit of combined diversity measured "
-        + "above currently comes from the base reading's own prose variation, none from the "
-        + "heritage connector layer — the same fact B3's RELATIONSHIP_DEPTH_LIMITED taxonomy names "
-        + "for fiveElements/fourRivers/fiveOfficers. This is a content-depth finding, not a defect."
-      : "At least one required construct has a connector residue > 1 — see perConstructExhaustive "
-        + "for which, and the calendar cross-checks below for whether a real user's occurrence "
-        + "range actually reaches it.",
+      ? "Every required construct's connectorResidue is 1 under the current graph. This means "
+        + "the beta runtime has no connector rotation to show yet; it is a measured content-depth "
+        + "limit, not a rights/readiness switch."
+      : "At least one required construct has a connector residue > 1. The expanded beta graph "
+        + "now provides genuine connector rotation for those constructs; see perConstructExhaustive "
+        + "and the calendar cross-checks for whether a real user's occurrence range reaches it.",
     calendarExhaustionUnderMostlySteadyScenario: calendarExhaustionSteady,
     calendarExhaustionUnderFrequentMovementLikeScenario: calendarExhaustionVariable,
   };
@@ -448,9 +433,9 @@ function main() {
       ),
     },
     INTERNAL_REFLECTION_RETENTION: {
-      label: "The DEVELOPMENT Reflection Engine path (reflectionMode=on) — NOT the current public default. "
-        + "Stage 3 heritage connector output remains fail-closed under the real production safety state "
-        + "here too; this measures the Reflection Engine's own prose behaviour only.",
+      label: "The closed-beta Reflection Engine path (reflectionMode=on). "
+        + "Heritage connector presentation is enabled by the named beta policy; this analysis "
+        + "still does not clear external rights, provenance, or commercial-release obligations.",
       defaultScenarioByHorizon: Object.fromEntries(HORIZONS.map((h) => [h, ab.defaultScenario[h].next])),
       dedicatedScenarios: Object.fromEntries(
         Object.entries(ab.dedicatedScenarios).map(([name, byHorizon]) => [
@@ -478,7 +463,7 @@ function main() {
     console.log(`  ${name}/365d: verbatim repeat ${(s.verbatimRepeatRate * 100).toFixed(1)}%  distinct ${s.distinctTexts}  captured ${byHorizon[365].capturedDays}/365 days`);
   }
 
-  console.log("\nB. INTERNAL_REFLECTION_RETENTION (reflectionMode=on — development path, NOT public default)");
+  console.log("\nB. INTERNAL_REFLECTION_RETENTION (reflectionMode=on — closed-beta Reflection Engine)");
   for (const h of HORIZONS) {
     const s = ab.defaultScenario[h].next;
     console.log(`  default/${h}d: verbatim repeat ${(s.verbatimRepeatRate * 100).toFixed(1)}%  distinct ${s.distinctTexts}  near-dup ${(s.nearDuplicateRate * 100).toFixed(1)}%`);
@@ -490,7 +475,7 @@ function main() {
 
   console.log(`\nConstruct rotation cross-reference (365d): ${ab.constructRotationCrossReference.daysWithCurrentlyUnavailableConstruct}/365 days land on a currently non-RUNTIME_SUPPORTED construct`);
 
-  console.log("\nC. LATENT_HERITAGE_EXHAUSTION (internal seam, hypothetical authorisation — NOT production)");
+  console.log("\nC. LATENT_HERITAGE_EXHAUSTION (GOLD analytical seam — not a rights or commercial-release clearance)");
   for (const p of c.exhaustiveDepthPerConstruct) {
     if (p.error) { console.log(`  ${p.heritageConstruct}: ${p.error}`); continue; }
     console.log(`  ${p.heritageConstruct}: exhaustive combined-material=${p.combinedMaterialDistinct} over period ${p.combinedPeriod} (${p.stoppingProof.split(":")[0]})`);

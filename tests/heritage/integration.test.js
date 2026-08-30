@@ -46,23 +46,22 @@ test("every registry lineage carries provenance and has no placeholder source", 
   }
 });
 
-test("engine reads only runtime-eligible attributed heritage prose", () => {
-  const held = composeReading(readState(), { includeSelfReport: false });
-  const heldPart = held.parts.find((part) => part.id === "heritage");
-  assert.ok(heldPart, "a held source should render an explicit gap, not a blank layer");
-  assert.match(heldPart.text, /research ledger.*not in this reading/i);
-  assert.doesNotMatch(heldPart.text, /stand equal.*auspicious/i);
-  assert.ok(held.heritageAbstentions.some((entry) =>
-    entry.reasonCode === "HERITAGE_RESEARCH_ONLY"));
+test("engine reads beta-routed, attributed heritage prose without treating release status as a runtime off switch", () => {
+  const reading = composeReading(readState(), { includeSelfReport: false });
+  const heritagePart = reading.parts.find((part) => part.id === "heritage");
+  assert.ok(heritagePart, "a beta-routed source should render attributed material");
+  assert.match(heritagePart.text, /Taiqing Shenjian.*facial section/i);
+  assert.doesNotMatch(heritagePart.text, /stand equal.*auspicious/i);
+  assert.equal(reading.heritageAbstentions.length, 0);
 
-  const reading = composeReading(readState({
+  const riversReading = composeReading(readState({
     heritageConstruct: "fourRivers",
     sourceLineage: "primary",
   }), { includeSelfReport: false });
-  const heritagePart = reading.parts.find((part) => part.id === "heritage");
-  assert.ok(heritagePart);
-  assert.ok(heritagePart.text.includes("Four waterways"));
-  assert.equal(reading.heritageAbstentions.length, 0);
+  const riversHeritage = riversReading.parts.find((part) => part.id === "heritage");
+  assert.ok(riversHeritage);
+  assert.ok(riversHeritage.text.includes("Four waterways"));
+  assert.equal(riversReading.heritageAbstentions.length, 0);
 });
 
 test("measurement abstention is explicit and never becomes observation prose", () => {
@@ -107,7 +106,7 @@ test("a source lineage marked abstention does not emit its definition", () => {
   const heritage = reading.parts.find((part) => part.id === "heritage");
   assert.ok(heritage, "source abstention should remain visible as a deliberate gap");
   assert.doesNotMatch(heritage.text, /eight characters|stand equal|auspicious/i);
-  assert.match(heritage.text, /research ledger/i);
+  assert.match(heritage.text, /research ledger|pending source review/i);
   assert.ok(reading.heritageAbstentions.some((entry) =>
     entry.reasonCode === "HERITAGE_SOURCE_ABSTENTION"));
 });
@@ -212,13 +211,14 @@ test("Taiqing is described as a contested attribution, never as Wang Pu authorsh
   }
 });
 
-test("heritage-only and research-only lineages cannot enter runtime prose", () => {
+test("explicitly routed heritage-only material enters beta prose with its source boundary intact", () => {
   const reading = composeReading(readState({
     heritageConstruct: "fiveMountains",
-    sourceLineage: "taiqing-siku",
+    sourceLineage: "primary",
   }), { includeSelfReport: false });
   const heritage = reading.parts.find((part) => part.id === "heritage");
-  assert.ok(heritage, "a held lineage must be explained instead of disappearing");
-  assert.match(heritage.text, /research ledger/i);
-  assert.equal(reading.text.includes("太清神鑑 Five Mountains assignment"), false);
+  assert.ok(heritage, "a routed lineage must remain visible instead of disappearing");
+  assert.match(heritage.text, /Taiqing Shenjian records Five Mountains/i);
+  assert.match(heritage.text, /camera cannot measure/i);
+  assert.equal(reading.heritageAbstentions.length, 0);
 });

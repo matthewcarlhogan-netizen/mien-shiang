@@ -154,8 +154,14 @@ test("a Tier-3-only field change does not move the Tier 2 heritage material sign
 });
 
 test("a Tier-2-visible connector change moves the Tier 2 heritage material signature", () => {
-  const tier2ModelA = { available: true, reason: null, card: { connectorId: "connector-a" } };
-  const tier2ModelB = { available: true, reason: null, card: { connectorId: "connector-b" } };
+  const tier2ModelA = {
+    available: true, reason: null,
+    card: { connectorId: "connector-a", relationshipLabel: "corresponds to", participants: [{ label: "A" }], sourceTitle: "Source A" },
+  };
+  const tier2ModelB = {
+    available: true, reason: null,
+    card: { connectorId: "connector-b", relationshipLabel: "corresponds to", participants: [{ label: "B" }], sourceTitle: "Source B" },
+  };
   assert.notEqual(
     heritageTier2MaterialSignature(tier2ModelA),
     heritageTier2MaterialSignature(tier2ModelB),

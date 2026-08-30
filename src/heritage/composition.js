@@ -101,6 +101,7 @@ import { HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY } from "./negative-relationship
 import { HERITAGE_COMPOSITION_POLICIES } from "./composition-policies-registry.js";
 import { HERITAGE_CONCEPT_REGISTRY } from "./concepts.js";
 import { SOURCE_REGISTRY } from "../reading/provenance.js";
+import { ABSTRACT_LINEAGE_OVERRIDES } from "./runtime-routing.js";
 
 export const SUPPRESSION_REASONS = Object.freeze([
   "CAPTURE_QUALITY_GATE_FAILED",
@@ -200,8 +201,6 @@ function unsupportedLineageResult(depthMode, occurrence) {
  * content/editorial decision this module has no authority to make on its
  * own — it belongs here, one explicit entry per decision, never inferred.
  */
-const ABSTRACT_LINEAGE_OVERRIDES = Object.freeze({});
-
 const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj || {}, key);
 
 /**

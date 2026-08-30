@@ -2,26 +2,27 @@
 /*
  * HERITAGE READINESS / GOLD HARNESS.
  *
- * `npm run heritage:readiness`. Measures the heritage library's LATENT
- * capability — how deep the corpus is if every non-content authorisation
- * gate were hypothetically satisfied — against the required scope in
- * scripts/heritage-readiness/required-scope.mjs. This is an internal
- * analytical tool.
+ * `npm run heritage:readiness`. Measures the heritage library's GOLD
+ * analytical depth against the required scope in
+ * scripts/heritage-readiness/required-scope.mjs. This remains an internal
+ * analytical tool; the closed-beta product runtime is enabled separately by
+ * an explicit named policy and runtime lineage routing.
  *
  * ── THE INTERNAL SEAM, NOT THE PRODUCTION ENTRY POINT ───────────────────────
  * This harness calls `composeHeritageConnectionsWithRegistries()`, injecting
  * the canonical registry exports directly — NEVER `composeHeritageForReading()`,
  * which is the sole product-facing Stage 3 entry point. `src/ui/qise/app.js`
- * and `composeHeritageOnceForReading()` are not touched by this file, and
- * `safetyPassed`/`captureQualityPassed` are never set to `true` anywhere in
- * production as a result of this harness existing.
+ * and `composeHeritageOnceForReading()` are not touched by this file. Its
+ * analytical gate inputs stay local to this measurement; the production app
+ * uses its own persisted capture authorization and named beta policy.
  *
- *     THIS EVALUATES LATENT LIBRARY CAPABILITY USING THE INTERNAL COMPOSITION
- *     SEAM. IT DOES NOT AUTHORIZE STAGE 3 PRODUCTION OUTPUT.
+ *     THIS EVALUATES GOLD LIBRARY DEPTH USING THE INTERNAL COMPOSITION SEAM.
+ *     IT DOES NOT CLEAR SOURCE RIGHTS OR AUTHORIZE COMMERCIAL RELEASE.
  *
- * Production safety authorisation is currently UNKNOWN/unset and remains
- * fail-closed until an explicit approved safety decision or implemented
- * authoritative signal changes that state (docs/DECISION_CARDS.md CARD 6).
+ * Closed-beta runtime authorization is recorded explicitly in
+ * `QISE_BETA_SAFETY_AUTHORIZATION` and the Stage-3 decision register. It is
+ * intentionally separate from this content-depth report: a NOT_READY GOLD
+ * result is an honest analytical finding, not a runtime off-switch.
  *
  * ── REUSES THE REAL PRODUCTION REDUCERS ─────────────────────────────────────
  * `deriveTier2FromComposition`, `tier2ConnectorModel`, `tier3ConnectorModel`,
@@ -40,7 +41,7 @@
 
 import { writeFileSync } from "node:fs";
 import { execSync } from "node:child_process";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { HERITAGE_REGISTRY, HERITAGE_CONNECTOR_REGISTRY, HERITAGE_DISAGREEMENT_REGISTRY } from "../src/heritage/registry.js";
 import { HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY } from "../src/heritage/negative-relationships-registry.js";
@@ -57,14 +58,14 @@ import { readingTiers } from "../src/qise/reading-tiers.js";
 
 import { REQUIRED_HERITAGE_SCOPE, COVERAGE_CLASSES, assertScopeMatchesCanonicalConstructs, summariseCoverage } from "./heritage-readiness/required-scope.mjs";
 
-export const HARNESS_VERSION = "1.0.0";
+export const HARNESS_VERSION = "1.1.0";
 export const DIVERSITY_TARGET = 250;
-export const CONNECTOR_RESIDUE_WALK_BOUND = 64; // real corpus candidate counts are 0-2; generous margin
+export const CONNECTOR_RESIDUE_WALK_BOUND = 64; // current real-corpus candidate counts are 0-8; generous margin
 export const DIVERSITY_WALK_CAP = 2000; // exhaustive for periods at/under this; sampled lower-bound above it
 
 function gitCommit() {
   try {
-    return execSync("git rev-parse HEAD", { cwd: new URL("..", import.meta.url).pathname }).toString().trim();
+    return execSync("git rev-parse HEAD", { cwd: fileURLToPath(new URL("..", import.meta.url)) }).toString().trim();
   } catch {
     return "UNKNOWN";
   }
@@ -80,7 +81,7 @@ export const canonicalRegistries = Object.freeze({
   sourceRegistry: SOURCE_REGISTRY,
 });
 
-/** The internal seam call, with the LATENT authorisation this harness exists to evaluate. */
+/** The internal seam call, with explicit analytical authorisation for GOLD measurement. */
 export function composeLatent({ heritageConstruct, sourceLineage, depthMode, occurrence }) {
   return composeHeritageConnectionsWithRegistries({
     ...canonicalRegistries,
@@ -88,8 +89,8 @@ export function composeLatent({ heritageConstruct, sourceLineage, depthMode, occ
     sourceLineage,
     depthMode,
     occurrence,
-    // LATENT authorisation — hypothetical, internal-seam only. Never true in
-    // any code path composeHeritageForReading()/app.js can reach.
+    // Analytical authorisation for measuring the canonical graph. This is not
+    // a rights clearance and does not mutate the beta runtime policy.
     captureQualityPassed: true,
     safetyPassed: true,
   });
@@ -170,13 +171,9 @@ export function baseMaterialSignature(baseTier2) {
   return stableStringify(baseTier2);
 }
 
-/** The heritage layer's Tier 2 (Reading) structural identity: ids only, never prose text. */
+/** The heritage layer's Tier 2 (Reading) identity is the bounded rendered card, not hidden ids. */
 export function heritageTier2MaterialSignature(tier2Model) {
-  return stableStringify({
-    available: tier2Model.available,
-    reason: tier2Model.reason,
-    cardConnectorId: tier2Model.card ? tier2Model.card.connectorId ?? tier2Model.card.sourceId ?? null : null,
-  });
+  return stableStringify({ markup: heritageConnectorTier2Markup(tier2Model) });
 }
 
 /** The heritage layer's Tier 3 (Why/Study) structural identity — kept SEPARATE from Tier 2's,
@@ -293,11 +290,10 @@ export function main() {
   const coverage = summariseCoverage();
 
   // One representative reachable state per required construct, at the
-  // abstract sourceLineage the real production path actually ever supplies
-  // ("primary" — see docs/heritage-evidence/SAFETY_AUTHORIZATION_INTERFACE.md
-  // and heritageRotation()). This is the LATENT analysis subject: what the
-  // corpus could support if construct-level routing/authorisation were
-  // resolved, not a claim about what already renders.
+  // abstract sourceLineage the real production path supplies ("primary" —
+  // see runtime-routing.js and heritageRotation()). The GOLD analysis keeps
+  // its fixed analytical scope; beta runtime routing is reported separately
+  // and is not inferred from a passing or failing GOLD gate.
   const perConstruct = [];
   for (const constructId of HERITAGE_CONSTRUCT_IDS) {
     const representative = reachable.find((s) => s.heritageConstruct === constructId && s.sourceLineage === "primary")
@@ -336,14 +332,34 @@ export function main() {
   const failureTaxonomy = HERITAGE_CONSTRUCT_IDS.map((constructId) => {
     const scope = REQUIRED_HERITAGE_SCOPE[constructId];
     const analysis = perConstruct.find((p) => p.heritageConstruct === constructId);
+    const betaRuntime = composeLatent({
+      heritageConstruct: constructId,
+      sourceLineage: "primary",
+      depthMode: "SOURCE_DEEP",
+      occurrence: 0,
+    });
     let taxonomy;
     if (scope.class === "COVERAGE_GAP") taxonomy = "COVERAGE_GAP";
     else if (scope.class === "DECISION_BLOCKED") taxonomy = "LINEAGE_DECISION_BLOCKED";
     else if (scope.class === "ARCHITECTURE_BLOCKED") taxonomy = "MULTI_WITNESS_ARCHITECTURE_BLOCKED";
     else if (scope.class === "RUNTIME_SUPPORTED" && analysis && analysis.heritageMaterialDistinct <= 1) taxonomy = "RELATIONSHIP_DEPTH_LIMITED";
-    else if (scope.class === "RUNTIME_SUPPORTED" && analysis && analysis.combinedMaterialDistinct < DIVERSITY_TARGET) taxonomy = "PROSE_DEPTH_LIMITED";
-    else taxonomy = "RUNTIME_POLICY_BLOCKED";
-    return { heritageConstruct: constructId, class: scope.class, taxonomy, blockedByDecisionCard: scope.blockedByDecisionCard };
+    else if (scope.class === "RUNTIME_SUPPORTED" && analysis && analysis.combinedMaterialDistinct < DIVERSITY_TARGET) taxonomy = "GOLD_DIVERSITY_TARGET_NOT_MET";
+    else if (scope.class === "RUNTIME_SUPPORTED") taxonomy = "NONE — BETA_RUNTIME_ACTIVE";
+    else taxonomy = "GOLD_SCOPE_CLASSIFICATION";
+    return {
+      heritageConstruct: constructId,
+      class: scope.class,
+      taxonomy,
+      betaRuntimeStatus: betaRuntime.suppressed
+        ? `SUPPRESSED:${betaRuntime.suppressionReason}`
+        : betaRuntime.abstained
+          ? `ABSTAINED:${betaRuntime.abstentionReasonCode}`
+          : (betaRuntime.active || []).length + (betaRuntime.sourcePanelOnly || []).length > 0
+            ? "BETA_ACTIVE"
+            : "BETA_ACTIVE_NO_MATERIAL",
+      betaRuntimeLineage: betaRuntime.primaryLineage || null,
+      blockedByDecisionCard: scope.blockedByDecisionCard,
+    };
   });
 
   /* ── the five GOLD gates, conjunctive, never averaged ────────────────── */
@@ -360,10 +376,10 @@ export function main() {
     harnessVersion: HARNESS_VERSION,
     commit: gitCommit(),
     generatedAt: new Date().toISOString(),
-    disclaimer: "THIS EVALUATES LATENT LIBRARY CAPABILITY USING THE INTERNAL COMPOSITION SEAM. "
-      + "IT DOES NOT AUTHORIZE STAGE 3 PRODUCTION OUTPUT. Safety authorization is currently "
-      + "UNKNOWN/unset in production and remains fail-closed until an explicit approved safety "
-      + "decision or implemented authoritative signal changes that state.",
+    disclaimer: "THIS IS THE HERITAGE_LIBRARY_GOLD ANALYTICAL REPORT. Closed-beta runtime uses "
+      + "the canonical Stage-3 entry point with explicit QISE_BETA_SAFETY_AUTHORIZATION and "
+      + "runtime lineage routing. This report does not clear source rights, provenance, or "
+      + "commercial-release obligations.",
     requiredScope: REQUIRED_HERITAGE_SCOPE,
     coverageSummary: coverage,
     reachableStatesTotal: reachable.length,
@@ -399,7 +415,7 @@ export function main() {
       + `  combined(base+Tier2) raw/material=${p.combinedRawDistinct}/${p.combinedMaterialDistinct}`);
   }
   console.log("\nFailure taxonomy:");
-  for (const f of failureTaxonomy) console.log(`  ${f.heritageConstruct}: ${f.taxonomy}${f.blockedByDecisionCard ? ` (${f.blockedByDecisionCard})` : ""}`);
+  for (const f of failureTaxonomy) console.log(`  ${f.heritageConstruct}: ${f.taxonomy} [runtime=${f.betaRuntimeStatus}, lineage=${f.betaRuntimeLineage || "none"}]${f.blockedByDecisionCard ? ` (${f.blockedByDecisionCard})` : ""}`);
   console.log("\nConnector identity:", connectorIdentity.totalConnectors, "total,",
     connectorIdentity.exactSourceTextCollisions.length, "exact-sourceText collisions");
   console.log("\nGates:", JSON.stringify(report.gates));

@@ -10,10 +10,14 @@ import {
 import {
   ASCENDANT_SUBJECT, REGION_PLACE, DIRECTION_VERB, MAGNITUDE_QUALIFIER,
   HEADLINE, HISTORY_LINE, CONFIDENCE_VOICE, AVAILABILITY_LINE, OBSERVATION_SHAPES,
-  BRIDGE_OPENER, BRIDGE_ABSTAINED, REFLECTION, ROTATION_DISCLOSURE,
+  BRIDGE_OPENER, BRIDGE_CONTEXT, BRIDGE_ABSTAINED, REFLECTION, REFLECTION_WITNESS_CONTEXT,
+  ROTATION_DISCLOSURE,
   SELF_REPORT_BRIDGE, HERITAGE_CONSTRUCT_LABEL, HERITAGE_REVIEW_COPY,
 } from "./reflection-corpus.js";
 import { HERITAGE_REGISTRY } from "../heritage/registry.js";
+import {
+  runtimeLineageFor, runtimePresentationFor, runtimeAttributionFor, runtimeNoteFor,
+} from "../heritage/runtime-routing.js";
 import { seededIndex } from "./passages.js";
 
 export const LAYERS = Object.freeze(["observation", "heritage", "reflection"]);
@@ -25,22 +29,39 @@ const read = (s) => s.availability === "read";
 export function heritageMaterialFor(s, registry = HERITAGE_REGISTRY) {
   const registryEntry = registry[s.heritageConstruct]
     || registry.threeSections;
-  const requested = registryEntry.lineages[s.sourceLineage];
+  const runtimeLineageId = runtimeLineageFor(registryEntry.constructId, s.sourceLineage, registry);
+  const requested = registryEntry.lineages[runtimeLineageId]
+    || registryEntry.lineages[s.sourceLineage];
+  /*
+   * The beta product is a functioning reading application, not a release
+   * verdict. A lineage's runtimeStatus remains useful metadata for audit and
+   * release review, but it must not turn the entire Reflection Engine into a
+   * dead surface during closed beta. The requested lineage is still shown as
+   * attributed historical material, including its own caveats. Abstention is
+   * reserved for an explicit source availability decision, not a missing
+   * release approval.
+   */
   const lineage = requested
-    ? requested.runtimeStatus === "RUNTIME_PROSE" ? requested : null
+    ? (requested.availability === "abstention" ? null : requested)
     : Object.values(registryEntry.lineages)
-      .find((candidate) => candidate.runtimeStatus === "RUNTIME_PROSE") || null;
+      .find((candidate) => candidate.runtimeStatus === "RUNTIME_PROSE"
+        && candidate.availability !== "abstention") || null;
 
   if (lineage && lineage.availability !== "abstention") {
     return Object.freeze({
       entry: registryEntry,
       lineage,
-      passage: lineage.definition,
-      note: lineage.note || null,
-      attribution: lineage.source,
+      passage: runtimePresentationFor(registryEntry.constructId, s.sourceLineage, registry)
+        || lineage.definition,
+      note: runtimeNoteFor(registryEntry.constructId, s.sourceLineage, registry)
+        || lineage.note || null,
+      attribution: runtimeAttributionFor(registryEntry.constructId, s.sourceLineage, registry)
+        || lineage.source,
       abstained: false,
       reasonCode: null,
       provenanceId: lineage.sourceId,
+      runtimeLineageId: runtimeLineageId || null,
+      runtimeStatus: lineage.runtimeStatus,
     });
   }
 
@@ -197,7 +218,9 @@ export const COMPONENTS = Object.freeze([
           || HERITAGE_CONSTRUCT_LABEL.threeSections;
         return [HERITAGE_REVIEW_COPY.bridge(label)];
       }
-      return read(s) ? BRIDGE_OPENER : BRIDGE_ABSTAINED;
+      return read(s)
+        ? BRIDGE_OPENER.map((opener) => `${opener} ${BRIDGE_CONTEXT(s.heritageConstruct, s.sourceLineage)}`)
+        : BRIDGE_ABSTAINED;
     },
   },
   {
@@ -209,7 +232,10 @@ export const COMPONENTS = Object.freeze([
         return [HERITAGE_REVIEW_COPY.question];
       }
       const byConstruct = REFLECTION[s.heritageConstruct] || REFLECTION.threeSections;
-      return byConstruct[s.ascendant] || byConstruct.ping;
+      const questions = byConstruct[s.ascendant] || byConstruct.ping;
+      const witnessContext = REFLECTION_WITNESS_CONTEXT[s.sourceLineage]
+        || REFLECTION_WITNESS_CONTEXT.primary;
+      return questions.map((question) => `${question} ${witnessContext}`);
     },
   },
 ].map((component) => Object.freeze({

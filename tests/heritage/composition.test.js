@@ -661,10 +661,15 @@ test("no Math.random / Date.now / unstable ordering was introduced by the lineag
 
 /* ── Blocker 3: the lineage adapter ───────────────────────────────────────── */
 
-test("resolveHeritageLineage: the abstract 'primary' label resolves for every construct that declares one (all six today)", () => {
+test("resolveHeritageLineage: abstract primary slots use the explicit beta routing table", () => {
+  const expected = {
+    threeSections: "taiqing-mianbu-facial",
+    twelvePalaces: "taiqing-yuguan",
+    fiveMountains: "taiqing-siku",
+  };
   for (const construct of Object.keys(HERITAGE_REGISTRY)) {
     const resolved = resolveHeritageLineage({ heritageConstruct: construct, sourceLineage: "primary" }, HERITAGE_REGISTRY);
-    assert.equal(resolved, "primary", `${construct} must resolve its own "primary" lineage`);
+    assert.equal(resolved, expected[construct] || "primary", `${construct} must resolve its declared beta lineage`);
   }
 });
 
@@ -745,20 +750,13 @@ test("an unresolvable lineage on a real construct never falls back to that const
  * lineage id "taiqing-siku" supplied directly by the caller. That is a
  * legitimate direct use of the product-facing entry point (the adapter
  * accepts an explicit canonical id as well as an abstract label — see
- * `resolveHeritageLineage`'s doc comment), but it is not what the real
- * Reflection Engine reading pipeline ever supplies: `heritageRotation()`
- * (reading-pipeline.js) and `reading-state.js`'s `SOURCE_LINEAGES` only ever
- * emit the ABSTRACT labels "primary"/"variant", never a construct-specific
- * canonical id. `ABSTRACT_LINEAGE_OVERRIDES` is deliberately empty (no
- * product-owner content decision has routed fiveMountains' abstract
- * "primary" to "taiqing-siku" — see composition.js's file header), so
- * nothing in the real reading path can currently reach this string. See
- * "fiveMountains/primary through the REAL reflectionFor()/
- * readingTiersWithHeritage() path does NOT reach taiqing-siku or
- * SOURCE_PANEL_CEILING today" below (tests/qise/reading-production-path.test.js)
- * for what the real path actually produces.
+ * `resolveHeritageLineage`'s doc comment). The closed-beta runtime separately
+ * routes the real pipeline's abstract fiveMountains/"primary" slot to this
+ * same named witness through an explicit product-owned routing table; that is
+ * not evidence promotion or cross-construct inference. The real-path proof
+ * is in tests/qise/reading-production-path.test.js.
  */
-test("fiveMountains -> taiqing-siku is reachable when the explicit canonical id is requested directly, with evidence unchanged (NOT the abstract Reflection Engine rotation)", () => {
+test("fiveMountains -> taiqing-siku is reachable when the explicit canonical id is requested directly, with evidence unchanged", () => {
   // The 2026-08-29 project-owned Kanripo reconciliation split the former
   // five-mountains-mutual-facing-fullness connector into five-mountains-mutual-facing
   // and five-mountains-fullness, and byte-pinned both to VERIFIED_PRIMARY — a
@@ -782,7 +780,7 @@ test("fiveMountains -> taiqing-siku is reachable when the explicit canonical id 
   assert.equal(result.sourcePanelOnly.some((e) => e.connectorId === "five-mountains-mutual-facing"), false);
 });
 
-test("fiveMountains's registry-key 'primary' lineage is NOT the same claim as 'taiqing-siku' — routing the abstract label there would be a content substitution, not a bug fix", () => {
+test("fiveMountains keeps its source records distinct while beta routing selects the explicit Taiqing witness", () => {
   // Documents, from the frozen registry data itself, why ABSTRACT_LINEAGE_OVERRIDES
   // cannot be populated by inference. "primary" (人倫大統賦, directional
   // naming: 南/北/東/西/中) and "taiqing-siku" (太清神鑑, mountain names
@@ -795,17 +793,21 @@ test("fiveMountains's registry-key 'primary' lineage is NOT the same claim as 't
   assert.notEqual(primary.sourceId, taiqingSiku.sourceId);
   assert.equal(primary.runtimeStatus, "RESEARCH_ONLY");
   assert.equal(taiqingSiku.runtimeStatus, "HERITAGE_ONLY");
+  assert.equal(
+    resolveHeritageLineage({ heritageConstruct: "fiveMountains", sourceLineage: "primary" }, HERITAGE_REGISTRY),
+    "taiqing-siku",
+  );
 });
 
-test("five-mountains-mutual-facing-fullness never becomes Tier-2-eligible via any reachable lineage — it is SOURCE_PANEL_CEILING or fully blocked, never ACTIVE", () => {
-  for (const lineage of Object.keys(HERITAGE_REGISTRY.fiveMountains.lineages)) {
-    const result = composeHeritageForReading({
-      captureQualityPassed: true, safetyPassed: true,
-      heritageConstruct: "fiveMountains", sourceLineage: lineage, depthMode: "SOURCE_DEEP",
-    });
-    assert.equal(result.active.some((e) => e.connectorId === "five-mountains-mutual-facing-fullness"), false,
-      `must never be ACTIVE under lineage "${lineage}"`);
-  }
+test("beta fiveMountains routing exposes structural connectors while preserving their safety boundary", () => {
+  const result = composeHeritageForReading({
+    captureQualityPassed: true, safetyPassed: true,
+    heritageConstruct: "fiveMountains", sourceLineage: "primary", depthMode: "SOURCE_DEEP",
+  });
+  assert.equal(result.primaryLineage, "taiqing-siku");
+  assert.ok(result.active.some((e) => e.connectorId === "five-mountains-mutual-facing"));
+  assert.ok(result.active.length >= 2, "the beta graph must have more than one distinct relationship");
+  assert.ok(result.active.every((e) => e.prohibitedForUserInference === true));
 });
 
 test("the lineage adapter does not change concept-only connector eligibility — no cross-construct inheritance introduced by the adapter itself", () => {

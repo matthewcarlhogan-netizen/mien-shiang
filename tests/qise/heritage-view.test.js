@@ -92,6 +92,28 @@ function makeReflection(stateOverrides = {}, occurrence = 0) {
   return { state, composed: composeReading(state, { occurrence }), occurrence };
 }
 
+test("closed-beta production path provides bounded attributed heritage material for every daily construct", () => {
+  for (const heritageConstruct of [
+    "threeSections", "fiveElements", "twelvePalaces", "fiveMountains", "fourRivers", "fiveOfficers",
+  ]) {
+    const reflection = makeReflection({ heritageConstruct, sourceLineage: "primary" });
+    const tier2 = tierTwoHeritageConnections(reflection, { captureQualityPassed: true, safetyPassed: true });
+    const tier3 = tierThreeHeritageConnections(reflection, { captureQualityPassed: true, safetyPassed: true });
+
+    assert.equal(tier2.available, true, `${heritageConstruct} must expose a bounded Tier 2 connector`);
+    assert.ok(tier2.connector, `${heritageConstruct} Tier 2 connector must be present`);
+    assert.equal(tier2.connector.prohibitedForUserInference, true,
+      `${heritageConstruct} Tier 2 connector must retain its non-inference boundary`);
+    assert.equal(tier3.suppressed, false, `${heritageConstruct} must not be runtime-gate suppressed`);
+    assert.equal(tier3.abstained, false, `${heritageConstruct} must not silently abstain`);
+    assert.ok(tier3.primaryLineage, `${heritageConstruct} must resolve an explicit runtime lineage`);
+    assert.ok((tier3.active.length + tier3.sourcePanelOnly.length) > 0,
+      `${heritageConstruct} Tier 3 must retain attributed material`);
+    assert.ok(tier3.active.every((entry) => entry.prohibitedForUserInference === true),
+      `${heritageConstruct} active material must remain non-inferential`);
+  }
+});
+
 /* ── humanizeRelationshipType: mechanical, invents nothing ───────────────── */
 
 test("humanizeRelationshipType lowercases and spaces the enum, nothing else", () => {
@@ -161,12 +183,14 @@ test("B: tier2ConnectorModel never surfaces sourcePanelOnly content — the fiel
   assert.equal(JSON.stringify(model).includes("ceilinged"), false);
 });
 
-test("B (end-to-end, real corpus): the real fiveMountains/primary Tier 2 output — LINEAGE_RESEARCH_ONLY-blocked today — never renders a card", () => {
+test("B (end-to-end, real corpus): the beta-routed fiveMountains/primary Tier 2 output renders a bounded card", () => {
   const reflection = makeReflection({ heritageConstruct: "fiveMountains", sourceLineage: "primary" });
   const tier2Connectors = tierTwoHeritageConnections(reflection, { captureQualityPassed: true, safetyPassed: true });
   const model = tier2ConnectorModel(tier2Connectors);
-  assert.equal(model.available, false);
-  assert.equal(model.card, null);
+  assert.equal(model.available, true);
+  assert.ok(model.card);
+  assert.match(model.card.connectorId, /^five-mountains-/);
+  assert.equal(model.card.prohibitedForUserInference, true);
 });
 
 /* ── C: Tier 3 surfaces source-panel/disagreement/abstention structures ──── */
@@ -190,22 +214,15 @@ test("C: tier3ConnectorModel surfaces active, sourcePanelOnly, disagreements and
   assert.equal(model.abstentions[0].connectorId, "blocked-1");
 });
 
-// five-mountains-mutual-facing-fullness was split into five-mountains-mutual-facing
-// and five-mountains-fullness by the 2026-08-29 project-owned Kanripo
-// reconciliation (errata E-8). The mechanism this test pins — whole-construct
-// abstention via LINEAGE_RESEARCH_ONLY when the abstract "primary" label is
-// unrouted — is unaffected by that split or by the connectors' own evidence
-// strength; either successor id demonstrates it identically.
-test("C (end-to-end, real corpus): the real fiveMountains/primary Tier 3 output reaches the LINEAGE_RESEARCH_ONLY abstention in the view model", () => {
+test("C (end-to-end, real corpus): the beta-routed fiveMountains/primary Tier 3 output exposes active structural material", () => {
   const reflection = makeReflection({ heritageConstruct: "fiveMountains", sourceLineage: "primary" });
   const tier3Connectors = tierThreeHeritageConnections(reflection, { captureQualityPassed: true, safetyPassed: true });
   const model = tier3ConnectorModel(tier3Connectors);
   assert.equal(model.suppressed, false);
-  assert.equal(model.active.some((c) => c.connectorId === "five-mountains-mutual-facing"), false);
-  assert.equal(model.sourcePanelOnly.some((c) => c.connectorId === "five-mountains-mutual-facing"), false);
-  const blocked = model.abstentions.find((e) => e.connectorId === "five-mountains-mutual-facing");
-  assert.ok(blocked, "the connector must still be reachable in Tier 3's structured abstentions");
-  assert.equal(blocked.gateReasons[0], "LINEAGE_RESEARCH_ONLY");
+  assert.equal(tier3Connectors.primaryLineage, "taiqing-siku");
+  assert.ok(model.active.some((c) => c.connectorId === "five-mountains-mutual-facing"));
+  assert.ok(model.active.length >= 2);
+  assert.ok(model.active.every((c) => c.prohibitedForUserInference === true));
 });
 
 /* ── D: fail-closed safety — UNKNOWN/missing suppresses both tiers' models ── */
@@ -867,54 +884,21 @@ test("11 (real corpus, real chain, disclosed reachability override): five-forms-
   assert.equal(source.sectionLocatorStatus, "VERIFIED",
     "fixture assumption: the source's status is stronger than the connector's own -- this is what makes the test meaningful, not a coincidence of equal values");
 
-  // This connector's real runtimePolicy is RESEARCH_ONLY, and resolver.js
-  // correctly routes RESEARCH_ONLY connectors to abstentions BEFORE any
-  // SOURCE_PANEL promotion (resolver.js item 2) -- proven below with ZERO
-  // override, through the real, unmodified production path. Abstention
-  // cards (composition.js's toAbstention()) never carry locator fields at
-  // all, so no real (construct, lineage) pairing today can drive this exact
-  // connector into tier3ConnectorModel()'s evidence-card reduction -- a
-  // pre-existing, orthogonal fact about this connector's runtime policy,
-  // not something this fix touches or needs to touch.
+  // The beta graph permits this structural relationship to reach the
+  // attributed source-panel tier, but it must not be upgraded to the source's
+  // stronger locator status.
   const realPath = composeHeritageForReading({
     captureQualityPassed: true, safetyPassed: true,
     heritageConstruct: "fiveElements", sourceLineage: "primary",
     depthMode: "SOURCE_DEEP", occurrence: 0,
   });
-  assert.equal(
-    realPath.abstentions.some((a) => a.connectorId === "five-forms-generative-overcoming-system" && a.disposition === "RESEARCH_ONLY"),
-    true,
-    "fixture assumption: through the real, unmodified production path, this connector abstains as RESEARCH_ONLY today, and so cannot demonstrate the locator-status gap via that path alone",
-  );
-
-  // So the real chain is exercised through the injectable seam instead --
-  // composeHeritageConnectionsWithRegistries, which calls the SAME
-  // resolveHeritageConnections() and the SAME mapResolverResult() the
-  // production path calls -- with the REAL canonical registries UNCHANGED
-  // except one disclosed, single-field override on a CLONE of this ONE
-  // connector record: runtimePolicy only, so the record becomes reachable
-  // as sourcePanelOnly and can reach an evidence card at all. Every other
-  // field on the clone -- including the sectionLocatorStatus under test --
-  // stays byte-identical to the real registry entry.
-  const reachableConnectorRegistry = Object.freeze({
-    ...HERITAGE_CONNECTOR_REGISTRY,
-    "five-forms-generative-overcoming-system": Object.freeze({
-      ...real,
-      runtimePolicy: "HERITAGE_PRESENTATION_ALLOWED",
-    }),
-  });
-  const result = composeHeritageConnectionsWithRegistries(realBase({
-    heritageConstruct: "fiveElements", sourceLineage: "primary",
-    connectorRegistry: reachableConnectorRegistry,
-  }));
-  assert.equal(result.abstained, false);
-  const resolvedEntry = [...result.active, ...result.sourcePanelOnly]
+  const resolvedEntry = [...realPath.active, ...realPath.sourcePanelOnly]
     .find((e) => e.connectorId === "five-forms-generative-overcoming-system");
-  assert.ok(resolvedEntry, "the connector must be reachable once the orthogonal runtimePolicy gate is (disclosedly) lifted");
+  assert.ok(resolvedEntry, "the connector must be reachable through the beta production path");
   assert.equal(resolvedEntry.sectionLocatorStatus, "RECORDED",
     "the connector's own RECORDED status must survive resolveHeritageConnections() -> Stage-3 mapping");
 
-  const model = tier3ConnectorModel(result, REAL_SOURCE_REGISTRY);
+  const model = tier3ConnectorModel(realPath, REAL_SOURCE_REGISTRY);
   const card = [...model.active, ...model.sourcePanelOnly]
     .find((c) => c.connectorId === "five-forms-generative-overcoming-system");
   assert.ok(card);
@@ -1112,7 +1096,7 @@ test("13: Tier 2 and Tier 3 models carry the SAME rotation-disclosure string as 
   assert.doesNotMatch(heritageConnectorTier3Markup(tier3Model), /rotation through the traditional systems/);
 });
 
-test("13 (real corpus, real chain): fiveOfficers/primary has real sourcePanelOnly material with no active connector — Tier 3's model still carries disclosure metadata even though Tier 2 has nothing to disclose", () => {
+test("13 (real corpus, real chain): fiveOfficers/primary has active membership plus source-panel material, and both tiers carry disclosure metadata", () => {
   // fourRivers/primary (formerly used here) now has a real ACTIVE connector:
   // the 2026-08-29 project-owned Kanripo reconciliation (matrix CR-02)
   // byte-pinned four-rivers-flow-and-banks to VERIFIED_PRIMARY, and unlike
@@ -1126,19 +1110,9 @@ test("13 (real corpus, real chain): fiveOfficers/primary has real sourcePanelOnl
   const tier2Connectors = tierTwoHeritageConnections(reflection, { captureQualityPassed: true, safetyPassed: true });
   const tier3Connectors = tierThreeHeritageConnections(reflection, { captureQualityPassed: true, safetyPassed: true });
 
-  // Fixture assumption: fiveOfficers/primary has no ACTIVE connector, so
-  // Tier 2 has nothing to select and nothing to disclose -- exactly the
-  // asymmetric case the Codex finding described, reproduced with zero
-  // synthetic data. This asymmetry no longer matters for what actually
-  // reaches the screen: the Why SURFACE (app.js) discloses the reading-level
-  // rotation unconditionally regardless of whether any Stage-3 connector is
-  // selected -- see the combined ownership test in heritage-connections.test.js.
-  // What this test proves is narrower and still real: even in this exact
-  // asymmetric case, Tier 3's connector-payload metadata is present and
-  // correct, and the connector markup itself still renders no disclosure of
-  // its own.
-  assert.equal(tier2Connectors.available, false);
-  assert.equal(tier2ConnectorModel(tier2Connectors).rotationDisclosure, null);
+  assert.equal(tier2Connectors.available, true);
+  assert.ok(tier2ConnectorModel(tier2Connectors).card);
+  assert.equal(tier2ConnectorModel(tier2Connectors).rotationDisclosure, ROTATION_DISCLOSURE);
 
   const tier3Model = tier3ConnectorModel(tier3Connectors, REAL_SOURCE_REGISTRY);
   assert.ok(tier3Model.sourcePanelOnly.some((c) => c.connectorId === "five-officers-one-good-office-ten-years"),

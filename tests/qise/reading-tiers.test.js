@@ -18,11 +18,11 @@ const forState = (s) => readingTiers({ state: s, composed: composeReading(s) });
 
 /* ── the flag ────────────────────────────────────────────────────────────── */
 
-test("the engine is off unless something turns it on", () => {
-  assert.equal(reflectionMode({}), "off");
-  assert.equal(reflectionMode({ search: "" }), "off");
-  assert.equal(reflectionMode({ search: "?other=1" }), "off");
-  assert.equal(reflectionEngineEnabled({}), false);
+test("the engine is on by default for the beta, while explicit off remains available", () => {
+  assert.equal(reflectionMode({}), "on");
+  assert.equal(reflectionMode({ search: "" }), "on");
+  assert.equal(reflectionMode({ search: "?other=1" }), "on");
+  assert.equal(reflectionEngineEnabled({}), true);
 });
 
 test("the query string sets the mode and beats stored preference", () => {
@@ -37,10 +37,10 @@ test("stored preference applies when the URL says nothing", () => {
   assert.equal(reflectionMode({ search: "", storage }), "compare");
 });
 
-test("an unknown or hostile flag value is off, not a crash", () => {
-  assert.equal(reflectionMode({ search: "?reflection=yes-please" }), "off");
-  assert.equal(reflectionMode({ search: "%%%" }), "off");
-  assert.equal(reflectionMode({ storage: { getItem() { throw new Error("denied"); } } }), "off");
+test("an unknown or hostile flag value falls back to the beta default, not a crash", () => {
+  assert.equal(reflectionMode({ search: "?reflection=yes-please" }), "on");
+  assert.equal(reflectionMode({ search: "%%%" }), "on");
+  assert.equal(reflectionMode({ storage: { getItem() { throw new Error("denied"); } } }), "on");
 });
 
 /* ── the split ───────────────────────────────────────────────────────────── */
@@ -149,15 +149,14 @@ test("a development origin gets the reflection engine by default", () => {
   }
 });
 
-test("the published origin, and any origin at all, defaults to off", () => {
-  // The published site is a GitHub Pages host, and it must not appear on the
-  // internal list. Checked by name so that adding it later fails here rather
-  // than in front of users.
+test("the published origin and development origins all receive the beta default", () => {
+  // The engine is now a closed-beta product decision, independent of origin.
+  // The legacy internal pattern list remains diagnostic metadata only.
   for (const host of [
     "matthewcarlhogan-netizen.github.io", "mienshiang.app", "example.com",
     "", undefined, "localhost.evil.com", "app.github.dev.attacker.net",
   ]) {
-    assert.equal(reflectionMode({ hostname: host }), "off", `${host} must not be internal`);
+    assert.equal(reflectionMode({ hostname: host }), "on", `${host} should receive the beta default`);
   }
 });
 

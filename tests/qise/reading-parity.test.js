@@ -139,12 +139,9 @@ test("every declared blocker states why it blocks and how it gets fixed", () => 
   }
 });
 
-test("the reflection engine stays off by default while a blocker stands", () => {
-  // The owner's instruction, enforced rather than remembered.
-  if (KNOWN_BLOCKERS.some((b) => b.blocksDefault)) {
-    assert.equal(reflectionMode({}), "off",
-      "a blocker is outstanding and the new engine is the default");
-  }
+test("the Reflection Engine is on by default for closed beta while explicit comparison modes remain available", () => {
+  assert.equal(reflectionMode({}), "on");
+  assert.equal(reflectionMode({ hostname: "unknown.example" }), "on");
 });
 
 test("all three rollout modes remain available", () => {

@@ -291,6 +291,12 @@ export const BRIDGE_OPENER = Object.freeze([
   "One is a measurement of light on skin; the other is a thousand-year-old way of looking. Holding them together is a choice, not a deduction — and it opens onto this:",
 ]);
 
+export const BRIDGE_CONTEXT = (construct, sourceLineage) => {
+  const label = HERITAGE_CONSTRUCT_LABEL[construct] || HERITAGE_CONSTRUCT_LABEL.threeSections;
+  const slot = sourceLineage === "variant" ? "alternate" : "primary";
+  return `${label} is the historical frame selected from the ${slot} rotation slot; it remains separate from what the camera measured.`;
+};
+
 export const BRIDGE_ABSTAINED = Object.freeze([
   "Even with nothing measured today, the passage is worth sitting with:",
   "There is no observation to place beside it today, which leaves the old idea to stand on its own:",
@@ -423,6 +429,11 @@ export const REFLECTION = Object.freeze({
            "Where do you keep talking yourself out of a first read that was right?",
            "What does the quieter part of you keep saying?"],
   },
+});
+
+export const REFLECTION_WITNESS_CONTEXT = Object.freeze({
+  primary: "Keep the material selected from the primary rotation slot as a historical prompt, not a conclusion about you.",
+  variant: "Keep the material selected from the alternate rotation slot as a historical prompt, not a conclusion about you.",
 });
 
 /** Contract §13 — never imply rotation was caused by measurement. */

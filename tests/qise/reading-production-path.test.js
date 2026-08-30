@@ -320,19 +320,11 @@ test("the existing passage engine still runs on the same record", () => {
  * `heritageRotation` above; "2026-08-20" verified against
  * `HERITAGE_CONSTRUCTS`'s fixed six-day cycle).
  *
- * The honest current result: `ABSTRACT_LINEAGE_OVERRIDES` is deliberately
- * empty (a content/editorial decision reserved for a product owner — see
- * src/heritage/composition.js's file header), so the abstract "primary"
- * resolves to fiveMountains' literal registry key "primary" — the
- * 人倫大統賦 (Renlun Datong) directional-naming witness, `runtimeStatus:
- * "RESEARCH_ONLY"` — never to "taiqing-siku" (太清神鑑, HERITAGE_ONLY,
- * the mountain-name-to-region witness the connector actually cites). The
- * resolver therefore blocks the connector at `LINEAGE_RESEARCH_ONLY`, not
- * `SOURCE_PANEL_CEILING` — it is fully traceable (present in `abstentions`)
- * but never shown. If a product owner later authorises routing fiveMountains'
- * abstract "primary" to "taiqing-siku" via `ABSTRACT_LINEAGE_OVERRIDES`, this
- * test's asserted outcome will correctly start failing, which is the intended
- * signal to update it alongside that decision.
+ * The beta product decision now explicitly routes the abstract "primary"
+ * slot to the Taiqing facial witness. The source records remain distinct and
+ * their disagreement metadata remains available; routing is not evidence
+ * promotion. This test proves that the decision reaches the real reading
+ * pipeline rather than only a direct Stage-3 unit call.
  *
  * Updated 2026-08-29 (project-owned Kanripo reconciliation, errata E-8): the
  * former `five-mountains-mutual-facing-fullness` connector referenced above
@@ -342,7 +334,7 @@ test("the existing passage engine still runs on the same record", () => {
  * evidence strength — so the split and the evidence promotion change neither
  * mechanism nor outcome here, only the id under test.
  */
-test("fiveMountains/primary through the REAL reflectionFor()/readingTiersWithHeritage() path does NOT reach taiqing-siku or SOURCE_PANEL_CEILING today", () => {
+test("fiveMountains/primary through the REAL reflectionFor()/readingTiersWithHeritage() path reaches the routed beta graph", () => {
   const canonicalDay = "2026-08-20";
   const rotation = heritageRotation(canonicalDay);
   assert.deepEqual(rotation, { heritageConstruct: "fiveMountains", sourceLineage: "primary" },
@@ -356,21 +348,19 @@ test("fiveMountains/primary through the REAL reflectionFor()/readingTiersWithHer
 
   const tiers = readingTiersWithHeritage(reflection, { captureQualityPassed: true, safetyPassed: true });
 
-  // Tier 2: no active connector — the flagship claim is not production-reachable today.
-  assert.equal(tiers.tier2.connectors.available, false);
-  assert.equal(tiers.tier2.connectors.reason, "NO_ACTIVE_CONNECTOR");
-  assert.equal(tiers.tier2.connectors.connector, null);
+  // Tier 2: one bounded structural relationship is selected.
+  assert.equal(tiers.tier2.connectors.available, true);
+  assert.ok(tiers.tier2.connectors.connector);
+  assert.ok(tiers.tier2.connectors.connector.prohibitedForUserInference);
 
-  // Tier 3 (SOURCE_DEEP): not ACTIVE, not source-panel-ceilinged — genuinely blocked.
+  // Tier 3 (SOURCE_DEEP): the same routed selection expands without rerolling.
   const tier3Connectors = tiers.tier3.connectors;
-  assert.equal(tier3Connectors.primaryLineage, "primary",
-    "the resolver received the abstract label verbatim, not \"taiqing-siku\"");
+  assert.equal(tier3Connectors.primaryLineage, "taiqing-siku");
+  assert.ok(tier3Connectors.active.some((e) => e.connectorId === "five-mountains-mutual-facing"));
+  assert.ok(tier3Connectors.active.length >= 2);
   assert.equal(
-    tier3Connectors.active.some((e) => e.connectorId === "five-mountains-mutual-facing"), false);
-  assert.equal(
-    tier3Connectors.sourcePanelOnly.some((e) => e.connectorId === "five-mountains-mutual-facing"), false,
-    "SOURCE_PANEL_CEILING is not reached through the real abstract-label path");
-  const blocked = tier3Connectors.abstentions.find((e) => e.connectorId === "five-mountains-mutual-facing");
-  assert.ok(blocked, "the connector must still be fully traceable, even though it is never shown");
-  assert.equal(blocked.gateReasons[0], "LINEAGE_RESEARCH_ONLY");
+    tier3Connectors.renderPlan.relationshipOrder[0],
+    tiers.tier2.connectors.connector.connectorId,
+    "Tier 3 must expand the Tier 2 selection rather than independently reroll it",
+  );
 });

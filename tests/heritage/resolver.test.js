@@ -185,12 +185,15 @@ test("4: resolver source contains no Math.random or Date.now content-selection",
 
 /* ── 5. primary construct with no eligible connector ─────────────────────── */
 
-test("5: twelvePalaces has zero connectors in the real registry", () => {
+test("5: twelvePalaces' registered connectors remain hidden while its primary lineage is research-only", () => {
   const result = resolveHeritageConnections(realArgs({ readingState: { heritageConstruct: "twelvePalaces", sourceLineage: "primary" } }));
   assert.equal(result.abstained, false);
   assert.equal(result.primaryConstruct, "twelvePalaces");
   assert.deepEqual(result.activeConnectors, []);
-  assert.deepEqual(result.unavailableRelations, []);
+  assert.deepEqual(result.unavailableRelations.map((entry) => entry.connectorId), [
+    "twelve-palaces-appearance-closure", "twelve-palaces-membership-taiqing",
+  ]);
+  assert.ok(result.unavailableRelations.every((entry) => entry.disposition === "LINEAGE_RESEARCH_ONLY"));
   assert.deepEqual(result.sourcePanels, []);
 });
 
@@ -470,7 +473,9 @@ test("13: fiveElements candidates are exactly the registered connectors, no synt
   // five-forms-like-with-like added by the 2026-08-29 project-owned Kanripo
   // acquisition (matrix CR-09, errata E-7) — a genuinely distinct 玉管照神局
   // like-with-like relation, not a synthesized pairwise edge.
-  assert.deepEqual(allIds.sort(), ["five-forms-generative-overcoming-system", "five-forms-like-with-like"]);
+  assert.deepEqual(allIds.sort(), [
+    "five-elements-tolerance", "five-forms-generative-overcoming-system", "five-forms-like-with-like",
+  ]);
 });
 
 /* ── 14. Twelve Palaces does not import ZWDS ──────────────────────────────── */

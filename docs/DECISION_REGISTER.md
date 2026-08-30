@@ -14,7 +14,7 @@ Use this register to stop prompts, discussions and implementation from collapsin
 - Five Mountains and Twelve Palaces are separate systems; the nose/central mountain maps to Earth in the Five Mountains model.
 - Exact geometry with insufficient evidence is marked `needsVerification: true` and is not shipped as fact.
 - Current history/baseline behaviour and limits remain as implemented until deliberately migrated.
-- Heritage connector architecture Stages 1 (data spine) and 2 (deterministic resolver) are approved and frozen; see `docs/HERITAGE_CONNECTOR_STAGE_STATUS.md` for the frozen code baseline, verification counts and architectural locks. Stage 3 (prose/Reflection Engine integration) **code is present on `main`** (merged via PR #40, 30 August 2026 correction — the previous "has not started" line here was stale). Presence is not approval: see `docs/HERITAGE_CONNECTOR_STAGE_STATUS.md`'s six-axis status for what is and is not true of Stage 3 as a result, and `docs/heritage-evidence/SAFETY_AUTHORIZATION_INTERFACE.md` for why it remains fail-closed in production regardless.
+- Heritage connector architecture Stages 1 (data spine) and 2 (deterministic resolver) are approved and frozen; see `docs/HERITAGE_CONNECTOR_STAGE_STATUS.md` for the frozen code baseline, verification counts and architectural locks. Stage 3 (prose/Reflection Engine integration) is present and, under the closed-beta decision below, active in the beta runtime. Presence and beta runtime authority do not clear rights, provenance or commercial-release obligations.
 
 ### DR-2026-08-25-AI-CONTEXT-MODEL-ROUTING
 
@@ -28,6 +28,17 @@ Use this register to stop prompts, discussions and implementation from collapsin
     - /clear is required when switching materially different tasks.
     - Repository checkpoints/canonical docs are persistent project memory; large chat histories are not.
     - This routing changes development workflow only and does not weaken provenance, safety, heritage freezes, release gates or product contracts.
+
+### DR-2026-08-31-REFLECTION-BETA-RUNTIME
+
+- **Date:** 31 August 2026
+- **Owner:** product owner
+- **Status:** approved
+- **Question:** Should the complete Reflection Engine and attributed heritage connector path remain disabled by rights/readiness status during closed beta?
+- **Decision:** **No.** The Reflection Engine is on by default for closed beta, and the heritage connector path is enabled for the complete reading flow. The abstract daily slots for Three Sections, Twelve Palaces and Five Mountains use explicit, named source routing rather than silently abstaining because a release audit is incomplete.
+- **Mechanism:** `src/qise/reading-flags.js` defaults to `on`; `QISE_BETA_SAFETY_AUTHORIZATION` records the no-referral-gate-by-design policy used by `src/ui/qise/app.js`; `src/heritage/runtime-routing.js` maps the affected abstract slots; and the expanded graph is registered in `src/heritage/runtime-connectors.js`.
+- **Boundaries:** This is a closed-beta runtime decision, not a rights clearance or a commercial-release approval. Source attribution, disagreement metadata, non-inference framing, capture-quality gates and the release audit remain in force. Fortune/rank material remains source-panel-only where its policy requires it.
+- **Consequence:** The product can now be functionally exercised end to end before beta distribution. `heritage:readiness` remains an analytical content-depth report and may still say `NOT_READY`; that result is no longer a runtime off-switch. Customer-impact workshops are not a prerequisite to implementation; beta testing follows completion of the functional app.
 
 ## Approved direction, not necessarily complete
 
@@ -92,7 +103,7 @@ Use this register to stop prompts, discussions and implementation from collapsin
 - **Status:** approved
 - **Question:** The Reflection Engine has met the engineering bar. Should it become the default?
 - **Decision:** **internal default yes, public default no.** Development proceeds against the Reflection Engine; public release behaviour stays on the passage engine until the heritage rights gates close. Superseded for cultural-review dependency by DR-2026-08-19-CULTURAL-REVIEW-RETIREMENT.
-- **Mechanism:** `src/qise/reading-flags.js` defaults to `on` for development origins on a named allowlist and `off` for every other origin, including any it has never heard of. This was chosen over a build flag deliberately: a build flag can be set wrongly in a release pipeline and fails open in public; a host allowlist fails closed. `?reflection=` and stored preference still override in both directions, and `compare` remains available.
+- **Mechanism:** Historical implementation: `src/qise/reading-flags.js` defaulted to `on` for development origins and `off` elsewhere. Superseded for closed beta by `DR-2026-08-31-REFLECTION-BETA-RUNTIME`; `?reflection=` and stored preference still override in both directions, and `compare` remains available.
 - **Evidence:** `docs/PARITY_2026-08-17.md` — ten of ten migration gates pass, 1,152 real records, zero regressions, 0.0% verbatim repetition over a simulated year against the passage engine's 26.8%.
 - **Consequences:** the passage engine is **not** removed. Both engines remain, and the parity gate keeps running against both.
 

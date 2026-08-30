@@ -46,7 +46,7 @@ import { frameStats } from "../../qise/framestats.js";
 import { computeReadingMetrics, lumRatioP90P50 } from "../../qise/metrics.js";
 import { interpretReading, readingConfidence, axesOf, planSegment, BASELINE_VERSION } from "../../qise/baseline.js";
 import { passageFor } from "../../qise/passages.js";
-import { reflectionMode } from "../../qise/reading-flags.js";
+import { reflectionMode, QISE_BETA_SAFETY_AUTHORIZATION } from "../../qise/reading-flags.js";
 import { reflectionFor } from "../../qise/reading-pipeline.js";
 import { readingTiers } from "../../qise/reading-tiers.js";
 import { openStore } from "../../qise/store.js";
@@ -1215,15 +1215,15 @@ async function renderReflection(reading, history) {
      * (`captureAuthorizationFromReading` fails closed to `undefined` for
      * anything other than an explicit "clean" or "assisted").
      *
-     * `safetyPassed` is deliberately left unset: the Qi Se tracker has no
-     * safety-referral gate of its own yet (unlike the legacy Module A/B
-     * malar gate), so there is nothing true to assert, and an unasserted
-     * gate must suppress rather than silently pass. Wire a real safety
-     * signal here if and when one is built for Qi Se — capture-quality
-     * passing must never be treated as a substitute for it.
+     * Qi Se is a non-clinical, self-observation surface and has no separate
+     * safety-referral signal. The product-owner beta decision is therefore to
+     * pass the explicit non-clinical policy here; capture quality remains a
+     * separate gate and unresolved source metadata remains visible in the
+     * heritage cards.
      */
     const tiers = readingTiersWithHeritage(reflection, {
       captureQualityPassed: captureAuthorizationFromReading(reading),
+      safetyPassed: QISE_BETA_SAFETY_AUTHORIZATION.heritageConnectors,
     });
     if (!tiers) {
       teardownReflectionSurfaces(surfaces);

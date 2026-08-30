@@ -48,8 +48,11 @@ analogy.
 `undefined`. `app.js` wires this into
 `readingTiersWithHeritage(reflection, { captureQualityPassed: … })`.
 
-**For safety — no.** There is nothing true to assert. `src/ui/qise/app.js`
-**deliberately does not pass `safetyPassed`** to `readingTiersWithHeritage()`.
+**For a clinical/referral signal — no.** There is nothing true to assert and no
+clinical signal is being fabricated. For closed-beta runtime presentation, the
+product owner has separately chosen the explicit no-referral-gate policy
+recorded below; `src/ui/qise/app.js` passes that named policy to
+`readingTiersWithHeritage()`.
 
 ### Stage 3's own side of the interface (PR #40 — complete and fail-closed)
 
@@ -70,13 +73,29 @@ invoked. Only a literal `true` on both proceeds. `safetyPassed` is never `true`
 anywhere in production ⇒ `gateStatus(undefined)` = `"UNKNOWN"` ⇒ suppressed under
 `SAFETY_GATE_UNKNOWN`.
 
-**Practical consequence:** heritage connector output is wired into the production
-call path and is **always suppressed there today.** This is correct fail-closed
-behaviour for a missing upstream prerequisite — not a bug.
+**Historical consequence:** before the closed-beta decision below, heritage
+connector output was always suppressed in the production path. That was correct
+for an unset policy, but it is no longer the beta runtime configuration.
 
 ---
 
-## 3. What exact product/system decision is required?
+## 2a. Closed-beta runtime decision
+
+The product owner has decided that Qi Se is a non-clinical self-observation
+experience and has **no additional safety/referral gate by design** for closed
+beta. This is represented by the named `QISE_BETA_SAFETY_AUTHORIZATION` policy,
+not by truthy coercion or an unnamed default. The app passes its
+`heritageConnectors` value as `safetyPassed`.
+
+This decision does not clear source rights, provenance, cultural attribution,
+store approval, or commercial-release obligations. It also does not remove the
+capture-quality gate: a missing or failed capture-quality authorization still
+suppresses connector output. The low-level composition interface remains
+fail-closed for callers that omit or explicitly fail either input.
+
+---
+
+## 3. What exact product/system decision was required?
 
 One of:
 
@@ -97,11 +116,9 @@ clinical pattern on specific pixels warranted a "see a clinician" nudge;
 whether Qi Se's personal-baseline colour deltas have any analogue is itself a
 research + clinical question).
 
-**If (a):** the smallest safe implementation is a single named constant/decision
-record (e.g. `QISE_SAFETY_MODEL: "NO_REFERRAL_GATE_BY_DESIGN"`) that
-`app.js` reads to pass `safetyPassed: true` — **only** after the product owner
-has recorded the semantics in `docs/DECISION_REGISTER.md`. It must NOT be a bare
-`safetyPassed: true` literal with no decision behind it.
+**Decision applied:** option (a) was selected for closed beta. The implementation
+uses the named `QISE_BETA_SAFETY_AUTHORIZATION` policy, recorded in
+`docs/DECISION_REGISTER.md`, rather than a bare `safetyPassed: true` literal.
 
 ---
 
@@ -123,11 +140,9 @@ has recorded the semantics in `docs/DECISION_REGISTER.md`. It must NOT be a bare
 
 | stage | blocked? | why |
 |---|---|---|
-| **internal prototype** | **NO** | Stage 3 connector rendering is not required to exercise the product end-to-end. The prototype slice (see `PROTOTYPE_NOW.md`) is the pinned Tier-1 constructs displayed with their provenance — that path does not go through `composeHeritageForReading()`. The connector layer can stay fail-closed/suppressed. |
-| **user-test prototype** | **NO**, if the showcase corpus is the pinned Tier-1 constructs with provenance and disagreement notes, and the Stage-3 connector layer is left off (`reflectionMode` not `"off"` is a separate toggle; the connector modules stay dormant). **YES**, only if the user test specifically needs the Stage-3 connector cards on screen. |
-| **public release** | **YES** — for the Stage-3 connector feature specifically. Not for the rest of the product. The connector feature cannot ship to the public with `safetyPassed` permanently `UNKNOWN` (it would render nothing) *or* with a fabricated `true`. One of §3(a)/(b) must be resolved first, plus the Decision-1 lineage-content decision, plus the CC BY-SA 4.0 rights question (Phase D / SR-18). |
+| **internal prototype** | **NO** | The complete path is now exercised by the same production entry point used for beta. |
+| **closed beta** | **NO** | The named no-referral-gate policy enables the connector path; capture-quality checks and explicit non-inference boundaries remain active. |
+| **public/commercial release** | **YES** | Rights, provenance, store approval and other external release obligations remain separate from beta runtime availability. |
 
-**Stage 3 status is unchanged: PARTIAL / BLOCKED ON SAFETY AUTHORIZATION AND A
-LINEAGE CONTENT DECISION.** This pass closes the *evidence* gap that sat behind
-the lineage-content decision; it does not touch the safety blocker, which is a
-product/clinical decision the product owner owns.
+**Current Stage 3 status:** closed-beta runtime active; public/commercial release
+remains separately gated by external evidence and owner/counsel decisions.

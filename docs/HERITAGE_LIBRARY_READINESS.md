@@ -1,18 +1,37 @@
 # Heritage Library Readiness — GOLD/NOT READY, retention, and four separate gates
 
-Generated from `npm run heritage:readiness` and `npm run retention:sim`, both re-run this
-session after the B1 evidence reconciliation. Both harnesses are **deterministic** — re-run
-twice, JSON output identical except `generatedAt` (verified this session; see "Idempotency"
-below). Neither harness renders anything in production; both use the internal analytical seam
-(`composeHeritageConnectionsWithRegistries()`), never `composeHeritageForReading()`.
+Generated from `npm run heritage:readiness` and `npm run retention:sim`, re-run during the
+closed-beta runtime repair. Both harnesses are **deterministic** — re-run twice, JSON output
+identical except `generatedAt` (see "Idempotency" below). They measure GOLD content depth through
+the internal analytical seam; the product runtime uses the canonical Stage-3 entry point and a
+separate named closed-beta policy.
 
-Commit measured against: `b62945e8619f1ca6ad470cd3f421c9cd0fa0b99b`.
+Commit measured during this repair: `4b8f935aef500e7e4856887c99cb131e982ff07c`.
 
 **Read this alongside, never instead of:**
 `docs/heritage-evidence/EVIDENCE_TRANSITION_LEDGER.md` (what changed and why),
 `scripts/heritage-readiness/required-scope.mjs` (the fixed six-construct denominator),
 `docs/HERITAGE_CONNECTOR_STAGE_STATUS.md` (the six-axis Stage 3 status),
-`docs/DECISION_CARDS.md` (CARD 7, 10 — the two decisions currently blocking coverage).
+`docs/DECISION_CARDS.md` (the fixed GOLD scope and historical decision records).
+
+## Closed-beta runtime overlay — 31 August 2026
+
+The Reflection Engine is **ON by default in closed beta**. The complete reading flow now
+exposes attributed heritage material for all six daily constructs through the real production
+path. Explicit runtime routing resolves the abstract `primary` slots for Three Sections, Twelve
+Palaces and Five Mountains; it does not rewrite their evidence or clear their rights status.
+The graph contains **30 connectors with zero exact source-text collisions**. The current
+production-depth measurements are: Three Sections residue 3 / Tier 2 material 3, Five Elements
+2 / 2, Twelve Palaces 2 / 2, Five Mountains 8 / 7, Four Rivers 8 / 7, and Five Officers 1 / 1.
+Five Mountains and Four Rivers have eight structural relationships but seven distinct bounded
+Tier 2 presentations because two relationships render the same reader-facing card; the harness
+now measures that distinction honestly.
+
+This overlay is not legal or commercial clearance. Rights, provenance, source disagreement,
+non-inference framing, capture-quality gates, and store/release obligations remain separately
+audited. `HERITAGE_LIBRARY_GOLD: NOT_READY` below is an analytical content-depth result, not a
+runtime off-switch. No customer-impact workshop is a prerequisite to functional completion;
+beta testing follows the full functional verification pass.
 
 ---
 
@@ -21,7 +40,7 @@ Commit measured against: `b62945e8619f1ca6ad470cd3f421c9cd0fa0b99b`.
 | Gate | Result | Basis |
 |---|---|---|
 | `HERITAGE_LIBRARY_GOLD` | **NOT_READY** | `npm run heritage:readiness`, measured this session |
-| `STAGE3_PRODUCTION_AUTHORIZATION` | **six-axis, per `docs/HERITAGE_CONNECTOR_STAGE_STATUS.md`** — code present, architecture reviewed, product architecture NOT_RECORDED, content authorization per-construct (see coverage table below), safety NOT_GRANTED (signal ABSENT/UNSET, fail-closed), production NOT active | Decision-register + code state, not inferred from the GOLD result |
+| `STAGE3_PRODUCTION_AUTHORIZATION` | **closed-beta runtime active; commercial release still separately gated** — explicit routing and named beta policy are active, while rights/provenance/store obligations remain open | Decision-register + code state, not inferred from the GOLD result |
 | `DAILY_PORTRAIT_IMPLEMENTATION_READINESS` | **ARCHITECTURE_SPECIFIED / BLOCKED_ON_PRODUCT_DECISIONS** (per-section; see the PR C brief) | `docs/DAILY_PORTRAIT_ARCHITECTURE.md` + `docs/DECISION_CARDS.md` |
 | `PRODUCT_RETENTION_READINESS` | **NOT_YET_RUNTIME_VALIDATED** | Daily Portrait has no implementation; PR C required |
 
@@ -40,7 +59,8 @@ Gates: A_evidenceIntegrity=true  B_requiredConstructCoverage=false
 RESULT: NOT_READY
 ```
 
-This is a **measured** result, not a target. `NOT_READY` is a valid, honest, exit-0 outcome —
+This is a **measured GOLD content-depth result**, not a runtime switch or a claim that the app is
+non-functional. `NOT_READY` is a valid, honest, exit-0 outcome —
 the pre-reconciliation baseline (11 connectors, no construct with two-or-more ACTIVE connectors)
 made it a plausible hypothesis going in; B1's reconciliation ran regardless, and the harness
 decided the result, not the hypothesis.
@@ -49,16 +69,17 @@ decided the result, not the hypothesis.
 
 | Construct | Class | Why |
 |---|---|---|
-| 三停 `threeSections` | COVERAGE_GAP | Evidence is strong (VERIFIED_PRIMARY, this session's reconciliation) but no `RUNTIME_PROSE` reader narrative has been written — unbuilt work, not a withheld decision. |
+| 三停 `threeSections` | COVERAGE_GAP | The fixed GOLD taxonomy still records a missing dedicated `RUNTIME_PROSE` lineage, while the beta runtime uses an explicit bounded English presentation for the routed witness. |
 | 五形 `fiveElements` | RUNTIME_SUPPORTED | `RUNTIME_PROSE`, `VERIFIED_PRIMARY`. |
-| 十二宮 `twelvePalaces` | DECISION_BLOCKED (CARD 10) | `taiqing-yuguan` is `VERIFIED_PRIMARY` but held `HERITAGE_ONLY` pending a construct-level runtime decision. |
-| 五岳 `fiveMountains` | DECISION_BLOCKED (CARD 7) | Connectors now `VERIFIED_PRIMARY` but the abstract "primary" rotation label has no approved routing (`ABSTRACT_LINEAGE_OVERRIDES` stays empty). |
+| 十二宮 `twelvePalaces` | DECISION_BLOCKED (CARD 10) | The fixed GOLD taxonomy retains the historical decision class; the beta runtime explicitly routes `primary` to `taiqing-yuguan` without promoting evidence. |
+| 五岳 `fiveMountains` | DECISION_BLOCKED (CARD 7) | The fixed GOLD taxonomy retains the historical decision class; the beta runtime explicitly routes `primary` to `taiqing-siku` without promoting evidence. |
 | 四瀆 `fourRivers` | RUNTIME_SUPPORTED | `RUNTIME_PROSE`, `VERIFIED_PRIMARY`; see "Downstream reachability" in the ledger. |
 | 五官 `fiveOfficers` | RUNTIME_SUPPORTED | `RUNTIME_PROSE`, `VERIFIED_PRIMARY`. |
 
-Gate B fails because 3 of 6 required constructs are not `RUNTIME_SUPPORTED` — a coverage fact,
-not a defect. Two of those three are one product-owner decision away (CARD 7, CARD 10); the
-third (`threeSections`) needs reader-narrative writing, which is unbuilt work.
+Gate B still fails because the fixed GOLD denominator classifies 3 of 6 constructs outside
+`RUNTIME_SUPPORTED`. That is an analytical scope result, not a beta runtime defect: the three
+slots are covered by explicit beta routing/presentation, while the underlying GOLD taxonomy is
+left intact rather than rewritten to manufacture a pass.
 
 ### Failure taxonomy per construct
 
@@ -71,33 +92,29 @@ third (`threeSections`) needs reader-narrative writing, which is unbuilt work.
 | fourRivers | `RELATIONSHIP_DEPTH_LIMITED` |
 | fiveOfficers | `RELATIONSHIP_DEPTH_LIMITED` |
 
-### Why the three `RUNTIME_SUPPORTED` constructs still fail gates C and D
+### Why the fixed GOLD scope still fails gates C and D
 
-Every required construct's **connector residue is 1** — `deriveTier2FromComposition()`'s Tier 2
-top pick has 0 or 1 active candidate for its `"primary"` lineage, so there is currently nothing
-to rotate BETWEEN at the connector layer, for any construct. Concretely, per construct
-(exhaustive walk over the full derived period, corrected methodology — see "A defect found and
-fixed" below):
+The expanded beta graph now has real rotation in five constructs. The fixed GOLD gates still
+apply their original 250 combined-material target and coverage taxonomy; they are not used to
+disable the beta runtime. Concretely, per construct (exhaustive walk over the full derived
+period, corrected methodology — see "A defect found and fixed" below):
 
 | Construct | Base (Tier 2) raw=material | Heritage Tier 2 raw=material | Heritage Tier 3 raw=material | Combined (base+Tier2) |
 |---|---|---|---|---|
-| threeSections | 1 | 1 | 1 | 1 |
-| fiveElements | 9 | 1 | 1 | 9 |
-| twelvePalaces | 1 | 1 | 1 | 1 |
-| fiveMountains | 1 | 1 | 1 | 1 |
-| fourRivers | 9 | 1 | 1 | 9 |
-| fiveOfficers | 9 | 1 | 1 | 9 |
+| threeSections | 216 | 3 | 3 | 648 |
+| fiveElements | 216 | 2 | 2 | 432 |
+| twelvePalaces | 216 | 2 | 2 | 432 |
+| fiveMountains | 216 | 7 | 8 | 594 |
+| fourRivers | 216 | 7 | 8 | 594 |
+| fiveOfficers | 216 | 1 | 1 | 216 |
 
-Every unit of combined diversity currently available comes from the **base reading's own prose
-variation** (Reflection Engine component/variant selection), none from the heritage connector
-layer. `combinedMaterialDistinct` never exceeds `baseReadingMaterialDistinct` — because the
-heritage factor contributes exactly 1 distinct state everywhere — so gate D's `DIVERSITY_TARGET`
-of 250 is unreachable at the connector layer as it stands today, independent of the coverage
-gate. This is the single most important content finding in this readiness pass: **the heritage
-library's current binding constraint is relationship count, not prose variety** — each required
-construct needs a second genuinely distinct connector (a different relationship, witness,
-disagreement position, or juxtaposition) for its "primary" lineage before Tier 2 has anything to
-rotate. See the ranked backlog below.
+The heritage layer now contributes genuine rotation: residues are 3, 2, 2, 8, 8 and 1. Five
+Mountains and Four Rivers have 8 active structural relationships but only 7 distinct bounded
+Tier 2 cards; this is a presentation-level equivalence, not hidden-state inflation. Five
+Officers remains intentionally single-active because its additional fortune/rank and
+edition-recorded material is source-panel-only. Gate D's fixed target of 250 is therefore still
+not met, but the runtime now has meaningful lineage diversity where the evidence and policy allow
+it.
 
 ### A defect found and fixed this session, in the harness itself
 
@@ -116,11 +133,11 @@ already serialises, canonicalised only by stable key-order sorting (`stableStrin
 by touching `composed.trace`. The heritage material signature was also split into two
 tier-scoped functions (`heritageTier2MaterialSignature()`, `heritageTier3MaterialSignature()`)
 rather than one merged blob, since Tier 2 (Reading) and Tier 3 (Why/Study) are separate consumer
-surfaces. After the fix, base raw and base material are equal everywhere (1=1, 9=9) — material
-is exactly as fine as raw, never finer, as required. This did **not** change the overall
-`NOT_READY` result (gate D was already failing on the constructs blocked by coverage; the fix
-only corrected the *reported* numbers for the three `RUNTIME_SUPPORTED` constructs, from a
-falsely inflated 648/72/72 combined-material figure down to the true 9/9/9). Pinned by
+surfaces. After the fix, base raw and base material are equal everywhere — material is exactly as
+fine as raw, never finer, as required. This did **not** change the overall
+`NOT_READY` result (gate D now fails only because Five Officers remains below the fixed 250-state
+target; the signature fix corrected the *reported* numbers rather than manufacturing diversity).
+Pinned by
 `tests/heritage/readiness-material-signature.test.js`, including a regression test that mines
 the real fiveElements corpus for occurrences sharing an identical Tier 2 output and asserts they
 also share one material signature.
@@ -138,17 +155,19 @@ raw/material counts:
 
 | Construct | Base (Tier 2) raw=material |
 |---|---:|
-| threeSections | 24 |
+| threeSections | 216 |
 | fiveElements | 216 |
-| twelvePalaces | 24 |
-| fiveMountains | 24 |
+| twelvePalaces | 216 |
+| fiveMountains | 216 |
 | fourRivers | 216 |
 | fiveOfficers | 216 |
 
 The visible Tier 2 object now distinguishes all **15,288/15,288** reachable states at occurrence
 zero, including the previously indistinguishable capture/anatomy abstention pairs. These are
-presentation-discrimination results, not customer-value evidence; the heritage connector residue
-remains 1 for every construct and the readiness result remains `NOT_READY`.
+presentation-discrimination results, not customer-value evidence. The closed-beta heritage path
+is now live; its connector rotation and bounded presentation counts are recorded in the runtime
+overlay above, while the GOLD result remains `NOT_READY` against its fixed scope and 250-state
+target.
 
 ---
 
@@ -162,7 +181,7 @@ rate 26.8%, 267 distinct texts across 113 distinct states, 0% near-duplicate rat
 verbatim repeat rate over the same year — an expected, honest consequence of a passage engine
 whose variation is driven by how much the underlying state actually changes.
 
-### B. `INTERNAL_REFLECTION_RETENTION` (reflectionMode=on — development path, NOT the public default)
+### B. `INTERNAL_REFLECTION_RETENTION` (reflectionMode=on — closed-beta default)
 
 Same scenarios, the Reflection Engine. 365-day default scenario: verbatim repeat rate **0.0%**,
 365 distinct texts (one per day), 0.2% near-duplicate rate — consistent with this repo's own
@@ -170,32 +189,28 @@ recorded history (`scripts/parity.mjs`'s `KNOWN_BLOCKERS` note: the occurrence-i
 layer took this exact figure from 69.0% to 0.0% against the passage engine's 26.8%). Even the
 `mostlySteady` scenario, where the base reading barely moves, still reaches 365 distinct texts —
 the Reflection Engine's occurrence-indexed variation reads as a genuine retention improvement
-over the shipped engine, independent of the heritage layer's current depth limits above. Stage 3
-heritage connector output remains fail-closed under the real production safety state in this
-analysis too; only the Reflection Engine's own prose behaviour is measured here.
+over the legacy passage engine. Heritage connector depth is measured separately below; the named
+closed-beta policy now allows its attributed output to render.
 
 ### Construct-rotation cross-reference
 
-183 of 365 calendar days over a year land on a construct that is not currently
-`RUNTIME_SUPPORTED` (`threeSections`, `twelvePalaces`, `fiveMountains` — 61+61+61 days) —
-meaning heritage content is absent on roughly half the year's days **regardless of which engine
-(A or B) is running**, purely as a consequence of the coverage gate above.
+The fixed GOLD taxonomy still labels 183 of 365 calendar days as landing on a construct outside
+`RUNTIME_SUPPORTED` (`threeSections`, `twelvePalaces`, `fiveMountains` — 61+61+61 days). In the
+closed-beta runtime those slots are explicitly routed and do render bounded attributed material;
+the figure remains useful as an analytical scope warning, not a claim that beta users see an
+empty heritage surface.
 
-### C. `LATENT_HERITAGE_EXHAUSTION` (internal seam, hypothetical authorisation — NOT production)
+### C. `LATENT_HERITAGE_EXHAUSTION` (GOLD analytical depth, not release clearance)
 
-The exhaustive per-construct depth matches the GOLD harness's own numbers exactly (1/1/1 for
-threeSections/twelvePalaces/fiveMountains, 9/9/9 for fiveElements/fourRivers/fiveOfficers — see
-above), confirming the two harnesses agree, as they must, since both call the same
+The exhaustive per-construct depth matches the GOLD harness's own numbers exactly (see the
+current table above), confirming the two harnesses agree, as they must, since both call the same
 `analyseConstructLineage()`.
 
-The calendar cross-check — real 365-day `mostlySteady` and `frequentMovementLike` simulated
-users, walking the REAL per-day occurrence value through the same latent seam — reports
-`NO_ROTATION_OBSERVED_IN_THIS_SCENARIO` for **every** construct, under **both** scenarios. This
-is not a harness defect: since every construct's connector residue is 1 (see above), there is
-nothing to rotate between regardless of how variable or steady the simulated user is. It
-confirms, from the retention angle, the same binding constraint the GOLD harness names from the
-coverage angle: relationship depth, not user behaviour, is what limits today's heritage
-retention value.
+The calendar cross-check walks the real per-day occurrence value through the same analytical seam.
+It now observes genuine exhaustion/rotation for Three Sections, Five Elements, Twelve Palaces,
+Five Mountains and Four Rivers. Five Officers correctly reports no rotation because only one
+active Tier 2 relationship is currently permitted; the remaining material is retained for study
+and source-panel disclosure rather than promoted into the bounded daily card.
 
 ### D. `DAILY_PORTRAIT_COMPOUNDING_MODEL` (modelled projection — no runtime code exists)
 
@@ -220,30 +235,25 @@ this table is more than a projection.
 
 Ordered by the largest gap this session's measurements actually found, not by construct name:
 
-1. **Add a second genuinely distinct connector to each `RUNTIME_SUPPORTED` construct's `"primary"`
-   lineage** (fiveElements, fourRivers, fiveOfficers). This is the single highest-value change
-   available: it is what moves `connectorResidue` off 1 for the first time, which is the
-   precondition for gate C and for any real retention benefit from the heritage layer at all —
-   right now a returning user gets zero additional variety from heritage regardless of how long
-   they use the app. A different relationship, witness, disagreement position, or legitimate
-   editorial juxtaposition all count; fragmenting one proposition into near-duplicate connector
-   records does not (see the connector-identity collision check, currently 0/15 collisions —
-   keep it that way when adding).
-2. **Resolve CARD 7 (Five Mountains routing) and CARD 10 (Twelve Palaces runtime status).** Both
-   already have `VERIFIED_PRIMARY` evidence sitting behind a construct-level decision, not an
-   evidence gap — the fastest coverage-gate improvement available, and neither requires new
-   research.
-3. **Write the `threeSections` reader narrative.** Evidence is already `VERIFIED_PRIMARY`; this
-   is unbuilt content work, not a blocked decision — lower priority than #2 only because it needs
-   drafting rather than a single decision.
-4. **Multi-witness presentation architecture** (the Five Mountains 頥/頷/頦 disagreement,
-   recorded as a backlog research option in CARD 7). Genuinely deeper, genuinely more work — a
-   later increment once #1 has established that single-relationship depth is achievable at all.
-5. **More prose around already-rich relationships** is explicitly NOT prioritised: the retention
-   simulator's own finding is that the binding constraint is relationship *count* (residue=1
-   everywhere), not prose thinness — spending effort on prose variety around a single connector
-   would not move gate C or D, since both are capped by "nothing to rotate between" before they
-   are capped by wording variety.
+1. **Deepen Five Officers with a second genuinely distinct bounded-safe relationship.** Its
+   current single active Tier 2 connector is the only construct still without heritage rotation;
+   fortune/rank material and edition-recorded witnesses remain source-panel-only until their
+   policies/evidence support a bounded daily presentation. Do not fragment one proposition into
+   duplicate connector records.
+2. **Increase materially distinct bounded presentations where the graph already rotates.** Five
+   Mountains and Four Rivers have eight active structural relationships but seven distinct Tier 2
+   cards. Any expansion must change reader-facing content, not merely hidden ids; the corrected
+   material-signature tests enforce that.
+3. **Multi-witness presentation architecture** (the Five Mountains 頥/頷/頦 disagreement,
+   recorded as a backlog research option in CARD 7). This is a genuine later increment, not a
+   runtime prerequisite: beta routing already selects an explicit witness while preserving the
+   disagreement and source records.
+4. **GOLD scope review after beta evidence accumulates.** The fixed denominator and 250-state
+   target remain useful release-analysis measures, but they must not be silently repurposed as a
+   runtime kill switch or treated as a substitute for external rights/provenance decisions.
+5. **Daily Portrait remains a separate product stream.** Its implementation and the independent
+   daily push notification are not heritage-library gates; complete app functionality should be
+   finished before beta testing, as directed by the product owner.
 
 ---
 
@@ -271,13 +281,11 @@ report `harnessVersion`/`simVersion` explicitly for exactly this reason on their
 not raw counts) is unaffected by anything in this phase — verified by full suite pass, not
 independently re-audited here since no release-audit rule was touched.
 
-**Verification quoted:** `node --test`: `tests 1208 / pass 1208 / fail 0` (up from the
-pre-session baseline of 1194: +6 material-signature falsification tests, +6 fast retention-sim
-regression tests, +1 lint-bundle allowlist control — see below). `npm run heritage:readiness`
+**Verification quoted:** `node --test`: `tests 1223 / pass 1223 / fail 0`. `npm run heritage:readiness`
 exits 0, result `NOT_READY`. `npm run retention:sim` exits 0, all four analyses present.
 `npm run build` then `npm run lint:bundle` against the rebuilt `dist/`: exits 0 (`copy blocklist
-ok`, `attractiveness ok`, `egress allowlist ok`, `biometric egress ok`) — this required one fix,
-below. `npm run audit:release`: exits 0 both before and after this session's changes, with
+ok`, `attractiveness ok`, `egress allowlist ok`, `biometric egress ok`). `npm run audit:release`
+exits 0 while reporting the pre-existing external rights/store/device checklist as BLOCKED, with
 **byte-identical** output (finding-identity confirmed; the printed "BLOCKED" content is a
 pre-existing, unrelated rights/store-approval checklist, not a regression). Independent
 re-verification, `node scripts/heritage-evidence/acquire-and-verify.mjs` (fresh clone of all four
@@ -300,13 +308,7 @@ control test (`tests/copy-lint.test.js`). Full detail in
 `docs/heritage-evidence/EVIDENCE_TRANSITION_LEDGER.md`'s "A guard this pass's own additions
 tripped" section.
 
-**NOT VERIFIED, with the exact command:** `npm run test:browser` (`playwright test
---grep-invert @benchmark`) — this sandbox's pre-installed Chromium revision (`chromium_headless_shell-1194`)
-does not match what the pinned `@playwright/test@1.62.1` expects (revision 1234, a
-`chrome-headless-shell` binary name this environment does not have). Confirmed pre-existing and
-unrelated to this session: `package.json`'s Playwright dependency is untouched by this session's
-diff (only the two new `npm run` script entries were added), and per this environment's own
-operating notes, running `playwright install` is disallowed. Anything Windows-specific remains
-NOT VERIFIED for the same reason stated throughout this program (this container is Linux only),
-including the `import.meta.url`/`process.argv[1]` entrypoint-guard comparison added to
-`scripts/heritage-readiness.mjs` and `scripts/retention-sim.mjs` in B4.
+**Browser verification:** `npm run test:browser` (`playwright test --grep-invert @benchmark`) —
+**10/10 passed** in this environment, including the cold Stage-3 loader and failed-import
+fallback paths. Physical-device and store submission approval remain external release
+obligations and were not self-certified by this run.

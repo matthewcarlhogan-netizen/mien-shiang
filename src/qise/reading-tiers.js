@@ -55,7 +55,9 @@ export function tierTwo(state, composed) {
     }),
     passage: composed.layers.heritage.join(" "),
     attribution: material.attribution,
-    sourceStatus: material.abstained ? "WITHHELD_PENDING_SOURCE_REVIEW" : "RUNTIME_PROSE",
+    sourceStatus: material.abstained
+      ? "WITHHELD_PENDING_SOURCE_REVIEW"
+      : material.runtimeStatus === "RUNTIME_PROSE" ? "RUNTIME_PROSE" : "BETA_PREVIEW",
     sourceAbstained: material.abstained,
     // §13 — carried as its own field so a surface cannot keep the passage and
     // drop the disclosure that the passage was rotated rather than chosen.
