@@ -8,7 +8,7 @@ export function normaliseNewlines(text) {
   return String(text).replace(/\r\n?/g, "\n");
 }
 
-export function extractFencedCsv(text, header) {
+export function extractFencedCsv(text, header, { optional = false } = {}) {
   const canonical = normaliseNewlines(text);
   const escaped = String(header).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const match = canonical.match(new RegExp(
@@ -16,6 +16,7 @@ export function extractFencedCsv(text, header) {
     "m",
   ));
   if (!match) {
+    if (optional) return null;
     throw new Error(`missing fenced CSV block headed by ${header}`);
   }
   return match[1];

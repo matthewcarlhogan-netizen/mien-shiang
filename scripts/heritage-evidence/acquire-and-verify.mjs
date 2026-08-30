@@ -72,7 +72,10 @@ for (const m of dossier.matchAll(/^([0-9a-f]{64})\s+(KR3g004\d_\d{3}\.txt)$/gm))
 
 // §2 CSV: the fenced blocks beginning with their stable headers
 const passagesCsv = extractFencedCsv(dossier, "passageId,sourceId,repoUrl");
-const atlasCsv = extractFencedCsv(dossier, "relationshipId,family,relationshipClass");
+// The atlas was historically optional while the dossier was being assembled;
+// preserve that deliberate degraded-but-runnable state. Passage evidence is
+// required and therefore still fails closed when its section is absent.
+const atlasCsv = extractFencedCsv(dossier, "relationshipId,family,relationshipClass", { optional: true });
 
 function parseCsv(text) {
   const rows = [];
@@ -316,7 +319,11 @@ const atlasArith = atlas.length ? {
 // ---------------------------------------------------------------------------
 const result = {
   acquisitionTimestamp: acqTimestamp,
-  dossier: { path: "MIEN_SHIANG_PINNING_PASS.md", sha256: sha256(Buffer.from(dossier, "utf8")) },
+  dossier: {
+    path: "MIEN_SHIANG_PINNING_PASS.md",
+    sha256: sha256(Buffer.from(dossier, "utf8")),
+    sha256Basis: "UTF-8 text after CRLF/CR newline normalization",
+  },
   repos: repoResults.map(r => ({ id: r.id, title: r.title, remote: r.remote,
     expectedCommit: r.expectedCommit, actualCommit: r.actualCommit, commitMatch: r.commitMatch,
     commitDate: r.commitDate, fileCount: r.files.length })),
@@ -333,7 +340,7 @@ if (jsonOut) writeFileSync(jsonOut, JSON.stringify(result, null, 2));
 const L = [];
 L.push(`# acquire-and-verify — ${acqTimestamp}`);
 L.push("");
-L.push(`dossier SHA-256: ${result.dossier.sha256}`);
+L.push(`dossier SHA-256 (normalized UTF-8 text): ${result.dossier.sha256}`);
 L.push("");
 L.push(`## Commits`);
 for (const r of result.repos) L.push(`- ${r.id} ${r.title}: ${r.actualCommit} ${r.commitMatch ? "MATCH" : "!!! MISMATCH"} (${r.commitDate})`);

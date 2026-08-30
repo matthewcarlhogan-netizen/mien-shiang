@@ -27,3 +27,10 @@ test("missing heritage CSV sections fail with the requested header", () => {
     /missing fenced CSV block headed by passageId,sourceId,repoUrl/,
   );
 });
+
+test("optional heritage CSV sections preserve the empty-section fallback", () => {
+  assert.equal(
+    extractFencedCsv("# Evidence\n", "relationshipId,family,relationshipClass", { optional: true }),
+    null,
+  );
+});

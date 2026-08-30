@@ -3,7 +3,7 @@
 **Acquisition run:** `2026-08-29T04:49:24Z` (this repository's environment — GitHub Codespace, Linux, Node 22, `git` 2.x).
 **Method:** `git clone` of the four Kanripo repositories into a scratch directory **outside** the repo working tree, `git checkout <pinned commit>`, `sha256sum` computed locally in Node (`node:crypto`), `<pb:...>` markers counted from bytes, all 17 `PINNED_PASSAGES.csv` rows located under their claimed markers. No mirror, no OCR, no Wikisource, no secondary quotation.
 **Reproducible runner:** [`scripts/heritage-evidence/acquire-and-verify.mjs`](../../scripts/heritage-evidence/acquire-and-verify.mjs) — output committed at [`docs/heritage-evidence/acquisition-verify.json`](acquisition-verify.json) and [`acquisition-verify-report.txt`](acquisition-verify-report.txt).
-**Dossier under verification:** `MIEN_SHIANG_PINNING_PASS.md`, SHA-256 `c67d1ca45a51acaaf7444a25a70ad64c3d54116cf9131727092c596f586e65ed`.
+**Dossier under verification:** `MIEN_SHIANG_PINNING_PASS.md`, SHA-256 of its **newline-normalized UTF-8 text** `c67d1ca45a51acaaf7444a25a70ad64c3d54116cf9131727092c596f586e65ed`. This basis is deliberate: Git may materialize the same dossier with LF or CRLF depending on host settings.
 
 ```bash
 # exact reproduction
