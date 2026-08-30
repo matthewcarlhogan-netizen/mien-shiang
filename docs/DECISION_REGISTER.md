@@ -14,7 +14,7 @@ Use this register to stop prompts, discussions and implementation from collapsin
 - Five Mountains and Twelve Palaces are separate systems; the nose/central mountain maps to Earth in the Five Mountains model.
 - Exact geometry with insufficient evidence is marked `needsVerification: true` and is not shipped as fact.
 - Current history/baseline behaviour and limits remain as implemented until deliberately migrated.
-- Heritage connector architecture Stages 1 (data spine) and 2 (deterministic resolver) are approved and frozen; see `docs/HERITAGE_CONNECTOR_STAGE_STATUS.md` for the frozen code baseline, verification counts and architectural locks. Stage 3 (prose/Reflection Engine integration) has not started.
+- Heritage connector architecture Stages 1 (data spine) and 2 (deterministic resolver) are approved and frozen; see `docs/HERITAGE_CONNECTOR_STAGE_STATUS.md` for the frozen code baseline, verification counts and architectural locks. Stage 3 (prose/Reflection Engine integration) **code is present on `main`** (merged via PR #40, 30 August 2026 correction — the previous "has not started" line here was stale). Presence is not approval: see `docs/HERITAGE_CONNECTOR_STAGE_STATUS.md`'s six-axis status for what is and is not true of Stage 3 as a result, and `docs/heritage-evidence/SAFETY_AUTHORIZATION_INTERFACE.md` for why it remains fail-closed in production regardless.
 
 ### DR-2026-08-25-AI-CONTEXT-MODEL-ROUTING
 

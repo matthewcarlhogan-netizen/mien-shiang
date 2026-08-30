@@ -65,7 +65,7 @@ PR #40.
 4. **Decision 2 (25-type) resolved or the disclosure removed** — a user-test
    build should not tell testers "the source has 25 types" while that is
    unattributed to any physiognomic source. Pick option B or C from
-   `PRODUCT_OWNER_DECISIONS.md`.
+   `RESEARCH_RECOMMENDATION_PACK.md`.
 5. **Decide the Twelve Palaces question (Decision 3)** — either include it with
    the shipped mapping marked `SOURCE_REQUIRED`, or leave it out. Do not show it
    as verified.

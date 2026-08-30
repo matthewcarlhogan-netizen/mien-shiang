@@ -10,7 +10,7 @@ evidence. **No code is written here.** Each row carries one tag:
 The mechanical rows (`UPDATE_LOCATOR`, `UPDATE_METADATA`, most `NEW_RECORD`) are
 carried into [`GEMINI_IMPLEMENTATION_MANIFEST.md`](GEMINI_IMPLEMENTATION_MANIFEST.md).
 Rows tagged `PRODUCT_OWNER_DECISION_REQUIRED` go to
-[`PRODUCT_OWNER_DECISIONS.md`](PRODUCT_OWNER_DECISIONS.md) and are **not** in the
+[`RESEARCH_RECOMMENDATION_PACK.md`](RESEARCH_RECOMMENDATION_PACK.md) and are **not** in the
 manifest.
 
 Frozen and **not touched**: `src/heritage/resolver.js`, `schema.js`,

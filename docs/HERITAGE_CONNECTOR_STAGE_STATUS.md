@@ -113,6 +113,24 @@ these frozen contracts.**
 
 ## Stage 3 — PARTIAL / BLOCKED ON SAFETY AUTHORIZATION AND A LINEAGE CONTENT DECISION
 
+### Six-axis status (added 30 August 2026 — read this before the word "Stage 3" anywhere below)
+
+A single word like "merged" or "complete" cannot carry five different facts at once. Six
+independent axes, none inferable from another:
+
+| Axis | Value | Basis |
+|---|---|---|
+| `CODE_PRESENT` | `YES` | Merged to `main` via PR #40. This is a fact about the git history, nothing more. |
+| `TECHNICAL_ARCHITECTURE_REVIEWED` | `YES` | Stage 3 went through documented, named review rounds and correction passes — the "correction pass" / "Round N" sections below are the evidence trail. This records that the architecture was *reviewed*, not that it was *approved*; a prior draft of this status conflated the two. |
+| `PRODUCT_ARCHITECTURE_APPROVED` | `NOT_RECORDED` | No `docs/DECISION_REGISTER.md` entry approves Stage 3 as a product feature. `DR-2026-08-24-HERITAGE-CONNECTOR-STAGES-1-2-FREEZE` froze Stages 1–2 only and explicitly named Stage 3 as not thereby authorised. |
+| `CONTENT_AUTHORIZATION` | **per construct/lineage — not one global value** | Constructs are in different states. Five Mountains is blocked on the lineage-routing decision (`docs/DECISION_CARDS.md` CARD 7). Others may differ after this PR's evidence reconciliation (`docs/heritage-evidence/EVIDENCE_TRANSITION_LEDGER.md`). Collapsing this to one yes/no would misstate whichever constructs differ from the rest. |
+| `SAFETY_AUTHORIZED` | `NOT_GRANTED` | A deterministic status, not a slash-separated one. Recorded separately, because it is a different fact: the authoritative safety signal itself is currently **ABSENT/UNSET** in production (`gateStatus(undefined)` → `"UNKNOWN"`, which fails closed — see `docs/heritage-evidence/SAFETY_AUTHORIZATION_INTERFACE.md`). No signal supplied → authorisation not granted → Stage 3 stays fail-closed. This does not prejudge `docs/DECISION_CARDS.md` CARD 6. |
+| `PRODUCTION_ACTIVE` | `NO` | `safetyPassed` is never `true` anywhere in `src/ui/qise/app.js`; connector output is suppressed on every real reading today. |
+
+Correcting `docs/DECISION_REGISTER.md`'s previously-stale "Stage 3 has not started" line to say
+`CODE_PRESENT` is true does not, as a side effect, make `PRODUCT_ARCHITECTURE_APPROVED` true — the
+correction is scoped to the git-history fact and nothing else.
+
 Heritage connector graph integrated with the Reflection Engine's reading
 path, on top of the frozen Stage 1/2 baseline (`df8cf22b9257c2a7fb75affd30b5e7dc6d15caa0`).
 

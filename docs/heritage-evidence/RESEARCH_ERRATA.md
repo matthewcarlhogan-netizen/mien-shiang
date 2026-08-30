@@ -5,7 +5,7 @@ the project-owned bytes. **None is an acquisition hard stop** (commits, hashes
 and passage locations all check out — acquisition report §5). Each is corrected
 in [`CORRECTED_RELATIONSHIP_ATLAS_V2.csv`](CORRECTED_RELATIONSHIP_ATLAS_V2.csv)
 and, where it changes a product question, carried into
-[`PRODUCT_OWNER_DECISIONS.md`](PRODUCT_OWNER_DECISIONS.md).
+[`RESEARCH_RECOMMENDATION_PACK.md`](RESEARCH_RECOMMENDATION_PACK.md).
 
 ---
 
