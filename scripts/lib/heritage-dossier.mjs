@@ -11,13 +11,18 @@ export function normaliseNewlines(text) {
 export function extractFencedCsv(text, header, { optional = false } = {}) {
   const canonical = normaliseNewlines(text);
   const escaped = String(header).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = canonical.match(new RegExp(
-    "```csv\\n(" + escaped + "[\\s\\S]*?)\\n```",
-    "m",
-  ));
-  if (!match) {
-    if (optional) return null;
-    throw new Error(`missing fenced CSV block headed by ${header}`);
+  const blockPattern = new RegExp(
+    "^```csv\\n(" + escaped + "(?:\\n[\\s\\S]*?)?)\\n```",
+    "gm",
+  );
+  const matches = [...canonical.matchAll(blockPattern)];
+  if (matches.length > 1) {
+    throw new Error(`duplicate fenced CSV blocks headed by ${header}`);
   }
-  return match[1];
+  if (matches.length === 0) {
+    const headerPattern = new RegExp("^```csv\\n" + escaped + "(?:\\n|$)", "m");
+    if (optional && !headerPattern.test(canonical)) return null;
+    throw new Error(`missing or malformed fenced CSV block headed by ${header}`);
+  }
+  return matches[0][1];
 }

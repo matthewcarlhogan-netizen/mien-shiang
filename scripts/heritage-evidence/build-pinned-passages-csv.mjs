@@ -16,7 +16,10 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const dossier = normaliseNewlines(readFileSync(join(ROOT, "MIEN_SHIANG_PINNING_PASS.md"), "utf8"));
 const verify = JSON.parse(readFileSync(join(ROOT, "docs/heritage-evidence/acquisition-verify.json"), "utf8"));
 
-const csvBlock = extractFencedCsv(dossier, "passageId,sourceId,repoUrl");
+const csvBlock = extractFencedCsv(
+  dossier,
+  "passageId,sourceId,repoUrl,commitSha,fileSha256,filePath,juan,section,pbMarker,textualLayer,passageChinese,translation,retrievedAt",
+);
 const lines = csvBlock.split("\n");
 const header = lines[0];
 const bodyRows = lines.slice(1).filter(l => l.trim());

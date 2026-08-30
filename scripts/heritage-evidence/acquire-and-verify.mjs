@@ -71,11 +71,18 @@ for (const m of dossier.matchAll(/^([0-9a-f]{64})\s+(KR3g004\d_\d{3}\.txt)$/gm))
 }
 
 // §2 CSV: the fenced blocks beginning with their stable headers
-const passagesCsv = extractFencedCsv(dossier, "passageId,sourceId,repoUrl");
+const passagesCsv = extractFencedCsv(
+  dossier,
+  "passageId,sourceId,repoUrl,commitSha,fileSha256,filePath,juan,section,pbMarker,textualLayer,passageChinese,translation,retrievedAt",
+);
 // The atlas was historically optional while the dossier was being assembled;
 // preserve that deliberate degraded-but-runnable state. Passage evidence is
 // required and therefore still fails closed when its section is absent.
-const atlasCsv = extractFencedCsv(dossier, "relationshipId,family,relationshipClass", { optional: true });
+const atlasCsv = extractFencedCsv(
+  dossier,
+  "relationshipId,family,relationshipClass,fromParticipant,toParticipant,direction,condition,historicalClaim,sourceId,lineageId,sourcePassageChinese,translation,juan,section,folio,sectionLocatorStatus,folioLocatorStatus,citationStatus,evidenceStrength,textualLayer,disagreementId,prohibitedForUserInference,runtimePotential,notes",
+  { optional: true },
+);
 
 function parseCsv(text) {
   const rows = [];

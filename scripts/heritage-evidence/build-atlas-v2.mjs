@@ -14,7 +14,10 @@ import { extractFencedCsv, normaliseNewlines } from "../lib/heritage-dossier.mjs
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const dossier = normaliseNewlines(readFileSync(join(ROOT, "MIEN_SHIANG_PINNING_PASS.md"), "utf8"));
 
-const block = extractFencedCsv(dossier, "relationshipId,family,relationshipClass");
+const block = extractFencedCsv(
+  dossier,
+  "relationshipId,family,relationshipClass,fromParticipant,toParticipant,direction,condition,historicalClaim,sourceId,lineageId,sourcePassageChinese,translation,juan,section,folio,sectionLocatorStatus,folioLocatorStatus,citationStatus,evidenceStrength,textualLayer,disagreementId,prohibitedForUserInference,runtimePotential,notes",
+);
 const lines = block.split("\n").filter(l => l.trim());
 const header = lines[0].split(",");
 function parseLine(line) {
