@@ -6,7 +6,7 @@ identical except `generatedAt` (see "Idempotency" below). They measure GOLD cont
 the internal analytical seam; the product runtime uses the canonical Stage-3 entry point and a
 separate named closed-beta policy.
 
-Commit measured during this repair: `4354875bea2ecaf8f453609fa2cc444c9dd0721a`.
+Runtime code measured during this repair: `11fab6c8db92c71ecc364a79947f0c8291795695`.
 
 **Read this alongside, never instead of:**
 `docs/heritage-evidence/EVIDENCE_TRANSITION_LEDGER.md` (what changed and why),
