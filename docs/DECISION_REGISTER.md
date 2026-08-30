@@ -41,6 +41,17 @@ Use this register to stop prompts, discussions and implementation from collapsin
 - **Lineage-depth amendment:** The pinned Five Officers disagreement is now a live alternate rotation in closed beta. `heritage-five-officers-renlun-datong` is a dedicated verified source record; `renlun-xue` remains `HERITAGE_ONLY`, and the fortune/rank connector remains `SOURCE_PANEL_ONLY`.
 - **Consequence:** The product can now be functionally exercised end to end before beta distribution. `heritage:readiness` remains an analytical content-depth report and may still say `NOT_READY`; that result is no longer a runtime off-switch. Customer-impact workshops are not a prerequisite to implementation; beta testing follows completion of the functional app.
 
+### DR-2026-08-31-DAILY-NOTIFICATION-RESTORATION
+
+- **Date:** 31 August 2026
+- **Owner:** product owner
+- **Status:** approved
+- **Question:** Should the daily return notification remain excluded from the product, or be restored as a separate tool alongside the face-reading experience and the optional Daily Portrait direction?
+- **Decision:** Restore it as a separate, optional device-notification tool. It is not part of Daily Portrait, not a Reflection Engine gate, and not a reason to weaken the face-reading work. It is default-off, requires an explicit permission choice, supports daily/weekdays/weekly cadence, user-selected daytime delivery, seven/30-day pause and one-tap opt-out.
+- **Boundaries:** The notification carries only “Today’s reading is ready.” It never carries face details, measurements, heritage claims, a streak, a missed-day penalty, a rank, or a health implication. It is local-first: the implementation uses an isolated notification store, an installed-PWA background best-effort path where the browser supports it, and an active-app fallback. No developer-operated push service or customer payload is introduced by this decision.
+- **Consequence:** The old blanket “no notifications” wording in earlier design/retention documents is superseded. “No streaks, streak loss, compulsion loops or notification pressure” remains in force. Browser scheduling is not an exact-time guarantee; the UI discloses that limitation.
+- **Evidence:** `src/qise/notifications.js`, `src/sw.js`, the notification settings in `src/qise.html`, and `tests/qise/notifications.test.js` define and exercise the policy and storage boundary.
+
 ## Approved direction, not necessarily complete
 
 - Scanner-first Android TWA route and GitHub-hosted HTTPS deployment.

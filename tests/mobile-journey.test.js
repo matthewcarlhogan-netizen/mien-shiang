@@ -68,3 +68,24 @@ test("results are split into three short views with one primary story surface", 
   assert.match(html, /data-reading-panel="pattern"/);
   assert.doesNotMatch(html, /Unlock the full reading|Weekly access|coming soon/i);
 });
+
+test("the daily reminder is a separate, default-off capability with a background fallback", () => {
+  const html = read("qise.html");
+  const worker = read("sw.js");
+  const app = read("ui/qise/app.js");
+  const rootApp = read("ui.js");
+  const policy = read("qise/notifications.js");
+  assert.match(html, /id="notification-enabled"/);
+  assert.match(html, /id="notification-options" hidden/);
+  assert.match(html, /Pause 7 days/);
+  assert.match(html, /never includes face details/i);
+  assert.match(app, /openNotificationStore/);
+  assert.match(app, /requestPermission/);
+  assert.match(app, /notificationStore\.claimDelivery/);
+  assert.match(rootApp, /serviceWorker\.register\("\.\/sw\.js", \{ type: "module" \}\)/);
+  assert.match(worker, /mienshiang-v24/);
+  assert.match(worker, /periodicsync/);
+  assert.match(worker, /notificationclick/);
+  assert.match(policy, /enabled: false/);
+  assert.match(policy, /Today’s reading is ready/);
+});

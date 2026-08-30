@@ -50,6 +50,11 @@ import { reflectionMode, QISE_BETA_SAFETY_AUTHORIZATION } from "../../qise/readi
 import { reflectionFor } from "../../qise/reading-pipeline.js";
 import { readingTiers } from "../../qise/reading-tiers.js";
 import { openStore } from "../../qise/store.js";
+import {
+  canonicalDayAfter, canonicalDayFor, nextNotificationAt, notificationEligibility,
+  notificationPayload, openNotificationStore, recordNotificationDelivered,
+  updateNotificationPreferences,
+} from "../../qise/notifications.js";
 import { readingScreenModel, historyColumnModel } from "./screens.js";
 import { SHARE_CADENCES, shareReadings } from "./share.js";
 import {
@@ -87,6 +92,9 @@ let screenFlashThemeColour = null;
 let exposureHalo = null;
 let releasePalaceExperience = () => {};
 let reflectionRenderEpoch = 0;
+let notificationStore = null;
+let notificationTimer = null;
+let notificationDeliveryPromise = null;
 
 /* ── screens ─────────────────────────────────────────────────────────────── */
 
@@ -954,6 +962,11 @@ async function finish(burst, rois, sclera, opened, history, gateMargins, illumin
   scratch = null;
 
   const stored = await store.put(reading);
+  if (notificationStore) {
+    const currentHistory = await store.all();
+    await syncNotificationReadingDay(currentHistory);
+    await scheduleNotificationTimer();
+  }
   await renderReading(stored);
 }
 
@@ -1445,6 +1458,199 @@ function drawSparkline(svg, model) {
       `<circle cx="${x(p.i).toFixed(1)}" cy="${y(p.value).toFixed(1)}" r="2" fill="none" stroke="var(--qise-ink)" />`).join("");
 }
 
+function notificationPermission() {
+  return typeof Notification === "undefined" ? "unsupported" : Notification.permission;
+}
+
+async function notificationRegistration() {
+  if (!("serviceWorker" in navigator)) return null;
+  try {
+    // A test harness, embedded browser, or a browser that declines module
+    // workers can leave `ready` pending forever. Notifications must never hold
+    // the reading boot path hostage, so background work gets a bounded wait.
+    const timeout = new Promise((resolve) => setTimeout(() => resolve(null), 750));
+    return await Promise.race([navigator.serviceWorker.ready, timeout]);
+  } catch { return null; }
+}
+
+async function registerNotificationBackgroundWork() {
+  if (!("serviceWorker" in navigator)) return null;
+  const register = (registration) => {
+    registration?.active?.postMessage({ type: "qise-notification-register" });
+    return registration;
+  };
+  try {
+    const existing = await navigator.serviceWorker.getRegistration();
+    if (existing?.active) return register(existing);
+    // Do not await this promise: a blocked worker must never hold boot or a
+    // preference change open. If a worker activates later, it still receives
+    // the registration request.
+    navigator.serviceWorker.ready.then(register).catch(() => {});
+  } catch { /* background scheduling is optional */ }
+  return null;
+}
+
+async function unregisterNotificationBackgroundWork() {
+  const registration = await notificationRegistration();
+  registration?.active?.postMessage({ type: "qise-notification-unregister" });
+}
+
+function latestReadingDay(history) {
+  return history
+    .filter((reading) => reading && reading.valid !== false && reading.canonicalDay)
+    .slice(-1)[0]?.canonicalDay || null;
+}
+
+async function syncNotificationReadingDay(history) {
+  if (!notificationStore) return null;
+  const latest = latestReadingDay(history);
+  const prefs = await notificationStore.get();
+  if (prefs.lastReadingDay === latest) return prefs;
+  return notificationStore.put(updateNotificationPreferences(prefs, {
+    lastReadingDay: latest,
+  }));
+}
+
+async function deliverNotificationIfDue(history = null) {
+  if (!notificationStore || notificationDeliveryPromise) return notificationDeliveryPromise;
+  notificationDeliveryPromise = (async () => {
+    const rows = history || await store.all();
+    const prefs = await syncNotificationReadingDay(rows);
+    const now = new Date();
+    const day = canonicalDayFor(now);
+    const eligibility = notificationEligibility({
+      now,
+      preferences: prefs,
+      hasPriorReading: rows.some((reading) => reading && reading.valid !== false),
+      hasReadingToday: rows.some((reading) => reading && reading.valid !== false
+        && reading.canonicalDay === day),
+    });
+    if (!eligibility.eligible) return eligibility;
+    if (notificationPermission() !== "granted") {
+      return { ...eligibility, eligible: false, reason: "permission-not-granted" };
+    }
+
+    const claimed = await notificationStore.claimDelivery(eligibility.canonicalDay);
+    if (!claimed) return { ...eligibility, eligible: false, reason: "already-claimed" };
+    const payload = notificationPayload(eligibility.canonicalDay);
+    try {
+      const registration = await notificationRegistration();
+      if (registration?.showNotification) {
+        await registration.showNotification(payload.title, payload);
+      } else {
+        // The service-worker path is preferred because it survives a page
+        // transition. This fallback keeps an already-open supported browser
+        // useful when it has no worker registration.
+        new Notification(payload.title, payload);
+      }
+      await notificationStore.put(recordNotificationDelivered(prefs, eligibility.canonicalDay));
+      return { ...eligibility, delivered: true };
+    } catch (error) {
+      await notificationStore.releaseDelivery(eligibility.canonicalDay).catch(() => {});
+      throw error;
+    }
+  })().finally(() => { notificationDeliveryPromise = null; });
+  return notificationDeliveryPromise;
+}
+
+function clearNotificationTimer() {
+  if (notificationTimer !== null) clearTimeout(notificationTimer);
+  notificationTimer = null;
+}
+
+async function scheduleNotificationTimer() {
+  clearNotificationTimer();
+  if (!notificationStore) return;
+  const next = nextNotificationAt(new Date(), await notificationStore.get());
+  if (!next) return;
+  const delay = Math.max(1000, Math.min(next.getTime() - Date.now(), 2_147_483_647));
+  notificationTimer = setTimeout(() => {
+    deliverNotificationIfDue().catch((error) => console.warn("qise: active notification failed", error));
+  }, delay);
+}
+
+function notificationStatus(prefs, history) {
+  const permission = notificationPermission();
+  if (permission === "unsupported") return "Notifications are not available in this browser.";
+  if (permission === "denied") return "Notifications are blocked in this browser’s site settings.";
+  if (!prefs.enabled) return "Off — no reminder will appear.";
+  if (!history.some((reading) => reading && reading.valid !== false)) {
+    return "Ready when the first reading is complete.";
+  }
+  if (prefs.pausedUntilDay && canonicalDayFor() < prefs.pausedUntilDay) {
+    return `Paused until ${prefs.pausedUntilDay}.`;
+  }
+  const time = `${String(prefs.hour).padStart(2, "0")}:${String(prefs.minute).padStart(2, "0")}`;
+  const cadence = prefs.cadence === "weekdays" ? "on weekdays"
+    : prefs.cadence === "weekly" ? "weekly"
+      : "each day";
+  return `On — ${cadence} at ${time}, during daytime hours only.`;
+}
+
+async function renderNotificationSettings(history = null) {
+  const panel = $("notification-settings");
+  if (!panel || !notificationStore) return;
+  const rows = history || await store.all();
+  const prefs = await notificationStore.get();
+  const permission = notificationPermission();
+  const enabled = $("notification-enabled");
+  const cadence = $("notification-cadence");
+  const time = $("notification-time");
+  const weekday = $("notification-weekday");
+  const options = $("notification-options");
+  const pause7 = $("notification-pause-7");
+  const pause30 = $("notification-pause-30");
+  const resume = $("notification-resume");
+  enabled.checked = prefs.enabled;
+  enabled.disabled = permission === "unsupported";
+  cadence.value = prefs.cadence;
+  time.value = `${String(prefs.hour).padStart(2, "0")}:${String(prefs.minute).padStart(2, "0")}`;
+  weekday.value = String(prefs.weekday);
+  options.hidden = !prefs.enabled;
+  weekday.disabled = !prefs.enabled || prefs.cadence !== "weekly";
+  cadence.disabled = !prefs.enabled;
+  time.disabled = !prefs.enabled;
+  pause7.disabled = !prefs.enabled;
+  pause30.disabled = !prefs.enabled;
+  resume.hidden = !prefs.pausedUntilDay || canonicalDayFor() >= prefs.pausedUntilDay;
+  $("notification-status").textContent = notificationStatus(prefs, rows);
+}
+
+async function updateNotificationPreferencesFromControls(patch = {}) {
+  if (!notificationStore) return;
+  const prefs = await notificationStore.update(patch);
+  if (prefs.enabled) await registerNotificationBackgroundWork();
+  else await unregisterNotificationBackgroundWork();
+  await deliverNotificationIfDue();
+  await scheduleNotificationTimer();
+  await renderNotificationSettings();
+  return prefs;
+}
+
+async function enableNotifications() {
+  if (notificationPermission() === "unsupported") {
+    $("notification-enabled").checked = false;
+    $("notification-status").textContent = "Notifications are not available in this browser.";
+    return;
+  }
+  let permission = Notification.permission;
+  if (permission === "default") permission = await Notification.requestPermission();
+  if (permission !== "granted") {
+    await notificationStore.update({ enabled: false });
+    $("notification-enabled").checked = false;
+    $("notification-status").textContent = permission === "denied"
+      ? "Notifications are blocked in this browser’s site settings."
+      : "No reminder was enabled.";
+    await renderNotificationSettings();
+    return;
+  }
+  const current = await notificationStore.get();
+  await updateNotificationPreferencesFromControls({
+    enabled: true,
+    cadence: current.cadence === "off" ? "daily" : current.cadence,
+  });
+}
+
 async function renderHistory() {
   const limit = SHARE_CADENCES[activeShareCadence].days;
   const history = await store.all();
@@ -1468,6 +1674,7 @@ async function renderHistory() {
   $("share-column").textContent = activeShareCadence === "today"
     ? "Share my colour seal"
     : (col.n === 1 ? "Share my colour column" : `Share ${col.n}-reading column`);
+  await renderNotificationSettings(history);
   show("screen-history");
 }
 
@@ -1509,11 +1716,20 @@ async function boot() {
     },
   });
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./sw.js").catch((error) => {
+    navigator.serviceWorker.register("./sw.js", { type: "module" }).catch((error) => {
       console.warn("qise: offline shell registration failed", error);
     });
   }
   store = await openStore();
+  try {
+    notificationStore = await openNotificationStore();
+  } catch (error) {
+    // The reading remains fully usable if an embedded browser has IndexedDB
+    // but refuses a second database. The setting surface reports this rather
+    // than pretending a reminder is active.
+    console.warn("qise: notification storage unavailable", error);
+    notificationStore = null;
+  }
 
   const showConsentStep = (step) => {
     $("consent-step-purpose").hidden = step !== "purpose";
@@ -1614,6 +1830,44 @@ async function boot() {
   }));
   $("go-history").addEventListener("click", () => renderHistory().catch((e) => console.error(e)));
   $("back-reading").addEventListener("click", () => show("screen-reading"));
+  $("notification-enabled").addEventListener("change", () => {
+    const enabled = $("notification-enabled").checked;
+    const operation = enabled
+      ? enableNotifications()
+      : updateNotificationPreferencesFromControls({ enabled: false });
+    operation.catch((error) => {
+      console.error("qise: notification preference failed", error);
+      $("notification-enabled").checked = false;
+      $("notification-status").textContent = "The reminder could not be changed. It remains off.";
+    });
+  });
+  $("notification-cadence").addEventListener("change", () => {
+    updateNotificationPreferencesFromControls({
+      cadence: $("notification-cadence").value,
+      enabled: $("notification-cadence").value !== "off",
+    }).catch((error) => console.error("qise: notification cadence failed", error));
+  });
+  $("notification-time").addEventListener("change", () => {
+    const [hour, minute] = $("notification-time").value.split(":").map(Number);
+    updateNotificationPreferencesFromControls({ hour, minute })
+      .catch((error) => console.error("qise: notification time failed", error));
+  });
+  $("notification-weekday").addEventListener("change", () => {
+    updateNotificationPreferencesFromControls({ weekday: Number($("notification-weekday").value) })
+      .catch((error) => console.error("qise: notification weekday failed", error));
+  });
+  $("notification-pause-7").addEventListener("click", () => {
+    updateNotificationPreferencesFromControls({ pausedUntilDay: canonicalDayAfter(new Date(), 7) })
+      .catch((error) => console.error("qise: notification pause failed", error));
+  });
+  $("notification-pause-30").addEventListener("click", () => {
+    updateNotificationPreferencesFromControls({ pausedUntilDay: canonicalDayAfter(new Date(), 30) })
+      .catch((error) => console.error("qise: notification pause failed", error));
+  });
+  $("notification-resume").addEventListener("click", () => {
+    updateNotificationPreferencesFromControls({ pausedUntilDay: null })
+      .catch((error) => console.error("qise: notification resume failed", error));
+  });
   $("share-today").addEventListener("click", () => shareCurrent("today").catch((e) => {
     console.error(e);
     const status = document.querySelector('.screen[data-active="true"] .share-status') || $("share-status");
@@ -1642,11 +1896,35 @@ async function boot() {
   });
 
   $("withdraw").addEventListener("click", async () => {
-    await consent.withdraw({ deleteAll: () => store.deleteAll() });
+    await consent.withdraw({ deleteAll: async () => {
+      await store.deleteAll();
+      await notificationStore?.deleteAll();
+      clearNotificationTimer();
+      await unregisterNotificationBackgroundWork();
+    } });
     location.reload();
   });
 
-  const last = (await store.all()).slice(-1)[0];
+  const initialHistory = await store.all();
+  if (notificationStore) {
+    await syncNotificationReadingDay(initialHistory);
+    await registerNotificationBackgroundWork();
+    await deliverNotificationIfDue(initialHistory).catch((error) => {
+      console.warn("qise: initial notification check failed", error);
+    });
+    await scheduleNotificationTimer();
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) deliverNotificationIfDue().catch((error) => {
+        console.warn("qise: visible notification check failed", error);
+      });
+    });
+    window.addEventListener("focus", () => {
+      deliverNotificationIfDue().catch((error) => {
+        console.warn("qise: focus notification check failed", error);
+      });
+    });
+  }
+  const last = initialHistory.slice(-1)[0];
   const destination = consentBootTarget(consent.isGranted(), Boolean(last));
   if (destination === "screen-reading") await renderReading(last);
   else show(destination);

@@ -159,6 +159,17 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .history-copy h2{font-family:var(--passage);font-size:1.18rem;line-height:1.2;margin:.12rem 0 .42rem}
 .history-mini-bar{display:flex;height:.42rem;overflow:hidden;border-radius:999px;background:var(--qise-track);margin:.55rem 0}
 .history-mini-bar span{min-width:2px}
+.notification-settings{margin-top:1.4rem}
+.notification-settings h2{font-family:var(--passage);font-size:1.45rem;line-height:1.15;margin:.15rem 0 .5rem}
+.notification-toggle{display:flex;align-items:flex-start;gap:.7rem;margin:1rem 0 0;font-size:.9rem;line-height:1.5}
+.notification-toggle input{width:1.1rem;height:1.1rem;margin-top:.2rem;flex:none;accent-color:var(--qing)}
+.notification-options{display:grid;gap:.75rem;margin:1rem 0 0;padding-top:1rem;border-top:1px solid var(--qise-border)}
+.notification-options[hidden]{display:none}
+.notification-field{display:grid;grid-template-columns:8rem 1fr;gap:.75rem;align-items:center;font-size:.86rem}
+.notification-field select,.notification-field input[type=time]{font:inherit;color:inherit;background:var(--qise-surface);border:1px solid var(--qise-border);border-radius:9px;padding:.55rem .65rem;min-height:44px}
+.notification-actions{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.25rem}
+.notification-actions button{border-radius:10px;font-size:.8rem}
+.notification-status{min-height:1.5em;margin:.8rem 0 0;font-size:.78rem;opacity:.78}
 
 .notice{border-left:3px solid var(--huang);padding:.5rem .7rem;margin:.8rem 0;font-size:.9rem}
 .segmented{display:grid;grid-template-columns:repeat(3,1fr);gap:.35rem;background:var(--qise-track);padding:.3rem;border-radius:12px;margin:1rem 0}
@@ -571,6 +582,43 @@ html[data-screen-flash="true"] .capture-badge span{background:#FFFDF5;box-shadow
     <button type="button" data-cadence="fortnight" aria-pressed="false">14 readings</button>
   </div>
   <div class="history" id="history-column"></div>
+  <section class="surface notification-settings" id="notification-settings" aria-labelledby="notification-h">
+    <p class="eyebrow">A separate, optional tool</p>
+    <h2 id="notification-h">A quiet daily nudge</h2>
+    <p class="muted">Choose whether this device should remind you to return to today&rsquo;s private reading. It stays off until you choose it, never includes face details, and never creates a streak or a penalty.</p>
+    <label class="notification-toggle" for="notification-enabled">
+      <input id="notification-enabled" type="checkbox">
+      <span><strong>Allow a device reminder</strong><br>One neutral reminder at a time that suits you.</span>
+    </label>
+    <div class="notification-options" id="notification-options" hidden>
+      <label class="notification-field" for="notification-cadence"><span>Cadence</span>
+        <select id="notification-cadence">
+          <option value="daily">Every day</option>
+          <option value="weekdays">Weekdays</option>
+          <option value="weekly">Weekly</option>
+          <option value="off">Off</option>
+        </select>
+      </label>
+      <label class="notification-field" for="notification-weekday"><span>Weekly day</span>
+        <select id="notification-weekday">
+          <option value="1">Monday</option><option value="2">Tuesday</option>
+          <option value="3">Wednesday</option><option value="4">Thursday</option>
+          <option value="5">Friday</option><option value="6">Saturday</option>
+          <option value="0">Sunday</option>
+        </select>
+      </label>
+      <label class="notification-field" for="notification-time"><span>Reminder time</span>
+        <input id="notification-time" type="time" min="08:00" max="20:59" step="60">
+      </label>
+      <div class="notification-actions" aria-label="Pause reminders">
+        <button id="notification-pause-7" type="button">Pause 7 days</button>
+        <button id="notification-pause-30" type="button">Pause 30 days</button>
+        <button id="notification-resume" type="button" hidden>Resume</button>
+      </div>
+    </div>
+    <p class="notification-status" id="notification-status" role="status" aria-live="polite">Off — no reminder will appear.</p>
+    <p class="muted">The browser controls whether a local reminder can run while the app is closed. The app uses daytime hours only, from 08:00 to 21:00.</p>
+  </section>
   <div class="actions">
     <button class="primary wide" id="share-column">Share 7 readings</button>
     <button id="export-all">Export readings</button>

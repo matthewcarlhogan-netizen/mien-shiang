@@ -5,6 +5,11 @@
 Status: proposal. Supersedes nothing until the product owner accepts it.
 Base: `main` @ `66d43b1`. Written 17 August 2026.
 
+**Current correction:** the product owner later restored a separate, default-off daily device
+reminder under `DR-2026-08-31-DAILY-NOTIFICATION-RESTORATION`. The blanket “no notifications”
+sentences in this historical proposal are superseded only on that point. Its rejection of streak
+pressure, streak loss and compulsion loops remains active.
+
 ---
 
 ## 0. The one decision everything else follows from

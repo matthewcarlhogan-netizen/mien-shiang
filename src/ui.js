@@ -529,7 +529,7 @@ if ("serviceWorker" in navigator) {
   // but it must not be empty. An empty handler is what hid a total service
   // worker install failure: no offline support, no error, nothing on screen.
   window.addEventListener("load", () =>
-    navigator.serviceWorker.register("./sw.js").catch((err) =>
+    navigator.serviceWorker.register("./sw.js", { type: "module" }).catch((err) =>
       console.warn("Service worker registration failed; offline support is unavailable.", err)));
 }
 

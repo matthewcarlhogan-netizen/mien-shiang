@@ -98,7 +98,7 @@ Route only approved signal versions into deterministic eligibility and compositi
 
 ### 5 — experience integration
 
-Add the daily ritual, calibration, retake, abstention, history, export and delete experience. Preserve offline use, accessibility, low-end performance and a non-coercive cadence: no streak pressure or notification behaviour without a later approved decision.
+Add the daily ritual, calibration, retake, abstention, history, export and delete experience. Preserve offline use, accessibility, low-end performance and a non-coercive cadence. The separate notification tool follows `DR-2026-08-31-DAILY-NOTIFICATION-RESTORATION`; it is not a Daily Portrait dependency and does not add streak pressure.
 
 ### 6 — compliance and release evidence
 

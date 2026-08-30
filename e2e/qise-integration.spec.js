@@ -366,3 +366,44 @@ test.describe("Stage-3 connector-integration load boundary", () => {
     expect(whyHtml).not.toContain("Historical connector graph");
   });
 });
+
+test("the daily reminder is a separate default-off tool with persistent opt-out controls", async ({ page, context }) => {
+  // Chromium's test profile can report the real Notification permission as
+  // blocked even after grantPermissions. Mock only that browser boundary;
+  // the policy, persistence and UI still run through the production modules.
+  await context.grantPermissions(["notifications"], { origin: "http://127.0.0.1:4173" });
+  await page.addInitScript(() => {
+    function MockNotification() {}
+    Object.defineProperty(MockNotification, "permission", { value: "granted" });
+    MockNotification.requestPermission = async () => "granted";
+    Object.defineProperty(window, "Notification", {
+      value: MockNotification, writable: true, configurable: true,
+    });
+  });
+  await page.reload();
+  await page.goto(NEUTRAL_PAGE);
+  const reading = await buildReading(page, canonicalFace(), "2026-08-21");
+  await seedConsentAndReading(page, reading);
+  await page.goto("/qise.html?reflection=off");
+  await page.getByRole("button", { name: "Your column" }).click();
+
+  const toggle = page.locator("#notification-enabled");
+  await expect(toggle).not.toBeChecked();
+  await expect(page.locator("#notification-status")).toHaveText("Off — no reminder will appear.");
+
+  await toggle.check();
+  await expect(toggle).toBeChecked();
+  await expect(page.locator("#notification-options")).toBeVisible();
+  await expect(page.locator("#notification-status")).toHaveText(/On — each day at/);
+
+  await page.locator("#notification-cadence").selectOption("weekly");
+  await page.locator("#notification-weekday").selectOption("3");
+  await expect(page.locator("#notification-weekday")).toHaveValue("3");
+  await toggle.uncheck();
+  await expect(page.locator("#notification-status")).toHaveText("Off — no reminder will appear.");
+
+  await page.reload();
+  await page.getByRole("button", { name: "Your column" }).click();
+  await expect(page.locator("#notification-enabled")).not.toBeChecked();
+  await expect(page.locator("#notification-options")).toBeHidden();
+});

@@ -51,10 +51,13 @@ notes and test fixtures explicitly exempted — and it tests **behaviour** (does
 missed day as a failure state, visually or textually?), not the mere absence of a word from a
 markdown file.
 
-**No-notification direction is preserved.** The product does not push notifications to remind,
-nag, or re-engage. This retention program does not reopen that decision; if it is reopened, that
-is a separate, explicit product-owner decision recorded in `docs/DECISION_REGISTER.md`, not an
-inference from anything in this document.
+**The notification direction is now explicit and separate.** Under
+`DR-2026-08-31-DAILY-NOTIFICATION-RESTORATION`, the product may offer a default-off, user-selected
+device reminder as a separate tool. It carries only “Today’s reading is ready.” and never creates
+a streak, loss state, countdown, penalty or personalised face claim. This document's gap and
+non-coercion rules still govern: a missed day is never failure, and notification delivery is not a
+measure of engagement or compliance. Browser background delivery is best effort, not an exact-time
+promise.
 
 ## A missed day is a gap, not a failure
 

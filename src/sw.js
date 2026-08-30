@@ -1,3 +1,8 @@
+import {
+  canonicalDayFor, notificationEligibility, notificationPayload,
+  openNotificationStore, recordNotificationDelivered,
+} from "./qise/notifications.js";
+
 /* Offline support.
  *
  * App shell is cached on install. The MediaPipe WASM runtime and the 4 MB face
@@ -5,7 +10,7 @@
  * second launch works with no connection at all. */
 // Bumped when the shell list changes: the activate handler deletes every cache
 // whose name is not CACHE, so a stale v1 holding an old SHELL cannot survive.
-const CACHE = "mienshiang-v23";
+const CACHE = "mienshiang-v24";
 const SHELL = [
   "./", "./index.html", "./ui.js", "./analysis.js", "./engine.js",
   // Measurement calibration. Owned by neither module; engine.js imports both,
@@ -38,7 +43,7 @@ const SHELL = [
   "./qise/illumination.js", "./qise/upload.js", "./qise/framestats.js",
   "./qise/wakelock.js",
   "./qise/gates.js", "./qise/camera.js", "./qise/metrics.js", "./qise/pose.js",
-  "./qise/baseline.js", "./qise/store.js", "./qise/passages.js",
+  "./qise/baseline.js", "./qise/store.js", "./qise/passages.js", "./qise/notifications.js",
   "./qise/patterns.js", "./qise/composition.js", "./qise/integrated.js",
   "./ui/qise/palette.js", "./ui/qise/seal.js", "./ui/qise/screens.js",
   "./ui/qise/share.js", "./ui/qise/theme.js", "./ui/qise/exposure-halo.js", "./ui/qise/app.js",
@@ -106,5 +111,110 @@ self.addEventListener("fetch", (e) => {
         .catch(() => hit);
       return hit || net;
     })
+  );
+});
+
+const PERIODIC_SYNC_TAG = "qise-daily-reading";
+
+/**
+ * Background delivery is deliberately best effort. A browser may delay or
+ * decline Periodic Background Sync; the page also schedules an active-app
+ * fallback. Neither path is allowed to claim a reminder was shown until the
+ * browser accepted showNotification and the delivery day was persisted.
+ */
+async function deliverDailyNotification() {
+  try {
+    const store = await openNotificationStore();
+    const preferences = await store.get();
+    const now = new Date();
+    const day = canonicalDayFor(now);
+    const result = notificationEligibility({
+      now,
+      preferences,
+      hasPriorReading: Boolean(preferences.lastReadingDay),
+      hasReadingToday: preferences.lastReadingDay === day,
+    });
+    if (!result.eligible) return result;
+
+    if (!await store.claimDelivery(result.canonicalDay)) {
+      return { ...result, eligible: false, reason: "already-claimed" };
+    }
+    const payload = notificationPayload(result.canonicalDay);
+    try {
+      await self.registration.showNotification(payload.title, payload);
+      await store.put(recordNotificationDelivered(preferences, result.canonicalDay));
+      return { ...result, delivered: true };
+    } catch (error) {
+      await store.releaseDelivery(result.canonicalDay).catch(() => {});
+      throw error;
+    }
+  } catch (error) {
+    // A permission revocation, unavailable store, or browser scheduling
+    // failure must not turn into a false delivery record or an unhandled worker
+    // rejection that kills future background events.
+    console.warn("qise: daily notification was not delivered", error);
+    return { eligible: false, reason: "delivery-failed" };
+  }
+}
+
+async function registerPeriodicBackgroundSync() {
+  try {
+    const registration = self.registration;
+    if (registration.periodicSync?.register) {
+      await registration.periodicSync.register(PERIODIC_SYNC_TAG, {
+        // This is a lower bound, not a promise of exact-time delivery.
+        minInterval: 24 * 60 * 60 * 1000,
+      });
+      return true;
+    }
+  } catch (error) {
+    console.warn("qise: periodic notification scheduling unavailable", error);
+  }
+  return false;
+}
+
+async function unregisterPeriodicBackgroundSync() {
+  try {
+    if (self.registration.periodicSync?.unregister) {
+      await self.registration.periodicSync.unregister(PERIODIC_SYNC_TAG);
+    }
+  } catch (error) {
+    console.warn("qise: periodic notification cancellation unavailable", error);
+  }
+}
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "qise-notification-register") {
+    event.waitUntil(registerPeriodicBackgroundSync());
+  }
+  if (event.data?.type === "qise-notification-unregister") {
+    event.waitUntil(unregisterPeriodicBackgroundSync());
+  }
+  if (event.data?.type === "qise-notification-check") {
+    event.waitUntil(deliverDailyNotification());
+  }
+});
+
+self.addEventListener("periodicsync", (event) => {
+  if (event.tag === PERIODIC_SYNC_TAG) event.waitUntil(deliverDailyNotification());
+});
+
+// A future push provider may use the same privacy-safe payload. No server or
+// subscription is assumed here; an unsolicited push can never bypass the
+// user's local preference and quiet-hours policy.
+self.addEventListener("push", (event) => {
+  event.waitUntil(deliverDailyNotification());
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const destination = new URL(event.notification.data?.url || "./qise.html", self.location.origin).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
+      const qiseUrl = new URL("./qise.html", self.location.origin).href;
+      const existing = windows.find((client) => client.url.startsWith(qiseUrl));
+      if (existing?.focus) return existing.focus();
+      return self.clients.openWindow(destination);
+    }),
   );
 });

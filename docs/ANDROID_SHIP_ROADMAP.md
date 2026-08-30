@@ -36,7 +36,9 @@ visible abstention and attributed interpretation—not a weaker scanner.
 7. **Scan again:** the return action is always another face scan.
 
 No notification streak, streak loss, invite quota or share-to-unlock ships in
-version 1. Sharing is expression, not payment.
+version 1. A separate, default-off daytime reminder is permitted under
+`DR-2026-08-31-DAILY-NOTIFICATION-RESTORATION`; it is not a streak or a payment
+mechanism. Sharing is expression, not payment.
 
 ## Corrected technical decisions
 
@@ -198,7 +200,7 @@ period complete, and all launch gates have recorded evidence.
 - Roll back on privacy regression, camera crash cluster, Digital Asset Links
   failure, interpretation/citation defect or disclosure mismatch.
 - Weekly product review uses scan completion, voluntary share, seven/fourteen
-  reading return and abstention—not streaks, notification opens or invite spam.
+  reading return and abstention—not streaks, notification pressure or invite spam.
 
 ## Next five commits
 
