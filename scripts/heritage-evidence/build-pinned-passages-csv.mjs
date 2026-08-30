@@ -10,12 +10,13 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { extractFencedCsv, normaliseNewlines } from "../lib/heritage-dossier.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const dossier = readFileSync(join(ROOT, "MIEN_SHIANG_PINNING_PASS.md"), "utf8");
+const dossier = normaliseNewlines(readFileSync(join(ROOT, "MIEN_SHIANG_PINNING_PASS.md"), "utf8"));
 const verify = JSON.parse(readFileSync(join(ROOT, "docs/heritage-evidence/acquisition-verify.json"), "utf8"));
 
-const csvBlock = dossier.match(/```csv\n(passageId,sourceId,repoUrl[\s\S]*?)\n```/)[1];
+const csvBlock = extractFencedCsv(dossier, "passageId,sourceId,repoUrl");
 const lines = csvBlock.split("\n");
 const header = lines[0];
 const bodyRows = lines.slice(1).filter(l => l.trim());

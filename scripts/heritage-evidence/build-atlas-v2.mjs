@@ -9,11 +9,12 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { extractFencedCsv, normaliseNewlines } from "../lib/heritage-dossier.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const dossier = readFileSync(join(ROOT, "MIEN_SHIANG_PINNING_PASS.md"), "utf8");
+const dossier = normaliseNewlines(readFileSync(join(ROOT, "MIEN_SHIANG_PINNING_PASS.md"), "utf8"));
 
-const block = dossier.match(/```csv\n(relationshipId,family,relationshipClass[\s\S]*?)\n```/)[1];
+const block = extractFencedCsv(dossier, "relationshipId,family,relationshipClass");
 const lines = block.split("\n").filter(l => l.trim());
 const header = lines[0].split(",");
 function parseLine(line) {

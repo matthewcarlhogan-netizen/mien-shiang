@@ -5,7 +5,7 @@
  * Clones the four Kanripo repositories at the commits pinned in
  * MIEN_SHIANG_PINNING_PASS.md, recomputes every file SHA-256, counts <pb:...>
  * folio markers, and verifies each of the 17 rows of the embedded
- * PINNED_PASSAGES.csv byte-for-byte against the freshly cloned working-tree
+ * PINNED_PASSAGES.csv byte-for-byte against the freshly cloned Git object
  * bytes: the claimed <pb:...> marker must govern the passage, and the passage
  * text (with the Mandoku pilcrow and page-break markup removed) must contain
  * the dossier's quoted Chinese as a contiguous run.
@@ -15,6 +15,11 @@
  * including BOTH codepoints for 宮/宫 (U+5BAE and U+5BAB), because Kanripo's
  * 2016-02-05 normalisation pass rewrites one to the other in these texts and a
  * single-codepoint grep produced a false "十二宮 = 0" in the dossier.
+ *
+ * Source files are read with `git show`, not from the checkout. Git's
+ * core.autocrlf setting can rewrite a text file on Windows; hashing the
+ * working tree would then make the same pinned commit pass on LF hosts and
+ * fail on CRLF hosts.
  *
  * Usage:
  *   node scripts/heritage-evidence/acquire-and-verify.mjs <scratchCloneDir> [--json <out.json>] [--report <out.md>]
@@ -27,6 +32,7 @@ import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { extractFencedCsv, normaliseNewlines } from "../lib/heritage-dossier.mjs";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const DOSSIER = join(REPO_ROOT, "MIEN_SHIANG_PINNING_PASS.md");
@@ -50,11 +56,13 @@ if (!existsSync(scratch)) mkdirSync(scratch, { recursive: true });
 
 const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
 const git = (cwd, ...a) => execFileSync("git", a, { cwd, encoding: "utf8" }).trim();
+const gitBlob = (cwd, path) => execFileSync("git", ["show", `HEAD:${path}`], { cwd });
 
 // ---------------------------------------------------------------------------
 // 1. Parse the dossier: §1 expected hashes, §2 PINNED_PASSAGES.csv
 // ---------------------------------------------------------------------------
-const dossier = readFileSync(DOSSIER, "utf8");
+const dossierText = readFileSync(DOSSIER, "utf8");
+const dossier = normaliseNewlines(dossierText);
 
 // §1 hash block: lines "  <64hex>  <file>"
 const expectedHashes = {};
@@ -62,14 +70,9 @@ for (const m of dossier.matchAll(/^([0-9a-f]{64})\s+(KR3g004\d_\d{3}\.txt)$/gm))
   expectedHashes[m[2]] = m[1];
 }
 
-// §2 CSV: the fenced block beginning with the passageId header
-function extractCsvBlock(header) {
-  const re = new RegExp("```csv\\n(" + header.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "[\\s\\S]*?)\\n```", "m");
-  const mm = dossier.match(re);
-  return mm ? mm[1] : null;
-}
-const passagesCsv = extractCsvBlock("passageId,sourceId,repoUrl");
-const atlasCsv = extractCsvBlock("relationshipId,family,relationshipClass");
+// §2 CSV: the fenced blocks beginning with their stable headers
+const passagesCsv = extractFencedCsv(dossier, "passageId,sourceId,repoUrl");
+const atlasCsv = extractFencedCsv(dossier, "relationshipId,family,relationshipClass");
 
 function parseCsv(text) {
   const rows = [];
@@ -111,7 +114,7 @@ for (const r of KANRIPO) {
   const files = git(dir, "ls-files").split("\n").filter(Boolean);
   const hashes = {};
   for (const f of files) {
-    const buf = readFileSync(join(dir, f));
+    const buf = gitBlob(dir, f);
     hashes[f] = { sha256: sha256(buf), bytes: buf.length };
     if (/^KR3g004\d_\d{3}\.txt$/.test(f)) fileBytes[f] = buf;
   }
@@ -313,7 +316,7 @@ const atlasArith = atlas.length ? {
 // ---------------------------------------------------------------------------
 const result = {
   acquisitionTimestamp: acqTimestamp,
-  dossier: { path: "MIEN_SHIANG_PINNING_PASS.md", sha256: sha256(readFileSync(DOSSIER)) },
+  dossier: { path: "MIEN_SHIANG_PINNING_PASS.md", sha256: sha256(Buffer.from(dossier, "utf8")) },
   repos: repoResults.map(r => ({ id: r.id, title: r.title, remote: r.remote,
     expectedCommit: r.expectedCommit, actualCommit: r.actualCommit, commitMatch: r.commitMatch,
     commitDate: r.commitDate, fileCount: r.files.length })),
