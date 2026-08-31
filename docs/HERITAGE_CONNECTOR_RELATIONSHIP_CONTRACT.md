@@ -259,7 +259,114 @@ a product-owner decision and is recorded here, not taken.
 
 ---
 
-## 5. Decisions required before any implementation
+## 5. Decisions taken (DR-2026-08-31-D2-CONNECTOR-PREDICATE)
+
+D2-1 approved (must land with D2-2). D2-2 approved with enforcement. D2-3 approved with exactly
+**two** records, not three. D2-4 hold the target — Gate D stays at 250, `NOT_READY` accepted,
+passing the gate is not authorised.
+
+The original §5 decision list is superseded; see the register entry for the binding wording.
+
+---
+
+## 6. The field-flow trace, and why D2-2 needs a bounded freeze exception
+
+D2-2 requires that `excludedPredicateClauses` be *consumed or otherwise enforced by the
+reader-facing path*, and that a project-owned translation of the geometric predicate be
+exposed. Tracing that requirement against the real code produces a blocker that must be
+recorded rather than routed around.
+
+### 6.1 Neither field can reach a reader today, and two allow-lists are why
+
+```
+connector record            src/heritage/registry.js          editable
+  -> toResolvedEntry()      src/heritage/resolver.js:754      FROZEN   <-- blocked
+    -> connectorCard()      src/ui/qise/heritage-view.js:147  editable <-- also blocked
+      -> heritageConnectorTier2Markup / Tier3Markup           -> reader
+```
+
+Both stages are **explicit field allow-lists**, not spreads — deliberately, and the design is
+correct:
+
+- `toResolvedEntry()` copies exactly 20 named fields off the connector. `relationshipPredicate`
+  is **not** among them, and neither is any translation or exclusion field. Everything else on the
+  record is dropped at this boundary.
+- `connectorCard()` reduces further to 9 fields — `connectorId`, `relationshipLabel`,
+  `participants`, `relationshipDirection`, `sourceId`, `sourceTitle`, `sectionLocator`,
+  `disposition`, `prohibitedForUserInference`. `connectorEvidenceCard()` (Tier 3) spreads that
+  base and adds 8 evidence fields; still no predicate.
+
+So a connector's `relationshipPredicate` is invisible to every reader-facing surface, and adding
+`excludedPredicateClauses` to the registry alone would be exactly the "unused metadata" D2-2
+explicitly rejects. **The first allow-list that must change is in a frozen file.**
+
+### 6.2 Two records differing only in source are not the distinction D2-3 asks for
+
+Without the predicate, the two Three Sections records differ to a reader only by `sourceId`,
+`sourceTitle` and `sectionLocator` — the reader sees *two different sources*, never *two
+different claims*. D2-3 requires "a meaningful proportion/equality distinction in the permitted
+surface". 相稱 (in proportion) versus 平等 (equal) is that distinction, and it cannot be shown
+while the predicate stops at `toResolvedEntry()`.
+
+### 6.3 Where project-owned translations actually live — and why the connector has none
+
+Translation is an established, validated contract, but it exists **only on lineage records**:
+
+| field | on | purpose |
+|---|---|---|
+| `definition` | lineage | the project-owned English prose; `heritageMaterialFor()` renders it as Tier 2's passage |
+| `translationProvenance` | lineage | `PROJECT_ORIGINAL` / `PUBLIC_DOMAIN_TRANSLATION` / `NOT_TRANSLATED_HERITAGE_ONLY`, validated at `validator.js:370,380` |
+| `translationAgentId` | lineage | who produced it |
+
+**Connector records carry no translation field of any kind.** They hold `sourceText` (Han),
+`note` (an English research note, not reader copy), and — proposed — `relationshipPredicate`
+(Han). There is therefore no existing verified path by which an English rendering of 相稱 or
+平等 could reach a reader, and none may be invented in an execution handoff.
+
+### 6.4 `englishSafe()` blocks Han, and does not block an English fortune claim
+
+`heritage-view.js`'s `englishSafe()` omits any string containing a Han character, whole, with a
+deliberate no-fragment policy: *"a surgically-edited fragment is not a verified translation, it
+is a guess with the evidence removed."*
+
+That gives D2-2 half its enforcement for free — 上相 and 貴 are Han, so they can never survive
+`englishSafe()` into a reader-facing field. **It gives none of the other half.** D2-2 also bans
+"any English rank, status or fortune interpretation", and a project-owned English translation
+reading *"a person of superior physiognomy"* would pass `englishSafe()` untouched. A second,
+English-vocabulary guard on the translation field is therefore required, not optional.
+
+### 6.5 The smallest explicit architecture exception — PROPOSED, NOT APPROVED
+
+Minimal change set, in dependency order. It reuses the existing validated translation contract
+rather than inventing a second one.
+
+1. **`src/heritage/connectors.js`** — three optional fields on `HERITAGE_CONNECTOR_FIELDS`:
+   `relationshipPredicate` (already present), `predicateTranslation` (project-owned English),
+   `excludedPredicateClauses` (array of excluded source clauses, audit-only, never rendered), and
+   reuse of the existing `HERITAGE_TRANSLATION_PROVENANCE` enum for a
+   `predicateTranslationProvenance`. **No new enum.**
+2. **`src/heritage/resolver.js:754` `toResolvedEntry()` — the freeze exception.** Add exactly two
+   pass-through entries, `predicateTranslation` and `excludedPredicateClauses`. No logic change,
+   no new branch, no effect on disposition, ordering or selection.
+3. **`src/ui/qise/heritage-view.js` `connectorCard()`** — add `predicateTranslation` to the
+   allow-list, passed through `englishSafe()` **and** a new `fortuneFree()` guard that omits the
+   value if it carries rank/status/fortune vocabulary. `excludedPredicateClauses` is deliberately
+   **not** added: it is audit metadata whose enforcement is the guard, and rendering the list of
+   things withheld would reintroduce the very clause it excludes.
+
+Step 2 is a Stage 1/2 freeze exception. Under this document's own §3 rules an
+`ARCHITECTURE_AFFECTING` change stops and becomes a decision card rather than being smuggled in,
+so **it is proposed here and is not authorised.** It is the narrowest form available: two
+pass-through fields in one object literal, adding no behaviour to the resolver.
+
+If the product owner declines the exception, D2-2's enforcement clause cannot be satisfied, and
+therefore D2-1 (which must land with D2-2) and D2-3's "meaningful distinction" requirement cannot
+be satisfied either. The honest fallback is to leave all three unimplemented rather than ship
+`excludedPredicateClauses` as unused metadata.
+
+---
+
+## 7. Superseded — original decision list
 
 | # | Decision | Blocking |
 |---|---|---|

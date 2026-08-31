@@ -29,6 +29,53 @@ Use this register to stop prompts, discussions and implementation from collapsin
     - Repository checkpoints/canonical docs are persistent project memory; large chat histories are not.
     - This routing changes development workflow only and does not weaken provenance, safety, heritage freezes, release gates or product contracts.
 
+### DR-2026-08-31-D2-CONNECTOR-PREDICATE
+
+- **Date:** 31 August 2026
+- **Owner:** product owner
+- **Status:** approved
+- **Context:** `docs/HERITAGE_CONNECTOR_RELATIONSHIP_CONTRACT.md` established that no heritage
+  connector is both measurable from a flat photograph and authorised for presentation, so the
+  connector layer contributes exactly one state everywhere. These four decisions respond to that
+  finding.
+
+- **D2-1 — APPROVED.** Promote `three-sections-facial-proportion-taiqing` from `RESEARCH_ONLY` to
+  `HERITAGE_PRESENTATION_ALLOWED`, and route `threeSections/primary` from `RESEARCH_ONLY` to
+  `RUNTIME_PROSE`. **Must land together with D2-2** — the promotion is not authorised on its own,
+  because the promoted record's source text carries a rank clause.
+
+- **D2-2 — APPROVED WITH ENFORCEMENT.** The product may carry the source-attested geometric
+  predicate while excluding the fortune/status clause.
+    - The full source text remains in the evidence registry for audit and provenance.
+    - Runtime surfaces may expose only the verified geometric excerpt and a project-owned
+      translation.
+    - 上相, 貴, and any English rank, status or fortune interpretation must never appear in
+      Tier 1, Tier 2, Tier 3, source cards, accessibility text, exports or share surfaces.
+    - An `excludedPredicateClauses` field is **necessary but not sufficient**. It must be consumed
+      or otherwise enforced by the reader-facing path and pinned by negative tests. Unused
+      metadata does not satisfy this decision.
+
+- **D2-3 — APPROVED, with the corrected record set.** Exactly **two** Three Sections predicate
+  records in total, never three:
+    1. **Retain and update** the existing `three-sections-facial-proportion-taiqing` —
+       `relationshipPredicate: 相稱`, `disagreementIds: ["three-sections-predicate"]`,
+       `alternateConnectorIds: ["three-sections-pingdeng-yuguan"]`, plus the approved explicit
+       fortune-clause exclusion.
+    2. **Add exactly one** new record, `three-sections-pingdeng-yuguan`.
+  A `three-sections-xiangcheng-taiqing` record must **not** be created — it would duplicate the
+  existing Taiqing record. After promotion, active count and connector residue must be exactly
+  **2**, not 3.
+
+- **D2-4 — HOLD THE TARGET.** Gate D stays at 250 and `NOT_READY` is accepted. The threshold is
+  not to be revised to fit the current corpus. A later evidence-based capacity review may
+  reconsider it only after source acquisition. **Passing the gate is not authorised during this
+  task.**
+
+- **Consequence recorded, not decided here:** satisfying D2-2's enforcement clause requires a
+  bounded Stage 1/2 freeze exception on `src/heritage/resolver.js`'s `toResolvedEntry()`. See
+  `docs/HERITAGE_CONNECTOR_RELATIONSHIP_CONTRACT.md` §6 — that exception is proposed, not
+  approved, and no implementation may proceed without it.
+
 ## Approved direction, not necessarily complete
 
 - Scanner-first Android TWA route and GitHub-hosted HTTPS deployment.
