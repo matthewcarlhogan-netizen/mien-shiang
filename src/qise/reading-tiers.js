@@ -85,6 +85,55 @@ export function personalContext(state, composed) {
   for (const field of PERSONAL_CONTEXT_FIELDS) {
     filled[field] = textsFor(composed, [field])[0] || null;
   }
+
+  /*
+   * ── HISTORY IS DROPPED ON AN ABSTENTION, BECAUSE ITS KEY WAS FORCED ──────
+   * The `history` component is keyed on `historyStage` AND `trajectory`, and
+   * `deriveReadingState()` FORCES `trajectory: "steady"` on every abstention —
+   * a placeholder standing in for a claim it explicitly refuses to make ("any
+   * abstention suppresses the trajectory claim: we did not observe enough to
+   * say where this sits in a pattern"). Carried through, an established user
+   * whose capture abstained on confidence read this, in one block:
+   *
+   *   "...the room and the face are not separable in this capture, so the
+   *    honest answer is silence."
+   *   "Nothing is standing out against the range the app has learned for you."
+   *
+   * The second sentence is an outcome claim about a scan that was not read,
+   * derived from the placeholder rather than from evidence. Tier 1 has always
+   * carried it; D-1 surfaced it into a block headed "Your record", where it
+   * reads as a finding about the reader.
+   *
+   * ── WHY ONLY AT `established`, AND NOT ON EVERY ABSTENTION ──────────────
+   * The three stages say materially different kinds of thing at `steady`, and
+   * only one of them is a verdict:
+   *
+   *   calibrating  "The app is still learning what ordinary looks like for
+   *                 you."                        <- about the RECORD
+   *   establishing "The picture the app holds of your ordinary range is still
+   *                 filling in."                 <- about the RECORD
+   *   established  "Nothing is standing out against the range the app has
+   *                 learned for you."            <- about TODAY'S FACE
+   *
+   * The first two remain true whether or not today's scan was read: they
+   * describe how much history exists, which the abstention does not change.
+   * Only at `established` does "steady" mean "nothing moved today", and that
+   * is exactly the claim an unread capture cannot support.
+   *
+   * Dropping history on EVERY abstention was the first fix written here, and
+   * it was wrong in a way worth recording: it also erased the calibrating and
+   * establishing lines, which are honest, and it collapsed abstained states
+   * that differ only by `historyStage` into one another — trading a false
+   * claim for a false equivalence.
+   *
+   * Found in review by Codex on PR #45 (P1). `confidence` is NOT dropped —
+   * `confidenceBand` is genuinely measured, not forced, so it remains true of
+   * the capture even when nothing could be read from it.
+   */
+  if (state.availability !== "read" && state.historyStage === "established") {
+    filled.history = null;
+  }
+
   return Object.freeze({
     ...filled,
     read: state.availability === "read",

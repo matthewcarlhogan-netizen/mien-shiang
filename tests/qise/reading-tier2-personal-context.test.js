@@ -39,6 +39,7 @@ import {
 import { enumerateReachableStates, stateKey, AVAILABILITY } from "../../src/qise/reading-state.js";
 import { composeReading, DECLARED_EQUIVALENCES } from "../../src/qise/reflection.js";
 import { shareCardModel } from "../../src/ui/qise/share.js";
+import { stripComments, tokeniseStringLiterals } from "../../scripts/copy-scan.js";
 
 const STATES = enumerateReachableStates();
 const forState = (s, occurrence = 0) =>
@@ -58,9 +59,13 @@ test("every reachable state produces a distinct visible Tier 2", () => {
   for (const s of STATES) {
     const key = visible(forState(s).tier2);
     if (seen.has(key)) {
+      // `seen` is keyed by the visible Tier 2 string, so the prior colliding
+      // state is `seen.get(key)` — reading it back with `seen.get(s)` printed
+      // `undefined` and hid the very state the failure exists to name.
+      // Found in review by Copilot on PR #45.
       assert.fail(
         "Tier 2 collision between two reachable states:\n  "
-        + stateKey(seen.get(s)) + "\n  " + stateKey(s));
+        + stateKey(seen.get(key)) + "\n  " + stateKey(s));
     }
     seen.set(key, s);
   }
@@ -169,13 +174,52 @@ test("an abstained reading explains the gap and fabricates nothing", () => {
     // movement claim, so there is nothing to report and nothing is invented.
     assert.equal(pc.observation, null, `${availability} fabricated an observation`);
     assert.equal(pc.magnitude, null, `${availability} fabricated a magnitude`);
-    assert.deepEqual([...pc.absent], ["observation", "magnitude"],
+    // History survives only where it describes the RECORD's maturity rather
+    // than today's face — see the header in `personalContext`. At
+    // `established` the only steady line is a verdict, so it is dropped.
+    const expectedAbsent = s.historyStage === "established"
+      ? ["observation", "magnitude", "history"]
+      : ["observation", "magnitude"];
+    assert.deepEqual([...pc.absent], expectedAbsent,
       `${availability} did not name what it could not fill`);
+    if (s.historyStage === "established") {
+      assert.equal(pc.history, null,
+        `${availability} made an outcome claim from a forced trajectory`);
+    }
 
     // The gap is explained, in words, rather than left as a shorter block.
     assert.ok(pc.availability && pc.availability.length > 20,
       `${availability} gave no reason for the gap`);
   }
+});
+
+test("an abstained record makes no outcome claim, in any reachable abstained state", () => {
+  /*
+   * The P1 this guards, found in review on PR #45. `deriveReadingState()`
+   * forces `trajectory: "steady"` on every abstention, and the `history`
+   * component is keyed on it — so an established user whose capture abstained
+   * on confidence saw "the honest answer is silence" and "Nothing is standing
+   * out against the range the app has learned for you." in one block.
+   *
+   * Checked as PROSE over every reachable abstained state, not just as a null
+   * field: a future corpus line reintroducing an outcome claim through some
+   * other component would slip past a null check and must not slip past this.
+   */
+  const OUTCOME_CLAIM = /nothing is standing out|nothing notable|has risen|has fallen|is standing out against/i;
+  const offenders = [];
+  for (const s of STATES.filter((x) => x.availability !== "read")) {
+    const pc = forState(s).tier2.personalContext;
+    const prose = PERSONAL_CONTEXT_FIELDS.map((f) => pc[f] || "").join(" ");
+    const m = prose.match(OUTCOME_CLAIM);
+    if (m) offenders.push(`${stateKey(s)}: "${m[0]}"`);
+  }
+  assert.deepEqual([...new Set(offenders.map((o) => o.split(": ")[1]))], [],
+    "an abstained reading made an outcome claim about a scan that was not read:\n  "
+    + offenders.slice(0, 5).join("\n  "));
+
+  // Paired positive control: the pattern really does catch the shipped line.
+  assert.match("Nothing is standing out against the range the app has learned for you.",
+    OUTCOME_CLAIM);
 });
 
 test("a read reading carries the observation, and has no gap notice to give", () => {
@@ -312,9 +356,26 @@ test("the projection is selected by component id, not rebuilt from the state", (
   const body = tiers.slice(start, tiers.indexOf("\n}", start));
   assert.match(body, /textsFor\(composed, \[field\]\)/,
     "personalContext no longer selects out of composed.parts");
-  // No corpus import, no string literal that could be reader-facing copy.
-  const literals = body.match(/"[^"]{12,}"/g) || [];
-  assert.deepEqual(literals, [], `personalContext carries its own copy: ${literals.join(", ")}`);
+  /*
+   * No string literal in the CODE that could be reader-facing copy.
+   *
+   * Two corrections live in this one assertion, both of them defects this
+   * guard actually had:
+   *
+   * 1. Comments are stripped first. This function's header quotes the three
+   *    corpus history lines verbatim to show why only one of them is a
+   *    verdict; a guard that counted those as "carrying its own copy" would
+   *    push back against explaining the decision.
+   * 2. It uses `tokeniseStringLiterals`, not a `/"..."/` regex. CLAUDE.md item
+   *    22: JavaScript alternates strings and code, so quote-to-quote matching
+   *    happily captures the CODE BETWEEN two literals. It did exactly that
+   *    here, reporting `" && state.historyStage === "` — a fragment spanning
+   *    from the end of one literal to the start of the next — as reader-facing
+   *    copy. The repo built the tokeniser for this; use it.
+   */
+  const literals = tokeniseStringLiterals(stripComments(body))
+    .filter((s) => s.trim().length >= 12);
+  assert.deepEqual(literals, [], `personalContext carries its own copy: ${literals.join(" | ")}`);
 });
 
 /* ── 12. the share/export surface is unchanged ───────────────────────────── */

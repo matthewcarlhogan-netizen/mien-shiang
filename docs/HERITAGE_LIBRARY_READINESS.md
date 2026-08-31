@@ -6,7 +6,17 @@ twice, JSON output identical except `generatedAt` (verified this session; see "I
 below). Neither harness renders anything in production; both use the internal analytical seam
 (`composeHeritageConnectionsWithRegistries()`), never `composeHeritageForReading()`.
 
-Commit measured against: `b62945e8619f1ca6ad470cd3f421c9cd0fa0b99b`.
+**Commit provenance — two measurement rounds, not one.**
+
+| figures | measured against | why |
+|---|---|---|
+| Everything except the base-reading columns | `b62945e8619f1ca6ad470cd3f421c9cd0fa0b99b` | the original Phase B run |
+| The **base-reading** columns in §1 and §2C (24 / 216) | `1cd96de49904118cece3b47c836074b966cadb8d` (D-1) | D-1 changed `readingTiers().tier2`, which is what `baseMaterialSignature()` reads |
+
+Re-running the harness at `b62945e` reproduces the *pre-D-1* base figures (1 and 9), not the ones
+tabulated below — so the base rows are versioned separately rather than presented as if one
+commit produced the whole report. Every heritage-connector figure is identical at both commits;
+D-1 did not touch that layer. Raised in review by Codex on PR #45.
 
 **Read this alongside, never instead of:**
 `docs/heritage-evidence/EVIDENCE_TRANSITION_LEDGER.md` (what changed and why),
@@ -198,10 +208,15 @@ meaning heritage content is absent on roughly half the year's days **regardless 
 
 ### C. `LATENT_HERITAGE_EXHAUSTION` (internal seam, hypothetical authorisation — NOT production)
 
-The exhaustive per-construct depth matches the GOLD harness's own numbers exactly (1/1/1 for
-threeSections/twelvePalaces/fiveMountains, 9/9/9 for fiveElements/fourRivers/fiveOfficers — see
-above), confirming the two harnesses agree, as they must, since both call the same
+The exhaustive per-construct depth matches the GOLD harness's own numbers exactly (24/24/24 for
+threeSections/twelvePalaces/fiveMountains, 216/216/216 for fiveElements/fourRivers/fiveOfficers —
+see the table above), confirming the two harnesses agree, as they must, since both call the same
 `analyseConstructLineage()`.
+
+**Both harnesses were re-run after D-1 and both moved together**, which is the point of quoting
+them side by side: the base column rose 24-fold in each. The pre-D-1 figures were 1/1/1 and
+9/9/9. Nothing about the heritage connector layer changed — its residue is 1 in both
+measurements.
 
 The calendar cross-check — real 365-day `mostlySteady` and `frequentMovementLike` simulated
 users, walking the REAL per-day occurrence value through the same latent seam — reports
