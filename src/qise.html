@@ -201,6 +201,11 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .reflection{position:relative;border:0;padding:1.15rem 1.15rem 1.15rem 2.1rem;margin:1rem 0;background:color-mix(in srgb,var(--chi) 8%,var(--qise-surface));border-radius:20px;font-family:var(--passage);font-size:1.12rem;line-height:1.55}
 .reflection::before{content:"“";position:absolute;left:.72rem;top:.35rem;color:var(--chi);font-size:2.4rem;line-height:1}
 .story-passage{font-family:var(--passage);font-size:1.04rem;line-height:1.72;margin:0}
+/* "Your record" — the reader's own measured material, kept visually apart from
+   the attributed passage below it so the two layers cannot read as one voice. */
+.personal-record{display:block;margin:0 0 1.25rem;padding-bottom:1.1rem;border-bottom:1px solid var(--qise-border)}
+.personal-record p{margin:0 0 .5rem}
+.personal-record p:last-child{margin-bottom:0}
 .integrated-card{margin:1rem 0;padding:1.15rem;border:1px solid color-mix(in srgb,var(--chi) 38%,var(--qise-border));border-radius:22px;background:linear-gradient(145deg,color-mix(in srgb,var(--chi) 10%,var(--qise-surface)),var(--qise-surface) 60%)}
 .integrated-card h2{font-family:var(--passage);font-size:1.55rem;line-height:1.12;margin:.2rem 0 .55rem}
 .integrated-mark{display:grid;grid-template-columns:auto 1fr;gap:.9rem;align-items:center;margin-top:.9rem}

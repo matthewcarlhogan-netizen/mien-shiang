@@ -1132,6 +1132,43 @@ function loadHeritageStage3Modules() {
 }
 
 /**
+ * "Your record" — the reader's own material on the Reading screen.
+ *
+ * ONE renderer, called by BOTH the Story surface and the compare surface, for
+ * the reason CLAUDE.md item 51 exists: a block written inline at two call
+ * sites drifts, and the half that drifts is the half nobody opens. Compare
+ * mode showing a materially poorer Tier 2 than Story is exactly that failure.
+ *
+ * Every string here comes from `tier2.personalContext`, which is a projection
+ * of sentences `composeReading()` already produced (see
+ * `reading-tiers.js`'s `personalContext`). This function selects and places;
+ * it never composes. There is no copy in it.
+ *
+ * ── WHY THE AVAILABILITY LINE IS GATED ON `!read` ──────────────────────────
+ * `AVAILABILITY_LINE.read` is deliberately `[""]` — on a day that WAS read
+ * there is no gap to announce — so `personalContext.availability` is null and
+ * `absent` lists it. That is honest as data and a trap as markup: rendering
+ * the `absent` list on a read day would tell a reader with a perfectly good
+ * capture that something could not be filled. So the gap notice renders only
+ * where there is genuinely a gap, and it renders FIRST, because on an
+ * abstained day the reason is the whole message and the fields below it are
+ * empty by design rather than by accident.
+ */
+function personalRecordMarkup(context) {
+  if (!context) return "";
+  const line = (text, cls) => (text ? `<p${cls ? ` class="${cls}"` : ""}>${esc(text)}</p>` : "");
+  return `
+    <section class="personal-record">
+      <p class="eyebrow">Your record</p>
+      ${context.read ? "" : line(context.availability, "muted")}
+      ${line(context.observation)}
+      ${line(context.magnitude)}
+      ${line(context.history, "muted")}
+      ${line(context.confidence, "muted")}
+    </section>`;
+}
+
+/**
  * ONE teardown for every path that leaves Reflection with nothing authorised
  * to show — off, a Stage 3 load failure, or an unauthorised/abstained tiers
  * result. Written once so a branch cannot drift from its siblings the way
@@ -1264,8 +1301,14 @@ async function renderReflection(reading, history) {
     ${tier1.confidence ? `<p class="muted">${esc(tier1.confidence)}</p>` : ""}
     ${tier1.selfReport ? `<p class="muted">${esc(tier1.selfReport)}</p>` : ""}`;
 
+  // The reader's own record first, then the tradition's: two contiguous
+  // blocks, never interleaved, so section 7's layer separation survives into
+  // the surface and not only into the data model.
+  const personalRecord = personalRecordMarkup(tier2.personalContext);
+
   storyNode.hidden = false;
   storyNode.innerHTML = `
+    ${personalRecord}
     <p class="eyebrow">The tradition\u2019s reading</p>
     <p class="story-passage">${esc(tier2.passage)}</p>
     <p class="muted">${esc(tier2.attribution)}</p>
@@ -1279,11 +1322,22 @@ async function renderReflection(reading, history) {
     compareNode.hidden = !comparing;
     if (comparing) {
       const previous = passageFor(reading.compass, reading.z || {}, reading.timestampIso);
+      /*
+       * The Reflection side carries the SAME `personalRecord` block Story
+       * renders — the identical string from the identical call — because the
+       * point of compare mode is what the two engines actually produce, and
+       * the reader's own record is now part of what this one produces.
+       * Omitting it here would understate the Reflection engine against the
+       * passage engine, which is the opposite of a fair comparison. It sits
+       * under the Reflection heading, never under "Current engine": the
+       * passage engine has no such material and must not appear to.
+       */
       compareNode.innerHTML = `
         <p class="eyebrow">Side by side</p>
         <div class="section-label"><h2>Current engine</h2><span class="muted">${esc(previous.provenanceId)}</span></div>
         <p class="story-passage">${esc(previous.text)}</p>
         <div class="section-label"><h2>Reflection engine</h2><span class="muted">${esc(tier3.provenance.engine)}</span></div>
+        ${personalRecord}
         <p class="story-passage">${esc(tier2.passage)} ${esc(tier2.bridge)} ${esc(tier2.question)}</p>`;
     }
   }

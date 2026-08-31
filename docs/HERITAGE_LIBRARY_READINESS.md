@@ -81,12 +81,16 @@ fixed" below):
 
 | Construct | Base (Tier 2) raw=material | Heritage Tier 2 raw=material | Heritage Tier 3 raw=material | Combined (base+Tier2) |
 |---|---|---|---|---|
-| threeSections | 1 | 1 | 1 | 1 |
-| fiveElements | 9 | 1 | 1 | 9 |
-| twelvePalaces | 1 | 1 | 1 | 1 |
-| fiveMountains | 1 | 1 | 1 | 1 |
-| fourRivers | 9 | 1 | 1 | 9 |
-| fiveOfficers | 9 | 1 | 1 | 9 |
+| threeSections | 24 | 1 | 1 | 24 |
+| fiveElements | 216 | 1 | 1 | 216 |
+| twelvePalaces | 24 | 1 | 1 | 24 |
+| fiveMountains | 24 | 1 | 1 | 24 |
+| fourRivers | 216 | 1 | 1 | 216 |
+| fiveOfficers | 216 | 1 | 1 | 216 |
+
+**The base column was re-measured after the D-1 Tier 2 repair** (see the section below); it
+previously read 1 / 9 / 1 / 1 / 9 / 9. Heritage Tier 2, heritage Tier 3 and therefore the
+binding constraint are all unchanged.
 
 Every unit of combined diversity currently available comes from the **base reading's own prose
 variation** (Reflection Engine component/variant selection), none from the heritage connector
@@ -98,6 +102,42 @@ library's current binding constraint is relationship count, not prose variety** 
 construct needs a second genuinely distinct connector (a different relationship, witness,
 disagreement position, or juxtaposition) for its "primary" lineage before Tier 2 has anything to
 rotate. See the ranked backlog below.
+
+**D-1 raised the base column 24-fold and changed none of that.** The best-performing construct
+moved from 9 to 216 distinct base-material states and still does not reach the 250 target, and
+the heritage residue is still exactly 1 everywhere, so gate D fails for the same reason it
+failed before and the ranked backlog is unaltered. If anything the finding is now sharper: the
+base reading alone supplies 216 distinct Tier 2 states while the connector layer supplies one.
+
+### D-1 — the Tier 2 projection, and what its numbers do and do not show
+
+`src/qise/reading-tiers.js`'s `tierTwo()` read only the heritage layer plus the bridge and the
+question. Those components declare four of the ten reading-affecting axes; the other six
+(`region`, `direction`, `magnitudeBand`, `confidenceBand`, `historyStage`, `trajectory`) were
+computed, carried on the frozen state, rendered in Tier 1 and Tier 3, and dropped before the
+Reading screen — `reading-state.js`'s founding defect, one layer above the module written to
+prevent it.
+
+Measured over all 15,288 reachable states with `enumerateReachableStates()` + `composeReading()`
++ `readingTiers()`:
+
+| | distinct visible Tier 2 | collision |
+|---|---|---|
+| before | 178 / 15,288 | 98.8% |
+| after | 15,288 / 15,288 | 0.0% |
+
+And the fixed-output half of the defect: one read state sampled across 40 consecutive
+occurrences produced **1** distinct Tier 2 before and **24** after. The repair adds a
+`tier2.personalContext` projection selected by component id out of `composed.parts` — the same
+sentences the composition already produced, chosen through the same `textsFor()` helper
+`tierOne()` uses. No new engine, no new corpus, no clock, no randomness.
+
+**This is not customer-value evidence, and must not be cited as any.** It measures the removal
+of a defect: a screen that had 178 faces now has as many as it has states. Nothing here shows
+that a reader wants the Reading screen, opens it twice, finds the record true, or returns
+because of it. Presentation discrimination is a precondition for the screen being worth
+validating, not a substitute for validating it. `PRODUCT_RETENTION_READINESS` is unchanged at
+`NOT_YET_RUNTIME_VALIDATED`.
 
 ### A defect found and fixed this session, in the harness itself
 
