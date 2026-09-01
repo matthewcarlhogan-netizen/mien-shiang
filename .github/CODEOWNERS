@@ -16,10 +16,13 @@
 /docs/proposals/ @matthewcarlhogan-netizen
 /docs/CLAUDE_CODE_BOOTSTRAP.md @matthewcarlhogan-netizen
 /docs/CLOUD_AGENT_RUNBOOK.md @matthewcarlhogan-netizen
+/docs/BETA_RELEASE.md @matthewcarlhogan-netizen
 /scripts/check-release.js @matthewcarlhogan-netizen
+/scripts/release-profile.js @matthewcarlhogan-netizen
 /scripts/copy-scan.js @matthewcarlhogan-netizen
 /scripts/lint-bundle.js @matthewcarlhogan-netizen
 /tests/agent-governance.test.js @matthewcarlhogan-netizen
+/tests/release-lanes.test.js @matthewcarlhogan-netizen
 /tests/copy-guard.test.js @matthewcarlhogan-netizen
 /tests/copy-lint.test.js @matthewcarlhogan-netizen
 /tests/source-integrity.test.js @matthewcarlhogan-netizen

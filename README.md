@@ -17,13 +17,21 @@ Two build flavours: `entertainment-only` and `wellness`, selected by
 
 ```bash
 npm start     # http://localhost:5173
-npm test      # 612 tests
+npm test      # 1267 tests
 npm run build # dist/
 npm run lint:bundle # compliance guards on dist/
+npm run build:beta   # dist-beta/, core scanner only
+npm run audit:beta   # strict checks for the beta artefact
+npm run audit:release # reports beta and commercial lanes separately
+npm run release:check # strict commercial-store gate
 ```
 
-No npm dependencies. The build performs no transform — `dist/` is a copy of
-`src/`, with Module B stubbed out in the entertainment flavour.
+The full build performs no transform — `dist/` is a copy of `src/`, with Module
+B stubbed out in the entertainment flavour. The disclosed beta build is a
+deliberate release profile: it copies the core scanner into `dist-beta/`,
+removes the Qi Se tracker and heritage connector tree, and points the manifest
+and service worker at the core scanner entry. See
+[docs/BETA_RELEASE.md](docs/BETA_RELEASE.md).
 
 ## On your phone
 

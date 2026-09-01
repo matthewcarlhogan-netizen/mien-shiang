@@ -91,6 +91,12 @@ jobs:
       - name: Bundle lint (wellness flavour)
         run: npm run lint:bundle
 
+      - name: Build, lint and audit the disclosed beta
+        run: |
+          npm run build:beta
+          npm run lint:beta
+          npm run audit:beta
+
       # The entertainment flavour is what carries the "does not exhibit health
       # features" declaration, so it is linted too — the declaration is only as
       # good as the artefact it describes.
