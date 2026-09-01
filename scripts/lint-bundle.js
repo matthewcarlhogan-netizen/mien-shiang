@@ -66,6 +66,16 @@ export const EGRESS_ALLOWLIST = [
   { pattern: /^https:\/\/checkout\.lemonsqueezy\.com\/buy\/[A-Za-z0-9-]+$/, why: "Lemon Squeezy hosted checkout" },
 ];
 
+/**
+ * Exact static social-preview assets. These are metadata identifiers for a
+ * crawler, not runtime destinations the app fetches. The egress guard accepts
+ * them only when they appear on an og:image/twitter:image meta line below;
+ * placing the same URL in code or a link still fails closed.
+ */
+export const SOCIAL_PREVIEW_ALLOWLIST = [
+  /^https:\/\/matthewcarlhogan-netizen\.github\.io\/mien-shiang\/og-image\.png$/,
+];
+
 /** Accepted only when a DSN is configured at runtime; never hardcoded. */
 export const SENTRY_DSN_PATTERN = /^https:\/\/[\w.]+@[\w.-]+\.ingest(\.[a-z]+)?\.sentry\.io\/\d+$/;
 export const REVENUECAT_HOST = "api.revenuecat.com";
@@ -272,6 +282,13 @@ function guardEgress(file, text) {
     const url = m[0];
     if (/^https?:\/\/(localhost|127\.0\.0\.1)/.test(url)) continue;
     if (url.startsWith("http://www.w3.org")) continue;              // XML namespace, not a fetch
+    const lineStart = text.lastIndexOf("\n", m.index) + 1;
+    const lineEnd = text.indexOf("\n", m.index);
+    const line = text.slice(lineStart, lineEnd < 0 ? text.length : lineEnd);
+    if (SOCIAL_PREVIEW_ALLOWLIST.some((p) => p.test(url))
+        && /<(?:meta)\b[^>]*(?:property|name)="(?:og:image|twitter:image)"[^>]*\bcontent="/i.test(line)) {
+      continue;
+    }
     if (IDENTIFIER_URI_ALLOWLIST.some((p) => p.test(url))) continue;
     if (EGRESS_ALLOWLIST.some((a) => a.pattern.test(url))) continue;
     if (SENTRY_DSN_PATTERN.test(url)) continue;

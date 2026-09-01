@@ -19,7 +19,10 @@ import {
   BLOCKLIST, DISEASE_TERMS, extractJsProse, extractHtmlCopy, findTerms,
   findAssertive, assertCanary, CANARY_FAILURE, CANARY_TERM, isProse,
 } from "../scripts/copy-scan.js";
-import { IDENTIFIER_URI_ALLOWLIST } from "../scripts/lint-bundle.js";
+import {
+  IDENTIFIER_URI_ALLOWLIST,
+  SOCIAL_PREVIEW_ALLOWLIST,
+} from "../scripts/lint-bundle.js";
 
 const SRC = fileURLToPath(new URL("../src", import.meta.url));
 
@@ -216,4 +219,12 @@ test("the Kanripo sourceUrl identifier exception matches only the pinned acquisi
   assert.equal(allowed("https://github.com/kanripo/KR3g9999/blob/b3e5b69beb95f575bb47e9eaed1e6aadd23bffe5/KR3g9999_001.txt"), false, "only the four pinned repos may match");
   assert.equal(allowed("https://github.com/kanripo/KR3g0045/blob/notahexsha/KR3g0045_001.txt"), false, "commit must be a 40-char hex SHA");
   assert.equal(allowed("https://evil.example.com/kanripo/KR3g0045/blob/b3e5b69beb95f575bb47e9eaed1e6aadd23bffe5/KR3g0045_001.txt"), false, "host must be github.com");
+});
+
+test("the social preview exception matches only the exact static asset", () => {
+  const allowed = (url) => SOCIAL_PREVIEW_ALLOWLIST.some((pattern) => pattern.test(url));
+  assert.equal(allowed("https://matthewcarlhogan-netizen.github.io/mien-shiang/og-image.png"), true);
+  assert.equal(allowed("https://matthewcarlhogan-netizen.github.io/mien-shiang/og-image.png?x=1"), false, "query string must not match");
+  assert.equal(allowed("https://matthewcarlhogan-netizen.github.io/other/og-image.png"), false, "path must not widen");
+  assert.equal(allowed("https://evil.example.com/mien-shiang/og-image.png"), false, "host must not widen");
 });
