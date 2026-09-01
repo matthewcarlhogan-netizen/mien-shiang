@@ -24,7 +24,7 @@ export const DELEGATE_ORDER = ["GPU", "CPU"];
  * @param {(fileset:any, opts:any)=>Promise<any>} createFromOptions
  *        Injected. In the app this is `FaceLandmarker.createFromOptions`.
  * @param {any} fileset  Resolved WASM fileset.
- * @param {{modelAssetPath:string}} model
+ * @param {{modelAssetPath:string, numFaces?:number}} model
  * @param {(msg:string)=>void} [onProgress]
  * @returns {Promise<{landmarker:any, delegate:"GPU"|"CPU", attempts:Array}>}
  */
@@ -44,7 +44,10 @@ export async function createLandmarkerWithFallback(
       const landmarker = await createFromOptions(fileset, {
         baseOptions: { modelAssetPath: model.modelAssetPath, delegate },
         runningMode: model.runningMode || "IMAGE",
-        numFaces: 1,
+        // Ask for the configured number of faces. Callers that need to
+        // reject ambiguous captures can request two and use selectSingleFace
+        // instead of silently analysing whichever face happened to be first.
+        numFaces: model.numFaces ?? 1,
         // 52 blendshape coefficients. Used for EXPRESSION and ASYMMETRY only —
         // expression is a state at the moment of capture, never a personality
         // signal. See src/expression.js.
@@ -66,4 +69,21 @@ export async function createLandmarkerWithFallback(
   // hides the GPU error, which is usually the informative one.
   const detail = attempts.map((a) => `${a.delegate}: ${a.error}`).join(" | ");
   throw new Error(`Could not start the face model on this device. ${detail}`);
+}
+
+/**
+ * Classify a detector result without ever choosing a face implicitly.
+ *
+ * A face reading is meaningful only when the image contains exactly one
+ * detected face. Returning a status rather than throwing keeps this helper
+ * usable by live-camera loops, where "no face" is an ordinary frame state.
+ *
+ * @param {{faceLandmarks?:Array<Array<any>>}|null|undefined} result
+ * @returns {{status:"none"|"single"|"multiple", landmarks:Array<any>|null}}
+ */
+export function selectSingleFace(result) {
+  const faces = Array.isArray(result?.faceLandmarks) ? result.faceLandmarks : [];
+  if (faces.length === 0) return { status: "none", landmarks: null };
+  if (faces.length > 1) return { status: "multiple", landmarks: null };
+  return { status: "single", landmarks: faces[0] };
 }

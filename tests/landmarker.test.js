@@ -13,7 +13,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { createLandmarkerWithFallback, DELEGATE_ORDER } from "../src/landmarker.js";
+import {
+  createLandmarkerWithFallback,
+  DELEGATE_ORDER,
+  selectSingleFace,
+} from "../src/landmarker.js";
 
 const MODEL = { modelAssetPath: "face_landmarker.task" };
 
@@ -105,4 +109,27 @@ test("the same tested fallback can configure the live scanner", async () => {
   assert.equal(result.delegate, "CPU");
   assert.ok(factory.calls.every((call) => call.runningMode === "VIDEO"));
   assert.ok(factory.calls.every((call) => call.outputFaceBlendshapes === false));
+});
+
+test("callers can request two faces to detect an ambiguous capture", async () => {
+  const factory = fakeFactory();
+  await createLandmarkerWithFallback(factory, {}, { ...MODEL, numFaces: 2 });
+
+  assert.equal(factory.calls[0].numFaces, 2);
+});
+
+test("single-face selection refuses missing and ambiguous detector results", () => {
+  assert.deepEqual(selectSingleFace(null), { status: "none", landmarks: null });
+
+  const oneFace = [{ x: 0.5, y: 0.5, z: 0 }];
+  assert.deepEqual(selectSingleFace({ faceLandmarks: [oneFace] }), {
+    status: "single",
+    landmarks: oneFace,
+  });
+
+  const anotherFace = [{ x: 0.25, y: 0.25, z: 0 }];
+  assert.deepEqual(selectSingleFace({ faceLandmarks: [oneFace, anotherFace] }), {
+    status: "multiple",
+    landmarks: null,
+  });
 });

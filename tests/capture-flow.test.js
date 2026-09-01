@@ -17,6 +17,16 @@ import { fileURLToPath } from "node:url";
 
 const src = (p) => readFileSync(fileURLToPath(new URL(`../src/${p}`, import.meta.url)), "utf8");
 const html = src("index.html");
+const analysis = src("analysis.js");
+
+test("the core analysis requests enough detections to refuse multi-face photos", () => {
+  assert.match(analysis, /createLandmarkerWithFallback[\s\S]*?numFaces: 2/,
+    "core analysis must ask the detector to surface an ambiguous capture");
+  assert.match(analysis, /selectSingleFace\(res\)/,
+    "core analysis must use the explicit single-face selection contract");
+  assert.match(analysis, /More than one face found/,
+    "ambiguous captures must produce an actionable user-facing error");
+});
 
 // ───────────────────────────────────────────────────── the primary action ──
 
