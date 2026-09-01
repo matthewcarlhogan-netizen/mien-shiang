@@ -1,16 +1,35 @@
 # Release gates
 
-**Two gates. One target. Product-owner direction, 17 August 2026.**
+The repository has two intentionally separate release lanes. A disclosed beta
+can exercise the core scanner while the commercial-store lane remains blocked.
+Passing the beta lane is not a rights clearance, store approval, or readiness
+decision for the Qi Se longitudinal tracker and heritage connector depth.
 
----
+## GATE 1 — DISCLOSED BETA
 
-## GATE 1 — FULL PRODUCT (the target)
+The beta artefact contains the core scanner only. Its entry point is the legacy
+scanner at `index.html`; the Qi Se tracker, heritage connector code, and their
+UI/module trees are omitted from `dist-beta/`. The Qi Se safety-authorization
+signal remains unset and any connector composition remains fail-closed.
 
-**Qi Se measurement + personal history + Heritage + Reflection Engine.**
+Build and verify it with:
 
-This is the product. Pattern × Co–Star × Mien Shiang, with the scholarly
-heritage and reflection layer as the core differentiator — the thing no
-competitor in this category can copy without dismantling their own claims.
+```bash
+npm run build:beta
+npm run lint:beta
+npm run audit:beta
+```
+
+The beta must be described as a small, disclosed, entertainment-only test of
+the on-device scanner. Its content and limitations must be disclosed to
+testers; the beta command does not waive the commercial evidence requirements.
+
+## GATE 2 — FULL PRODUCT / COMMERCIAL STORE
+
+The full product target remains Qi Se measurement + personal history + Heritage
++ Reflection Engine. It requires the rights-clearance and citation-provenance
+record for every content family, plus the app-store and real-device evidence in
+[`STORE_RELEASE_GATES.md`](STORE_RELEASE_GATES.md).
 
 ### Open requirements
 
@@ -25,15 +44,18 @@ competitor in this category can copy without dismantling their own claims.
 | Legal requirement 5 × 6 families | **Open** — Track 2 |
 | Evidence hashed into the manifest | **Open** |
 
-### Release condition
+### Commercial release condition
 
-All six families `cleared` in `docs/commercial-rights-manifest.json`, verified by
-`npm run audit:release`, **and** the public default flipped deliberately in a
-recorded decision. Neither alone is sufficient.
+All content families must be `cleared` in
+`docs/commercial-rights-manifest.json`, with citation provenance and hashed
+evidence verified by `npm run audit:commercial`. The store and device gates
+must also pass. `npm run release:check` is the strict candidate gate and must
+remain green before generating or uploading a paid store candidate.
 
----
+## Audit commands
 
-## Current recommendation
-
-**Stay on the target product.** The critical path is acquisition of the
-remaining required evidence.
+- `npm run audit:release` reports both lanes without changing their status.
+- `npm run audit:beta` requires a correctly built, core-scanner-only beta
+  artefact.
+- `npm run audit:commercial` reports the full rights/store gate.
+- `npm run release:check` fails closed when the commercial gate is not ready.

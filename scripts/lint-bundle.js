@@ -23,7 +23,13 @@ import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
-const DIST = join(REPO, "dist");
+const distArgAt = process.argv.indexOf("--dist");
+const distName = distArgAt >= 0 ? process.argv[distArgAt + 1] : "dist";
+if (!distName || distName.startsWith("-")) {
+  throw new Error("lint-bundle: --dist requires a directory name");
+}
+const DIST = join(REPO, distName);
+const DIST_LABEL = `${distName.replace(/\\/g, "/")}/`;
 
 // ─────────────────────────────────────────────────────────────── allowlist ──
 
@@ -315,7 +321,7 @@ function guardNoBiometricEgress(file, text) {
 
 function main() {
   if (!existsSync(DIST)) {
-    console.error("FAIL: dist/ does not exist. Run `npm run build` first.");
+    console.error(`FAIL: ${DIST_LABEL} does not exist. Build the requested profile first.`);
     process.exit(1);
   }
 
@@ -323,7 +329,7 @@ function main() {
   const files = walk(DIST).filter((f) => /\.(js|html|webmanifest|json)$/.test(f));
 
   if (files.length === 0) {
-    console.error("FAIL: scanned 0 files in dist/. A lint that scans nothing cannot pass.");
+    console.error(`FAIL: scanned 0 files in ${DIST_LABEL}. A lint that scans nothing cannot pass.`);
     process.exit(1);
   }
 
@@ -336,7 +342,7 @@ function main() {
     guardNoBiometricEgress(file, text);
   }
 
-  console.log(`Bundle lint — flavour: ${flavour.flavour}, ${files.length} files scanned`);
+  console.log(`Bundle lint — ${DIST_LABEL} flavour: ${flavour.flavour}, ${files.length} files scanned`);
   console.log(`  ${allCopy.length} user-facing strings extracted`);
 
   // A scanner that found nothing because it is broken must fail loudly rather

@@ -35,10 +35,12 @@ import {
 import { createHash } from "node:crypto";
 import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildProfile, isExcludedFromBeta } from "./release-profile.js";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SRC = join(REPO, "src");
-const DIST = join(REPO, "dist");
+const PROFILE = buildProfile(process.argv.slice(2));
+const DIST = join(REPO, PROFILE.lane === "beta" ? "dist-beta" : "dist");
 const MODEL_CACHE = join(REPO, "saved_models", "face_landmarker.task");
 const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
 const MODEL_SHA256 = "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff";
@@ -113,6 +115,48 @@ const walk = (dir) => readdirSync(dir).flatMap((n) => {
   return statSync(p).isDirectory() ? walk(p) : [p];
 });
 
+function rewriteBetaIndex(source) {
+  const withoutRedirect = source.replace(
+    /<script>\r?\n\/\/ The shared project URL[\s\S]*?<\/script>\r?\n/,
+    "<!-- Disclosed beta entry: the core scanner is the only enabled feature. -->\n",
+  );
+  if (withoutRedirect === source) {
+    throw new Error("build: beta entry could not remove the Qi Se redirect");
+  }
+
+  const withoutTrackerLink = withoutRedirect.replace(
+    /\s*·\s*\r?\n\s*<!-- The Qi Se tracker is a second entry point[\s\S]*?-->\r?\n\s*<a href="\.\/qise\.html">Qi Se tracker<\/a>/,
+    "",
+  );
+  if (withoutTrackerLink === withoutRedirect) {
+    throw new Error("build: beta entry could not remove the Qi Se tracker link");
+  }
+  return withoutTrackerLink;
+}
+
+function rewriteBetaServiceWorker(source) {
+  const lines = source.split(/\r?\n/);
+  const filtered = lines.filter((line) =>
+    !line.includes('"./qise') && !line.includes('"./ui/qise'));
+  if (filtered.length === lines.length) {
+    throw new Error("build: beta service worker still has no Qi Se shell entries to remove");
+  }
+  return filtered
+    .map((line) => line.replace('const CACHE = "mienshiang-v23";',
+      'const CACHE = "mienshiang-beta-v1";'))
+    .join("\n");
+}
+
+function rewriteBetaManifest(source) {
+  const manifest = JSON.parse(source);
+  return JSON.stringify({
+    ...manifest,
+    id: "./",
+    description: "A private, on-device Mien Xiang face scanner.",
+    start_url: "./index.html",
+  }, null, 2) + "\n";
+}
+
 /* Module B replacements for the entertainment flavour. Same export surface,
  * no health-adjacent copy, no thresholds, nothing to render. */
 const STUB_SAFETY = `/* Entertainment build: Module B is not shipped.
@@ -169,10 +213,23 @@ async function build() {
   let copied = 0;
   for (const file of walk(SRC)) {
     const rel = relative(SRC, file);
+    if (PROFILE.lane === "beta" && isExcludedFromBeta(rel)) continue;
     const dest = join(DIST, rel);
     mkdirSync(dirname(dest), { recursive: true });
     copyFileSync(file, dest);
     copied++;
+  }
+
+  if (PROFILE.lane === "beta") {
+    writeFileSync(join(DIST, "index.html"), rewriteBetaIndex(
+      readFileSync(join(DIST, "index.html"), "utf8"),
+    ), "utf8");
+    writeFileSync(join(DIST, "sw.js"), rewriteBetaServiceWorker(
+      readFileSync(join(DIST, "sw.js"), "utf8"),
+    ), "utf8");
+    writeFileSync(join(DIST, "manifest.webmanifest"), rewriteBetaManifest(
+      readFileSync(join(DIST, "manifest.webmanifest"), "utf8"),
+    ), "utf8");
   }
 
   const stubbed = [];
@@ -201,13 +258,18 @@ async function build() {
     version: pkg.version,
     commitSha,
     flavour: flavour.name,
+    releaseLane: PROFILE.lane,
+    releaseProfile: PROFILE.name,
+    enabledSurface: PROFILE.enabledSurface,
+    qiseFeatureEnabled: PROFILE.qiseFeatureEnabled,
+    excludedSourcePrefixes: PROFILE.excludedSourcePrefixes,
     moduleBShipped: flavour.moduleB,
     stubbedModules: stubbed,
     mediaPipe: { version: "0.10.18", sameOrigin: true, assets: vendoredAssets },
     commercialContentCleared,
   }, null, 2) + "\n", "utf8");
 
-  console.log(`Built dist/ — flavour: ${flavour.name}`);
+  console.log(`Built ${PROFILE.lane === "beta" ? "dist-beta/" : "dist/"} — ${PROFILE.name}, flavour: ${flavour.name}`);
   console.log(`  ${copied} files copied`);
   console.log(stubbed.length
     ? `  ${stubbed.length} Module B module(s) stubbed out: ${stubbed.join(", ")}`

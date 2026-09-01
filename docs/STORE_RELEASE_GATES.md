@@ -2,6 +2,10 @@
 
 Status: **BLOCKED — evidence incomplete**
 
+These are the commercial-store gates. They are intentionally separate from the
+disclosed core-scanner beta lane described in [`BETA_RELEASE.md`](BETA_RELEASE.md);
+a beta pass does not satisfy any gate on this page.
+
 Target: Q4 paid global release
 
 The web scanner is not itself a four-store release. This repository currently
