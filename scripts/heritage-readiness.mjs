@@ -40,7 +40,7 @@
 
 import { writeFileSync } from "node:fs";
 import { execSync } from "node:child_process";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { HERITAGE_REGISTRY, HERITAGE_CONNECTOR_REGISTRY, HERITAGE_DISAGREEMENT_REGISTRY } from "../src/heritage/registry.js";
 import { HERITAGE_NEGATIVE_RELATIONSHIP_REGISTRY } from "../src/heritage/negative-relationships-registry.js";
@@ -64,7 +64,7 @@ export const DIVERSITY_WALK_CAP = 2000; // exhaustive for periods at/under this;
 
 function gitCommit() {
   try {
-    return execSync("git rev-parse HEAD", { cwd: new URL("..", import.meta.url).pathname }).toString().trim();
+    return execSync("git rev-parse HEAD", { cwd: fileURLToPath(new URL("..", import.meta.url)) }).toString().trim();
   } catch {
     return "UNKNOWN";
   }
