@@ -177,7 +177,11 @@ export function tierThree(state, composed) {
     byLayer[layer] = composed.trace
       .filter((t) => t.layer === layer)
       .map((t) => ({
-        sentence: (composed.parts.find((p) => p.id === t.id) || {}).text || "",
+        sentence: (composed.parts.find((p) => p.id === t.id) || {}).text
+          || (t.abstention
+            ? "Heritage material remains source-attributed; measurement-derived joining abstained because "
+              + t.abstention.reasonCode + "."
+            : ""),
         component: t.id,
         because: t.drivenBy,
       }));

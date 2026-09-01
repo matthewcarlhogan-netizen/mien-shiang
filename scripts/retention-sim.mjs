@@ -42,7 +42,7 @@
 
 import { writeFileSync } from "node:fs";
 import { execSync } from "node:child_process";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
   MEASURED, recordFor, oldReading, exposureStats, dayString, repeatExposure,
@@ -66,7 +66,7 @@ const DAILY_PORTRAIT_HORIZONS = [7, 30, 90, 365];
 
 function gitCommit() {
   try {
-    return execSync("git rev-parse HEAD", { cwd: new URL("..", import.meta.url).pathname }).toString().trim();
+    return execSync("git rev-parse HEAD", { cwd: fileURLToPath(new URL("..", import.meta.url)) }).toString().trim();
   } catch {
     return "UNKNOWN";
   }
