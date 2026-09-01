@@ -191,10 +191,16 @@ export function tier2VisibleDisagreements(result) {
  * (see `tierThreeHeritageConnections` below).
  *
  * Exported separately from `tierTwoHeritageConnections` so the selection
- * logic itself is testable against a hand-built composition result — the
- * real corpus does not yet contain two ACTIVE connectors for the same
- * construct, so this is the only way to exercise the rotation/selection path
- * today without waiting for the corpus to grow.
+ * logic itself is testable against a hand-built composition result. As of
+ * D2-3 (DR-2026-08-31-D2-CONNECTOR-PREDICATE) the real corpus DOES contain
+ * two ACTIVE connectors for one construct (threeSections: the Taiqing 相稱
+ * and Yuguan 平等 records) — see
+ * tests/heritage/three-sections-predicate-acceptance.test.js's Tier 2
+ * rotation test for that exercised against the real registry. The synthetic
+ * fixture below is kept regardless: it isolates the selection algorithm from
+ * corpus content, so a future change to that one construct's evidence cannot
+ * silently stop covering rotation/sourcePanelOnly isolation for every other
+ * construct.
  */
 export function deriveTier2FromComposition(result) {
   if (result.suppressed || result.abstained) {

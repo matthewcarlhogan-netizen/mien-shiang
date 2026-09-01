@@ -24,9 +24,17 @@
  * "primary" request to the VERIFIED `taiqing-mianbu-facial` lineage instead
  * of the contested received-Ma-Yi lineage — see
  * docs/HERITAGE_CONNECTOR_RELATIONSHIP_CONTRACT.md §6 for the full trace.
- * This is now ONE genuine cell on the diagonal, not zero — the tests below
- * are updated accordingly, together with that evidence and that decision, as
- * this file's own discipline requires.
+ * This was ONE genuine cell on the diagonal, not zero.
+ *
+ * D2-3 added a SECOND: `three-sections-pingdeng-yuguan`, citing the
+ * independently-evidenced, byte-pinned, VERIFIED_PRIMARY 玉管照神局 卷下 verse
+ * (`heritage-three-sections-yuguan` — not a Ma Yi witness, not the same juan
+ * as the Taiqing facial material). Both connectors share the threeSections
+ * construct and the same routed lineage, so both receive the same
+ * HERITAGE_ONLY ceiling and both reach ACTIVE — the diagonal now has TWO
+ * genuine cells, not one. See contract §8.7 for the full trace. The tests
+ * below are updated accordingly, together with that evidence and that
+ * decision, as this file's own discipline requires.
  *
  * ── WHY THIS IS A TEST AND NOT ONLY A DOCUMENT ─────────────────────────────
  * CLAUDE.md's Verification Protocol §9: a constraint without a failing test to
@@ -99,13 +107,15 @@ const MEASURABLE = new Set(["FULLY_AVAILABLE", "PARTIALLY_AVAILABLE"]);
 
 /* ── the finding itself ──────────────────────────────────────────────────── */
 
-test("exactly one connector is now both measurable and authorised, and it is the decided one", () => {
+test("exactly two connectors are now both measurable and authorised -- the decided predicate pair", () => {
   const both = CONNECTORS.filter(([, c]) =>
     c.runtimePolicy === "HERITAGE_PRESENTATION_ALLOWED"
     && MEASURABLE.has(relationshipAvailabilityOf(c)));
 
-  assert.deepEqual(both.map(([id]) => id), ["three-sections-facial-proportion-taiqing"],
-    "the set of connectors both measurable and authorised changed -- if this is a new, "
+  assert.deepEqual(both.map(([id]) => id), [
+    "three-sections-facial-proportion-taiqing",
+    "three-sections-pingdeng-yuguan",
+  ], "the set of connectors both measurable and authorised changed -- if this is a new, "
     + "genuine, decided promotion, update docs/HERITAGE_CONNECTOR_RELATIONSHIP_CONTRACT.md "
     + "section 1 and docs/DECISION_REGISTER.md together with this assertion. Do NOT delete "
     + "this assertion to make the suite pass.");
@@ -128,16 +138,22 @@ test("the corpus cross-tabulation is what the contract records", () => {
     // HERITAGE_ONLY taiqing-mianbu-facial lineage), which
     // classifyRelationshipAvailability() folds in as a ceiling. See contract
     // §6 for the full trace.
+    //
+    // D2-3 added three-sections-pingdeng-yuguan into the SAME cell (1 -> 2):
+    // it shares the threeSections construct and therefore the same routed
+    // lineage and the same HERITAGE_ONLY ceiling as its sibling. See contract
+    // §8.7.
     "FULLY_AVAILABLE|RESEARCH_ONLY": 1,
     "PARTIALLY_AVAILABLE|SOURCE_PANEL_ONLY": 1,
     "HERITAGE_ONLY|HERITAGE_PRESENTATION_ALLOWED": 3,
     "UNAVAILABLE_FROM_CAPTURE|RESEARCH_ONLY": 9,
-    "FULLY_AVAILABLE|HERITAGE_PRESENTATION_ALLOWED": 1,
+    "FULLY_AVAILABLE|HERITAGE_PRESENTATION_ALLOWED": 2,
   }, "the connector corpus changed shape; re-measure and update the contract document");
-  assert.equal(CONNECTORS.length, 15, "no connector record was added or removed by this decision");
+  assert.equal(CONNECTORS.length, 16, "exactly one connector record (three-sections-pingdeng-yuguan) "
+    + "was added by D2-3; anything else changing this count needs its own decision");
 });
 
-test("two connectors are active anywhere in the product, and both are named", () => {
+test("three connectors are active anywhere in the product, and all are named", () => {
   const active = [];
   for (const heritageConstruct of HERITAGE_CONSTRUCT_IDS) {
     for (const sourceLineage of ["primary", "variant"]) {
@@ -152,6 +168,7 @@ test("two connectors are active anywhere in the product, and both are named", ()
   assert.deepEqual(active.sort(), [
     "fourRivers/primary:four-rivers-flow-and-banks",
     "threeSections/primary:three-sections-facial-proportion-taiqing",
+    "threeSections/primary:three-sections-pingdeng-yuguan",
   ], "the set of active connectors changed");
 });
 
@@ -190,7 +207,7 @@ test("fiveMountains' two authorised connectors are still blocked by lineage rout
     .map(([id]) => id).sort();
   assert.deepEqual(allowed, [
     "five-mountains-fullness", "five-mountains-mutual-facing", "four-rivers-flow-and-banks",
-    "three-sections-facial-proportion-taiqing",
+    "three-sections-facial-proportion-taiqing", "three-sections-pingdeng-yuguan",
   ].sort());
 
   assert.equal(HERITAGE_REGISTRY.fiveMountains.lineages.primary.runtimeStatus, "RESEARCH_ONLY",
@@ -214,9 +231,21 @@ test("fiveMountains' two authorised connectors are still blocked by lineage rout
 
 /* ── the residue, measured through the harness ──────────────────────────── */
 
-test("connector residue is 1 for every construct, for want of candidates", () => {
+test("connector residue is 1 for every construct except threeSections (D2-3), for want of candidates", () => {
   for (const heritageConstruct of HERITAGE_CONSTRUCT_IDS) {
     const { residue, activeCount, derivedFrom } = connectorResidue(heritageConstruct, "primary");
+    if (heritageConstruct === "threeSections") {
+      // D2-3: two genuine, independently-evidenced candidates now exist
+      // (Taiqing 相稱, Yuguan 平等) -- residue moves from "nothing to rotate"
+      // to "walked the real rotation period and found the repeat". See
+      // contract §8.7 and DECISION_REGISTER.md's D2-3 entry.
+      assert.equal(residue, 2, "D2-3 activated a second threeSections connector; residue should be 2");
+      assert.equal(activeCount, 2, "threeSections should have exactly two active connectors");
+      assert.match(derivedFrom, /exact repeat found/,
+        "threeSections's residue of 2 should come from walking a real rotation, not the "
+        + "single-or-zero-candidate shortcut");
+      continue;
+    }
     assert.equal(residue, 1, `${heritageConstruct} residue moved to ${residue}`);
     assert.ok(activeCount <= 1, `${heritageConstruct} has ${activeCount} active connectors`);
     assert.match(derivedFrom, /single-or-zero-candidate/,

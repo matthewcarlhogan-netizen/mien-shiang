@@ -472,7 +472,7 @@ calls it "Research-only" as an editorial judgement this pass does not have groun
 If the product owner wants Ma Yi's material visible in a Tier 3 source panel specifically, that is
 a distinct, separate decision, not a side effect of D2-1/D2-2.
 
-### 8.5 Scope: one connector, not two
+### 8.5 Scope: one connector, not two (superseded by §8.7 — D2-3 is now implemented)
 
 D2-3's full scope (exactly two Three Sections predicate records: update Taiqing in place, add one
 new `three-sections-pingdeng-yuguan`) is **not completed in this pass**. The instruction for this
@@ -515,3 +515,132 @@ Verification, this commit: `node --test` 1261/1261 (was 1246); `npm run build`,
 `npm run retention:sim` all exit 0; the local `npm run test:browser` sandbox failure is the same
 pre-existing Chromium 1194 vs pinned 1234 mismatch (confirmed unrelated by re-running against the
 installed binary: 11/11 pass).
+
+## 8.7 D2-3 IMPLEMENTED — the second, independently-evidenced connector
+
+D2-3 authorises exactly two Three Sections predicate records, never three
+(docs/DECISION_REGISTER.md's D2-3 entry). §8.5 above described the scope as not yet
+completed; this section supersedes that — the second record now exists.
+
+### 8.7.1 What was added
+
+`three-sections-pingdeng-yuguan` — `registry.js`, following
+`docs/agents/D2_GEMINI_HANDOFF.md` Task 2b's field-by-field spec verbatim:
+
+| field | value |
+|---|---|
+| `relationshipPredicate` | `平等` |
+| `excludedPredicateClauses` | `["和美"]` |
+| `sourceId` | `heritage-three-sections-yuguan` |
+| `sourceText` | `三停平等能和美` (copied from `evidence.js`'s `yuguan-pingdeng` lineage record, not retyped) |
+| `sectionLocator` / `folioLocator` | `卷下` / `<pb:KR3g0044_WYG_003_13a>`, both `VERIFIED` |
+| `measurementAvailability` | `SUPPORTED_2D` |
+| `runtimePolicy` | `HERITAGE_PRESENTATION_ALLOWED` |
+| `alternateConnectorIds` | `["three-sections-facial-proportion-taiqing"]` |
+| `disagreementIds` | `["three-sections-predicate"]` |
+
+`heritage-three-sections-yuguan` (`SOURCE_REGISTRY`) is a genuinely independent,
+byte-pinned, `VERIFIED_PRIMARY` witness: 玉管照神局 卷下, a Southern Tang/early Song Siku
+text. It is not a Ma Yi witness and not the same juan as the Taiqing facial material — its
+own authorship note already states "平等 here is NOT a Ming/麻衣-exclusive predicate".
+Activating it neither touches nor depends on the still-`RESEARCH_ONLY` Ma Yi
+connector/lineage.
+
+The exclusion follows the same reasoning D2-2 applied to Taiqing's `上相`: the verse's
+consequence-clause `能和美` ("[this] can bring harmony and beauty") is an aesthetic/
+desirability claim about the person, structurally the same shape as `乃上相之人矣`. It is
+named in `excludedPredicateClauses`, never rendered, and (like `相稱`) no English
+translation has been authored for `平等` either, so `englishSafe()` omits it whole and the
+card's `predicate` is honestly `null` today — same honest-abstention behaviour as the
+Taiqing record, not a regression.
+
+The existing Taiqing record gained two explicitly-declared fields per the decision register
+(`disagreementIds: ["three-sections-predicate"]`, `alternateConnectorIds:
+["three-sections-pingdeng-yuguan"]`) — not load-bearing for reachability
+(`collectDisagreementIds()` already attaches any CONSTRUCT-targeted disagreement to every
+candidate for that construct regardless of this field) but required to be declared, not
+merely achieved implicitly.
+
+### 8.7.2 Measured through the production composition seam
+
+Both connectors reach `ACTIVE` disposition with `relationshipAvailability: "HERITAGE_ONLY"`,
+because both are scoped to the `threeSections` construct and therefore inherit the identical
+ceiling from the one SELECTED (routed) lineage — `resolveLineageRestriction()` applies
+uniformly to every candidate for a construct, never per-connector:
+
+```
+composeLatent({ heritageConstruct: "threeSections", sourceLineage: "primary", occurrence: 0 }).active
+  -> [three-sections-facial-proportion-taiqing (相稱, HERITAGE_ONLY, ACTIVE),
+      three-sections-pingdeng-yuguan (平等, HERITAGE_ONLY, ACTIVE)]
+```
+
+`connectorResidue("threeSections", "primary")` moves from `{residue: 1, activeCount: 1,
+derivedFrom: "single-or-zero-candidate"}` to `{residue: 2, activeCount: 2, derivedFrom:
+"walked 64 occurrences, exact repeat found"}` — matching the decision register's explicit
+"active count and connector residue must be exactly 2, not 3" requirement.
+
+Tier 2's deterministic rotation (`renderPlan.relationshipOrder`) genuinely alternates
+between the two now that there are two real candidates — checked at occurrences 0-7, both
+connectors are reached (Yuguan at even occurrences, Taiqing at odd, in this measurement;
+`rotateDeterministically`'s offset/stride are seeded from the construct/lineage/depthMode,
+not hand-picked). This is the first construct in the corpus where Tier 2's "shows at most
+one" selection is doing real work rather than trivially returning the only candidate.
+
+The `three-sections-predicate` disagreement (相稱 vs 平等, `status: "OPEN"`) is now
+genuinely surfaced by two separate active connectors — both `composed.active` entries carry
+`disagreementIds: ["three-sections-boundaries", "three-sections-predicate"]` — rather than
+being recorded in the registry with no corresponding presentation. Confirmed against the
+live composition, not asserted from the registry alone.
+
+**No leak, checked directly against rendered markup**, both at occurrence 0 (Tier 2 picks
+Yuguan) and occurrence 1 (Tier 2 picks Taiqing): `connectorCard()` returns `predicate: null`
+for both connectors (no translation exists for either 相稱 or 平等); the combined Tier 2 +
+Tier 3 markup and JSON models contain no Han rank/status match
+(`/[上]相|貴|富貴|壽/`) and no claim-shaped English match, across both occurrences.
+
+### 8.7.3 Re-measured corpus and gate state
+
+Connector identity: **16 total** (was 15), 0 exact-`sourceText` collisions —
+`heritage-three-sections-yuguan`'s `三停平等能和美` does not collide with
+`heritage-three-sections-taiqing-mianbu`'s `三停皆稱乃上相之人矣`.
+
+Cross-tabulation cell `FULLY_AVAILABLE|HERITAGE_PRESENTATION_ALLOWED` moves from **1 to 2**
+(the Yuguan connector's own participant/measurement signals classify identically to
+Taiqing's, before the lineage-restriction ceiling is folded in); every other cell is
+unchanged.
+
+`threeSections/primary`: `heritage(Tier2) raw/material` moves from `1/1` to `2/2`;
+`heritage(Tier3) raw/material` moves from `1/1` to `2/2`; `combined(base+Tier2) raw/material`
+moves from `24/24` to **`48/48`** (`prose period=72`, `connector residue=2`,
+`combined=LCM(72,2)=72`, all 72 evaluated exhaustively).
+
+`retention:sim`'s `LATENT_HERITAGE_EXHAUSTION` analysis, previously
+`NO_ROTATION_OBSERVED_IN_THIS_SCENARIO` for every construct including `threeSections`, now
+reports `threeSections (mostlySteady/365d calendar): EXHAUSTED_BY_CALENDAR_DAY_18 (61 days
+on rotation, 2 distinct presentations seen)` — the first real, non-trivial exhaustion
+measurement in the corpus. It is exhausted almost immediately in a realistic usage
+scenario, which is the honest content-depth finding, not evidence Gate D is close: **Gate D
+(`DIVERSITY_TARGET = 250`) stays untouched and still fails; `NOT_READY` is unchanged** — the
+new high-water mark for connector residue across all six constructs is 2, still three orders
+of magnitude below 250. Per D2-4, passing Gate D was never in scope for this pass, and this
+result does not move it.
+
+### 8.7.4 Ma Yi, unaffected
+
+The Ma Yi connector (`three-sections-equality-mayi-received`) and its lineage
+(`threeSections.lineages.primary`) are untouched by this section — still `RESEARCH_ONLY` at
+both levels, never active, never in the source panel. D2-3 activates a second connector
+under an EXISTING lineage route (`taiqing-mianbu-facial`, established by D2-1); it creates
+no new lineage route and touches no Ma Yi field. §8.4's reasoning for leaving Ma Yi alone is
+unchanged by this section.
+
+### 8.7.5 Verification, this commit
+
+`node --test` **1262/1262** (was 1261); `npm run build`, `npm run lint:bundle`,
+`npm run audit:release` (exit 0; reports pre-existing `BLOCKED` content-rights items
+unrelated to the heritage connector graph, unchanged by this diff), `npm run
+heritage:readiness` (exit 0, `NOT_READY` unchanged), `npm run retention:sim` (exit 0) all
+pass. The local `npm run test:browser` sandbox failure is the same pre-existing Chromium
+1194 vs pinned 1234 mismatch as D-1/D-2 (confirmed unrelated by re-running the same 10 specs
+against the installed binary directly with an explicit `executablePath` override: 10/10
+pass).

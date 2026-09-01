@@ -99,6 +99,22 @@ Use this register to stop prompts, discussions and implementation from collapsin
     (`three-sections-facial-proportion-taiqing`) activated, not the full two-record D2-3 scope —
     the second (`three-sections-pingdeng-yuguan`) record remains future work under this decision.
 
+- **D2-3 IMPLEMENTED (1 September 2026).** The second record, `three-sections-pingdeng-yuguan`,
+  is now added, following the field-by-field spec in `docs/agents/D2_GEMINI_HANDOFF.md` Task 2b
+  exactly: `relationshipPredicate: 平等`, `excludedPredicateClauses: ["和美"]` (the verse's
+  harmony/beauty consequence-clause, excluded on the same grounds as the sibling record's `上相`),
+  `sourceId: heritage-three-sections-yuguan` (an independent, byte-pinned, `VERIFIED_PRIMARY`
+  Southern Tang/early Song witness — not a Ma Yi source and not the same juan as the Taiqing
+  facial material), `alternateConnectorIds`/`disagreementIds` cross-referencing its sibling. The
+  existing Taiqing record gained the corresponding `disagreementIds`/`alternateConnectorIds`
+  fields the D2-3 spec requires. No third record was created; `three-sections-xiangcheng-taiqing`
+  remains absent and forbidden. Both connectors reach `ACTIVE` disposition, measured through the
+  production composition seam: `threeSections/primary` active count and connector residue are
+  both exactly **2**, matching this entry's "never three" requirement. Ma Yi and its lineage are
+  untouched, still `RESEARCH_ONLY`. Gate D (`DIVERSITY_TARGET = 250`, D2-4) is untouched and still
+  fails; `NOT_READY` is unchanged. Full trace, measured numbers, and the leak-check methodology in
+  `docs/HERITAGE_CONNECTOR_RELATIONSHIP_CONTRACT.md` §8.7.
+
 ## Approved direction, not necessarily complete
 
 - Scanner-first Android TWA route and GitHub-hosted HTTPS deployment.

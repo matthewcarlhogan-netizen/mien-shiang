@@ -1,7 +1,7 @@
 /*
  * D-2 IMPLEMENTATION — DR-2026-08-31-D2-CONNECTOR-PREDICATE.
  *
- * ── WHAT WAS ACTUALLY IMPLEMENTED, IN ONE SENTENCE ─────────────────────────
+ * ── WHAT WAS ACTUALLY IMPLEMENTED, IN ONE SENTENCE (D2-1/D2-2) ─────────────
  * `three-sections-facial-proportion-taiqing` (the VERIFIED Taiqing facial
  * connector) is now active; the contested received-Ma-Yi
  * `threeSections/primary` lineage is untouched, still `RESEARCH_ONLY`, never
@@ -12,14 +12,23 @@
  * card's `predicate` field is honestly `null` today. Full trace in
  * docs/HERITAGE_CONNECTOR_RELATIONSHIP_CONTRACT.md §6.
  *
- * ── WHY THIS IS ONE CONNECTOR, NOT TWO ──────────────────────────────────────
- * The corrected D2-3 scope (two records: update Taiqing in place, add
- * exactly one new Yuguan/平等 record) is NOT completed in this pass — the
- * owner's instruction for this round asked for exactly one verified Taiqing
- * connector, activated, with the field-flow proven end to end. Splitting the
- * `three-sections-predicate` disagreement into two connectors remains future
- * work under the same decision. `AUTHORISED_ACTIVE_TAIQING_ID` names the one
- * connector this pass activates; nothing here asserts a second exists.
+ * ── WHAT D2-3 ADDED: THE SECOND CONNECTOR ───────────────────────────────────
+ * `three-sections-pingdeng-yuguan` is now ALSO active, citing the
+ * independently-evidenced, byte-pinned, VERIFIED_PRIMARY 玉管照神局 卷下 verse
+ * (`heritage-three-sections-yuguan`) — a Southern Tang/early Song Siku
+ * witness, not a Ma Yi witness and not the same juan as the Taiqing facial
+ * material. Its `relationshipPredicate` is `平等` ("equal"); its
+ * `excludedPredicateClauses` names `和美` (the harmony/beauty
+ * consequence-clause the same verse also carries), exactly the same
+ * discipline D2-2 applied to the Taiqing record's `上相` exclusion. This is
+ * exactly the two-record scope docs/DECISION_REGISTER.md's D2-3 entry
+ * authorises — never a third (`three-sections-xiangcheng-taiqing` would
+ * duplicate the Taiqing record and is explicitly forbidden). Both
+ * `AUTHORISED_ACTIVE_TAIQING_ID` and `AUTHORISED_ACTIVE_YUGUAN_ID` are
+ * asserted below; the `three-sections-predicate` disagreement (相稱 vs 平等)
+ * is now genuinely surfaced by two separate active connectors, not merely
+ * recorded in the disagreement registry. Full trace in
+ * docs/HERITAGE_CONNECTOR_RELATIONSHIP_CONTRACT.md §8.7.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -42,19 +51,28 @@ import { heritageMaterialFor } from "../../src/qise/reflection.js";
 import { composeLatent, connectorResidue, DIVERSITY_TARGET } from "../../scripts/heritage-readiness.mjs";
 
 const AUTHORISED_ACTIVE_TAIQING_ID = "three-sections-facial-proportion-taiqing";
+const AUTHORISED_ACTIVE_YUGUAN_ID = "three-sections-pingdeng-yuguan";
 const MA_YI_CONNECTOR_ID = "three-sections-equality-mayi-received";
-const FORBIDDEN_DUPLICATE_IDS = ["three-sections-xiangcheng-taiqing", "three-sections-pingdeng-yuguan"];
+// D2-3 explicitly forbids a THIRD Three Sections predicate record — never
+// remove this from the forbidden list; a genuine third record needs its own
+// decision, not a passing test.
+const FORBIDDEN_DUPLICATE_IDS = ["three-sections-xiangcheng-taiqing"];
 
 /* ── #10, #11: identity, and no duplicate record ─────────────────────────── */
 
-test("no duplicate or second Taiqing/Yuguan connector was created", () => {
+test("no duplicate or third Taiqing/Yuguan connector was created", () => {
   for (const id of FORBIDDEN_DUPLICATE_IDS) {
     assert.equal(HERITAGE_CONNECTOR_REGISTRY[id], undefined,
-      `${id} exists; this pass activates exactly one existing connector, never a duplicate`);
+      `${id} exists; D2-3 authorises exactly two Three Sections predicate records, never a third`);
   }
   const taiqingSources = Object.values(HERITAGE_CONNECTOR_REGISTRY)
     .filter((c) => c.sourceId === "heritage-three-sections-taiqing-mianbu");
   assert.equal(taiqingSources.length, 1, "more than one connector now cites the Taiqing mianbu source");
+  const yuguanSources = Object.values(HERITAGE_CONNECTOR_REGISTRY)
+    .filter((c) => c.sourceId === "heritage-three-sections-yuguan");
+  assert.equal(yuguanSources.length, 1, "more than one connector now cites the Yuguan source");
+  assert.ok(HERITAGE_CONNECTOR_REGISTRY[AUTHORISED_ACTIVE_YUGUAN_ID],
+    "the D2-3 Yuguan connector is gone");
 });
 
 test("connector identity, source identity and relationship identity are distinct fields", () => {
@@ -70,7 +88,7 @@ test("connector identity, source identity and relationship identity are distinct
 
 /* ── #7: the Taiqing active path, gated correctly ────────────────────────── */
 
-test("the Taiqing connector is active for threeSections/primary, via the routed lineage", () => {
+test("both the Taiqing and Yuguan connectors are active for threeSections/primary, via the routed lineage", () => {
   const composed = composeLatent({
     heritageConstruct: "threeSections", sourceLineage: "primary",
     depthMode: "SOURCE_DEEP", occurrence: 0,
@@ -78,10 +96,13 @@ test("the Taiqing connector is active for threeSections/primary, via the routed 
   assert.equal(composed.primaryLineage, "taiqing-mianbu-facial",
     "ABSTRACT_LINEAGE_OVERRIDES.threeSections.primary is missing or changed");
   const activeIds = (composed.active || []).map((e) => e.connectorId);
-  assert.deepEqual(activeIds, [AUTHORISED_ACTIVE_TAIQING_ID]);
-  assert.equal(composed.active[0].relationshipAvailability, "HERITAGE_ONLY",
-    "the connector must present as attributed tradition, never as observed in this capture");
-  assert.equal(composed.active[0].disposition, "ACTIVE");
+  assert.deepEqual(activeIds, [AUTHORISED_ACTIVE_TAIQING_ID, AUTHORISED_ACTIVE_YUGUAN_ID],
+    "D2-3 authorises exactly these two active threeSections connectors, in this order");
+  for (const entry of composed.active) {
+    assert.equal(entry.relationshipAvailability, "HERITAGE_ONLY",
+      `${entry.connectorId} must present as attributed tradition, never as observed in this capture`);
+    assert.equal(entry.disposition, "ACTIVE");
+  }
 });
 
 test("the connector reached active only because of the decided lineage route, not a policy change alone", () => {
@@ -135,14 +156,18 @@ test("the passage layer (heritageMaterialFor) is untouched and still abstains fo
 
 /* ── #1, #2, #3: field flow, from connector record to rendered markup ────── */
 
-test("relationshipPredicate and excludedPredicateClauses survive resolver.js's pass-through", () => {
+test("relationshipPredicate and excludedPredicateClauses survive resolver.js's pass-through, for both connectors", () => {
   const composed = composeLatent({
     heritageConstruct: "threeSections", sourceLineage: "primary",
     depthMode: "SOURCE_DEEP", occurrence: 0,
   });
-  const entry = composed.active[0];
-  assert.equal(entry.relationshipPredicate, "相稱");
-  assert.deepEqual(entry.excludedPredicateClauses, ["上相"]);
+  const taiqing = composed.active.find((e) => e.connectorId === AUTHORISED_ACTIVE_TAIQING_ID);
+  assert.equal(taiqing.relationshipPredicate, "相稱");
+  assert.deepEqual(taiqing.excludedPredicateClauses, ["上相"]);
+
+  const yuguan = composed.active.find((e) => e.connectorId === AUTHORISED_ACTIVE_YUGUAN_ID);
+  assert.equal(yuguan.relationshipPredicate, "平等");
+  assert.deepEqual(yuguan.excludedPredicateClauses, ["和美"]);
 });
 
 test("the card layer consumes relationshipPredicate through two independent guards, not as unused metadata", () => {
@@ -150,7 +175,7 @@ test("the card layer consumes relationshipPredicate through two independent guar
     heritageConstruct: "threeSections", sourceLineage: "primary",
     depthMode: "SOURCE_DEEP", occurrence: 0,
   });
-  const entry = composed.active[0];
+  const entry = composed.active.find((e) => e.connectorId === AUTHORISED_ACTIVE_TAIQING_ID);
   const card = connectorCard(entry);
   assert.ok(card, "connectorCard returned nothing for the active entry");
   // Today: Han-only predicate, no translation authorised -> null, honestly.
@@ -176,17 +201,52 @@ test("the card layer consumes relationshipPredicate through two independent guar
     "claim-shaped English must be rejected even with no Han present");
 });
 
-test("the rendered Tier 2 and Tier 3 markup honestly omits the predicate today (no translation exists)", () => {
+test("the Yuguan connector's card layer consumes relationshipPredicate through the same two guards", () => {
+  // D2-3: the second connector must be wired identically to the first, not
+  // merely present in the registry — same proof shape as the Taiqing test
+  // above, using the Yuguan entry's OWN predicate (平等) and OWN excluded
+  // clause (和美), never the Taiqing ones.
   const composed = composeLatent({
     heritageConstruct: "threeSections", sourceLineage: "primary",
     depthMode: "SOURCE_DEEP", occurrence: 0,
   });
-  const t2Model = tier2ConnectorModel(deriveTier2FromComposition(composed));
-  const t3Model = tier3ConnectorModel(composed);
+  const entry = composed.active.find((e) => e.connectorId === AUTHORISED_ACTIVE_YUGUAN_ID);
+  assert.ok(entry, "the Yuguan connector did not reach active");
+  const card = connectorCard(entry);
+  assert.equal(card.predicate, null,
+    "no translation exists for 平等; the card must not render the raw Han predicate");
 
-  assert.equal(t2Model.card.predicate, null);
-  assert.doesNotMatch(heritageConnectorTier2Markup(t2Model), /相稱|上相/);
-  assert.doesNotMatch(heritageConnectorTier3Markup(t3Model), /相稱|上相/);
+  const safeSynthetic = connectorCard({ ...entry, relationshipPredicate: "equal in length" });
+  assert.equal(safeSynthetic.predicate, "equal in length");
+
+  const excludedSynthetic = connectorCard({ ...entry, relationshipPredicate: "和美 interpretation" });
+  assert.equal(excludedSynthetic.predicate, null, "Han must still be rejected on a synthetic value");
+
+  const claimSynthetic = connectorCard({
+    ...entry, relationshipPredicate: "this reading is auspicious",
+  });
+  assert.equal(claimSynthetic.predicate, null,
+    "claim-shaped English must be rejected even with no Han present");
+});
+
+test("the rendered Tier 2 and Tier 3 markup honestly omits both predicates today (no translation exists)", () => {
+  // At occurrence 0 the resolver's deterministic rotation happens to pick
+  // Yuguan as Tier 2's top pick, not Taiqing (see the Tier 2 rotation test
+  // below) -- so this sweeps a few occurrences rather than hardcoding one,
+  // and checks BOTH predicate/excluded-clause pairs in Tier 3, which always
+  // carries both active connectors regardless of Tier 2's rotation.
+  for (const occurrence of [0, 1]) {
+    const composed = composeLatent({
+      heritageConstruct: "threeSections", sourceLineage: "primary",
+      depthMode: "SOURCE_DEEP", occurrence,
+    });
+    const t2Model = tier2ConnectorModel(deriveTier2FromComposition(composed));
+    const t3Model = tier3ConnectorModel(composed);
+
+    assert.equal(t2Model.card.predicate, null);
+    assert.doesNotMatch(heritageConnectorTier2Markup(t2Model), /相稱|上相|平等|和美/);
+    assert.doesNotMatch(heritageConnectorTier3Markup(t3Model), /相稱|上相|平等|和美/);
+  }
 });
 
 /* ── #2/#3 continued: the markup function itself, directly ──────────────── */
@@ -247,6 +307,10 @@ test("fortuneFree rejects Han, rejects claim-shaped English, passes safe text, a
   // excludedPredicateClauses substring matching.
   assert.equal(fortuneFree("相稱, 上相", ["上相"]), null);
   assert.equal(fortuneFree("相稱", ["上相"]), "相稱");
+  // Same mechanism, D2-3's Yuguan exclusion -- proves the guard generalises
+  // to a different clause rather than being hardcoded to 上相.
+  assert.equal(fortuneFree("平等, 和美", ["和美"]), null);
+  assert.equal(fortuneFree("平等", ["和美"]), "平等");
 });
 
 test("no rank, status or fortune claim reaches any heritage reader surface, across all constructs and occurrences", () => {
@@ -298,46 +362,77 @@ test("no rank, status or fortune claim reaches Tier 1, Tier 2 or Tier 3 of the b
 
 /* ── #9: Tier 2/Tier 3 separation, no source-panel leakage ───────────────── */
 
-test("Tier 2 shows at most the one active connector; source-panel material never reaches Tier 2", () => {
-  const composed = composeLatent({
-    heritageConstruct: "threeSections", sourceLineage: "primary",
-    depthMode: "SOURCE_DEEP", occurrence: 0,
-  });
-  const t2 = deriveTier2FromComposition(composed);
-  assert.equal(t2.available, true);
-  assert.equal(t2.connector.connectorId, AUTHORISED_ACTIVE_TAIQING_ID);
-  // tier2ConnectorModel's shape structurally cannot carry sourcePanelOnly --
-  // see its own docstring -- confirmed here rather than only trusted.
-  const model = tier2ConnectorModel(t2);
-  assert.ok(!("sourcePanelOnly" in model), "Tier 2's model gained a source-panel field");
+test("Tier 2 shows at most one active connector, drawn from the two authorised candidates, and rotates between them", () => {
+  // D2-3 gives threeSections genuine rotation for the first time: this is no
+  // longer trivially true (there was nothing to rotate before D2-3). Sweep
+  // several occurrences and require the top pick to always be exactly one of
+  // the two authorised connectors, never both, never neither, and require
+  // BOTH to actually be picked somewhere in the sweep -- proving rotation is
+  // real, not a selection that always lands on the same one by accident.
+  const seen = new Set();
+  for (const occurrence of [0, 1, 2, 3, 4, 5, 6, 7]) {
+    const composed = composeLatent({
+      heritageConstruct: "threeSections", sourceLineage: "primary",
+      depthMode: "SOURCE_DEEP", occurrence,
+    });
+    const t2 = deriveTier2FromComposition(composed);
+    assert.equal(t2.available, true);
+    assert.ok([AUTHORISED_ACTIVE_TAIQING_ID, AUTHORISED_ACTIVE_YUGUAN_ID].includes(t2.connector.connectorId),
+      `Tier 2 selected an unauthorised connector: ${t2.connector.connectorId}`);
+    seen.add(t2.connector.connectorId);
+    // tier2ConnectorModel's shape structurally cannot carry sourcePanelOnly --
+    // see its own docstring -- confirmed here rather than only trusted.
+    const model = tier2ConnectorModel(t2);
+    assert.ok(!("sourcePanelOnly" in model), "Tier 2's model gained a source-panel field");
+  }
+  assert.deepEqual([...seen].sort(), [AUTHORISED_ACTIVE_TAIQING_ID, AUTHORISED_ACTIVE_YUGUAN_ID].sort(),
+    "Tier 2's rotation never actually reached both authorised connectors across this sweep");
 });
 
 /* ── #12, #13: the exhaustive harness, run honestly ───────────────────────── */
 
-test("connector residue for threeSections stays 1 -- one active connector, nothing to rotate against", () => {
+test("connector residue for threeSections is 2 -- two genuine candidates, walked to their real repeat", () => {
   const { residue, activeCount, derivedFrom } = connectorResidue("threeSections", "primary");
-  assert.equal(residue, 1);
-  assert.equal(activeCount, 1, "activeCount moved from 0 to 1, but residue correctly stays 1: one "
-    + "candidate is still nothing to rotate between");
-  assert.match(derivedFrom, /single-or-zero-candidate/);
+  assert.equal(residue, 2, "D2-3 activates a second threeSections connector; residue should move from 1 to 2");
+  assert.equal(activeCount, 2);
+  assert.match(derivedFrom, /exact repeat found/,
+    "residue should now come from walking a real rotation, not the single-or-zero-candidate shortcut");
 });
 
-test("Gate D's target is held at 250, and activating one connector does not and should not reach it", () => {
+test("Gate D's target is held at 250, and activating two connectors for one construct does not and should not reach it", () => {
   assert.equal(DIVERSITY_TARGET, 250, "DR-2026-08-31 D2-4 holds Gate D at 250; do not relax it here");
   const best = Math.max(...HERITAGE_CONSTRUCT_IDS.map((id) => connectorResidue(id, "primary").activeCount));
+  assert.equal(best, 2, "threeSections should be the new high-water mark for connector residue");
   assert.ok(best < DIVERSITY_TARGET,
     "connector depth now claims to approach the diversity target; re-measure before believing it");
 });
 
-test("the predicate disagreement is recorded but this pass does not claim to have surfaced both positions", () => {
-  // Evidence-level fact, unchanged by this pass: both positions are still
-  // recorded in the disagreement registry. Whether they are BOTH visibly
-  // reachable as active connectors is D2-3's remaining half, not claimed here.
+test("the predicate disagreement is recorded, and D2-3 surfaces both positions as separate active connectors", () => {
+  // Evidence-level fact: both positions are recorded in the disagreement
+  // registry. D2-3's actual contribution is that they are now BOTH visibly
+  // reachable as separate active connectors, not merely two rows in a
+  // registry -- checked here against the live composition, not asserted from
+  // the registry alone.
   const d = HERITAGE_DISAGREEMENT_REGISTRY["three-sections-predicate"];
   assert.ok(d);
-  assert.equal(d.status, "OPEN");
+  assert.equal(d.status, "OPEN", "the disagreement was resolved; that is a product decision, not this pass's");
   assert.deepEqual(d.positions.map((p) => p.positionId).sort(),
     ["taiqing-xiangcheng", "yuguan-pingdeng"]);
+
+  const composed = composeLatent({
+    heritageConstruct: "threeSections", sourceLineage: "primary",
+    depthMode: "SOURCE_DEEP", occurrence: 0,
+  });
+  const activeIds = new Set((composed.active || []).map((e) => e.connectorId));
+  assert.ok(activeIds.has(AUTHORISED_ACTIVE_TAIQING_ID) && activeIds.has(AUTHORISED_ACTIVE_YUGUAN_ID),
+    "both predicate positions should now correspond to a real active connector");
+  // Both connectors carry the disagreement -- collectDisagreementIds()
+  // attaches a CONSTRUCT-targeted disagreement to every candidate for that
+  // construct, not to one connector specifically.
+  for (const entry of composed.active) {
+    assert.ok(entry.disagreementIds.includes("three-sections-predicate"),
+      `${entry.connectorId} should carry the three-sections-predicate disagreement`);
+  }
 });
 
 /* ── #8: absent, malformed, disputed, research-only, source-panel-only ──── */
@@ -399,7 +494,7 @@ test("connectors.js, schema.js and validator.js are untouched by this decision",
 
 /* ── determinism ──────────────────────────────────────────────────────────── */
 
-test("the Taiqing connector's composition replays byte-identically for the same inputs", () => {
+test("the threeSections composition (both connectors) replays byte-identically for the same inputs", () => {
   for (const occurrence of [0, 1, 5, 12]) {
     const a = JSON.stringify(composeLatent({
       heritageConstruct: "threeSections", sourceLineage: "primary", depthMode: "SOURCE_DEEP", occurrence,
