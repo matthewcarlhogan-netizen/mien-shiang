@@ -191,16 +191,39 @@ function unsupportedLineageResult(depthMode, occurrence) {
 }
 
 /*
- * Deliberately empty. Every abstract label maps only to the identically
- * named key on that construct today (`"primary"` on every construct;
- * `"variant"` only where the construct itself declares one — currently
- * fourRivers alone). A future PRODUCT-OWNER decision to route a construct's
- * abstract rotation slot to a DIFFERENT named witness lineage (e.g. routing
- * fiveMountains' "variant" to one of its several competing witnesses) is a
- * content/editorial decision this module has no authority to make on its
- * own — it belongs here, one explicit entry per decision, never inferred.
+ * One entry, one product-owner decision: DR-2026-08-31-D2-CONNECTOR-PREDICATE.
+ *
+ * `threeSections`' literal `"primary"` registry key is the received Ma Yi
+ * lineage — contested attribution, no stable critical edition, and its own
+ * `definition` ends in a fortune claim ("the reading is auspicious"). The
+ * decision was explicit: use the VERIFIED Taiqing facial lineage
+ * (`taiqing-mianbu-facial`, 太清神鑑 卷五 論靣部, VERIFIED_PRIMARY) for active
+ * connector presentation, and keep the Ma Yi lineage itself untouched at
+ * RESEARCH_ONLY — never promoted, never the source of an active passage.
+ *
+ * This override affects ONLY the connector-resolution path
+ * (`resolveHeritageLineage`, consumed inside `composeHeritageConnectionsInternal`
+ * below). `heritageMaterialFor()` (`src/qise/reflection.js`) — which renders
+ * Tier 2's PASSAGE — does its own direct `lineages[state.sourceLineage]`
+ * lookup and has never consulted this map; it keeps reading the literal
+ * `"primary"` key (Ma Yi), which stays RESEARCH_ONLY, so the passage
+ * continues to abstain exactly as before this decision. The two heritage
+ * surfaces — the passage and the connector graph — are independent by
+ * construction, and this override is deliberately scoped to touch only one
+ * of them. See docs/HERITAGE_CONNECTOR_RELATIONSHIP_CONTRACT.md §6 for the
+ * full trace proving this.
+ *
+ * Every OTHER abstract label still maps only to the identically named key on
+ * that construct (`"primary"` elsewhere; `"variant"` only where the
+ * construct itself declares one — currently fourRivers alone). A future
+ * PRODUCT-OWNER decision to route a DIFFERENT construct's abstract rotation
+ * slot (e.g. fiveMountains' CARD 7) is a content/editorial decision this
+ * module has no authority to make on its own — one explicit entry per
+ * decision, never inferred, exactly as this one was added.
  */
-const ABSTRACT_LINEAGE_OVERRIDES = Object.freeze({});
+const ABSTRACT_LINEAGE_OVERRIDES = Object.freeze({
+  threeSections: Object.freeze({ primary: "taiqing-mianbu-facial" }),
+});
 
 const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj || {}, key);
 

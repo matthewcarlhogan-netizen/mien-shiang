@@ -209,12 +209,30 @@ export const HERITAGE_EVIDENCE = deepFreeze({
        * construct. Kept structurally distinct on purpose.
        */
       "taiqing-mianbu-facial": {
+        // DR-2026-08-31-D2-CONNECTOR-PREDICATE: RESEARCH_ONLY -> HERITAGE_ONLY.
+        // This is the LINEAGE record `ABSTRACT_LINEAGE_OVERRIDES.threeSections`
+        // (composition.js) now routes threeSections' abstract "primary" request
+        // to, for the CONNECTOR-resolution path only. HERITAGE_ONLY (not
+        // RUNTIME_PROSE) is deliberate: this `definition` field still embeds
+        // Han fortune-adjacent terms verbatim (上主貴 中主壽 下主富, 三停皆稱乃
+        // 上相之人矣) as evidence citation, and `heritageMaterialFor()` would
+        // render `definition` completely unfiltered as Tier 2's passage if it
+        // were ever selected as RUNTIME_PROSE. It cannot be selected today
+        // (reading-state's sourceLineage for threeSections is always the
+        // literal "primary" key, which `heritageMaterialFor()` reads directly
+        // and which stays the unrelated Ma Yi lineage, untouched) — but
+        // HERITAGE_ONLY is the status that is correct on its own terms,
+        // independent of that other path's current behaviour. The connector
+        // `three-sections-facial-proportion-taiqing` (registry.js), not this
+        // `definition` string, is what actually reaches the reader — its own
+        // `sourceText`/`relationshipPredicate` are separately filtered by
+        // `englishSafe()`/`fortuneFree()` in `src/ui/qise/heritage-view.js`.
         definition: "太清神鑑 卷五 論靣部 defines the FACIAL three sections with explicit boundaries: upper = 髪際 to 眉間; middle = 眉間 to 鼻凖; lower = 凖/人中 to 頰. A 三才 correspondence (上像天 中像人 下像地) and per-section predicates (上主貴 中主壽 下主富). 三停皆稱乃上相之人矣. This is FACIAL, distinct from the BODY 身三停 of 卷六.",
         source: "Taiqing Shenjian, 卷五 論靣部",
         sourceId: "heritage-three-sections-taiqing-mianbu",
         evidenceKind: "POSITIVE_CLAIM",
         evidenceStrength: "VERIFIED_PRIMARY",
-        runtimeStatus: "RESEARCH_ONLY",
+        runtimeStatus: "HERITAGE_ONLY",
         measurementAvailability: "SUPPORTED_2D",
         folioLocator: "<pb:KR3g0045_WYG_005_7b>",
         constituents: [

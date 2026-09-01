@@ -1,11 +1,12 @@
 /*
- * D-2 — WHY THE HERITAGE CONNECTOR CONTRIBUTES EXACTLY ONE STATE.
+ * D-2 — WHY THE HERITAGE CONNECTOR CONTRIBUTED EXACTLY ONE STATE, AND WHAT
+ * CHANGED UNDER DR-2026-08-31-D2-CONNECTOR-PREDICATE.
  *
- * ── THE FINDING THIS FILE PROTECTS ─────────────────────────────────────────
- * `connectorResidue()` returns 1 for every construct because
- * `composeLatent(...).active` is 0 or 1 everywhere. The cause is a conjunction
- * of two INDEPENDENT gates that turn out to be anti-correlated across the
- * corpus:
+ * ── THE ORIGINAL FINDING ────────────────────────────────────────────────────
+ * `connectorResidue()` returned 1 for every construct because
+ * `composeLatent(...).active` was 0 or 1 everywhere. The cause was a
+ * conjunction of two INDEPENDENT gates that turned out to be anti-correlated
+ * across the corpus:
  *
  *   - `active` admission requires `runtimePolicy === HERITAGE_PRESENTATION_ALLOWED`
  *     (resolver.js:1050/1065/1084 divert everything else).
@@ -13,11 +14,19 @@
  *     when the connector, every participant construct-lineage, and every
  *     historicalState all classify as `capturable`.
  *
- * Measured over the 15 connector records, the cross-tabulation's diagonal is
- * EMPTY: no connector is both measurable and authorised. The two
- * `FULLY_AVAILABLE` records are both threeSections and both `RESEARCH_ONLY`;
- * the three `HERITAGE_PRESENTATION_ALLOWED` records are all
- * `CAMERA_GEOMETRY_INSUFFICIENT`.
+ * Measured over the 15 connector records at the time, the cross-tabulation's
+ * diagonal was EMPTY: no connector was both measurable and authorised.
+ *
+ * ── WHAT DR-2026-08-31-D2-CONNECTOR-PREDICATE CHANGED ──────────────────────
+ * D2-1/D2-2 promoted `three-sections-facial-proportion-taiqing` to
+ * `HERITAGE_PRESENTATION_ALLOWED`, and `ABSTRACT_LINEAGE_OVERRIDES` (added to
+ * `composition.js` under the same decision) routes threeSections' abstract
+ * "primary" request to the VERIFIED `taiqing-mianbu-facial` lineage instead
+ * of the contested received-Ma-Yi lineage — see
+ * docs/HERITAGE_CONNECTOR_RELATIONSHIP_CONTRACT.md §6 for the full trace.
+ * This is now ONE genuine cell on the diagonal, not zero — the tests below
+ * are updated accordingly, together with that evidence and that decision, as
+ * this file's own discipline requires.
  *
  * ── WHY THIS IS A TEST AND NOT ONLY A DOCUMENT ─────────────────────────────
  * CLAUDE.md's Verification Protocol §9: a constraint without a failing test to
@@ -32,7 +41,8 @@
  * product-owner promotion decision (see docs/HERITAGE_CONNECTOR_RELATIONSHIP_
  * CONTRACT.md sections 3 and 5), SHOULD fail them — at which point the right
  * response is to update the recorded counts together with the evidence and the
- * decision that authorised it, never to loosen the assertion on its own.
+ * decision that authorised it, never to loosen the assertion on its own. This
+ * file's own history is now the proof: exactly that happened once already.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -89,15 +99,15 @@ const MEASURABLE = new Set(["FULLY_AVAILABLE", "PARTIALLY_AVAILABLE"]);
 
 /* ── the finding itself ──────────────────────────────────────────────────── */
 
-test("no connector is both measurable and authorised for active presentation", () => {
+test("exactly one connector is now both measurable and authorised, and it is the decided one", () => {
   const both = CONNECTORS.filter(([, c]) =>
     c.runtimePolicy === "HERITAGE_PRESENTATION_ALLOWED"
     && MEASURABLE.has(relationshipAvailabilityOf(c)));
 
-  assert.deepEqual(both.map(([id]) => id), [],
-    "A connector is now both measurable and authorised. That is a real change in the "
-    + "library's capability -- update docs/HERITAGE_CONNECTOR_RELATIONSHIP_CONTRACT.md "
-    + "section 1 with the evidence and the decision that authorised it. Do NOT delete "
+  assert.deepEqual(both.map(([id]) => id), ["three-sections-facial-proportion-taiqing"],
+    "the set of connectors both measurable and authorised changed -- if this is a new, "
+    + "genuine, decided promotion, update docs/HERITAGE_CONNECTOR_RELATIONSHIP_CONTRACT.md "
+    + "section 1 and docs/DECISION_REGISTER.md together with this assertion. Do NOT delete "
     + "this assertion to make the suite pass.");
 });
 
@@ -108,15 +118,26 @@ test("the corpus cross-tabulation is what the contract records", () => {
     cells[key] = (cells[key] || 0) + 1;
   }
   assert.deepEqual(cells, {
-    "FULLY_AVAILABLE|RESEARCH_ONLY": 2,
+    // DR-2026-08-31-D2-CONNECTOR-PREDICATE moved
+    // three-sections-facial-proportion-taiqing from the FULLY_AVAILABLE|
+    // RESEARCH_ONLY cell (was 2) into its own new cell below (was 0), and its
+    // measured relationshipAvailability moved from FULLY_AVAILABLE to
+    // HERITAGE_ONLY -- the connector's own participant/measurement signals
+    // are unchanged; what changed is the SELECTED LINEAGE's restriction
+    // (ABSTRACT_LINEAGE_OVERRIDES routes threeSections/primary to the
+    // HERITAGE_ONLY taiqing-mianbu-facial lineage), which
+    // classifyRelationshipAvailability() folds in as a ceiling. See contract
+    // §6 for the full trace.
+    "FULLY_AVAILABLE|RESEARCH_ONLY": 1,
     "PARTIALLY_AVAILABLE|SOURCE_PANEL_ONLY": 1,
     "HERITAGE_ONLY|HERITAGE_PRESENTATION_ALLOWED": 3,
     "UNAVAILABLE_FROM_CAPTURE|RESEARCH_ONLY": 9,
+    "FULLY_AVAILABLE|HERITAGE_PRESENTATION_ALLOWED": 1,
   }, "the connector corpus changed shape; re-measure and update the contract document");
-  assert.equal(CONNECTORS.length, 15);
+  assert.equal(CONNECTORS.length, 15, "no connector record was added or removed by this decision");
 });
 
-test("exactly one connector is active anywhere in the product, and it is named", () => {
+test("two connectors are active anywhere in the product, and both are named", () => {
   const active = [];
   for (const heritageConstruct of HERITAGE_CONSTRUCT_IDS) {
     for (const sourceLineage of ["primary", "variant"]) {
@@ -128,8 +149,10 @@ test("exactly one connector is active anywhere in the product, and it is named",
       }
     }
   }
-  assert.deepEqual(active, ["fourRivers/primary:four-rivers-flow-and-banks"],
-    "the set of active connectors changed");
+  assert.deepEqual(active.sort(), [
+    "fourRivers/primary:four-rivers-flow-and-banks",
+    "threeSections/primary:three-sections-facial-proportion-taiqing",
+  ], "the set of active connectors changed");
 });
 
 /*
@@ -155,21 +178,31 @@ test("the local availability re-derivation still agrees with the real compositio
 
 /* ── the second gate: lineage runtimeStatus ─────────────────────────────── */
 
-test("fiveMountains' two authorised connectors are blocked by lineage routing, not by policy", () => {
-  // CARD 7: ABSTRACT_LINEAGE_OVERRIDES is deliberately empty, so fiveMountains'
-  // "primary" has no approved routing. Its two HERITAGE_PRESENTATION_ALLOWED
-  // connectors are the only ones in the corpus blocked by something OTHER than
-  // their own policy -- which is why the residue is 1 and not 2.
+test("fiveMountains' two authorised connectors are still blocked by lineage routing, not by policy", () => {
+  // CARD 7 remains untouched by DR-2026-08-31-D2-CONNECTOR-PREDICATE:
+  // ABSTRACT_LINEAGE_OVERRIDES has exactly one entry now (threeSections),
+  // and fiveMountains' "primary" still has no approved routing of its own.
+  // Its two HERITAGE_PRESENTATION_ALLOWED connectors are still blocked by
+  // something OTHER than their own policy -- which is why fiveMountains'
+  // residue is still 1, unaffected by this decision.
   const allowed = CONNECTORS
     .filter(([, c]) => c.runtimePolicy === "HERITAGE_PRESENTATION_ALLOWED")
     .map(([id]) => id).sort();
   assert.deepEqual(allowed, [
     "five-mountains-fullness", "five-mountains-mutual-facing", "four-rivers-flow-and-banks",
-  ]);
+    "three-sections-facial-proportion-taiqing",
+  ].sort());
 
   assert.equal(HERITAGE_REGISTRY.fiveMountains.lineages.primary.runtimeStatus, "RESEARCH_ONLY",
     "fiveMountains/primary became routable; CARD 7 has moved and the contract needs updating");
   assert.equal(HERITAGE_REGISTRY.fourRivers.lineages.primary.runtimeStatus, "RUNTIME_PROSE");
+  // The received Ma Yi threeSections lineage -- the literal "primary" key --
+  // stays exactly where D2-1/D2-2 require it: untouched, never promoted.
+  // Its OWN passage-rendering path (heritageMaterialFor()) never consults
+  // ABSTRACT_LINEAGE_OVERRIDES (see composition.js's comment on the override
+  // and contract §6.1), so this is the fact that keeps the passage abstained.
+  assert.equal(HERITAGE_REGISTRY.threeSections.lineages.primary.runtimeStatus, "RESEARCH_ONLY",
+    "the contested Ma Yi threeSections/primary lineage must never be promoted");
 
   const mountains = composeLatent({
     heritageConstruct: "fiveMountains", sourceLineage: "primary",

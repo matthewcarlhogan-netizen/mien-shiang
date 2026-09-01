@@ -603,6 +603,35 @@ export const HERITAGE_CONNECTOR_REGISTRY = deepFreeze({
     prohibitedForUserInference: true,
     note: "玉管照神局: 似X得X like-with-like — an element-resembling form obtaining that same element, one outcome each (5 pairs). NOT generation (相生), overcoming (相尅), a 5x5 grid, or 25 types. See the no-five-forms-five-phases-conflation negative rule.",
   }),
+  /*
+   * DR-2026-08-31-D2-CONNECTOR-PREDICATE (D2-1/D2-2). Promoted from
+   * RESEARCH_ONLY. This is the one connector activated under that decision —
+   * see docs/HERITAGE_CONNECTOR_RELATIONSHIP_CONTRACT.md §6 for the full
+   * eligibility trace and docs/DECISION_REGISTER.md for the decision text.
+   *
+   * `relationshipPredicate` carries ONLY the geometric predicate (相稱, "in
+   * proportion / mutually matching") — never the fortune clause the same
+   * source sentence also contains. `excludedPredicateClauses` names that
+   * clause explicitly, per D2-2's requirement that the exclusion be
+   * recorded, not merely achieved by omission. Both fields are Han and are
+   * never rendered verbatim to a reader: `src/ui/qise/heritage-view.js`'s
+   * `connectorCard()` runs `relationshipPredicate` through `englishSafe()`
+   * (which omits any Han-bearing string whole) and `fortuneFree()` (which
+   * additionally rejects claim-shaped English, for when a translation
+   * exists). No translation exists yet — no per-connector translation field
+   * is authorised (see the contract's §6.5) — so today the card's `predicate`
+   * is `null` and nothing renders from this field. That is the correct,
+   * honest behaviour for unsupported translation, not a bug: see
+   * tests/heritage/three-sections-predicate-acceptance.test.js.
+   *
+   * `excludedPredicateClauses` is not declared in `HERITAGE_CONNECTOR_FIELDS`
+   * (connectors.js) on purpose — that file is frozen Stage 1 schema, and the
+   * approved exception is scoped to resolver.js only (see resolver.js's
+   * `toResolvedEntry()`). `validateFields()` (validator.js) checks only the
+   * fields a manifest declares and does not reject undeclared ones, so this
+   * carries safely as connector-record content without touching a second
+   * frozen file.
+   */
   "three-sections-facial-proportion-taiqing": connectorRecord({
     connectorId: "three-sections-facial-proportion-taiqing",
     relationshipType: "COLLECTIVE_RULE",
@@ -624,9 +653,11 @@ export const HERITAGE_CONNECTOR_REGISTRY = deepFreeze({
     folioLocatorStatus: "VERIFIED",
     folioLocatorKind: "WYG_PB",
     measurementAvailability: "SUPPORTED_2D",
-    runtimePolicy: "RESEARCH_ONLY",
+    runtimePolicy: "HERITAGE_PRESENTATION_ALLOWED",
     prohibitedForUserInference: true,
-    note: "太清神鑑 卷五 論靣部 FACIAL three sections: per-section 主貴/主壽/主富 predicates and 三停皆稱乃上相之人. Distinct from the 卷六 BODY 身三停 material. Fortune-typed.",
+    relationshipPredicate: "相稱",
+    excludedPredicateClauses: ["上相"],
+    note: "太清神鑑 卷五 論靣部 FACIAL three sections: per-section 主貴/主壽/主富 predicates and 三停皆稱乃上相之人. Distinct from the 卷六 BODY 身三停 material. Fortune-typed. Active connector renders the 相稱 geometric predicate only; 上相 is excluded (D2-2).",
   }),
 });
 

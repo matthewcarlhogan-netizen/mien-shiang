@@ -76,6 +76,29 @@ Use this register to stop prompts, discussions and implementation from collapsin
   `docs/HERITAGE_CONNECTOR_RELATIONSHIP_CONTRACT.md` §6 — that exception is proposed, not
   approved, and no implementation may proceed without it.
 
+- **Implementation clarification (31 August 2026, same date).** Two corrections to how D2-1 is
+  realised, given by the product owner alongside the approval of the bounded `resolver.js`
+  exception above:
+    1. **The `resolver.js` exception is scoped to exactly `relationshipPredicate` and
+       `excludedPredicateClauses`.** No `predicateTranslation` field, no new enum, and no changes
+       to `connectors.js`/`schema.js`/`validator.js` — narrower than the exception originally
+       proposed in the contract document's §6.5.
+    2. **D2-1 is implemented by ROUTING, not by promoting the contested lineage.** Rather than
+       moving `threeSections/primary`'s literal registry key (the received Ma Yi lineage) to
+       `RUNTIME_PROSE`, `ABSTRACT_LINEAGE_OVERRIDES.threeSections.primary` (a mechanism already
+       reserved in `composition.js` for exactly this kind of decision) now resolves the
+       CONNECTOR-resolution path's abstract "primary" request to the verified
+       `taiqing-mianbu-facial` lineage instead. The Ma Yi lineage itself is untouched, stays
+       `RESEARCH_ONLY`, and is never the source of an active passage — satisfying the requirement
+       that its "the reading is auspicious" clause never render as active user inference.
+       `heritageMaterialFor()` (the PASSAGE renderer) does not consult this override and continues
+       to read the literal `"primary"` key, so the passage for `threeSections/primary` continues
+       to abstain exactly as before this decision.
+    Implemented in commit `4c36c2c`-onward on `claude/heritage-connector-relationships-d2`; full
+    trace in `docs/HERITAGE_CONNECTOR_RELATIONSHIP_CONTRACT.md` §8. This is exactly one connector
+    (`three-sections-facial-proportion-taiqing`) activated, not the full two-record D2-3 scope —
+    the second (`three-sections-pingdeng-yuguan`) record remains future work under this decision.
+
 ## Approved direction, not necessarily complete
 
 - Scanner-first Android TWA route and GitHub-hosted HTTPS deployment.

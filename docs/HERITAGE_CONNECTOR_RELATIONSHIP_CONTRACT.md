@@ -377,3 +377,141 @@ be satisfied either. The honest fallback is to leave all three unimplemented rat
 
 None is taken here. CARD 7 (`fiveMountains` routing) and CARD 10 (`twelvePalaces`) remain open
 and untouched.
+
+---
+
+## 8. IMPLEMENTED — DR-2026-08-31-D2-CONNECTOR-PREDICATE, D2-1/D2-2 (single-connector scope)
+
+The product owner approved D2-1 through D2-4 with two corrections to how D2-1 is realised, and
+this section records what was actually built, superseding §6.5's proposal where they differ.
+
+### 8.1 The lineage decision — routed, not promoted
+
+D2-1's original wording ("route `threeSections/primary` to `RUNTIME_PROSE`") would have promoted
+the CONTESTED received-Ma-Yi lineage — the literal `"primary"` registry key — whose own
+`definition` ends "...the reading is auspicious," a fortune claim D2-2 bans. The corrected
+instruction: **use the verified Taiqing lineage for active presentation; keep the Ma Yi lineage
+untouched and never promoted.**
+
+Implemented via `ABSTRACT_LINEAGE_OVERRIDES.threeSections = { primary: "taiqing-mianbu-facial" }`
+in `src/heritage/composition.js` — the exact mechanism this file already reserved for a
+product-owner lineage-routing decision (see item 43/CARD 7's discussion). This affects **only**
+the connector-resolution path. `heritageMaterialFor()` (`src/qise/reflection.js`), which renders
+Tier 2's PASSAGE, does its own direct `lineages[state.sourceLineage]` lookup and has never
+consulted this map — confirmed by tracing the function, not assumed — so the passage for
+`threeSections/primary` continues to read the literal `"primary"` key (Ma Yi, still
+`RESEARCH_ONLY`) and continues to abstain exactly as before. Pinned by
+`tests/heritage/three-sections-predicate-acceptance.test.js`'s
+`"the passage layer (heritageMaterialFor) is untouched and still abstains..."`.
+
+`taiqing-mianbu-facial`'s own `runtimeStatus` moved `RESEARCH_ONLY` → `HERITAGE_ONLY` (not
+`RUNTIME_PROSE`): its `definition` field still embeds Han fortune-adjacent terms verbatim as
+citation evidence, and `RUNTIME_PROSE` would make it a fallback passage candidate. `HERITAGE_ONLY`
+un-gates the connector-resolution `applicableLineageRestriction` check (resolver.js's
+`resolveLineageRestriction`) without ever making this lineage eligible to render as a passage.
+
+### 8.2 The frozen-file exception — narrower than §6.5 proposed
+
+Approved: a bounded `resolver.js` exception for **exactly** `relationshipPredicate` and
+`excludedPredicateClauses`, and nothing else. §6.5's three-step proposal (which included a new
+`predicateTranslation` field, a `predicateTranslationProvenance` field reusing
+`HERITAGE_TRANSLATION_PROVENANCE`, and additions to `connectors.js`) was **not** approved and was
+**not** built. What was actually implemented is narrower:
+
+- `resolver.js`'s `toResolvedEntry()` gained exactly two pass-through lines. No other line changed.
+- `connectors.js`, `schema.js`, `validator.js` are **untouched** — confirmed by a test that diffs
+  them and fails if any contains the string `excludedPredicateClauses`. This was possible because
+  `validateFields()` (validator.js) checks only the fields a manifest declares and does not reject
+  undeclared ones — confirmed by reading it, not assumed — so `excludedPredicateClauses` carries
+  safely as connector-record content in `registry.js` without a schema declaration.
+- No `predicateTranslation` field exists anywhere. No translation was invented for 相稱, 平等,
+  上相 or 貴. The connector's `relationshipPredicate` (`"相稱"`, Han) is carried through, but with
+  no translation field authorised, `connectorCard()`'s `predicate` output is honestly `null` today
+  — proven to be "abstained", not "unused metadata", by feeding `connectorCard()` synthetic safe
+  and unsafe predicate values and confirming each is handled correctly (see the acceptance test's
+  `"the card layer consumes relationshipPredicate through two independent guards"`).
+
+### 8.3 The enforcement guard — `fortuneFree()`, and what it caught live
+
+`src/ui/qise/heritage-view.js` gained `fortuneFree(value, excludedClauses)`, consumed in
+`connectorCard()` (on `relationshipPredicate`, after `englishSafe()`) and in
+`disagreementPositionCard()` (on disagreement position `summary` text). Two independent gates,
+because they guard different things: `englishSafe()` removes Han script whole; `fortuneFree()`
+removes claim-shaped English and anything matching the connector's own `excludedPredicateClauses`
+— the half `englishSafe()` cannot cover, since a hypothetical translation reading "a person of
+superior physiognomy" contains no Han character at all.
+
+**A real leak was found and fixed while building this, not merely anticipated.** Activating the
+Taiqing connector made `threeSections`' disagreements reachable for the first time (disagreements
+attach to a CONSTRUCT, not to a specific connector — resolver.js's `collectDisagreementIds` — so
+they are pulled in regardless of which connector is active). One position's summary,
+`three-sections-boundaries`' `received-mayi-contradiction`, reads "Received Ma Yi witness
+contradicts attributed auspiciousness predicate" — pure English, no Han, so it passed
+`englishSafe()` untouched and rendered live in Tier 3 markup. The word "auspiciousness" has no
+word boundary before "ness", so a `\bauspicious\b`-anchored pattern missed it. Fixed by dropping
+the boundary (`auspicious` as a bare substring) and applying `fortuneFree()` to disagreement
+position summaries as well as connector predicates. Confirmed fixed by re-rendering the actual
+markup, not by re-running the regex in isolation.
+
+The vocabulary is **claim-shaped, not category-shaped** — see item 22/40's class of mistake in
+CLAUDE.md. An early version banning the bare words "fortune"/"status"/"rank" fired on this
+product's own refusal copy ("it remains fortune-typed heritage and is never encoded as a user
+inference"). That string is now the guard's own pinned negative control.
+
+### 8.4 Ma Yi — left exactly where it was, not promoted to a source panel
+
+The instruction's "keep the contested Ma Yi lineage source-panel-only... unless its provenance,
+attribution and wording are independently safe and explicitly approved" was read as: no such
+independent review has happened in this pass, so the Ma Yi connector
+(`three-sections-equality-mayi-received`) and its lineage are **untouched** — still
+`RESEARCH_ONLY` at both levels, exactly as before. This is the more conservative reading:
+literally promoting the connector's `runtimePolicy` to `SOURCE_PANEL_ONLY` would itself be the
+kind of `PRODUCT_POLICY_AFFECTING` content decision the evidence-reconciliation discipline
+requires its own explicit, justified ledger row for, and the record's own embedded note already
+calls it "Research-only" as an editorial judgement this pass does not have grounds to overturn.
+If the product owner wants Ma Yi's material visible in a Tier 3 source panel specifically, that is
+a distinct, separate decision, not a side effect of D2-1/D2-2.
+
+### 8.5 Scope: one connector, not two
+
+D2-3's full scope (exactly two Three Sections predicate records: update Taiqing in place, add one
+new `three-sections-pingdeng-yuguan`) is **not completed in this pass**. The instruction for this
+round asked for exactly one verified Taiqing connector, activated, with the predicate field-flow
+proven end to end — not the second (Yuguan/平等) record. `AUTHORISED_ACTIVE_TAIQING_ID` in the
+acceptance test names the one connector this pass activates. Splitting the
+`three-sections-predicate` disagreement into its second connector remains future work under the
+same decision; both positions are still recorded in the disagreement registry and remain visible
+as such (with `englishSafe()`/`fortuneFree()`-filtered fallbacks) via Tier 3's disagreement panel,
+independent of whether a second connector exists.
+
+### 8.6 Measured result
+
+Cross-tabulation, corpus size still 15 records, no record added or removed:
+
+| relationship availability | HERITAGE_PRESENTATION_ALLOWED | SOURCE_PANEL_ONLY | RESEARCH_ONLY |
+|---|---|---|---|
+| FULLY_AVAILABLE | 0 | 0 | **1** |
+| PARTIALLY_AVAILABLE | 0 | 1 | 0 |
+| HERITAGE_ONLY | 3 | 0 | 0 |
+| UNAVAILABLE_FROM_CAPTURE | 0 | 0 | 9 |
+| **FULLY_AVAILABLE** | **1 (Taiqing, new)** | — | — |
+
+Active connectors anywhere in the product: **two** —
+`fourRivers/primary:four-rivers-flow-and-banks` (unchanged) and
+`threeSections/primary:three-sections-facial-proportion-taiqing` (new).
+
+`threeSections/primary` connector residue: **still 1** — one active candidate, nothing to rotate
+against, exactly per `connectorResidue()`'s own definition. `heritage:readiness`'s
+`heritage(Tier2) raw/material` for `threeSections/primary` is unchanged at `1/1` — the COUNT of
+distinct states cannot move with only one candidate, though the CONTENT of that one state changed
+qualitatively, from an abstained placeholder to an actual attributed connector. Gate D
+(`DIVERSITY_TARGET = 250`) is untouched and still fails; `NOT_READY` is unchanged; `retention:sim`
+still reports `NO_ROTATION_OBSERVED_IN_THIS_SCENARIO` for every construct including
+`threeSections`, for the same reason. **This is the honest result, not a shortfall to be
+corrected here** — per D2-4, passing Gate D was never in scope for this pass.
+
+Verification, this commit: `node --test` 1261/1261 (was 1246); `npm run build`,
+`npm run lint:bundle`, `npm run audit:release`, `npm run heritage:readiness`,
+`npm run retention:sim` all exit 0; the local `npm run test:browser` sandbox failure is the same
+pre-existing Chromium 1194 vs pinned 1234 mismatch (confirmed unrelated by re-running against the
+installed binary: 11/11 pass).

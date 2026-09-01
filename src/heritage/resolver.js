@@ -751,6 +751,26 @@ function resolveParticipantRuntimeGate(connector, conditionContext, referencedId
 
 /* ── connector -> trace entry (never mutates the source connector) ───────── */
 
+/*
+ * BOUNDED STAGE 1/2 FREEZE EXCEPTION — DR-2026-08-31-D2-CONNECTOR-PREDICATE.
+ *
+ * Two pass-through fields, `relationshipPredicate` and
+ * `excludedPredicateClauses`. No logic change, no new branch, no effect on
+ * disposition, ordering or selection — the two lines below are the entire
+ * exception. Approved narrowly and explicitly for these two fields only; see
+ * docs/HERITAGE_CONNECTOR_RELATIONSHIP_CONTRACT.md §6 for why the exception
+ * was needed (both fields were previously invisible to every reader-facing
+ * surface, which is exactly the "unused metadata" the product-owner decision
+ * refused to accept) and what it does NOT authorise (no schema change here,
+ * no new enum, and no per-connector translation field of any kind — none of
+ * that was approved).
+ *
+ * `excludedPredicateClauses` is audit metadata: it configures the
+ * `fortuneFree()` guard in `src/ui/qise/heritage-view.js`'s `connectorCard()`,
+ * which is what actually keeps a fortune/status/rank clause off a reader's
+ * screen. Passing it through here is necessary for that guard to see it, and
+ * is not by itself the enforcement.
+ */
 function toResolvedEntry(connector, { relationshipAvailability, conditionResolution, disposition, disagreementIds, gateReasons }) {
   return Object.freeze({
     connectorId: connector.connectorId,
@@ -769,6 +789,8 @@ function toResolvedEntry(connector, { relationshipAvailability, conditionResolut
     prohibitedForUserInference: connector.prohibitedForUserInference,
     sourceRuleGroupId: connector.sourceRuleGroupId ?? null,
     disagreementIds: disagreementIds || [],
+    relationshipPredicate: connector.relationshipPredicate ?? null,
+    excludedPredicateClauses: connector.excludedPredicateClauses || [],
     relationshipAvailability,
     conditionResolution,
     disposition,
