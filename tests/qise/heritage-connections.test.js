@@ -57,11 +57,13 @@ const PASSED = { captureQualityPassed: true, safetyPassed: true };
  * A hand-built composition result — a stable, documented contract in its own
  * right (src/heritage/composition.js's `mapResolverResult`/`suppressedResult`
  * shape) — used to test `deriveTier2FromComposition`'s selection logic
- * directly. The real corpus does not currently contain two ACTIVE connectors
- * for any one construct (see docs/HERITAGE_CONNECTOR_STAGE_STATUS.md's
- * Stage 3 limitations), so this is the only way to exercise rotation
- * selection and sourcePanelOnly isolation today without waiting for the
- * corpus to grow.
+ * directly, independent of any one construct's evidence. As of D2-3
+ * (DR-2026-08-31-D2-CONNECTOR-PREDICATE) the real corpus does contain two
+ * ACTIVE connectors for one construct (threeSections) — see
+ * tests/heritage/three-sections-predicate-acceptance.test.js for that
+ * exercised against the real registry — but this synthetic fixture is kept
+ * so rotation/sourcePanelOnly isolation stays covered even if that one
+ * construct's evidence ever changes shape.
  */
 const fakeActiveEntry = (connectorId) => Object.freeze({
   connectorId, relationshipType: "CORRESPONDS_TO", prohibitedForUserInference: true,

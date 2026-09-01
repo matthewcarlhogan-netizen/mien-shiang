@@ -100,6 +100,55 @@ function englishSafe(value) {
   return containsHan(value) ? null : value;
 }
 
+/*
+ * D2-2's SECOND, INDEPENDENT enforcement gate. `englishSafe()` above removes
+ * every Han-script value whole, which is half of D2-2's requirement (上相,
+ * 貴, and every other Han fortune term can never survive it into a reader
+ * field). It gives none of the OTHER half: D2-2 also bans "any English rank,
+ * status or fortune interpretation", and a project-owned English translation
+ * reading something like "a person of superior physiognomy" would pass
+ * `englishSafe()` completely untouched, since it contains no Han character at
+ * all. This function is that second gate — it exists so that if a verified
+ * translation is ever added for a predicate, the same enforcement still
+ * holds; today, with no translation field authorised at all (see
+ * docs/HERITAGE_CONNECTOR_RELATIONSHIP_CONTRACT.md §6.5), it mainly guards
+ * `excludedPredicateClauses` matches, which is enough to prove the gate is
+ * wired and not dead code (see the paired tests).
+ *
+ * The vocabulary is CLAIM-SHAPED, not category-shaped, on purpose. The first
+ * draft of this function banned the bare words "fortune", "status" and
+ * "rank" and immediately fired on this product's own refusal copy — text
+ * that NAMES the category in order to say it is not being claimed, e.g. "it
+ * remains fortune-typed heritage and is never encoded as a user inference".
+ * Banning the word would have meant rewriting a correct disclaimer to
+ * satisfy a lint about English (CLAUDE.md items 22 and 40, the same class of
+ * mistake). So every entry below is a CLAIM form ("the reading is
+ * auspicious", "a person of superior physiognomy"), never the bare noun.
+ * `excludedPredicateClauses` is checked as a literal substring match — it
+ * can only narrow what is withheld, never widen it, and it is never itself
+ * rendered (see `connectorCard()` below): showing the reader the list of
+ * withheld clauses would reintroduce the very clause it excludes.
+ */
+const FORTUNE_CLAIM_VOCABULARY = new RegExp([
+  "superior physiognomy", "high minister", "high office", "\\bnoble\\b", "nobility",
+  // No \b after "auspicious": "auspiciousness" has no word boundary between
+  // "auspicious" and "ness", so a \b-anchored pattern let it straight through
+  // — found live in tier3ConnectorModel()'s own disagreement-position markup
+  // ("...contradicts attributed auspiciousness predicate"), reachable the
+  // moment any threeSections connector is active (disagreements attach to
+  // the CONSTRUCT, not to a specific connector — resolver.js's
+  // collectDisagreementIds/disagreementPanels).
+  "auspicious", "\\bdestiny\\b", "\\bfated\\b", "longevity", "long life",
+  "good fortune", "fortunate", "brings? wealth", "wealthy", "prosperity", "prosperous",
+  "high rank", "elevated rank", "years of (rank|honour|honor|office)",
+].join("|"), "i");
+
+export function fortuneFree(value, excludedClauses) {
+  if (typeof value !== "string" || value === "") return value;
+  if ((excludedClauses || []).some((clause) => clause && value.includes(clause))) return null;
+  return FORTUNE_CLAIM_VOCABULARY.test(value) ? null : value;
+}
+
 /** "CORRESPONDS_TO" -> "corresponds to". A mechanical transform, not a new phrase. */
 export function humanizeRelationshipType(value) {
   return typeof value === "string" ? value.toLowerCase().replace(/_/g, " ") : "";
@@ -143,6 +192,18 @@ function participantLabel(p) {
  * them, structurally English-safe by construction (a kebab-case registry
  * key), so `heritageConnectorCardMarkup` still has an identifier to fall back
  * to when both free-text fields are omitted.
+ *
+ * `predicate` is `entry.relationshipPredicate` (DR-2026-08-31-D2-CONNECTOR-
+ * PREDICATE) through BOTH `englishSafe()` and `fortuneFree()` — two
+ * independent gates, since the two guard different things: `englishSafe()`
+ * removes Han script whole, `fortuneFree()` removes claim-shaped English and
+ * anything matching the connector's own `excludedPredicateClauses`. Today
+ * every recorded `relationshipPredicate` is Han-only, so `predicate` is
+ * always `null` in practice (no translation field is authorised — see the
+ * contract's §6.5) — that is the correct, honest result of abstaining from
+ * an uncertified translation, not evidence the field is unused: both guards
+ * are exercised, and would pass a safe value through, or block an unsafe
+ * one, the moment either kind of value exists.
  */
 export function connectorCard(entry, sourceRegistry = SOURCE_REGISTRY) {
   if (!entry) return null;
@@ -159,6 +220,7 @@ export function connectorCard(entry, sourceRegistry = SOURCE_REGISTRY) {
     sourceId: entry.sourceId || null,
     sourceTitle: englishSafe(source ? source.title : null),
     sectionLocator: englishSafe(entry.sectionLocator || null),
+    predicate: fortuneFree(englishSafe(entry.relationshipPredicate || null), entry.excludedPredicateClauses),
     disposition: entry.disposition || null,
     prohibitedForUserInference: entry.prohibitedForUserInference === true,
   });
@@ -240,11 +302,22 @@ function orderByRelationshipOrder(entries, relationshipOrder) {
  * structurally English-safe registry keys, so `heritageConnectorTier3Markup`
  * can always fall back to one of them when the free-text fields are omitted.
  */
+/*
+ * `summary` runs through `fortuneFree()` as well as `englishSafe()` — found
+ * necessary, not theoretical: `three-sections-boundaries`' own
+ * `received-mayi-contradiction` position summary reads "Received Ma Yi
+ * witness contradicts attributed auspiciousness predicate", pure English, no
+ * Han, so `englishSafe()` alone let it through. Disagreements attach to a
+ * CONSTRUCT (resolver.js's `collectDisagreementIds`/`disagreementPanels`),
+ * not to a specific connector, so this — and any other position summary on
+ * any disagreement — is reachable the moment ANY connector for that
+ * construct is active, whether or not that position's own connector exists.
+ */
 function disagreementPositionCard(position, sourceRegistry) {
   const source = sourceRegistry?.[position?.sourceId] || null;
   return Object.freeze({
     positionId: position?.positionId ?? null,
-    summary: englishSafe(position?.summary ?? null),
+    summary: fortuneFree(englishSafe(position?.summary ?? null)),
     sourceId: position?.sourceId ?? null,
     sourceTitle: englishSafe(source ? source.title : null),
     sectionLocator: englishSafe(source ? source.sectionLocator : null),
@@ -465,6 +538,7 @@ export function heritageConnectorCardMarkup(card) {
   return `
     <p>${esc(constructs)}${constructs && card.relationshipLabel ? " — " : ""}${esc(card.relationshipLabel)}</p>
     ${citation ? `<p class="muted">${esc(citation)}</p>` : ""}
+    ${card.predicate ? `<p class="muted">${esc(card.predicate)}</p>` : ""}
     ${evidence ? `<p class="muted">${esc(evidence)}</p>` : ""}
     ${card.prohibitedForUserInference ? `<p class="muted">Historical source material — not a reading of you.</p>` : ""}`;
 }

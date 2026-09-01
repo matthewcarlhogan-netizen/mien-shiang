@@ -661,10 +661,38 @@ test("no Math.random / Date.now / unstable ordering was introduced by the lineag
 
 /* ── Blocker 3: the lineage adapter ───────────────────────────────────────── */
 
-test("resolveHeritageLineage: the abstract 'primary' label resolves for every construct that declares one (all six today)", () => {
+/*
+ * DR-2026-08-31-D2-CONNECTOR-PREDICATE gave `threeSections` its first
+ * `ABSTRACT_LINEAGE_OVERRIDES` entry: "primary" now resolves to the VERIFIED
+ * `taiqing-mianbu-facial` lineage for connector resolution, not to the
+ * literal "primary" key (the contested, RESEARCH_ONLY received Ma Yi
+ * lineage) — see docs/HERITAGE_CONNECTOR_RELATIONSHIP_CONTRACT.md §6. That
+ * makes "every construct resolves its own literal key" no longer universally
+ * true, on purpose, for exactly the one construct with a recorded decision.
+ * The other five are untouched and still must resolve literally — this test
+ * now asserts BOTH halves explicitly, rather than silently narrowing the
+ * original assertion to fit.
+ */
+test("resolveHeritageLineage: the abstract 'primary' label resolves literally for every construct EXCEPT one recorded override", () => {
   for (const construct of Object.keys(HERITAGE_REGISTRY)) {
     const resolved = resolveHeritageLineage({ heritageConstruct: construct, sourceLineage: "primary" }, HERITAGE_REGISTRY);
+    if (construct === "threeSections") {
+      assert.equal(resolved, "taiqing-mianbu-facial",
+        "threeSections' recorded override (DR-2026-08-31-D2-CONNECTOR-PREDICATE) has changed or gone missing");
+      continue;
+    }
     assert.equal(resolved, "primary", `${construct} must resolve its own "primary" lineage`);
+  }
+});
+
+test("resolveHeritageLineage: the threeSections override does not leak to any other construct", () => {
+  for (const construct of Object.keys(HERITAGE_REGISTRY)) {
+    if (construct === "threeSections") continue;
+    assert.notEqual(
+      resolveHeritageLineage({ heritageConstruct: construct, sourceLineage: "primary" }, HERITAGE_REGISTRY),
+      "taiqing-mianbu-facial",
+      `${construct} resolved to threeSections' overridden lineage key`,
+    );
   }
 });
 

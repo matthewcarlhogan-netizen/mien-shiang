@@ -603,6 +603,43 @@ export const HERITAGE_CONNECTOR_REGISTRY = deepFreeze({
     prohibitedForUserInference: true,
     note: "玉管照神局: 似X得X like-with-like — an element-resembling form obtaining that same element, one outcome each (5 pairs). NOT generation (相生), overcoming (相尅), a 5x5 grid, or 25 types. See the no-five-forms-five-phases-conflation negative rule.",
   }),
+  /*
+   * DR-2026-08-31-D2-CONNECTOR-PREDICATE (D2-1/D2-2/D2-3). Promoted from
+   * RESEARCH_ONLY. See docs/HERITAGE_CONNECTOR_RELATIONSHIP_CONTRACT.md §6/§8
+   * for the full eligibility trace and docs/DECISION_REGISTER.md for the
+   * decision text.
+   *
+   * `relationshipPredicate` carries ONLY the geometric predicate (相稱, "in
+   * proportion / mutually matching") — never the fortune clause the same
+   * source sentence also contains. `excludedPredicateClauses` names that
+   * clause explicitly, per D2-2's requirement that the exclusion be
+   * recorded, not merely achieved by omission. Both fields are Han and are
+   * never rendered verbatim to a reader: `src/ui/qise/heritage-view.js`'s
+   * `connectorCard()` runs `relationshipPredicate` through `englishSafe()`
+   * (which omits any Han-bearing string whole) and `fortuneFree()` (which
+   * additionally rejects claim-shaped English, for when a translation
+   * exists). No translation exists yet — no per-connector translation field
+   * is authorised (see the contract's §6.5) — so today the card's `predicate`
+   * is `null` and nothing renders from this field. That is the correct,
+   * honest behaviour for unsupported translation, not a bug: see
+   * tests/heritage/three-sections-predicate-acceptance.test.js.
+   *
+   * `excludedPredicateClauses` is not declared in `HERITAGE_CONNECTOR_FIELDS`
+   * (connectors.js) on purpose — that file is frozen Stage 1 schema, and the
+   * approved exception is scoped to resolver.js only (see resolver.js's
+   * `toResolvedEntry()`). `validateFields()` (validator.js) checks only the
+   * fields a manifest declares and does not reject undeclared ones, so this
+   * carries safely as connector-record content without touching a second
+   * frozen file.
+   *
+   * D2-3 (docs/agents/D2_GEMINI_HANDOFF.md Task 2a): `disagreementIds` and
+   * `alternateConnectorIds` now declared explicitly, cross-referencing the
+   * sibling `three-sections-pingdeng-yuguan` record below. `disagreementIds`
+   * is not strictly load-bearing for reachability — `collectDisagreementIds()`
+   * (resolver.js) already attaches any CONSTRUCT-targeted disagreement to
+   * every candidate for that construct regardless of this field — but the
+   * decision register requires it declared, not merely achieved implicitly.
+   */
   "three-sections-facial-proportion-taiqing": connectorRecord({
     connectorId: "three-sections-facial-proportion-taiqing",
     relationshipType: "COLLECTIVE_RULE",
@@ -624,9 +661,70 @@ export const HERITAGE_CONNECTOR_REGISTRY = deepFreeze({
     folioLocatorStatus: "VERIFIED",
     folioLocatorKind: "WYG_PB",
     measurementAvailability: "SUPPORTED_2D",
-    runtimePolicy: "RESEARCH_ONLY",
+    runtimePolicy: "HERITAGE_PRESENTATION_ALLOWED",
     prohibitedForUserInference: true,
-    note: "太清神鑑 卷五 論靣部 FACIAL three sections: per-section 主貴/主壽/主富 predicates and 三停皆稱乃上相之人. Distinct from the 卷六 BODY 身三停 material. Fortune-typed.",
+    relationshipPredicate: "相稱",
+    excludedPredicateClauses: ["上相"],
+    disagreementIds: ["three-sections-predicate"],
+    alternateConnectorIds: ["three-sections-pingdeng-yuguan"],
+    note: "太清神鑑 卷五 論靣部 FACIAL three sections: per-section 主貴/主壽/主富 predicates and 三停皆稱乃上相之人. Distinct from the 卷六 BODY 身三停 material. Fortune-typed. Active connector renders the 相稱 geometric predicate only; 上相 is excluded (D2-2). See three-sections-pingdeng-yuguan for the independently-evidenced 平等 predicate family (D2-3).",
+  }),
+  /*
+   * DR-2026-08-31-D2-CONNECTOR-PREDICATE (D2-3). The second of exactly two
+   * Three Sections predicate records the decision register authorises — see
+   * docs/DECISION_REGISTER.md's D2-3 entry and
+   * docs/agents/D2_GEMINI_HANDOFF.md Task 2b for the field-by-field spec this
+   * record follows verbatim. Do NOT add a third: a
+   * `three-sections-xiangcheng-taiqing` record would duplicate the sibling
+   * connector above and is explicitly forbidden.
+   *
+   * `heritage-three-sections-yuguan` (SOURCE_REGISTRY, src/reading/provenance.js)
+   * is a genuinely independent, byte-pinned, VERIFIED_PRIMARY witness — 玉管照神局
+   * 卷下, a Southern Tang/early Song Siku text, not a Ma Yi witness and not the
+   * same juan as the Taiqing facial material above. Its own note already
+   * records "平等 here is NOT a Ming/麻衣-exclusive predicate", which is exactly
+   * why activating it does not touch or depend on the still-untouched,
+   * still-RESEARCH_ONLY Ma Yi connector/lineage.
+   *
+   * `relationshipPredicate: "平等"` carries only the geometric equality
+   * predicate from `sourceText`'s "三停平等". `能和美` ("[this] can bring
+   * harmony and beauty") is the source's own consequence-clause — an
+   * aesthetic/desirability claim about the person, the same shape as the
+   * Taiqing record's excluded `上相` — so it is named in
+   * `excludedPredicateClauses`, never rendered, per the same D2-2 discipline.
+   * As with the Taiqing predicate, both fields are Han-only and no
+   * translation has been authored, so `englishSafe()` omits
+   * `relationshipPredicate` whole today; the card's `predicate` is honestly
+   * `null` until a project-owned translation is supplied and approved.
+   */
+  "three-sections-pingdeng-yuguan": connectorRecord({
+    connectorId: "three-sections-pingdeng-yuguan",
+    relationshipType: "COLLECTIVE_RULE",
+    relationshipDirection: { kind: "UNDIRECTED" },
+    collectiveMode: "SYSTEM_AS_WHOLE",
+    graphScope: "CORE_HERITAGE",
+    participants: [
+      { participantId: "threeSections", nodeType: "CONSTRUCT", constructId: "threeSections", memberScope: "ALL_MEMBERS" },
+    ],
+    evidenceClass: "EXPLICITLY_ATTESTED",
+    evidenceStrength: "VERIFIED_PRIMARY",
+    sourceId: "heritage-three-sections-yuguan",
+    textualLayer: "BASE_TEXT",
+    sourceText: "三停平等能和美",
+    sourceTextStatus: "VERIFIED",
+    sectionLocator: "卷下",
+    sectionLocatorStatus: "VERIFIED",
+    folioLocator: "<pb:KR3g0044_WYG_003_13a>",
+    folioLocatorStatus: "VERIFIED",
+    folioLocatorKind: "WYG_PB",
+    measurementAvailability: "SUPPORTED_2D",
+    runtimePolicy: "HERITAGE_PRESENTATION_ALLOWED",
+    prohibitedForUserInference: true,
+    relationshipPredicate: "平等",
+    excludedPredicateClauses: ["和美"],
+    disagreementIds: ["three-sections-predicate"],
+    alternateConnectorIds: ["three-sections-facial-proportion-taiqing"],
+    note: "玉管照神局 卷下 詩曰 (adjacent to 鴿形): 三停平等能和美, byte-pinned <pb:KR3g0044_WYG_003_13a>. Southern Tang/early Song Siku witness, independent of the received Ma Yi material and of the Taiqing 卷五 facial material. Active connector renders the 平等 geometric predicate only; 和美 (the harmony/beauty consequence-clause) is excluded (D2-3), matching the discipline applied to the sibling Taiqing record's 上相 exclusion.",
   }),
 });
 

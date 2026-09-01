@@ -6,17 +6,21 @@ twice, JSON output identical except `generatedAt` (verified this session; see "I
 below). Neither harness renders anything in production; both use the internal analytical seam
 (`composeHeritageConnectionsWithRegistries()`), never `composeHeritageForReading()`.
 
-**Commit provenance — two measurement rounds, not one.**
+**Commit provenance — three measurement rounds, not one.**
 
 | figures | measured against | why |
 |---|---|---|
-| Everything except the base-reading columns | `b62945e8619f1ca6ad470cd3f421c9cd0fa0b99b` | the original Phase B run |
+| Everything except the base-reading columns and threeSections' heritage/combined figures | `b62945e8619f1ca6ad470cd3f421c9cd0fa0b99b` | the original Phase B run |
 | The **base-reading** columns in §1 and §2C (24 / 216) | `1cd96de49904118cece3b47c836074b966cadb8d` (D-1) | D-1 changed `readingTiers().tier2`, which is what `baseMaterialSignature()` reads |
+| **threeSections'** heritage(Tier2)/heritage(Tier3)/combined figures (2 / 2 / 48) and connector residue (2) | D2-3, `claude/heritage-connector-relationships-d2` | D2-1/D2-2/D2-3 (`DR-2026-08-31-D2-CONNECTOR-PREDICATE`) activated two threeSections connectors; every other construct's heritage-connector figures are unaffected and still match the Phase B commit — see `docs/HERITAGE_CONNECTOR_RELATIONSHIP_CONTRACT.md` §8.7 for the full trace and re-measurement |
 
-Re-running the harness at `b62945e` reproduces the *pre-D-1* base figures (1 and 9), not the ones
-tabulated below — so the base rows are versioned separately rather than presented as if one
-commit produced the whole report. Every heritage-connector figure is identical at both commits;
-D-1 did not touch that layer. Raised in review by Codex on PR #45.
+Re-running the harness at `b62945e` reproduces the *pre-D-1* base figures (1 and 9) and the
+*pre-D-2* threeSections heritage figures (1 / 1 / 24), not the ones tabulated below — so each
+round is versioned separately rather than presented as if one commit produced the whole report.
+Every OTHER heritage-connector figure (fiveElements, twelvePalaces, fiveMountains, fourRivers,
+fiveOfficers) is identical across all three commits; neither D-1 nor D2-1/D2-2/D2-3 touched that
+layer for any construct but threeSections. Raised in review by Codex on PR #45; the threeSections
+D-2 figures were not re-measured here until this note.
 
 **Read this alongside, never instead of:**
 `docs/heritage-evidence/EVIDENCE_TRANSITION_LEDGER.md` (what changed and why),
@@ -83,35 +87,49 @@ third (`threeSections`) needs reader-narrative writing, which is unbuilt work.
 
 ### Why the three `RUNTIME_SUPPORTED` constructs still fail gates C and D
 
-Every required construct's **connector residue is 1** — `deriveTier2FromComposition()`'s Tier 2
-top pick has 0 or 1 active candidate for its `"primary"` lineage, so there is currently nothing
-to rotate BETWEEN at the connector layer, for any construct. Concretely, per construct
-(exhaustive walk over the full derived period, corrected methodology — see "A defect found and
-fixed" below):
+**Updated by D2-1/D2-2/D2-3** (`DR-2026-08-31-D2-CONNECTOR-PREDICATE`; see
+`docs/HERITAGE_CONNECTOR_RELATIONSHIP_CONTRACT.md` §8): `threeSections` now has **connector
+residue 2**, not 1 — the first (and, as of this measurement, only) construct in the corpus with
+genuine connector-layer rotation. Every OTHER required construct's connector residue is still 1
+— `deriveTier2FromComposition()`'s Tier 2 top pick has 0 or 1 active candidate for its
+`"primary"` lineage, so there is still nothing to rotate BETWEEN at the connector layer for those
+five. Concretely, per construct (exhaustive walk over the full derived period, corrected
+methodology — see "A defect found and fixed" below):
 
 | Construct | Base (Tier 2) raw=material | Heritage Tier 2 raw=material | Heritage Tier 3 raw=material | Combined (base+Tier2) |
 |---|---|---|---|---|
-| threeSections | 24 | 1 | 1 | 24 |
+| threeSections | 24 | **2** | **2** | **48** |
 | fiveElements | 216 | 1 | 1 | 216 |
 | twelvePalaces | 24 | 1 | 1 | 24 |
 | fiveMountains | 24 | 1 | 1 | 24 |
 | fourRivers | 216 | 1 | 1 | 216 |
 | fiveOfficers | 216 | 1 | 1 | 216 |
 
+threeSections' own combined figure does not change WHY gates C and D fail overall: 48 is still
+three orders of magnitude below the `DIVERSITY_TARGET` of 250, and gate B (coverage) is unaffected
+by connector residue at all — `threeSections` stays `COVERAGE_GAP` because its own base-reading
+narrative is a separate axis from the connector graph (see the coverage table above). `NOT_READY`
+is unchanged.
+
 **The base column was re-measured after the D-1 Tier 2 repair** (see the section below); it
 previously read 1 / 9 / 1 / 1 / 9 / 9. Heritage Tier 2, heritage Tier 3 and therefore the
 binding constraint are all unchanged.
 
-Every unit of combined diversity currently available comes from the **base reading's own prose
-variation** (Reflection Engine component/variant selection), none from the heritage connector
-layer. `combinedMaterialDistinct` never exceeds `baseReadingMaterialDistinct` — because the
-heritage factor contributes exactly 1 distinct state everywhere — so gate D's `DIVERSITY_TARGET`
-of 250 is unreachable at the connector layer as it stands today, independent of the coverage
-gate. This is the single most important content finding in this readiness pass: **the heritage
-library's current binding constraint is relationship count, not prose variety** — each required
-construct needs a second genuinely distinct connector (a different relationship, witness,
-disagreement position, or juxtaposition) for its "primary" lineage before Tier 2 has anything to
-rotate. See the ranked backlog below.
+At the time of this Phase B measurement, every unit of combined diversity available came from the
+**base reading's own prose variation** (Reflection Engine component/variant selection), none from
+the heritage connector layer — the heritage factor contributed exactly 1 distinct state
+everywhere. **D2-1/D2-2/D2-3 changed this for `threeSections` specifically**: its combined figure
+(48) now exceeds its base-reading figure (24) for the first time in the corpus, because its
+heritage factor moved from 1 to 2 distinct states. The other five required constructs are
+unaffected — their heritage factor is still exactly 1, so `combinedMaterialDistinct` still equals
+`baseReadingMaterialDistinct` for them. Gate D's `DIVERSITY_TARGET` of 250 remains unreachable at
+the connector layer as it stands today (48 is not 250), independent of the coverage gate. The
+finding stands, only sharpened: **the heritage library's current binding constraint is
+relationship count, not prose variety** — every required construct except `threeSections` still
+needs a second genuinely distinct connector (a different relationship, witness, disagreement
+position, or juxtaposition) for its "primary" lineage before Tier 2 has anything to rotate; even
+`threeSections`, now the best-performing construct on this axis, is still three orders of
+magnitude short. See the ranked backlog below.
 
 **D-1 raised the base column 24-fold and changed none of that.** The best-performing construct
 moved from 9 to 216 distinct base-material states and still does not reach the 250 target, and
@@ -208,24 +226,30 @@ meaning heritage content is absent on roughly half the year's days **regardless 
 
 ### C. `LATENT_HERITAGE_EXHAUSTION` (internal seam, hypothetical authorisation — NOT production)
 
-The exhaustive per-construct depth matches the GOLD harness's own numbers exactly (24/24/24 for
-threeSections/twelvePalaces/fiveMountains, 216/216/216 for fiveElements/fourRivers/fiveOfficers —
-see the table above), confirming the two harnesses agree, as they must, since both call the same
-`analyseConstructLineage()`.
+The exhaustive per-construct depth matches the GOLD harness's own numbers exactly — **as
+re-measured post-D2-3**: threeSections combined-material is now **48** over period 72 (was 24),
+twelvePalaces/fiveMountains stay 24/24, fiveElements/fourRivers/fiveOfficers stay 216/216/216 —
+see the table above, confirming the two harnesses still agree, as they must, since both call the
+same `analyseConstructLineage()`.
 
 **Both harnesses were re-run after D-1 and both moved together**, which is the point of quoting
 them side by side: the base column rose 24-fold in each. The pre-D-1 figures were 1/1/1 and
-9/9/9. Nothing about the heritage connector layer changed — its residue is 1 in both
-measurements.
+9/9/9. At that point nothing about the heritage connector layer had changed — its residue was 1 in
+both measurements, for every construct. **D2-1/D2-2/D2-3 then moved threeSections' residue from
+1 to 2**, the first and only change to this layer either harness has recorded; the other five
+constructs are still residue 1 in both.
 
 The calendar cross-check — real 365-day `mostlySteady` and `frequentMovementLike` simulated
-users, walking the REAL per-day occurrence value through the same latent seam — reports
-`NO_ROTATION_OBSERVED_IN_THIS_SCENARIO` for **every** construct, under **both** scenarios. This
-is not a harness defect: since every construct's connector residue is 1 (see above), there is
-nothing to rotate between regardless of how variable or steady the simulated user is. It
-confirms, from the retention angle, the same binding constraint the GOLD harness names from the
-coverage angle: relationship depth, not user behaviour, is what limits today's heritage
-retention value.
+users, walking the REAL per-day occurrence value through the same latent seam — used to report
+`NO_ROTATION_OBSERVED_IN_THIS_SCENARIO` for **every** construct, under **both** scenarios, before
+D2-3. **Post-D2-3, threeSections now reports `EXHAUSTED_BY_CALENDAR_DAY_18` under both scenarios**
+(61 days on rotation, 2 distinct presentations seen) — the first non-trivial exhaustion result
+this simulator has ever produced. The other five constructs are unchanged: since their connector
+residue is still 1, there is still nothing to rotate between regardless of how variable or steady
+the simulated user is. Read together, this sharpens rather than overturns the original finding:
+relationship depth, not user behaviour, is what limits heritage retention value — and the one
+construct where depth was added exhausts inside three weeks of a realistic usage pattern, which is
+itself evidence that residue=2 is nowhere near enough, not evidence the constraint is solved.
 
 ### D. `DAILY_PORTRAIT_COMPOUNDING_MODEL` (modelled projection — no runtime code exists)
 
@@ -251,14 +275,18 @@ this table is more than a projection.
 Ordered by the largest gap this session's measurements actually found, not by construct name:
 
 1. **Add a second genuinely distinct connector to each `RUNTIME_SUPPORTED` construct's `"primary"`
-   lineage** (fiveElements, fourRivers, fiveOfficers). This is the single highest-value change
-   available: it is what moves `connectorResidue` off 1 for the first time, which is the
-   precondition for gate C and for any real retention benefit from the heritage layer at all —
-   right now a returning user gets zero additional variety from heritage regardless of how long
-   they use the app. A different relationship, witness, disagreement position, or legitimate
-   editorial juxtaposition all count; fragmenting one proposition into near-duplicate connector
-   records does not (see the connector-identity collision check, currently 0/15 collisions —
-   keep it that way when adding).
+   lineage** (fiveElements, fourRivers, fiveOfficers — still residue 1 as of D2-3; `threeSections`
+   is `COVERAGE_GAP`, not `RUNTIME_SUPPORTED`, so it was never this item's target, even though
+   D2-1/D2-2/D2-3 independently moved ITS connector residue off 1 by activating a second
+   `threeSections` connector — see the note above and contract §8.7). This item is still the
+   single highest-value change available for the three `RUNTIME_SUPPORTED` constructs: it is what
+   would move their `connectorResidue` off 1 for the first time, which is the precondition for
+   gate C and for any real retention benefit from the heritage layer at all for THOSE constructs —
+   right now a returning user still gets zero additional heritage-layer variety on fiveElements,
+   fourRivers or fiveOfficers regardless of how long they use the app. A different relationship,
+   witness, disagreement position, or legitimate editorial juxtaposition all count; fragmenting one
+   proposition into near-duplicate connector records does not (see the connector-identity collision
+   check, now 0/16 collisions post-D2-3 — keep it that way when adding).
 2. **Resolve CARD 7 (Five Mountains routing) and CARD 10 (Twelve Palaces runtime status).** Both
    already have `VERIFIED_PRIMARY` evidence sitting behind a construct-level decision, not an
    evidence gap — the fastest coverage-gate improvement available, and neither requires new
@@ -270,10 +298,12 @@ Ordered by the largest gap this session's measurements actually found, not by co
    recorded as a backlog research option in CARD 7). Genuinely deeper, genuinely more work — a
    later increment once #1 has established that single-relationship depth is achievable at all.
 5. **More prose around already-rich relationships** is explicitly NOT prioritised: the retention
-   simulator's own finding is that the binding constraint is relationship *count* (residue=1
-   everywhere), not prose thinness — spending effort on prose variety around a single connector
-   would not move gate C or D, since both are capped by "nothing to rotate between" before they
-   are capped by wording variety.
+   simulator's own finding is that the binding constraint is relationship *count* (residue=1 for
+   five of six required constructs; `threeSections` alone reached residue=2 under D2-3, and even
+   that exhausts by calendar day 18 in a realistic scenario — see contract §8.7.3), not prose
+   thinness — spending effort on prose variety around a single connector would not move gate C or
+   D, since both are capped by "nothing to rotate between" (or "almost nothing") before they are
+   capped by wording variety.
 
 ---
 
