@@ -54,13 +54,34 @@ const recordCases = [
   ["HVR-016", "project translation without registered agent", fiveOfficers,
     (record) => { record.lineages.primary.translationAgentId = "unknown-agent"; }, /registered translationAgentId/i],
   ["HVR-017", "alias without witness provenance", fiveOfficers,
-    (record) => { record.lineages.primary.constituents[0].aliasWitnesses = []; }, /alias.*witness provenance/i],
+    // The 2026-08-29 project-owned Kanripo reconciliation (matrix EV-08) removed
+    // the only real alias in the corpus (監察官 was reclassified as a genuine
+    // lineage disagreement, not an orthographic alias — see the "renlun-xue"
+    // lineage). This falsification therefore constructs the malformed shape it
+    // is testing rather than relying on the corpus to still contain one.
+    (record) => {
+      record.lineages.primary.constituents[0].aliases = ["測試別名"];
+      record.lineages.primary.constituents[0].aliasWitnesses = [];
+    }, /alias.*witness provenance/i],
   ["HVR-018", "duplicate constituent identity", fiveOfficers,
     (record) => { record.lineages.primary.constituents.push(clone(record.lineages.primary.constituents[0])); }, /constituentId.*duplicate/i],
   ["HVR-019", "related system also declared as alias", fiveOfficers,
     (record) => { record.aliases = [record.lineages.primary.relatedSystems[0].canonicalChineseName]; }, /cannot also be a construct alias/i],
   ["HVR-020", "malformed unattested research claim", fiveOfficers,
-    (record) => { record.lineages.primary.unverifiedClaims[0].attestationStatus = "RECORDED"; }, /attestationStatus/i],
+    // The 2026-08-29 reconciliation (matrix EV-08) resolved the corpus's only
+    // unverifiedClaims entry (philtrum-longevity-office) into a witnessed
+    // position, so this falsification constructs its own claim to mutate.
+    (record) => {
+      record.lineages.primary.unverifiedClaims = [{
+        claimId: "test-unattested-claim",
+        summary: "A synthetic claim for this falsification test.",
+        citationStatus: "source-required",
+        attestationStatus: "NONE_ATTESTED",
+        prohibitedForUserInference: true,
+        note: "Synthetic fixture; not a real corpus claim.",
+      }];
+      record.lineages.primary.unverifiedClaims[0].attestationStatus = "RECORDED";
+    }, /attestationStatus/i],
 ];
 
 for (const [id, description, make, mutate, expected] of recordCases) {
@@ -90,7 +111,10 @@ const connectorContext = (overrides = {}) => ({
 });
 const correspondsBase = () => clone(HERITAGE_CONNECTOR_REGISTRY["five-mountains-four-rivers-corresponds"]);
 const directedShenBase = () => clone(HERITAGE_CONNECTOR_REGISTRY["four-rivers-shen-corresponds"]);
-const collectiveBase = () => clone(HERITAGE_CONNECTOR_REGISTRY["five-mountains-mutual-facing-fullness"]);
+// five-mountains-mutual-facing-fullness was split into two connectors by the
+// 2026-08-29 project-owned Kanripo reconciliation (errata E-8); either half
+// carries the same COLLECTIVE_RULE/ALL_MEMBERS shape this fixture needs.
+const collectiveBase = () => clone(HERITAGE_CONNECTOR_REGISTRY["five-mountains-mutual-facing"]);
 const conjunctiveBase = () => clone(HERITAGE_CONNECTOR_REGISTRY["yuebo-mountains-rivers-form-shen-configuration"]);
 
 const connectorCases = [

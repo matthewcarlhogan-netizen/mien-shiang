@@ -30,7 +30,7 @@ that, STOP — it is mis-specified, report back.
 - Common values for every record below: `editionFingerprint = "WYG-Siku"`,
   `retrievedAt = "2026-08-29T04:49:24Z"`, `sourceAccess = "STABLE_REMOTE"`,
   `folioLocatorKind = "WYG_PB"`, `folioLocatorStatus = "VERIFIED"`.
-- **NOT in this manifest** (product-owner decisions — see `PRODUCT_OWNER_DECISIONS.md`):
+- **NOT in this manifest** (research recommendations pending a product-owner decision — see `RESEARCH_RECOMMENDATION_PACK.md`):
   matrix rows SR-18 (rights), EV-15 (25-type), EV-03/EV-13 runtime routing.
   Also NOT here: `ABSTRACT_LINEAGE_OVERRIDES` (stays `{}`), any `safetyPassed`
   change, any connector `runtimePolicy` promotion to `ACTIVE`.

@@ -1,8 +1,18 @@
-# PRODUCT-OWNER DECISION MEMO
+# RESEARCH RECOMMENDATION PACK — NOT A DECISION RECORD
+
+**Status: research recommendations only. Nothing in this file is approved.** This file was
+previously named `PRODUCT_OWNER_DECISIONS.md`, which could be misread as recording approved
+policy — it never did. Renamed 30 August 2026 specifically so a future agent cannot mistake a
+research recommendation for a product-owner decision by filename alone. An actual decision, if and
+when the product owner makes one, is recorded as a dated entry in `docs/DECISION_REGISTER.md` or
+as one of the cards in `docs/DECISION_CARDS.md` — never here.
 
 Three decision cards. **Research states the evidence and a recommendation; the
 product owner decides.** None of these is decided in this pass. `ABSTRACT_LINEAGE_OVERRIDES`
-is not touched. PR #40 is not merged.
+is not touched. **Correction, 30 August 2026: PR #40 has since merged to `main`** (see
+`docs/HERITAGE_CONNECTOR_STAGE_STATUS.md`'s six-axis status) — its merge is a `CODE_PRESENT` fact,
+not a resolution of any card below. Every card in this file remains exactly as undecided as it was
+before the merge; see `docs/DECISION_CARDS.md` CARD 7 for the Five Mountains card carried forward.
 
 Each card: historical fidelity · distortion risk · Stage-2 architecture effect ·
 Stage-3 effect · prototype effect · research recommendation.

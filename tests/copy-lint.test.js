@@ -200,3 +200,20 @@ test("the JSON Schema URI exception is an exact metadata identifier", () => {
   assert.equal(allowed("https://json-schema.org/draft/2020-12/schema#face"), false);
   assert.equal(allowed("https://json-schema.org/draft/2019-09/schema"), false);
 });
+
+test("the Kanripo sourceUrl identifier exception matches only the pinned acquisition shape", () => {
+  const allowed = (url) => IDENTIFIER_URI_ALLOWLIST.some((pattern) => pattern.test(url));
+  // Positive control — real sourceUrl shapes from src/reading/provenance.js,
+  // one per pinned repo.
+  assert.equal(allowed("https://github.com/kanripo/KR3g0045/blob/b3e5b69beb95f575bb47e9eaed1e6aadd23bffe5/KR3g0045_006.txt"), true);
+  assert.equal(allowed("https://github.com/kanripo/KR3g0046/blob/b408ea0b969672a1f52e5ec371f9fe3250976e58/KR3g0046_001.txt"), true);
+  assert.equal(allowed("https://github.com/kanripo/KR3g0043/blob/f69732902fc82fb6b1f759cb7bf5a910c0b903a3/KR3g0043_001.txt"), true);
+  assert.equal(allowed("https://github.com/kanripo/KR3g0044/blob/0fa9edb26dc77e9068a7dbf8af9ce6844ea96d74/KR3g0044_003.txt"), true);
+  // Negative controls — every way this could be widened into something the
+  // guard exists to catch.
+  assert.equal(allowed("https://github.com/kanripo/KR3g0045/blob/b3e5b69beb95f575bb47e9eaed1e6aadd23bffe5/KR3g0045_006.txt?x=1"), false, "query string must not match");
+  assert.equal(allowed("https://github.com/kanripo/KR3g0045/blob/b3e5b69beb95f575bb47e9eaed1e6aadd23bffe5/KR3g0045_006.txt#frag"), false, "fragment must not match");
+  assert.equal(allowed("https://github.com/kanripo/KR3g9999/blob/b3e5b69beb95f575bb47e9eaed1e6aadd23bffe5/KR3g9999_001.txt"), false, "only the four pinned repos may match");
+  assert.equal(allowed("https://github.com/kanripo/KR3g0045/blob/notahexsha/KR3g0045_001.txt"), false, "commit must be a 40-char hex SHA");
+  assert.equal(allowed("https://evil.example.com/kanripo/KR3g0045/blob/b3e5b69beb95f575bb47e9eaed1e6aadd23bffe5/KR3g0045_001.txt"), false, "host must be github.com");
+});

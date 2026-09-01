@@ -92,6 +92,14 @@ test("tier 3 accounts for every sentence in all three layers", () => {
   }
 });
 
+test("tier 3 explains a structured abstention instead of emitting a blank sentence", () => {
+  const s = STATES.find((x) => x.availability !== "read");
+  const t = forState(s);
+  const entry = t.tier3.byLayer.reflection.find((x) => x.component === "heritageJoinAbstention");
+  assert.ok(entry, "the abstention trace is missing");
+  assert.match(entry.sentence, /measurement-derived joining abstained because/i);
+});
+
 test("tier 3 names what is identifying and what is merely carried", () => {
   const t = forState(STATES[0]);
   assert.deepEqual(t.tier3.dimensions.map((d) => d.field), [...READING_AFFECTING]);

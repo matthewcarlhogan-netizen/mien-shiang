@@ -77,10 +77,11 @@ stubs when the flag is off.
 
 `package-lock.json` pins the declared dependencies for reproducible `npm ci` installs.
 
-612 across forty-nine files. If you see 44, the traversal suite is not being
-discovered; if you see 312, the `tests/qise/` tree is not.
+1194 across 76 files, measured 30 August 2026 by running `npm test` directly rather than trusting
+this line — the exact commands and sub-counts age quickly as the suite grows, so verify with the
+runner rather than updating this sentence again.
 
-**All 612 pass.** The long-standing `copy-guard` failure on
+**All 1194 pass.** The long-standing `copy-guard` failure on
 `TCM-202-DAMP-HEAT.recommend[1]` is resolved — that line moved to Module B in
 the Phase 2 split (see item 19). If a test fails, it is a real defect.
 
