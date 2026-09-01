@@ -13,7 +13,7 @@ import { readComplexion } from "./adapters/entertainment.js";
 import { evaluateSafety } from "./adapters/safety.js";
 import { composeReading } from "./reading/index.js";
 import { BUILD_FLAVOUR } from "./flags.js";
-import { createLandmarkerWithFallback } from "./landmarker.js";
+import { createLandmarkerWithFallback, selectSingleFace } from "./landmarker.js";
 import { geometryReport } from "./geometry.js";
 import { expressionState } from "./expression.js";
 import { extractRegions } from "./region-extractor.js";
@@ -42,7 +42,9 @@ async function getLandmarker(onProgress) {
   const built = await createLandmarkerWithFallback(
     FaceLandmarker.createFromOptions.bind(FaceLandmarker),
     fileset,
-    { modelAssetPath: MODEL },
+    // Request one extra detection so an image with two people is refused
+    // rather than silently reading whichever face MediaPipe returns first.
+    { modelAssetPath: MODEL, numFaces: 2 },
     onProgress,
   );
   landmarker = built.landmarker;
@@ -85,13 +87,17 @@ export async function runAnalysis(file, unmirror, onProgress) {
 
   onProgress?.("Finding face…");
   const res = lm.detect(canvas);
-  if (!res.faceLandmarks?.length) {
+  const face = selectSingleFace(res);
+  if (face.status === "none") {
     throw new Error("No face found. Face the camera straight on, in even light.");
+  }
+  if (face.status === "multiple") {
+    throw new Error("More than one face found. Please choose a photo with one face only.");
   }
   // Named `landmarks`, not `raw`: `raw` below is the raw SCALAR contract that
   // both modules consume, and having two different `raw` bindings in one
   // function is what broke this file.
-  const landmarks = res.faceLandmarks[0];
+  const landmarks = face.landmarks;
   if (landmarks.length !== EXPECTED_LANDMARKS) {
     throw new Error(`Expected ${EXPECTED_LANDMARKS} landmarks, got ${landmarks.length}.`);
   }
