@@ -5,7 +5,7 @@
  * Clones the four Kanripo repositories at the commits pinned in
  * MIEN_SHIANG_PINNING_PASS.md, recomputes every file SHA-256, counts <pb:...>
  * folio markers, and verifies each of the 17 rows of the embedded
- * PINNED_PASSAGES.csv byte-for-byte against the freshly cloned working-tree
+ * PINNED_PASSAGES.csv byte-for-byte against the freshly cloned Git object
  * bytes: the claimed <pb:...> marker must govern the passage, and the passage
  * text (with the Mandoku pilcrow and page-break markup removed) must contain
  * the dossier's quoted Chinese as a contiguous run.
@@ -15,6 +15,11 @@
  * including BOTH codepoints for 宮/宫 (U+5BAE and U+5BAB), because Kanripo's
  * 2016-02-05 normalisation pass rewrites one to the other in these texts and a
  * single-codepoint grep produced a false "十二宮 = 0" in the dossier.
+ *
+ * Source files are read with `git show`, not from the checkout. Git's
+ * core.autocrlf setting can rewrite a text file on Windows; hashing the
+ * working tree would then make the same pinned commit pass on LF hosts and
+ * fail on CRLF hosts.
  *
  * Usage:
  *   node scripts/heritage-evidence/acquire-and-verify.mjs <scratchCloneDir> [--json <out.json>] [--report <out.md>]
@@ -27,6 +32,7 @@ import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { extractFencedCsv, normaliseNewlines, parseCsv } from "../lib/heritage-dossier.mjs";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const DOSSIER = join(REPO_ROOT, "MIEN_SHIANG_PINNING_PASS.md");
@@ -37,6 +43,11 @@ const KANRIPO = [
   { id: "KR3g0045", title: "太清神鑑",   commit: "b3e5b69beb95f575bb47e9eaed1e6aadd23bffe5" },
   { id: "KR3g0046", title: "人倫大統賦", commit: "b408ea0b969672a1f52e5ec371f9fe3250976e58" },
 ];
+const PASSAGE_HEADER = "passageId,sourceId,repoUrl,commitSha,fileSha256,filePath,juan,section,pbMarker,textualLayer,passageChinese,translation,retrievedAt";
+const ATLAS_HEADER = "relationshipId,family,relationshipClass,fromParticipant,toParticipant,direction,condition,historicalClaim,sourceId,lineageId,sourcePassageChinese,translation,juan,section,folio,sectionLocatorStatus,folioLocatorStatus,citationStatus,evidenceStrength,textualLayer,disagreementId,prohibitedForUserInference,runtimePotential,notes";
+const PASSAGE_ROW_COUNT = 17;
+const ATLAS_ROW_COUNT = 38;
+const PASSAGE_ACCEPTED_STATUSES = new Set(["VERIFIED", "VERIFIED_WITH_TRANSCRIPTION_NOTE"]);
 
 const args = process.argv.slice(2);
 const scratch = args[0] ? resolve(args[0]) : null;
@@ -50,11 +61,13 @@ if (!existsSync(scratch)) mkdirSync(scratch, { recursive: true });
 
 const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
 const git = (cwd, ...a) => execFileSync("git", a, { cwd, encoding: "utf8" }).trim();
+const gitBlob = (cwd, path) => execFileSync("git", ["show", `HEAD:${path}`], { cwd });
 
 // ---------------------------------------------------------------------------
 // 1. Parse the dossier: §1 expected hashes, §2 PINNED_PASSAGES.csv
 // ---------------------------------------------------------------------------
-const dossier = readFileSync(DOSSIER, "utf8");
+const dossierText = readFileSync(DOSSIER, "utf8");
+const dossier = normaliseNewlines(dossierText);
 
 // §1 hash block: lines "  <64hex>  <file>"
 const expectedHashes = {};
@@ -62,36 +75,31 @@ for (const m of dossier.matchAll(/^([0-9a-f]{64})\s+(KR3g004\d_\d{3}\.txt)$/gm))
   expectedHashes[m[2]] = m[1];
 }
 
-// §2 CSV: the fenced block beginning with the passageId header
-function extractCsvBlock(header) {
-  const re = new RegExp("```csv\\n(" + header.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "[\\s\\S]*?)\\n```", "m");
-  const mm = dossier.match(re);
-  return mm ? mm[1] : null;
-}
-const passagesCsv = extractCsvBlock("passageId,sourceId,repoUrl");
-const atlasCsv = extractCsvBlock("relationshipId,family,relationshipClass");
+// §2 CSV: the fenced blocks beginning with their stable headers
+const passagesCsv = extractFencedCsv(
+  dossier,
+  PASSAGE_HEADER,
+);
+// The atlas was historically optional while the dossier was being assembled;
+// preserve that deliberate degraded-but-runnable state. Passage evidence is
+// required and therefore still fails closed when its section is absent.
+const atlasCsv = extractFencedCsv(
+  dossier,
+  ATLAS_HEADER,
+  { optional: true },
+);
 
-function parseCsv(text) {
-  const rows = [];
-  let row = [], field = "", q = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (q) {
-      if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
-      else if (c === '"') q = false;
-      else field += c;
-    } else if (c === '"') q = true;
-    else if (c === ",") { row.push(field); field = ""; }
-    else if (c === "\n") { row.push(field); rows.push(row); row = []; field = ""; }
-    else field += c;
-  }
-  if (field.length || row.length) { row.push(field); rows.push(row); }
-  const header = rows.shift();
-  return rows.filter(r => r.length > 1).map(r => Object.fromEntries(header.map((h, i) => [h, r[i]])));
-}
-
-const passages = parseCsv(passagesCsv);
-const atlas = atlasCsv ? parseCsv(atlasCsv) : [];
+const passages = parseCsv(passagesCsv, {
+  label: "required passage CSV",
+  expectedHeader: PASSAGE_HEADER,
+  expectedRows: PASSAGE_ROW_COUNT,
+  nonEmptyColumns: Array.from({ length: 13 }, (_, i) => i),
+});
+const atlas = atlasCsv ? parseCsv(atlasCsv, {
+  label: "optional atlas CSV",
+  expectedHeader: ATLAS_HEADER,
+  expectedRows: ATLAS_ROW_COUNT,
+}) : [];
 
 // ---------------------------------------------------------------------------
 // 2. Clone + checkout + verify commits, hash every file
@@ -111,7 +119,7 @@ for (const r of KANRIPO) {
   const files = git(dir, "ls-files").split("\n").filter(Boolean);
   const hashes = {};
   for (const f of files) {
-    const buf = readFileSync(join(dir, f));
+    const buf = gitBlob(dir, f);
     hashes[f] = { sha256: sha256(buf), bytes: buf.length };
     if (/^KR3g004\d_\d{3}\.txt$/.test(f)) fileBytes[f] = buf;
   }
@@ -313,14 +321,21 @@ const atlasArith = atlas.length ? {
 // ---------------------------------------------------------------------------
 const result = {
   acquisitionTimestamp: acqTimestamp,
-  dossier: { path: "MIEN_SHIANG_PINNING_PASS.md", sha256: sha256(readFileSync(DOSSIER)) },
+  dossier: {
+    path: "MIEN_SHIANG_PINNING_PASS.md",
+    sha256: sha256(Buffer.from(dossier, "utf8")),
+    sha256Basis: "UTF-8 text after CRLF/CR newline normalization",
+  },
   repos: repoResults.map(r => ({ id: r.id, title: r.title, remote: r.remote,
     expectedCommit: r.expectedCommit, actualCommit: r.actualCommit, commitMatch: r.commitMatch,
     commitDate: r.commitDate, fileCount: r.files.length })),
   hashTable, hashAllMatch,
   pbCounts, pbTotal,
   passageResults,
-  passageAllVerified: passageResults.every(p => p.status === "VERIFIED"),
+  passageAllVerified: passageResults.length === PASSAGE_ROW_COUNT
+    && passageResults.every(p => PASSAGE_ACCEPTED_STATUSES.has(p.status)),
+  passageAllContiguous: passageResults.length === PASSAGE_ROW_COUNT
+    && passageResults.every(p => p.status === "VERIFIED"),
   checks,
   atlasArith,
 };
@@ -330,7 +345,7 @@ if (jsonOut) writeFileSync(jsonOut, JSON.stringify(result, null, 2));
 const L = [];
 L.push(`# acquire-and-verify — ${acqTimestamp}`);
 L.push("");
-L.push(`dossier SHA-256: ${result.dossier.sha256}`);
+L.push(`dossier SHA-256 (normalized UTF-8 text): ${result.dossier.sha256}`);
 L.push("");
 L.push(`## Commits`);
 for (const r of result.repos) L.push(`- ${r.id} ${r.title}: ${r.actualCommit} ${r.commitMatch ? "MATCH" : "!!! MISMATCH"} (${r.commitDate})`);
@@ -342,6 +357,9 @@ L.push(`## <pb:...> markers — total ${pbTotal}`);
 for (const [f, n] of Object.entries(pbCounts)) L.push(`- ${f}: ${n}`);
 L.push("");
 L.push(`## Passage verification`);
+L.push(`- rows: ${passageResults.length}/${PASSAGE_ROW_COUNT}`);
+L.push(`- all accepted: ${result.passageAllVerified ? "YES" : "NO"}`);
+L.push(`- all contiguous: ${result.passageAllContiguous ? "YES" : "NO"}`);
 for (const p of passageResults) {
   L.push(`- ${p.passageId} [${p.status}] ${p.filePath} ${p.juan}/${p.section} ${p.pbMarker}`);
   if (p.transcriptionNote) L.push(`    NOTE: ${p.transcriptionNote}`);

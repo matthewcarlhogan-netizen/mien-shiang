@@ -1,6 +1,6 @@
-# acquire-and-verify — 2026-08-29T05:38:07.399Z
+# acquire-and-verify — 2026-08-30T13:54:07.890Z
 
-dossier SHA-256: c67d1ca45a51acaaf7444a25a70ad64c3d54116cf9131727092c596f586e65ed
+dossier SHA-256 (normalized UTF-8 text): c67d1ca45a51acaaf7444a25a70ad64c3d54116cf9131727092c596f586e65ed
 
 ## Commits
 - KR3g0043 月波洞中記: f69732902fc82fb6b1f759cb7bf5a910c0b903a3 MATCH (2016-02-05T19:15:36+09:00)
@@ -47,6 +47,9 @@ dossier SHA-256: c67d1ca45a51acaaf7444a25a70ad64c3d54116cf9131727092c596f586e65e
 - KR3g0046_002.txt: 55
 
 ## Passage verification
+- rows: 17/17
+- all accepted: YES
+- all contiguous: NO
 - tq-j2-wuyue [VERIFIED] KR3g0045_002.txt 卷二/五嶽 <pb:KR3g0045_WYG_002-17b> to <pb:KR3g0045_WYG_002-18a>
 - tq-j2-sidu [VERIFIED] KR3g0045_002.txt 卷二/四瀆 <pb:KR3g0045_WYG_002-18a> to <pb:KR3g0045_WYG_002-18b>
 - tq-j2-wuguan [VERIFIED] KR3g0045_002.txt 卷二/五官 <pb:KR3g0045_WYG_002-18b>

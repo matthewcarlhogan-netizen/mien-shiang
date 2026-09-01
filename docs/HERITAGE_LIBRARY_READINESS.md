@@ -257,7 +257,7 @@ below. `npm run audit:release`: exits 0 both before and after this session's cha
 pre-existing, unrelated rights/store-approval checklist, not a regression). Independent
 re-verification, `node scripts/heritage-evidence/acquire-and-verify.mjs` (fresh clone of all four
 Kanripo repos from GitHub, hashes recomputed from bytes, not read from the dossier): all 4
-commits MATCH, **17/17 file hashes MATCH**, all 18 dossier passages VERIFIED or
+commits MATCH, **17/17 file hashes MATCH**, all 17 dossier passages VERIFIED or
 VERIFIED_WITH_TRANSCRIPTION_NOTE (zero FAILED) — confirming the evidence base this session's
 `SOURCE_REGISTRY` promotions rely on is independently sound today, not merely trusted from an
 earlier pass.

@@ -1,8 +1,9 @@
 {
-  "acquisitionTimestamp": "2026-08-29T05:38:07.399Z",
+  "acquisitionTimestamp": "2026-08-30T13:54:07.890Z",
   "dossier": {
     "path": "MIEN_SHIANG_PINNING_PASS.md",
-    "sha256": "c67d1ca45a51acaaf7444a25a70ad64c3d54116cf9131727092c596f586e65ed"
+    "sha256": "c67d1ca45a51acaaf7444a25a70ad64c3d54116cf9131727092c596f586e65ed",
+    "sha256Basis": "UTF-8 text after CRLF/CR newline normalization"
   },
   "repos": [
     {
@@ -678,7 +679,8 @@
       "status": "VERIFIED"
     }
   ],
-  "passageAllVerified": false,
+  "passageAllVerified": true,
+  "passageAllContiguous": false,
   "checks": {
     "十二宮_U+5BAE": {
       "term": "十二宮",
