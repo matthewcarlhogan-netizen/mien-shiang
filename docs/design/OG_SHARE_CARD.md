@@ -2,16 +2,17 @@
 
 ## Visual thesis and user moment
 
-The share preview is **a quiet reading room introduced as an instrument**: one
-clear product name, one honest sentence about what happens on-device, and a
-neutral five-colour mark that belongs to the product without pretending to be
-the reader's result. The user moment is the link preview before somebody
+The share preview is **a quiet reading room introduced as an editorial cover**:
+one clear product name, one honest sentence about what happens on-device, and
+a restrained red field carrying the existing mark language without pretending
+to be the reader's result. The user moment is the link preview before somebody
 decides whether to open the app.
 
 The card keeps the first viewport legible at a glance: the title and product
-purpose lead on the left, while the mark supplies recognition on the right.
-The mark is intentionally unpersonalised; it contains no face, scan output,
-landmark, percentage, or interpretation.
+purpose lead on the left, while the red field supplies recognition on the
+right. The composition is flat and print-like rather than a dashboard or
+synthetic technology illustration. The mark is intentionally unpersonalised;
+it contains no face, scan output, landmark, percentage, or interpretation.
 
 ## Reference note
 
@@ -21,7 +22,7 @@ no image, lettering, motif, or layout is copied from them.
 1. [The Metropolitan Museum of Art — Pair of Square Seals with Cloud and Rock Pattern](https://www.metmuseum.org/art/collection/search/73666)
    (material / Chinese visual culture): the square seal is a compact physical
    object with a carved boundary and a deliberate relationship between surface
-   and mark. We keep the square boundary and line discipline; we do **not**
+   and mark. We keep the compact boundary and line discipline; we do **not**
    copy the cloud-and-rock relief, stone texture, or object silhouette.
 2. [V&A — Chinese wallpapers and the chinoiserie style](https://www.vam.ac.uk/articles/chinese-wallpapers-and-the-chinoiserie-style)
    (material / spatial design): a repeated paper field can establish atmosphere
@@ -49,6 +50,18 @@ no image, lettering, motif, or layout is copied from them.
    at a high-level touchpoint. We keep the product-specific type-and-colour
    system; we do **not** copy Material cards, elevation, motion, or example
    brands.
+7. [The Pattern](https://www.thepattern.com/) and [The Pattern on the App Store](https://apps.apple.com/us/app/the-pattern/id1071085727)
+   (contemporary personal software): the experience leads with intimate,
+   reflective language and enough space for the user to feel addressed rather
+   than marketed at. We keep the quiet, personal invitation and text-led
+   pacing; we do **not** copy astrology vocabulary, natal-chart imagery,
+   relationship labels, onboarding copy, or the app's interface.
+8. [Co–Star](https://www.costarastrology.com/) and [Design Matters on Co–Star](https://recordings.designmatters.io/how-the-design-of-the-astrology-app-co-star-is-conquering-the-masses/)
+   (contemporary digital editorial): a spare field, strong contrast, and one
+   legible focal statement can carry a distinctive product voice without a
+   crowded illustration. We keep the directness and restraint; we do **not**
+   copy its black-and-white system, celestial symbols, horoscope language,
+   illustrations, social mechanics, or screenshots.
 
 ## Asset provenance and licence
 
@@ -56,8 +69,8 @@ no image, lettering, motif, or layout is copied from them.
 palette values already declared in `src/ui/qise/palette.js`, system font
 fallbacks, and simple SVG primitives. `src/og-image.png` is a locally rendered
 1200 × 630 rasterisation of that SVG for social crawlers. No third-party image,
-font, seal, or texture is embedded. The linked references are not assets and
-are not reproduced.
+font, seal, or texture is embedded, and no generative image asset is used. The
+linked references are not assets and are not reproduced.
 
 ## Mobile-first verification plan
 

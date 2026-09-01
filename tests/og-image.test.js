@@ -51,4 +51,5 @@ test("the authored SVG uses the approved palette and carries no personal reading
     assert.match(svg, new RegExp(hex.replace("#", "#")), `${hex} must remain in the OG source`);
   }
   assert.doesNotMatch(svg, /landmark|percentage|reading result|today's reading/i);
+  assert.doesNotMatch(svg, /astrology|horoscope|zodiac|natal|planetary|celestial/i);
 });

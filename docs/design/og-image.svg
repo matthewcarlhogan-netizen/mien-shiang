@@ -7,33 +7,37 @@
 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
   <title id="title">Mien Shiang — a private, on-device face scanner</title>
-  <desc id="desc">A quiet dark reading-room composition with a restrained five-colour instrument mark.</desc>
+  <desc id="desc">A quiet editorial cover on mineral paper with a restrained red field and line mark.</desc>
 
-  <rect width="1200" height="630" fill="#1B1917"/>
-  <rect x="56" y="56" width="1088" height="518" fill="none" stroke="#EDE8DC" stroke-opacity=".24"/>
-  <path d="M56 170H1144M56 474H1144" stroke="#EDE8DC" stroke-opacity=".12"/>
+  <!-- A flat print-like cover: paper, type, one red field, and fine rules. -->
+  <rect width="1200" height="630" fill="#DCDBD3"/>
+  <rect x="48" y="48" width="1104" height="534" fill="none" stroke="#1B1917" stroke-opacity=".32"/>
+  <path d="M48 154H1152M48 500H1152" stroke="#1B1917" stroke-opacity=".2"/>
 
-  <g fill="#EDE8DC" font-family="Arial, Helvetica, sans-serif">
-    <text x="104" y="142" fill="#B0392A" font-size="18" font-weight="700" letter-spacing="5">MIEN SHIANG</text>
-    <text x="104" y="246" font-size="62" font-weight="700" letter-spacing="-1.5">A private,</text>
-    <text x="104" y="316" font-size="62" font-weight="700" letter-spacing="-1.5">on-device face scanner</text>
-    <text x="104" y="390" fill="#C09A2B" font-size="23" letter-spacing=".2">A quiet reading room for measured reflection.</text>
-    <text x="104" y="520" font-size="15" font-weight="700" letter-spacing="2.8">ENTERTAINMENT · NOT A MEDICAL DEVICE</text>
+  <g fill="#1B1917" font-family="Arial, Helvetica, sans-serif">
+    <text x="92" y="116" fill="#B0392A" font-size="18" font-weight="700" letter-spacing="5">MIEN SHIANG</text>
+    <text x="1042" y="116" font-size="13" font-weight="700" letter-spacing="2.2" text-anchor="end">PRIVATE / ON DEVICE</text>
   </g>
 
-  <!-- A neutral instrument mark: five palette relationships, no personal result. -->
-  <g transform="translate(842 152)">
-    <rect x="0" y="0" width="288" height="288" fill="none" stroke="#EDE8DC" stroke-width="4"/>
-    <rect x="14" y="14" width="260" height="260" fill="none" stroke="#EDE8DC" stroke-opacity=".2"/>
-    <line x1="144" y1="144" x2="144" y2="38" stroke="#B0392A" stroke-width="5" stroke-linecap="round"/>
-    <line x1="144" y1="144" x2="250" y2="144" stroke="#EDE8DC" stroke-width="5" stroke-linecap="round"/>
-    <line x1="144" y1="144" x2="144" y2="250" stroke="#1B1917" stroke-width="5" stroke-linecap="round"/>
-    <line x1="144" y1="144" x2="38" y2="144" stroke="#4A6E67" stroke-width="5" stroke-linecap="round"/>
-    <circle cx="144" cy="144" r="35" fill="none" stroke="#C09A2B" stroke-width="4"/>
-    <circle cx="144" cy="144" r="7" fill="#EDE8DC"/>
-    <circle cx="144" cy="38" r="6" fill="#B0392A"/>
-    <circle cx="250" cy="144" r="6" fill="#EDE8DC"/>
-    <circle cx="144" cy="250" r="6" fill="#1B1917" stroke="#EDE8DC" stroke-width="2"/>
-    <circle cx="38" cy="144" r="6" fill="#4A6E67"/>
+  <g fill="#1B1917" font-family="Georgia, 'Times New Roman', serif">
+    <text x="92" y="270" font-size="74" letter-spacing="-2">A private</text>
+    <text x="92" y="352" font-size="74" letter-spacing="-2">reading room.</text>
+  </g>
+
+  <g fill="#1B1917" font-family="Arial, Helvetica, sans-serif">
+    <text x="94" y="414" font-size="21" letter-spacing=".2">An on-device face scanner rooted in tradition.</text>
+    <text x="94" y="542" font-size="14" font-weight="700" letter-spacing="2.5">ENTERTAINMENT · NOT A MEDICAL DEVICE</text>
+  </g>
+
+  <!-- A neutral brand mark, not a result: no axes, grid, data, or face. -->
+  <g transform="translate(836 190)">
+    <rect x="0" y="0" width="262" height="262" fill="#B0392A"/>
+    <rect x="17" y="17" width="228" height="228" fill="none" stroke="#EDE8DC" stroke-width="3"/>
+    <path d="M69 181C43 163 37 124 51 91C66 56 104 36 141 45C169 52 193 71 201 99"
+      fill="none" stroke="#EDE8DC" stroke-width="11" stroke-linecap="butt"/>
+    <circle cx="184" cy="74" r="15" fill="#EDE8DC"/>
+    <path d="M58 207H204" stroke="#4A6E67" stroke-width="3"/>
+    <path d="M58 218H160" stroke="#C09A2B" stroke-width="3"/>
+    <path d="M58 229H116" stroke="#1B1917" stroke-width="3"/>
   </g>
 </svg>
