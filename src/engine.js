@@ -560,6 +560,106 @@ export function regionStats(rgba, mask, w, h) {
 }
 
 /**
+ * How far a zone's own scalar would move if its ROI boundary had landed a
+ * few pixels differently — the confidence signal for landmark jitter that
+ * item 33/18's `basis` pattern already uses for other kinds of partial
+ * measurement, applied here instead of touching what regionStats() returns.
+ *
+ * Deliberately NOT built by feeding a continuously-weighted mask into
+ * regionStats(): every scalar it produces (ei, mi, L, b, focalEi) is a
+ * TRIMMED-MEDIAN or percentile statistic taken by selectKth's unweighted
+ * three-way partition (textureAnalyzer.js, item 46). There is no weighted
+ * order-statistic anywhere in this codebase, and inventing one — a sort-and
+ * -accumulate-weight algorithm, not the current O(n) selection — to answer a
+ * confidence question would double the numerically delicate surface area
+ * items 30/46 exist to keep small, with none of their existing NaN-partition
+ * or tie-band tests protecting it. So this compares the SAME unweighted
+ * statistics computed over two masks (the full one and one eroded by
+ * BOUNDARY_EROSION_PX) instead: same selection code, same guarantees, zero
+ * change to any existing scalar.
+ *
+ * BOTH the trimmed centre AND the focal excess are compared, not the centre
+ * alone, and that is not redundancy — it was the first version's bug. A
+ * boundary-jitter ring is, almost by construction, a MINORITY of a real
+ * zone's pixels, and item 30 already proves the point that matters here: "the
+ * median of a symmetric trim is the median" — robustCentreOf() picks the
+ * value at a middle RANK, so any contamination under 50% of the sample cannot
+ * move it, however extreme that contamination is. A synthetic test with a 34%
+ * boundary ring at full saturation moved the centre by exactly zero before
+ * this comment was corrected. focalExcessOf() is the statistic item 30 built
+ * for precisely this shape of contamination — a raised MINORITY tail — so it
+ * is what actually catches a boundary ring in the realistic case. The centre
+ * comparison is kept as a backstop for thin, near-MIN_ROI_PX zones where a
+ * jitter genuinely can flip a majority of the pixels.
+ *
+ * Only the erythema-index sample is used, not the full regionStats() — ei is
+ * the cheapest of the four order statistics (two channels, no GLCM) and the
+ * one the safety gate is most sensitive to (item 2), so it is the one worth
+ * spending the extra pass on for every zone rather than the whole
+ * regionStats() output. Centre and focal excess are taken off the SAME
+ * sample, in that order, for the reason regionStats() does the same: the
+ * second selection inherits the first's partial ordering.
+ */
+export const BOUNDARY_SENSITIVITY_EI_THRESHOLD = 1.5;
+export const BOUNDARY_SENSITIVITY_FOCAL_THRESHOLD = 1.5;
+
+function erythemaSampleOver(rgba, mask, w, h) {
+  const px = w * h;
+  let n = 0;
+  for (let i = 0; i < px; i++) if (mask[i]) n++;
+  if (n < 32) return null; // too few surviving pixels for a meaningful statistic
+
+  const ei = new Float64Array(n);
+  let j = 0;
+  for (let i = 0; i < px; i++) {
+    if (!mask[i]) continue;
+    const p = i * 4;
+    const R = srgbToLinear(rgba[p]), G = srgbToLinear(rgba[p + 1]);
+    ei[j++] = 100 * Math.log10((R + EPS) / (G + EPS));
+  }
+  return ei;
+}
+
+/**
+ * @param {Uint8ClampedArray} rgba region-local RGBA, as regionStats() takes
+ * @param {Uint8Array} fullMask the region's ordinary hull mask
+ * @param {Uint8Array} erodedMask `erodeMask(fullMask, w, h)` from roi.js
+ * @returns {{sensitive:boolean, deltaEi:number|null, deltaFocalEi:number|null, reason?:string}}
+ */
+export function boundarySensitivity(rgba, fullMask, erodedMask, w, h) {
+  const fullEi = erythemaSampleOver(rgba, fullMask, w, h);
+  const erodedEi = erythemaSampleOver(rgba, erodedMask, w, h);
+
+  // A mask too small to evaluate is not evidence of stability — the erosion
+  // ran out of interior before it ran out of jitter margin, which is itself
+  // the failure mode this flag exists to surface. Fails toward "sensitive".
+  if (!fullEi || !erodedEi) {
+    return {
+      sensitive: true, deltaEi: null, deltaFocalEi: null,
+      reason: !erodedEi ? "eroded_too_small" : "full_too_small",
+    };
+  }
+
+  const fullCentre = robustCentreOf(fullEi, ERYTHEMA_TRIM_LO, ERYTHEMA_TRIM_HI);
+  const fullFocal = focalExcessOf(fullEi);
+  const erodedCentre = robustCentreOf(erodedEi, ERYTHEMA_TRIM_LO, ERYTHEMA_TRIM_HI);
+  const erodedFocal = focalExcessOf(erodedEi);
+
+  const deltaEi = Math.abs(fullCentre - erodedCentre);
+  // focalExcessOf() needs 16+ samples; below that it returns NaN, which must
+  // not read as "no excess" — an eroded sample that shrank below the floor is
+  // exactly the case this flag exists to catch, not a reason to stay quiet.
+  const deltaFocalEi = Number.isNaN(fullFocal) || Number.isNaN(erodedFocal)
+    ? null : Math.abs(fullFocal - erodedFocal);
+
+  const sensitive = deltaEi > BOUNDARY_SENSITIVITY_EI_THRESHOLD
+    || deltaFocalEi === null
+    || deltaFocalEi > BOUNDARY_SENSITIVITY_FOCAL_THRESHOLD;
+
+  return { sensitive, deltaEi, deltaFocalEi };
+}
+
+/**
  * Whole-face analysis.
  *
  * SELF-REFERENCE is the point: every value is a difference between one region

@@ -28,6 +28,61 @@
 export const MIN_ROI_PX = 8;
 
 /**
+ * How far a MediaPipe landmark can be expected to move between two otherwise
+ * identical detections (GPU vs CPU delegate, or one device vs another) before
+ * a boundary-sensitivity check has anything to catch. Not measured against
+ * this repo's own landmarker output — no cross-device landmark corpus exists
+ * here to measure it from — but taken from the magnitude actually cited when
+ * this diagnostic was commissioned ("MediaPipe's GPU-backed landmarks shift by
+ * even 2 pixels"), plus 1px for the canvas alpha-threshold rasterisation in
+ * region-extractor.js, which can itself move a boundary pixel in or out on a
+ * sub-pixel hull shift. Uncalibrated in the sense every constant in this file
+ * that predates real device data is uncalibrated — revisit if real landmark
+ * jitter is ever measured across devices.
+ */
+export const BOUNDARY_EROSION_PX = 3;
+
+/**
+ * Binary morphological erosion: a masked pixel survives only if every pixel
+ * within `radiusPx` (Chebyshev / box neighbourhood, not a circular one — a
+ * square structuring element is what a `radiusPx`-wide jitter in any
+ * direction actually threatens, and it is cheap to get exactly right) is
+ * ALSO masked. What remains is the pixels that would stay inside the region
+ * even if the hull that produced `mask` had landed `radiusPx` px differently.
+ *
+ * Pure array math over an already-rasterised mask, not a polygon offset of
+ * the hull — the hull is a geometric contour, but what a boundary-sensitivity
+ * check actually needs to know is which raster pixels are robust to a small
+ * shift of that contour, and eroding the raster answers that directly without
+ * a second, only-approximately-equivalent computational-geometry codepath.
+ */
+export function erodeMask(mask, w, h, radiusPx = BOUNDARY_EROSION_PX) {
+  const r = Math.max(0, radiusPx | 0);
+  const eroded = new Uint8Array(w * h);
+  if (r === 0) { eroded.set(mask); return eroded; }
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      if (!mask[i]) continue;
+
+      let survives = true;
+      for (let dy = -r; dy <= r && survives; dy++) {
+        const ny = y + dy;
+        if (ny < 0 || ny >= h) { survives = false; break; }
+        const rowBase = ny * w;
+        for (let dx = -r; dx <= r; dx++) {
+          const nx = x + dx;
+          if (nx < 0 || nx >= w || !mask[rowBase + nx]) { survives = false; break; }
+        }
+      }
+      eroded[i] = survives ? 1 : 0;
+    }
+  }
+  return eroded;
+}
+
+/**
  * Convex hull of the selected landmarks, expanded about its centroid by `pad`.
  *
  * @returns {Array<{x:number,y:number}>|null} null when fewer than 3 landmarks
