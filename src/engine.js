@@ -660,6 +660,104 @@ export function boundarySensitivity(rgba, fullMask, erodedMask, w, h) {
 }
 
 /**
+ * The high-frequency/low-frequency ceiling that separates ordinary sensor
+ * noise from a forced-high-ISO capture, in units of the four-neighbour
+ * Laplacian variance laplacianResponses() returns.
+ *
+ * UNCALIBRATED against a real device, in the same sense every constant in
+ * this file that predates labelled data is uncalibrated — there is no corpus
+ * of real high-ISO phone photos here to fit against. What it IS calibrated
+ * against: the same synthetic method item 4 used to derive
+ * NOISE_FLOOR_STRUCTURENESS — measuring this exact statistic on a flat 8-bit
+ * patch at increasing Gaussian noise sigma:
+ *
+ *   sigma (levels)   1     2     3     4      5      6      8     10    15
+ *   variance         8.3   28.8  61.8  109.1  168.8  243.4  430.6 673.3 1509.2
+ *
+ * A well-exposed phone capture's residual per-pixel noise after ISP
+ * denoising is ordinarily a few levels of sigma; a capture forced to a high
+ * ISO by insufficient light visibly grains at roughly double that. 200 sits
+ * inside the gap between the two regimes with margin on both sides, the same
+ * shape of choice as item 4's clamp — not fit to a boundary, sitting between
+ * two measured regimes. Revisit if real device photos at known ISO are ever
+ * collected.
+ */
+export const SENSOR_NOISE_VARIANCE_CEILING = 200;
+
+/**
+ * Four-neighbour discrete Laplacian, restricted to fully-interior masked
+ * pixels — a pixel whose neighbour crosses the mask boundary is skipped
+ * rather than treated as a 0-valued neighbour, so the boundary itself (which
+ * is a real edge, not noise) cannot inflate the estimate.
+ *
+ * Same statistic as qise/framestats.js's spatialLaplacianVariance(), used
+ * there in the opposite direction (LOW variance flags a blurred/filtered
+ * frame; HIGH variance here flags a noisy one). Reimplemented against this
+ * tree's (gray, mask, w, h) typed-array shape rather than qise's per-pixel
+ * object list — the two module trees do not import from each other (see
+ * CLAUDE.md's Qi Se tracker separation) and the data representations are not
+ * interchangeable without a full copy. If the formula changes, change it in
+ * both places.
+ */
+function laplacianResponses(gray, mask, w, h) {
+  const responses = [];
+  for (let y = 1; y < h - 1; y++) {
+    const row = y * w;
+    for (let x = 1; x < w - 1; x++) {
+      const i = row + x;
+      if (!mask[i] || !mask[i - 1] || !mask[i + 1] || !mask[i - w] || !mask[i + w]) continue;
+      responses.push(4 * gray[i] - gray[i - 1] - gray[i + 1] - gray[i - w] - gray[i + w]);
+    }
+  }
+  return responses;
+}
+
+/**
+ * Whole-capture sensor-noise confidence, pooled from the SAME peripheral
+ * baseline zones item 6 already uses for the colour baseline.
+ *
+ * Pooled across zones, never taken per-zone — the identical reasoning item
+ * 4/27 already established for structureness: a single small zone's
+ * high-frequency energy is dominated by whatever texture that one patch
+ * happens to have (a stray hair, a pore cluster), and pooling is what turns
+ * "is the WHOLE capture unusually noisy" into a question with a stable
+ * answer instead of one zone's luck.
+ *
+ * A CONFIDENCE FLAG, never a hard rejection — unlike the low-ITA erythema
+ * regime, this never suppresses an observation, only degrades trust in it.
+ * There is no labelled data here to say where a hard cutoff belongs, and a
+ * continuum degraded into a boolean pass/fail would assert a precision this
+ * measurement does not have. UI-surfaceable, not UI-blocking.
+ */
+export function sensorNoiseConfidence(regions, baselineZones = BASELINE_ZONES) {
+  const pooled = [];
+  let zonesRead = 0;
+  for (const key of baselineZones) {
+    const r = regions[key];
+    if (!r || !r.stats || !r.stats.gray) continue;
+    zonesRead++;
+    for (const v of laplacianResponses(r.stats.gray, r.mask, r.w, r.h)) pooled.push(v);
+  }
+  // Same floor as regionStats()'s own refusal (item: "too few pixels for the
+  // colorimetry to mean anything") — below it a variance estimate is noise
+  // about noise, not a measurement.
+  if (pooled.length < 256) {
+    return { confidence: "unknown", noiseVariance: null, reason: "not_enough_baseline_pixels", zonesRead };
+  }
+
+  const mean = pooled.reduce((s, v) => s + v, 0) / pooled.length;
+  const variance = pooled.reduce((s, v) => s + (v - mean) ** 2, 0) / pooled.length;
+  const degraded = variance > SENSOR_NOISE_VARIANCE_CEILING;
+
+  return {
+    confidence: degraded ? "degraded" : "full",
+    noiseVariance: variance,
+    reason: degraded ? "high_frequency_energy_exceeds_flat_skin_ceiling" : "",
+    zonesRead,
+  };
+}
+
+/**
  * Whole-face analysis.
  *
  * SELF-REFERENCE is the point: every value is a difference between one region
@@ -768,6 +866,7 @@ export function rawScalars(regions, opts = {}) {
   const ita = itaDegrees(med(baseL), med(baseB));
   const { regime, reason } = erythemaConfidence(ita);
   const baselineBlur = med(baseBlur);
+  const noise = sensorNoiseConfidence(regions, BASELINE_ZONES);
   const baseline = {
     ei: med(baseEi), mi: med(baseMi), contrast: med(baseC), ridge: med(baseR),
     ita, band: itaBand(ita), regime, reason, n: basePx,
@@ -779,6 +878,12 @@ export function rawScalars(regions, opts = {}) {
     ridgeScaleClamped: calibration.clamped, ridgeScaleFallback: calibration.fallback,
     ridgeScaleSamples: calibration.n,
     blurSigma: baselineBlur,
+    /** Confidence, not a gate — see sensorNoiseConfidence(). Surfaced so the
+     *  UI can flag "this light was hard on the camera" without this module
+     *  deciding to withhold anything on its own. */
+    sensorNoiseVariance: noise.noiseVariance,
+    sensorNoiseConfidence: noise.confidence,
+    sensorNoiseReason: noise.reason,
   };
 
   const zones = {};
