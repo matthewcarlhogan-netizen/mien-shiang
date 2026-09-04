@@ -57,7 +57,23 @@ export function srgbToLinear(v) {
  *  MUST be applied to the whole frame, once — never per region. Normalising
  *  each region separately drives them all toward grey and erases exactly the
  *  between-region differences this whole method measures. */
-export function shadesOfGray(data, p = 6) {
+/**
+ * @param {Uint8ClampedArray|Uint8Array|Array} data RGBA buffer, whole frame
+ * @param {number} p Minkowski order
+ * @param {Uint8Array|null} sampleMask ONE ENTRY PER PIXEL (not per RGBA
+ *   component — length data.length/4), restricting which pixels feed the
+ *   illuminant ESTIMATE. Never restricts which pixels the resulting gain is
+ *   APPLIED to: the second pass below is unconditional over every pixel,
+ *   background included, exactly as it always was. That is the whole
+ *   distinction CLAUDE.md item 1 exists to enforce — "applied ONCE, to the
+ *   WHOLE FRAME" describes the APPLICATION, and restricting the SAMPLE that
+ *   feeds a single frame-wide estimate is not the same operation as
+ *   estimating and applying separately per region. Do not let sampleMask
+ *   grow a second call site that also gates the application loop — that
+ *   would be item 1's bug again, just reached through a mask instead of a
+ *   per-zone call.
+ */
+export function shadesOfGray(data, p = 6, sampleMask = null) {
   const len = data.length;
 
   /* Both loops below are table-driven on the WHOLE FRAME — three pow() and
@@ -69,26 +85,45 @@ export function shadesOfGray(data, p = 6) {
    * future higher-bit-depth buffer) still gets the arithmetic. */
   const byteInput = data instanceof Uint8ClampedArray || data instanceof Uint8Array;
 
-  let sr = 0, sg = 0, sb = 0, n = 0;
-  if (byteInput) {
-    const pw = new Float64Array(256);
-    for (let v = 0; v < 256; v++) pw[v] = Math.pow(v, p);
-    for (let i = 0; i < len; i += 4) {
-      if (data[i + 3] < 8) continue;
-      sr += pw[data[i]];
-      sg += pw[data[i + 1]];
-      sb += pw[data[i + 2]];
-      n++;
+  /* Accumulation only — never touches `out`. Kept as one function so the
+   * masked and unmasked passes cannot drift into two copies of the same
+   * pow-table arithmetic (item 47's lesson). Called with useMask=false this
+   * is line-for-line the loop this function has always run, so the
+   * no-sampleMask caller's result is unaffected — confirmed by engine-bench's
+   * fingerprint, which is an EMPTY diff for every existing (unmasked) call
+   * site. */
+  const accumulate = (useMask) => {
+    let sr = 0, sg = 0, sb = 0, n = 0;
+    if (byteInput) {
+      const pw = new Float64Array(256);
+      for (let v = 0; v < 256; v++) pw[v] = Math.pow(v, p);
+      for (let i = 0; i < len; i += 4) {
+        if (data[i + 3] < 8) continue;
+        if (useMask && !sampleMask[i >> 2]) continue;
+        sr += pw[data[i]];
+        sg += pw[data[i + 1]];
+        sb += pw[data[i + 2]];
+        n++;
+      }
+    } else {
+      for (let i = 0; i < len; i += 4) {
+        if (data[i + 3] < 8) continue;
+        if (useMask && !sampleMask[i >> 2]) continue;
+        sr += Math.pow(data[i], p);
+        sg += Math.pow(data[i + 1], p);
+        sb += Math.pow(data[i + 2], p);
+        n++;
+      }
     }
-  } else {
-    for (let i = 0; i < len; i += 4) {
-      if (data[i + 3] < 8) continue;
-      sr += Math.pow(data[i], p);
-      sg += Math.pow(data[i + 1], p);
-      sb += Math.pow(data[i + 2], p);
-      n++;
-    }
-  }
+    return { sr, sg, sb, n };
+  };
+
+  let { sr, sg, sb, n } = accumulate(Boolean(sampleMask));
+  // A sample too small to trust falls back to the whole frame — the ORIGINAL
+  // always-available estimate — rather than a gain fit to a handful of
+  // pixels, or a refusal. This is the only fallback path; there is no
+  // per-region retry, which is exactly what item 1 forbids.
+  if (sampleMask && n < 16) ({ sr, sg, sb, n } = accumulate(false));
   if (n < 16) return data;
 
   let ir = Math.pow(sr / n, 1 / p);
