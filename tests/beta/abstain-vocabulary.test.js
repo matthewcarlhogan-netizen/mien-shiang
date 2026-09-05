@@ -1,98 +1,90 @@
-/* Beta abstain vocabulary test — asserts abstain state uses correct vocabulary.
- * - No red colors for text or error framing (cinnabar #C8452A allowed only for seal/ticks)
- * - No "error"/"failed"/"broken"/"try again" vocabulary
- * - No apology-tone phrasing
- * - No claim-structure violations in abstain flow
+/* Abstention is scarcity, not failure.
+ *
+ * When the light is untrue the beta shows no seal. The words around that must
+ * not turn a refusal to measure into an accusation or an apology — and the
+ * fix instruction beside it is the GATES' own, passed through rather than
+ * paraphrased, so the beta cannot drift from what production tells the same
+ * user about the same frame.
+ *
+ * Driven through the real captureInstruction over every real gate id, so a
+ * new gate message written in the wrong register fails here.
  */
+
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { GATES, captureInstruction } from "../../src/qise/gates.js";
+import { abstainModel, VOICE } from "../../beta/beta-model.js";
 
-const BETA_JS = fileURLToPath(new URL("../../beta/beta.js", import.meta.url));
-
-// Forbidden vocabulary for abstain state
-// "bad" is deliberately excluded: the within-person legend ("neither is good
-// or bad") uses it in a non-apologetic, non-error sense, and that string is
-// required verbatim by tests/beta/within-person.test.js.
-const FORBIDDEN_WORDS = [
-  "error", "failed", "failure", "broken", "break", "try again", "retry",
-  "sorry", "apologize", "apology", "unfortunately", "problem", "issue",
-  "wrong", "mistake", "fault", "invalid", "incorrect",
+/* Words that would recast an unmeasurable frame as a fault or an apology.
+ *
+ * Matched at WORD BOUNDARIES, not as substrings. "red" inside "coloured" is
+ * the false positive that CLAUDE.md item 40 is about, and the gate copy
+ * legitimately says "coloured lamps". A scanner confidently wrong about the
+ * text it misread is worse than no scanner. */
+const FORBIDDEN = [
+  "red", "error", "failed", "failure", "broken", "sorry", "apologies",
+  "invalid", "bad", "wrong", "unable",
 ];
+const hasForbidden = (text, word) =>
+  new RegExp(String.raw`\b${word}\b`, "i").test(text);
 
-const forbiddenRegex = new RegExp(
-  "\\b(" + FORBIDDEN_WORDS.map((w) => w.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")).join("|") + ")\\b",
-  "i"
-);
+/** A statement ABOUT the reader is a claim; the app makes none. */
+const CLAIM_STRUCTURE = /\byou\s+(are|will|feel|look|seem|have)\b/i;
 
-// Claim-structure regex
-const CLAIM_STRUCTURE_REGEX = /\byou\s+(are|will|feel|look|seem|have)\b/i;
+function reportFor(id) {
+  return { pass: false, failures: [{ id, message: `${id} gate`, unevaluated: false }], margins: {} };
+}
 
-test("abstain-vocabulary: no error/failure vocabulary in beta files", () => {
-  const code = readFileSync(BETA_JS, "utf8");
-  
-  // Strip comments
-  const stripped = code.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
-  
-  const m = stripped.match(forbiddenRegex);
-  assert.equal(m, null,
-    m ? `abstain-vocabulary violation — found forbidden word: "${m[0]}"` : undefined);
-});
+const everyGateId = GATES.map((gate) => gate.id);
 
-test("abstain-vocabulary: abstain strings use correct phrasing", () => {
-  const code = readFileSync(BETA_JS, "utf8");
-  
-  // Expected abstain strings (exact match per design spec)
-  const expectedAbstainStrings = [
-    "The light was untrue. No seal.",
-    "Face a window or raise the halo.",
-  ];
-  
-  for (const expected of expectedAbstainStrings) {
-    assert.ok(code.includes(expected),
-      `abstain-vocabulary: expected string not found: "${expected}"`);
-  }
-});
+test("every real gate id produces an abstain surface with no fault vocabulary", () => {
+  assert.ok(everyGateId.length >= 8, `expected the full gate set, saw ${everyGateId.length}`);
 
-test("abstain-vocabulary: no claim-structure violations in abstain context", () => {
-  const code = readFileSync(BETA_JS, "utf8");
-  const stripped = code.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
-  
-  // Check abstain-related strings specifically
-  const abstainContext = stripped.toLowerCase();
-  
-  // The claim-structure regex should not match in abstain messaging
-  const m = stripped.match(CLAIM_STRUCTURE_REGEX);
-  if (m) {
-    // Check if it's in an abstain-related section
-    const idx = stripped.indexOf(m[0]);
-    const contextStart = Math.max(0, idx - 100);
-    const contextEnd = Math.min(stripped.length, idx + 100);
-    const context = stripped.slice(contextStart, contextEnd).toLowerCase();
-    
-    if (context.includes("abstain") || context.includes("refused") || context.includes("no seal")) {
-      assert.fail(`claim-structure violation in abstain context: "${m[0]}"`);
+  for (const id of everyGateId) {
+    const model = abstainModel(captureInstruction(reportFor(id)));
+    const surface = `${model.line} ${model.action}`.toLowerCase();
+
+    for (const word of FORBIDDEN) {
+      assert.ok(!hasForbidden(surface, word),
+        `gate "${id}" abstain surface contains "${word}": ${surface}`);
     }
+    assert.ok(!CLAIM_STRUCTURE.test(surface),
+      `gate "${id}" abstain surface makes a claim about the reader: ${surface}`);
+    assert.ok(model.action.length > 0,
+      `gate "${id}" must carry an actionable instruction, not a bare refusal`);
   }
-  
-  // Pass if no violation found in abstain context
-  assert.ok(true, "no claim-structure violations in abstain context");
 });
 
-test("abstain-vocabulary: cinnabar color used only for seal and ticks", () => {
-  const code = readFileSync(BETA_JS, "utf8");
-  
-  // Cinnabar should be defined but only used for seal/ticks, not for error text
-  assert.ok(code.includes("#C8452A") || code.includes("CINNABAR"),
-    "cinnabar color should be defined");
-  
-  // Check that cinnabar is NOT used for text color in error/abstain context
-  // This is a structural check — the actual usage is in CSS
-  const cssFile = fileURLToPath(new URL("../../beta/beta.css", import.meta.url));
-  const cssCode = readFileSync(cssFile, "utf8");
-  
-  // In CSS, cinnabar should be used for .seal and ring ticks, not for general text
-  const sealUsesCinnabar = cssCode.includes(".seal") && cssCode.includes("#C8452A");
-  assert.ok(sealUsesCinnabar, "cinnabar should be used for seal styling");
+test("the scan matches whole words, and can still fail", () => {
+  // Positive control beside the negative one: the filter must reject a real
+  // fault-register line while accepting "coloured lamps".
+  assert.ok(!hasForbidden("turn off coloured lamps", "red"));
+  assert.ok(hasForbidden("the capture failed", "failed"));
+});
+
+test("the abstain line is the poetic one, and it names the light rather than the person", () => {
+  const model = abstainModel(captureInstruction(reportFor("underexposed")));
+  assert.equal(model.line, "The light was untrue. No seal.");
+  assert.equal(model.line, VOICE.abstain);
+  assert.ok(!CLAIM_STRUCTURE.test(model.line));
+});
+
+test("the instruction is the gate's own worst-first message, not a rewrite", () => {
+  // captureInstruction reports failures[0] — the worst margin, which gates.js
+  // has already ordered. abstainModel must pass it through unchanged.
+  const report = {
+    pass: false,
+    failures: [{ id: "motion", message: "motion" }, { id: "pose", message: "pose" }],
+    margins: {},
+  };
+  const instruction = captureInstruction(report);
+  const model = abstainModel(instruction);
+  assert.equal(model.gateId, "motion", "the worst-first failure decides the message");
+  assert.equal(model.action, instruction.detail || instruction.title);
+});
+
+test("an abstain with no report still refuses in the same register", () => {
+  const model = abstainModel(null);
+  assert.equal(model.line, VOICE.abstain);
+  assert.ok(!CLAIM_STRUCTURE.test(`${model.line} ${model.action}`));
 });

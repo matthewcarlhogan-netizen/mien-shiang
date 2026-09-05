@@ -1,108 +1,129 @@
-/* Beta within-person test — asserts ring and ledger encode only within-person deltas.
- * - No population strings
- * - No absolute colour values presented as population comparisons
- * - No "you are X" phrasing
+/* Everything the ledger and the ring show is within-person.
+ *
+ * Self-reference is the bias defence: nothing is compared to a population
+ * scale, and there is no population in this repo to be average against
+ * (CLAUDE.md, "The measurement layer", and item 33). The ledger's colour is
+ * driven by the delta against the subject's OWN baseline, never by an absolute
+ * Lab value — an absolute drawn here would read as a rating.
+ *
+ * Driven through the real model functions, with deltas of the shape
+ * qise/baseline.js `deltasFrom` actually produces.
  */
+
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { join } from "node:path";
+import { stripComments } from "../../scripts/copy-scan.js";
+import { ledgerModel, ringModel, readoutLine } from "../../beta/beta-model.js";
+import { deltasFrom, computeBaseline } from "../../src/qise/baseline.js";
 
-const BETA_JS = fileURLToPath(new URL("../../beta/beta.js", import.meta.url));
+const BETA_DIR = fileURLToPath(new URL("../../beta", import.meta.url));
 
-// Population comparison patterns that should NOT appear
-const POPULATION_PATTERNS = [
-  /population/i,
-  /average.*person/i,
-  /compared.*others/i,
-  /percentile/i,
-  /norm/i,
-  /normal.*range/i,
-  /typical/i,
-  /other.*users/i,
-  /people.*your/i,
-  /better.*than/i,
-  /worse.*than/i,
-];
+/* A short history of the same person, in the shape computeBaseline reads:
+ * `axes` per row, and baselineVersion "v2" so qiseMethodOf resolves to the
+ * sclera-corrected method. computeBaseline excludes the most recent three
+ * rows, so a usable baseline needs more than three. */
+function historyOf(values) {
+  return values.map((b, i) => ({
+    timestampIso: `2026-09-${String(i + 1).padStart(2, "0")}T09:00:00.000Z`,
+    valid: true,
+    baselineVersion: "v2",
+    axes: { a: 8, b, L: 60, C: 15, periorbitalL: 58, ming: 0.5, run: 0.5 },
+  }));
+}
 
-// Claim-structure regex for "you are" assertions
-const YOU_ARE_REGEX = /\byou\s+are\s+\w+/i;
-
-test("within-person: no population comparison strings in beta files", () => {
-  const code = readFileSync(BETA_JS, "utf8");
-  const stripped = code.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
-  
-  const offenders = [];
-  for (const pattern of POPULATION_PATTERNS) {
-    const m = stripped.match(pattern);
-    if (m) {
-      offenders.push(`Pattern ${pattern}: "${m[0]}"`);
-    }
-  }
-  
-  assert.deepEqual(offenders, [],
-    "within-person violation — found population comparison language:\n  " +
-    offenders.join("\n  "));
-});
-
-test("within-person: ledger encodes relative deltas only", () => {
-  const code = readFileSync(BETA_JS, "utf8");
-  
-  // The ledger should use within-person delta encoding (lerp between cool/warm)
-  // Check for the presence of delta-based coloring logic
-  assert.ok(code.includes("deltas") || code.includes("baseline"),
-    "within-person: ledger should reference baseline/deltas");
-  
-  // Verify no absolute color values are presented as population metrics
-  const absValuePatterns = [
-    /absolute.*value/i,
-    /population.*average/i,
-    /reference.*population/i,
+test("the ledger consumes within-person deltas and nothing else", () => {
+  const entries = [
+    { sealed: true, attenuated: false, deltas: { L: 0.4, a: -0.2, b: 1.1 } },
+    { sealed: true, attenuated: true, deltas: { L: -0.9, a: 0.1, b: -1.2 } },
+    { sealed: false, attenuated: false, deltas: null },
   ];
-  
-  const stripped = code.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
-  
-  for (const pattern of absValuePatterns) {
-    const m = stripped.match(pattern);
-    assert.equal(m, null,
-      m ? `within-person: should not present absolute values as population metrics: "${m[0]}"` : undefined);
+  const model = ledgerModel(entries);
+
+  assert.equal(model.length, 3);
+  // Warmth is a position between the two ends of the subject's own range.
+  assert.ok(model[0].warmth > model[1].warmth,
+    "a warmer delta must sit warmer than a cooler one");
+  for (const square of model) {
+    if (square.warmth === null) continue;
+    assert.ok(square.warmth >= 0 && square.warmth <= 1,
+      "warmth is a within-person position, always bounded");
+  }
+  // A reading with no delta is UNREAD, not zero. Absence of measurement and a
+  // measurement of absence are different objects.
+  assert.equal(model[2].kind, "unread");
+  assert.equal(model[2].warmth, null);
+});
+
+test("the ledger never reads an absolute colour value", () => {
+  // Same absolute Lab, opposite deltas: if an absolute leaked into the colour,
+  // these two would render the same.
+  const warm = ledgerModel([{ sealed: true, deltas: { L: 0, a: 0, b: 1.4 } }])[0];
+  const cool = ledgerModel([{ sealed: true, deltas: { L: 0, a: 0, b: -1.4 } }])[0];
+  assert.notEqual(warm.warmth, cool.warmth);
+
+  // And an entry carrying an absolute Lab but no delta stays unread.
+  const absoluteOnly = ledgerModel([
+    { sealed: true, lab: { L: 62, a: 9, b: 14 }, deltas: null },
+  ])[0];
+  assert.equal(absoluteOnly.warmth, null,
+    "an absolute Lab must not be able to colour a square");
+});
+
+test("the deltas the ledger receives are the store's own within-person deltas", () => {
+  const history = historyOf([12, 13, 12.5, 13.2, 12.8, 12.9, 13.1]);
+  const baseline = computeBaseline(history);
+  assert.ok(baseline.ready, "the fixture must produce a usable baseline");
+
+  const current = { a: 8, b: 14.5, L: 60, C: 15, periorbitalL: 58, ming: 0.5, run: 0.5 };
+  const deltas = deltasFrom(current, baseline);
+  assert.ok(deltas, "deltasFrom must produce within-person deltas");
+
+  // The pipeline's own delta drives the model; nothing is recomputed here.
+  const square = ledgerModel([{ sealed: true, deltas }])[0];
+  assert.ok(Number.isFinite(square.warmth) || square.warmth === null);
+  if (Number.isFinite(deltas.b)) {
+    assert.ok(square.warmth !== null, "a measured delta must colour the square");
   }
 });
 
-test("within-person: no 'you are' state assertions", () => {
-  const code = readFileSync(BETA_JS, "utf8");
-  const stripped = code.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
-  
-  const m = stripped.match(YOU_ARE_REGEX);
-  if (m) {
-    // Allow imperative forms like "you are invited to" but not state assertions
-    const contextStart = stripped.indexOf(m[0]);
-    const contextEnd = Math.min(stripped.length, contextStart + 50);
-    const context = stripped.slice(contextStart, contextEnd).toLowerCase();
-    
-    // Check if it's an allowed imperative vs a state assertion
-    const allowedImperatives = ["invited", "allowed", "free", "welcome"];
-    const isAllowed = allowedImperatives.some((word) => context.includes(word));
-    
-    if (!isAllowed) {
-      assert.fail(`within-person: 'you are' state assertion found: "${m[0]}"`);
+test("the ring counts seals, and reads no value at all", () => {
+  const model = ringModel([
+    { sealed: true, attenuated: false, deltas: { L: 9, a: 9, b: 9 } },
+    { sealed: true, attenuated: true, deltas: null },
+    { sealed: false, attenuated: false, deltas: null },
+  ]);
+  assert.equal(model.total, 3);
+  assert.equal(model.sealed, 2);
+  assert.deepEqual(model.ticks.map((t) => t.kind), ["clean", "attenuated", "abstain"]);
+  for (const tick of model.ticks) {
+    assert.deepEqual(Object.keys(tick).sort(), ["angle", "index", "kind"],
+      "a tick carries geometry and outcome; never a measured value");
+  }
+});
+
+test("the readout states deltas as deltas, signed", () => {
+  const line = readoutLine({ sealed: true, deltas: { L: 0.4, a: -0.2, b: 1.15 } }, 0);
+  assert.match(line, /ΔL \+0\.4/);
+  assert.match(line, /Δa -0\.2/);
+  assert.ok(!/\b6[0-9]\.\d\b/.test(line), "no absolute lightness may appear");
+  assert.equal(readoutLine({ sealed: false, deltas: null }, 1), "S02 · no seal");
+});
+
+test("no beta surface compares the reader to other people", () => {
+  const POPULATION = [
+    "average", "percentile", "rank", "compared to others", "population",
+    "than most", "better than", "worse than", "score of", "top ", "above average",
+  ];
+  for (const name of readdirSync(BETA_DIR)) {
+    const raw = readFileSync(join(BETA_DIR, name), "utf8");
+    // A comment explaining why a comparison is forbidden is not a comparison.
+    const text = (name.endsWith(".js") ? stripComments(raw) : raw).toLowerCase();
+    for (const phrase of POPULATION) {
+      assert.ok(!text.includes(phrase),
+        `beta/${name} contains a population comparison: "${phrase}"`);
     }
   }
-  
-  assert.ok(true, "no prohibited 'you are' state assertions");
-});
-
-test("within-person: legend uses correct within-person phrasing", () => {
-  const code = readFileSync(BETA_JS, "utf8");
-  
-  // Expected legend string per design spec
-  const expectedLegend = "cooler ↔ warmer than your baseline — neither is good or bad";
-  
-  assert.ok(code.includes(expectedLegend),
-    `within-person: expected legend string not found: "${expectedLegend}"`);
-  
-  // Verify the legend explicitly references "your baseline" (within-person)
-  // and NOT population terms
-  assert.ok(code.includes("baseline"),
-    "within-person: should reference baseline for comparison");
 });

@@ -36,6 +36,8 @@ import { INSIGHTS_COPY } from "../src/utils/insights.js";
 import { HARMONY_LEAD, HARMONY_NOT_MEASURED, SOURCES_DIFFER as HARMONY_SOURCES_DIFFER }
   from "../src/reading/harmony.js";
 
+import { VOICE as BETA_VOICE } from "../beta/beta-model.js";
+
 const MODULE_A_COPY = {
   RULES_A, ZONE_READINGS,
   ELEMENTS, SHAPE_TO_ELEMENT,
@@ -53,6 +55,10 @@ const MODULE_A_COPY = {
   // check below -- which only walks src/reading/ -- cannot catch it going
   // unregistered. Listed explicitly for that reason.
   INSIGHTS: INSIGHTS_COPY,
+  // The beta scanner's copy. It ships from /beta/ to the same people, so it is
+  // scanned by the same guard: an unregistered surface ships unread, whichever
+  // URL it is served from.
+  BETA: BETA_VOICE,
 };
 
 /* Disease names. Banned in BOTH modules. Deliberately excludes "ulcer" (a
