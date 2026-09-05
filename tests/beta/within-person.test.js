@@ -16,10 +16,10 @@ import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { stripComments } from "../../scripts/copy-scan.js";
-import { ledgerModel, ringModel, readoutLine } from "../../beta/beta-model.js";
+import { ledgerModel, ringModel, readoutLine } from "../../src/beta/beta-model.js";
 import { deltasFrom, computeBaseline } from "../../src/qise/baseline.js";
 
-const BETA_DIR = fileURLToPath(new URL("../../beta", import.meta.url));
+const BETA_DIR = fileURLToPath(new URL("../../src/beta", import.meta.url));
 
 /* A short history of the same person, in the shape computeBaseline reads:
  * `axes` per row, and baselineVersion "v2" so qiseMethodOf resolves to the

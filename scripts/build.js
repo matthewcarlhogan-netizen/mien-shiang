@@ -175,17 +175,8 @@ async function build() {
     copied++;
   }
 
-  // Copy beta/ → dist/beta/ for the Beta Scanner UI
-  const BETA = join(REPO, "beta");
-  if (existsSync(BETA)) {
-    for (const file of walk(BETA)) {
-      const rel = relative(BETA, file);
-      const dest = join(DIST, "beta", rel);
-      mkdirSync(dirname(dest), { recursive: true });
-      copyFileSync(file, dest);
-      copied++;
-    }
-  }
+  // No bespoke beta step: src/beta/ rides the src/ copy above, which is what
+  // keeps its relative imports identical in the tree and in the artifact.
 
   // Copy docs/design-prototype.html → dist/docs/design-prototype.html
   const designProtoSrc = join(REPO, "docs", "design-prototype.html");

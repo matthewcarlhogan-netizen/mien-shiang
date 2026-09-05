@@ -15,6 +15,14 @@
  * broken import path ("../engine.js", a file that does not exist) sit behind a
  * green suite — CLAUDE.md item 18a, exactly.
  *
+ * WHY THIS LIVES UNDER src/. dist/ is a FLATTENED copy of src/ (build.js does
+ * no transform), so a beta sitting beside src/ can never have one relative
+ * specifier that is correct in both trees: "../engine.js" resolves in the
+ * artifact and not in the source, and "../src/engine.js" the reverse. Shipping
+ * either breaks one of them. Inside src/, "../engine.js" is the same file in
+ * both, and the beta falls under source-integrity's every-local-import-resolves
+ * check for free.
+ *
  * NO SERVICE WORKER. Registering the root sw from /beta/ is a scope conflict,
  * so the beta runs without the offline shell. That is the one functional
  * difference from production and it is named in the owner ruling.
@@ -24,33 +32,33 @@ import {
   VOICE, sealStateFrom, calibrationLines, abstainModel, ringModel, ledgerModel,
   readoutLine, artifactModel, readingStateLabel, formatTime, buildReading,
 } from "./beta-model.js";
-import { createConsent, assertConsentGranted } from "../src/qise/consent.js";
+import { createConsent, assertConsentGranted } from "../qise/consent.js";
 import {
   openCamera, attachCameraPreview, ensureContinuousFocus, settleAndNegotiate,
   releaseCaptureMode, releaseCapture, createLandmarkerGuarded, GreenLatch,
   PolygonSmoother, BURST_FRAMES, trimmedMedianLab, reduceBurst, describeCameraError,
-} from "../src/qise/camera.js";
-import { createLandmarkerWithFallback } from "../src/landmarker.js";
-import { evaluateGates, captureInstruction } from "../src/qise/gates.js";
-import { frameStats } from "../src/qise/framestats.js";
-import { createScreenWakeLock } from "../src/qise/wakelock.js";
-import { createExposureHalo, haloStateFromCapture } from "../src/ui/qise/exposure-halo.js";
-import { readRois } from "../src/qise/rois.js";
-import { sampleSclera } from "../src/qise/sclera.js";
-import { headPose } from "../src/qise/pose.js";
-import * as color from "../src/qise/color.js";
-import { computeReadingMetrics, lumRatioP90P50 } from "../src/qise/metrics.js";
+} from "../qise/camera.js";
+import { createLandmarkerWithFallback } from "../landmarker.js";
+import { evaluateGates, captureInstruction } from "../qise/gates.js";
+import { frameStats } from "../qise/framestats.js";
+import { createScreenWakeLock } from "../qise/wakelock.js";
+import { createExposureHalo, haloStateFromCapture } from "../ui/qise/exposure-halo.js";
+import { readRois } from "../qise/rois.js";
+import { sampleSclera } from "../qise/sclera.js";
+import { headPose } from "../qise/pose.js";
+import * as color from "../qise/color.js";
+import { computeReadingMetrics, lumRatioP90P50 } from "../qise/metrics.js";
 import {
   interpretReading, readingConfidence, axesOf, BASELINE_VERSION,
-} from "../src/qise/baseline.js";
-import { openStore } from "../src/qise/store.js";
-import { extractRegions, eraseExtractedRegions } from "../src/region-extractor.js";
-import { shadesOfGray, rawScalars, sensorNoiseConfidence } from "../src/engine.js";
-import { measureIntegratedReading } from "../src/qise/integrated.js";
+} from "../qise/baseline.js";
+import { openStore } from "../qise/store.js";
+import { extractRegions, eraseExtractedRegions } from "../region-extractor.js";
+import { shadesOfGray, rawScalars, sensorNoiseConfidence } from "../engine.js";
+import { measureIntegratedReading } from "../qise/integrated.js";
 
-const MEDIAPIPE_BUNDLE = new URL("../src/vendor/mediapipe/vision_bundle.mjs", import.meta.url).href;
-const MEDIAPIPE_WASM = new URL("../src/vendor/mediapipe/wasm", import.meta.url).href;
-const FACE_MODEL = new URL("../src/vendor/mediapipe/models/face_landmarker.task", import.meta.url).href;
+const MEDIAPIPE_BUNDLE = new URL("../vendor/mediapipe/vision_bundle.mjs", import.meta.url).href;
+const MEDIAPIPE_WASM = new URL("../vendor/mediapipe/wasm", import.meta.url).href;
+const FACE_MODEL = new URL("../vendor/mediapipe/models/face_landmarker.task", import.meta.url).href;
 
 const CINNABAR = "#C8452A";
 const TRACKER_GROUND = "#0B0B0C";

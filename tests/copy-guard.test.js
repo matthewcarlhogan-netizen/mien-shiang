@@ -36,7 +36,7 @@ import { INSIGHTS_COPY } from "../src/utils/insights.js";
 import { HARMONY_LEAD, HARMONY_NOT_MEASURED, SOURCES_DIFFER as HARMONY_SOURCES_DIFFER }
   from "../src/reading/harmony.js";
 
-import { VOICE as BETA_VOICE } from "../beta/beta-model.js";
+import { VOICE as BETA_VOICE } from "../src/beta/beta-model.js";
 
 const MODULE_A_COPY = {
   RULES_A, ZONE_READINGS,

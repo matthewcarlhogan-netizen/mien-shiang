@@ -22,7 +22,7 @@ import { join } from "node:path";
 import { stripComments } from "../../scripts/copy-scan.js";
 import { SOURCE_REGISTRY, CITATION_STATUS } from "../../src/reading/provenance.js";
 
-const BETA_DIR = fileURLToPath(new URL("../../beta", import.meta.url));
+const BETA_DIR = fileURLToPath(new URL("../../src/beta", import.meta.url));
 
 const betaFiles = readdirSync(BETA_DIR).filter((n) => /\.(html|js|css)$/.test(n));
 /* Comments are stripped from .js before scanning: the note in beta-model.js
@@ -60,12 +60,15 @@ test("no withdrawn attribution appears on any beta surface", () => {
 });
 
 test("the work the beta does cite is recorded at EDITION_RECORDED", () => {
-  // 神相全編 is what the beta cites now. It must be in the registry, and it
-  // must be a recorded edition rather than a contested attribution.
+  // The beta prints the ROMANISED name: reader-facing literals under src/ are
+  // English-only (tests/ui-language.test.js), and CJK lives in the provenance
+  // registry. So the UI says "Shenxiang Quanbian" and the registry entry it
+  // must resolve to carries 神相全編.
   const cited = "神相全編";
-  const citing = betaFiles.filter((n) => readBeta(n).includes(cited));
-  assert.ok(citing.length > 0, "expected the beta to cite the recorded witness");
+  const printed = "Shenxiang Quanbian";
+  const citing = betaFiles.filter((n) => readBeta(n).includes(printed));
 
+  assert.ok(citing.length > 0, "the beta must cite the recorded witness by its romanised name");
   const entries = Object.entries(SOURCE_REGISTRY)
     .filter(([, entry]) => typeof entry.title === "string" && entry.title.includes(cited));
   assert.ok(entries.length > 0, `${cited} must appear in SOURCE_REGISTRY`);
@@ -80,10 +83,10 @@ test("the work the beta does cite is recorded at EDITION_RECORDED", () => {
   const locators = recorded.map(([, entry]) => entry.locator || entry.sectionLocator || "");
   for (const name of citing) {
     const text = readBeta(name);
-    for (const fragment of ["面三停", "十二宮訣"]) {
-      if (!text.includes(fragment)) continue;
-      assert.ok(locators.some((l) => l.includes(fragment)),
-        `beta/${name} prints locator "${fragment}", which no registry entry records`);
+    for (const [romanised, han] of [["Mian San Ting", "面三停"], ["Shi Er Gong Jue", "十二宮訣"]]) {
+      if (!text.includes(romanised)) continue;
+      assert.ok(locators.some((l) => l.includes(han)),
+        `beta/${name} prints locator "${romanised}", which no registry entry records`);
     }
   }
 });

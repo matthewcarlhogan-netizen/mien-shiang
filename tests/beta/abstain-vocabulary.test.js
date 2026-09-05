@@ -13,7 +13,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { GATES, captureInstruction } from "../../src/qise/gates.js";
-import { abstainModel, VOICE } from "../../beta/beta-model.js";
+import { abstainModel, VOICE } from "../../src/beta/beta-model.js";
 
 /* Words that would recast an unmeasurable frame as a fault or an apology.
  *

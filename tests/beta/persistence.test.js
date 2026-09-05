@@ -11,7 +11,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildReading } from "../../beta/beta-model.js";
+import { buildReading } from "../../src/beta/beta-model.js";
 import { toRecord, findForbiddenKeys, FORBIDDEN_KEY_PATTERN } from "../../src/qise/store.js";
 
 const metrics = {
