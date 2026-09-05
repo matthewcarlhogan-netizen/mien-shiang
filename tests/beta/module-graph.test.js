@@ -88,11 +88,16 @@ test("the SHIPPED artifact resolves, not just the source tree", async () => {
    * Skipped when dist/ is absent, because `npm test` must not require a build;
    * CI runs the build before the suite. */
   const { existsSync, readFileSync } = await import("node:fs");
-  const { fileURLToPath } = await import("node:url");
+  const { fileURLToPath, pathToFileURL } = await import("node:url");
   const dist = fileURLToPath(new URL("../../dist/beta/beta.js", import.meta.url));
   if (!existsSync(dist)) return;
 
-  await assert.doesNotReject(() => import(dist),
+  // import() takes a URL, not a path. On POSIX an absolute path happens to
+  // work; on Windows "D:\\a\\..." is read as a URL scheme and throws
+  // ERR_UNSUPPORTED_ESM_URL_SCHEME. Same family as CLAUDE.md item 8: a path
+  // handed to something that wanted a URL, green on the platform it was
+  // written on and broken on the other.
+  await assert.doesNotReject(() => import(pathToFileURL(dist).href),
     "the built beta must load from dist/, where the app is actually served");
 
   // And every specifier it names must exist at the path dist puts it.
