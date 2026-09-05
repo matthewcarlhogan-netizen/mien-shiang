@@ -1,412 +1,651 @@
-/* Beta Scanner UI — Main Module
- * Integrates with engine exports from PR #52:
- * - shadesOfGray(data, p, sampleMask) — skin-masked white balance
- * - sensorNoiseConfidence(regions, baselineZones) — returns { confidence, noiseVariance, reason, zonesRead }
- * - extractRegions(balanced, w, h, pts) — returns { regions, dropped }, each region has boundarySensitive + boundaryDeltaEi
- * - rawScalars(regions, opts) — within-person delta scalars
+/* Beta scanner — DOM wiring.
  *
- * Invariants:
- * - No fetch/XHR/WebSocket/sendBeacon
- * - No IndexedDB/localStorage/sessionStorage writes
- * - Ledger and ring state are in-memory only, cleared on unload
- * - All user-facing strings pass medical language and claim-structure checks
+ * This file is the beta's equivalent of src/ui/qise/app.js: it wires the DOM
+ * and orchestrates, and it holds no decisions of its own. Everything that can
+ * be decided without a browser lives in ./beta-model.js, and every measurement
+ * comes from the production modules imported below — there is no beta engine,
+ * no beta store and no simulation. The beta differs from the production
+ * scanner in its URL, its skin tokens, its banner line, and in having no
+ * offline shell; nowhere else.
+ *
+ * NO TOP-LEVEL SIDE EFFECTS. Nothing here touches document or window until
+ * init() is called, so a test can import this module purely to prove its
+ * import graph resolves. The previous revision registered a `beforeunload`
+ * listener at module scope, which made the module unimportable and let a
+ * broken import path ("../engine.js", a file that does not exist) sit behind a
+ * green suite — CLAUDE.md item 18a, exactly.
+ *
+ * NO SERVICE WORKER. Registering the root sw from /beta/ is a scope conflict,
+ * so the beta runs without the offline shell. That is the one functional
+ * difference from production and it is named in the owner ruling.
  */
 
-import { shadesOfGray, sensorNoiseConfidence, rawScalars } from "../engine.js";
-import { extractRegions } from "../region-extractor.js";
+import {
+  VOICE, sealStateFrom, calibrationLines, abstainModel, ringModel, ledgerModel,
+  readoutLine, artifactModel, readingStateLabel, formatTime, buildReading,
+} from "./beta-model.js";
+import { createConsent, assertConsentGranted } from "../src/qise/consent.js";
+import {
+  openCamera, attachCameraPreview, ensureContinuousFocus, settleAndNegotiate,
+  releaseCaptureMode, releaseCapture, createLandmarkerGuarded, GreenLatch,
+  PolygonSmoother, BURST_FRAMES, trimmedMedianLab, reduceBurst, describeCameraError,
+} from "../src/qise/camera.js";
+import { createLandmarkerWithFallback } from "../src/landmarker.js";
+import { evaluateGates, captureInstruction } from "../src/qise/gates.js";
+import { frameStats } from "../src/qise/framestats.js";
+import { createScreenWakeLock } from "../src/qise/wakelock.js";
+import { createExposureHalo, haloStateFromCapture } from "../src/ui/qise/exposure-halo.js";
+import { readRois } from "../src/qise/rois.js";
+import { sampleSclera } from "../src/qise/sclera.js";
+import { headPose } from "../src/qise/pose.js";
+import * as color from "../src/qise/color.js";
+import { computeReadingMetrics, lumRatioP90P50 } from "../src/qise/metrics.js";
+import {
+  interpretReading, readingConfidence, axesOf, BASELINE_VERSION,
+} from "../src/qise/baseline.js";
+import { openStore } from "../src/qise/store.js";
+import { extractRegions, eraseExtractedRegions } from "../src/region-extractor.js";
+import { shadesOfGray, rawScalars, sensorNoiseConfidence } from "../src/engine.js";
+import { measureIntegratedReading } from "../src/qise/integrated.js";
 
-// ─────────────────────────────────────────────────────── STATE (in-memory) ──
+const MEDIAPIPE_BUNDLE = new URL("../src/vendor/mediapipe/vision_bundle.mjs", import.meta.url).href;
+const MEDIAPIPE_WASM = new URL("../src/vendor/mediapipe/wasm", import.meta.url).href;
+const FACE_MODEL = new URL("../src/vendor/mediapipe/models/face_landmarker.task", import.meta.url).href;
 
-const state = {
-  session: [],        // Array of session objects: { timestamp, sealType, attenuated, luma, wbStatus, maskPct, deltas }
-  baseline: null,     // First accepted capture becomes baseline
-  selectedIdx: null,  // Currently selected ledger square index
-  captureCount: 0,
-  refusedCount: 0,
-};
+const CINNABAR = "#C8452A";
+const TRACKER_GROUND = "#0B0B0C";
+const TRACKER_TYPE = "#EDEAE3";
+const TRACKER_HAIR = "#2A2A2C";
+const TRACKER_DIM = "#8A857C";
+const COOL_RGB = [62, 124, 107];
+const WARM_RGB = [200, 69, 42];
 
-// Clear state on page unload (no persistence)
-window.addEventListener('beforeunload', () => {
-  state.session = [];
-  state.baseline = null;
-  state.selectedIdx = null;
-});
+/* Session view state. The readings themselves live in the production store;
+ * this is only what the current screen is showing. */
+const state = { entries: [], selectedIdx: null };
 
-// ───────────────────────────────────────────────────────── DOM ELEMENTS ───
+let consent = null;
+let store = null;
+let exposureHalo = null;
+let scratch = null;
+let captureRun = 0;
 
 const $ = (id) => document.getElementById(id);
-const bridge = $('bridge');
-const voice = $('voice');
-const plate = $('plate');
-const calibration = $('calibration');
-const sealEl = $('seal');
-const tagsEl = $('tags');
-const ring = $('ring');
-const ledger = $('ledger');
-const readout = $('readout');
-const artifactCanvas = $('artifact');
-const shareBtn = $('shareBtn');
-const toLibrary = $('toLibrary');
-const toTracker = $('toTracker');
 
-// ───────────────────────────────────────────────────────────── CONSTANTS ───
+/* ── rendering ─────────────────────────────────────────────────────────── */
 
-const CINNABAR = '#C8452A';
-const GILT = '#A9803B';
-const TRACKER_GROUND = '#0B0B0C';
-const TRACKER_TYPE = '#EDEAE3';
-const TRACKER_HAIR = '#2A2A2C';
-const TRACKER_DIM = '#8A857C';
-const PAPER_CINNABAR = '#B23A20';
-
-// Voice strings (exact — do not paraphrase)
-const VOICE = {
-  banner: 'Beta — instrument in calibration; readings are yours alone, nothing leaves this device.',
-  boot: 'The bench is open.',
-  sealed: (time) => `Sealed ${time}.`,
-  abstain: 'The light was untrue. No seal.',
-  abstainAction: 'Face a window or raise the halo.',
-  boundaryFlag: 'edge-sensitive capture — read with reserve',
-  noiseFlag: 'low light pushed the sensor — values attenuated',
-  legend: 'cooler ↔ warmer than your baseline — neither is good or bad',
-  firstSeal: 'Baseline founded. All comparison from here is to this alone.',
-  libNote: 'Depth is paid. Rigor is not.',
-  toLibrary: 'Open the study →',
-  toTracker: 'Return to the bench →',
-};
-
-// ───────────────────────────────────────────────────────── HELPERS ───
-
-function formatTime(date) {
-  const h = String(date.getHours()).padStart(2, '0');
-  const m = String(date.getMinutes()).padStart(2, '0');
-  return `${h}:${m}`;
-}
-
-function lerpColor(c1, c2, t) {
-  const r1 = parseInt(c1.slice(1, 3), 16);
-  const g1 = parseInt(c1.slice(3, 5), 16);
-  const b1 = parseInt(c1.slice(5, 7), 16);
-  const r2 = parseInt(c2.slice(1, 3), 16);
-  const g2 = parseInt(c2.slice(3, 5), 16);
-  const b2 = parseInt(c2.slice(5, 7), 16);
-  const r = Math.round(r1 + (r2 - r1) * t);
-  const g = Math.round(g1 + (g2 - g1) * t);
-  const b = Math.round(b1 + (b2 - b1) * t);
-  return `rgb(${r},${g},${b})`;
-}
-
-// ───────────────────────────────────────────────────── SEAL RENDERING ───
-
-function renderSeal(type, timestamp, attenuated = false) {
-  sealEl.className = 'seal';
-  sealEl.textContent = '';
-  
-  if (type === 'sealed') {
-    sealEl.classList.add('filled');
-    sealEl.textContent = formatTime(timestamp);
-    if (attenuated) {
-      sealEl.classList.remove('filled');
-      sealEl.classList.add('dashed');
-    }
-  } else if (type === 'abstain') {
-    sealEl.classList.add('outlined');
-  }
-  
-  // Stamp animation for sealed
-  if (type === 'sealed') {
-    sealEl.classList.add('stamp');
-    setTimeout(() => sealEl.classList.remove('stamp'), 90);
+function renderSeal(seal, timestamp) {
+  const el = $("seal");
+  el.className = "seal";
+  el.textContent = "";
+  if (seal.type === "sealed") {
+    el.classList.add(seal.variant);
+    el.textContent = formatTime(timestamp);
+    el.classList.add("stamp");
+    setTimeout(() => el.classList.remove("stamp"), 90);
+  } else {
+    el.classList.add("outlined");
   }
 }
 
-function renderTags(flags) {
-  tagsEl.innerHTML = '';
-  if (flags.boundarySensitive) {
-    const tag = document.createElement('span');
-    tag.className = 'tag';
-    tag.textContent = VOICE.boundaryFlag;
-    tagsEl.appendChild(tag);
-  }
-  if (flags.noiseConfidence === 'degraded') {
-    const tag = document.createElement('span');
-    tag.className = 'tag';
-    tag.textContent = VOICE.noiseFlag;
-    tagsEl.appendChild(tag);
+function renderTags(tags) {
+  const el = $("tags");
+  el.textContent = "";
+  for (const text of tags) {
+    const tag = document.createElement("span");
+    tag.className = "tag";
+    tag.textContent = text;
+    el.appendChild(tag);
   }
 }
 
-// ───────────────────────────────────────────────────── RING RENDERING ───
+function renderCalibration(lines) {
+  const el = $("calibration");
+  el.textContent = "";
+  for (const text of lines) {
+    const line = document.createElement("div");
+    line.className = "line";
+    line.textContent = text;
+    el.appendChild(line);
+  }
+}
 
 function renderRing() {
-  const count = state.session.length;
-  const sealedCount = state.session.filter(s => s.sealType === 'sealed').length;
-  
-  let svg = '<circle cx="100" cy="100" r="70" fill="none" stroke="#2A2A2C" stroke-width="1"/>';
-  
-  // Draw ticks for each session (max 14 visible)
-  const maxTicks = 14;
-  const sessionsToShow = state.session.slice(0, maxTicks);
-  
-  sessionsToShow.forEach((s, i) => {
-    const angle = (i / maxTicks) * 2 * Math.PI - Math.PI / 2;
-    const x1 = 100 + 78 * Math.cos(angle);
-    const y1 = 100 + 78 * Math.sin(angle);
-    const x2 = 100 + 90 * Math.cos(angle);
-    const y2 = 100 + 90 * Math.sin(angle);
-    
-    let strokeAttr;
-    if (s.sealType === 'sealed' && !s.attenuated) {
-      strokeAttr = `stroke="${CINNABAR}" stroke-width="3"`;
-    } else if (s.sealType === 'sealed' && s.attenuated) {
-      strokeAttr = `stroke="${CINNABAR}" stroke-width="2" stroke-dasharray="2 2"`;
-    } else {
-      strokeAttr = `stroke="#2A2A2C" stroke-width="2"`;
-    }
-    
-    svg += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" ${strokeAttr}/>`;
-  });
-  
-  // Center text (only show at session >= 3)
-  if (count >= 3) {
-    svg += `<text x="100" y="96" text-anchor="middle" fill="#EDEAE3" font-family="IBM Plex Mono" font-size="16">${sealedCount}/${count}</text>`;
-    svg += `<text x="100" y="112" text-anchor="middle" fill="#8A857C" font-family="IBM Plex Mono" font-size="8">SEALED</text>`;
+  const model = ringModel(state.entries);
+  const parts = ['<circle cx="100" cy="100" r="70" fill="none" stroke="#2A2A2C" stroke-width="1"/>'];
+  for (const tick of model.ticks) {
+    const x1 = (100 + 78 * Math.cos(tick.angle)).toFixed(1);
+    const y1 = (100 + 78 * Math.sin(tick.angle)).toFixed(1);
+    const x2 = (100 + 90 * Math.cos(tick.angle)).toFixed(1);
+    const y2 = (100 + 90 * Math.sin(tick.angle)).toFixed(1);
+    const stroke = tick.kind === "clean"
+      ? `stroke="${CINNABAR}" stroke-width="3"`
+      : tick.kind === "attenuated"
+        ? `stroke="${CINNABAR}" stroke-width="2" stroke-dasharray="2 2"`
+        : 'stroke="#2A2A2C" stroke-width="2"';
+    parts.push(`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" ${stroke}/>`);
   }
-  
-  ring.innerHTML = svg;
+  if (model.total >= 3) {
+    parts.push(`<text x="100" y="96" text-anchor="middle" fill="${TRACKER_TYPE}" font-size="16">${model.sealed}/${model.total}</text>`);
+    parts.push(`<text x="100" y="112" text-anchor="middle" fill="${TRACKER_DIM}" font-size="8">SEALED</text>`);
+  }
+  $("ring").innerHTML = parts.join("");
 }
 
-// ───────────────────────────────────────────────────── LEDGER RENDERING ───
-
 function renderLedger() {
-  ledger.innerHTML = '';
-  
-  state.session.forEach((s, i) => {
-    const sq = document.createElement('div');
-    sq.className = 'sq';
-    
-    if (s.attenuated) {
-      sq.classList.add('att');
-    }
-    
-    // Color based on warmth relative to baseline
-    if (state.baseline && s.deltas) {
-      const warmthT = Math.max(0, Math.min(1, (s.deltas.warmth + 1.5) / 3));
-      const coolRGB = [62, 124, 107];  // #3E7C6B
-      const warmRGB = [200, 69, 42];   // #C8452A
-      const r = Math.round(coolRGB[0] + (warmRGB[0] - coolRGB[0]) * warmthT);
-      const g = Math.round(coolRGB[1] + (warmRGB[1] - coolRGB[1]) * warmthT);
-      const b = Math.round(coolRGB[2] + (warmRGB[2] - coolRGB[2]) * warmthT);
-      
-      // Brightness modulation by |ΔL|
-      const brightness = 0.7 + Math.min(Math.abs(s.deltas.L || 0), 1.5) * 0.2;
-      const rb = Math.min(255, Math.round(r * brightness));
-      const gb = Math.min(255, Math.round(g * brightness));
-      const bb = Math.min(255, Math.round(b * brightness));
-      
-      sq.style.background = `rgb(${rb},${gb},${bb})`;
+  const el = $("ledger");
+  el.textContent = "";
+  for (const square of ledgerModel(state.entries)) {
+    const sq = document.createElement("div");
+    sq.className = "sq";
+    if (square.attenuated) sq.classList.add("att");
+    if (square.warmth === null) {
+      sq.style.background = TRACKER_HAIR;
     } else {
-      sq.style.background = '#2A2A2C';
+      const brightness = 0.7 + square.lightness * 0.2;
+      const channel = (i) => Math.min(255, Math.round(
+        (COOL_RGB[i] + (WARM_RGB[i] - COOL_RGB[i]) * square.warmth) * brightness));
+      sq.style.background = `rgb(${channel(0)},${channel(1)},${channel(2)})`;
     }
-    
-    sq.addEventListener('click', () => selectSession(i));
-    ledger.appendChild(sq);
-  });
+    sq.addEventListener("click", () => selectSession(square.index));
+    el.appendChild(sq);
+  }
 }
 
 function selectSession(idx) {
   state.selectedIdx = idx;
-  const s = state.session[idx];
-  
-  // Update visual selection
-  document.querySelectorAll('.sq').forEach((el, i) => {
-    el.classList.toggle('selected', i === idx);
+  document.querySelectorAll(".sq").forEach((el, i) => {
+    el.classList.toggle("selected", i === idx);
   });
-  
-  // Populate readout
-  if (s && s.deltas) {
-    const d = s.deltas;
-    readout.textContent = `S${String(idx + 1).padStart(2, '0')} · ΔL ${formatDelta(d.L)} · Δa ${formatDelta(d.a)} · Δb ${formatDelta(d.b)} · LUMA ${s.luma || '--'} · WB ${s.wbStatus || '--'} · MASK ${s.maskPct || '--'}%`;
-  }
+  $("readout").textContent = readoutLine(state.entries[idx], idx);
 }
 
-function formatDelta(v) {
-  if (v === null || v === undefined) return '--';
-  return (v >= 0 ? '+' : '') + v.toFixed(1);
-}
-
-// ───────────────────────────────────────────────────── ARTIFACT RENDERING ───
-
-function renderArtifact() {
-  const ctx = artifactCanvas.getContext('2d');
-  
-  // Black ground
+function renderArtifact(date = new Date()) {
+  const model = artifactModel(date);
+  const ctx = $("artifact").getContext("2d");
   ctx.fillStyle = TRACKER_GROUND;
   ctx.fillRect(0, 0, 320, 320);
-  
-  // Hairline inset border
   ctx.strokeStyle = TRACKER_HAIR;
   ctx.strokeRect(8.5, 8.5, 303, 303);
-  
-  // Cinnabar seal (96x96)
   ctx.fillStyle = CINNABAR;
   ctx.fillRect(112, 70, 96, 96);
-  
-  // Date in center of seal
-  const now = new Date();
-  const dateStr = `${String(now.getMonth() + 1).padStart(2, '0')}·${String(now.getDate()).padStart(2, '0')}`;
   ctx.fillStyle = TRACKER_TYPE;
-  ctx.font = '500 14px "IBM Plex Mono"';
-  ctx.textAlign = 'center';
-  ctx.fillText(dateStr, 160, 123);
-  
-  // Wordmark
-  ctx.font = '500 15px "IBM Plex Mono"';
-  ctx.fillText('M I E N   S H I A N G', 160, 216);
-  
-  // Footnote quote
-  ctx.font = '400 11px "IBM Plex Mono"';
-  ctx.fillStyle = TRACKER_DIM;
-  ctx.fillText('"The countenance is the exterior', 160, 246);
-  ctx.fillText('of the mind."', 160, 262);
-  ctx.fillText('(Mayi Xiangfa, Song)', 160, 282);
+  ctx.textAlign = "center";
+  ctx.font = '500 14px ui-monospace, monospace';
+  ctx.fillText(model.dateStr, 160, 123);
+  ctx.font = '500 15px ui-monospace, monospace';
+  ctx.fillText(model.wordmark, 160, 216);
 }
 
-// ───────────────────────────────────────────────────── CAPTURE FLOW ───
+function setVoice(text) {
+  const el = $("voice");
+  el.textContent = text;
+  el.classList.add("fade-in");
+  setTimeout(() => el.classList.remove("fade-in"), 160);
+}
 
-/* Simulated capture flow for demo purposes.
- * In production, this would integrate with camera.js and the halo system.
- * For now, we demonstrate the UI states and engine integration points.
- */
+/* The capture sequence overrides the theme to halo-white so the screen is a
+ * known light source. It is a theme token change and nothing else: the halo's
+ * own flash strength is driven by the halo LEVEL below, never by the theme,
+ * because a theme that could move the flash would move the illuminant between
+ * frames of one burst. */
+function setCaptureTheme(on) {
+  document.documentElement.dataset.theme = on ? "halo-white" : "";
+}
 
-async function simulateCapture(accept) {
-  const now = new Date();
-  
-  if (!accept) {
-    // Refused capture (first-run demo)
-    state.refusedCount++;
-    voice.textContent = VOICE.abstain;
-    voice.classList.add('fade-in');
-    setTimeout(() => voice.classList.remove('fade-in'), 160);
-    
-    renderSeal('abstain', now);
-    tagsEl.textContent = VOICE.abstainAction;
-    
-    state.session.push({
-      timestamp: now,
-      sealType: 'abstain',
-      attenuated: false,
-      luma: null,
-      wbStatus: null,
-      maskPct: null,
-      deltas: null,
-    });
-  } else {
-    // Accepted capture
-    state.captureCount++;
-    
-    // Simulate engine flags (in production, these come from real analysis)
-    const boundarySensitive = Math.random() < 0.3;
-    const noiseConfidence = Math.random() < 0.2 ? 'degraded' : 'full';
-    const attenuated = boundarySensitive || noiseConfidence === 'degraded';
-    
-    // Render seal
-    renderSeal('sealed', now, attenuated);
-    
-    // Render flags
-    renderTags({ boundarySensitive, noiseConfidence });
-    
-    // Simulate calibration values (in production, read from real pipeline)
-    const luma = Math.floor(Math.random() * 30) + 40;
-    const wbStatus = Math.random() < 0.8 ? 'LOCKED' : 'SETTLING';
-    const maskPct = Math.floor(Math.random() * 20) + 80;
-    
-    // Show calibration theater
-    calibration.innerHTML = `
-      <div class="line">LUMA ${luma}/60</div>
-      <div class="line">WB ${wbStatus}</div>
-      <div class="line">MASK ${maskPct}%</div>
-    `;
-    
-    // Compute within-person deltas using rawScalars (engine integration point)
-    let deltas = null;
-    if (state.baseline) {
-      // In production: deltas = rawScalars(currentRegions, { baseline: state.baseline });
-      // For demo: simulated deltas
-      deltas = {
-        L: (Math.random() - 0.5) * 2,
-        a: (Math.random() - 0.5) * 2,
-        b: (Math.random() - 0.5) * 2,
-        warmth: (Math.random() - 0.5) * 2,
-      };
-    } else {
-      // First seal establishes baseline
-      state.baseline = { timestamp: now };
-      voice.textContent = VOICE.firstSeal;
-    }
-    
-    state.session.push({
-      timestamp: now,
-      sealType: 'sealed',
-      attenuated,
-      luma,
-      wbStatus,
-      maskPct,
-      deltas,
-      boundarySensitive,
-      noiseConfidence,
-    });
+/* ── capture ───────────────────────────────────────────────────────────── */
+
+async function buildLandmarker() {
+  assertConsentGranted(consent, "FaceLandmarker");
+  const { FaceLandmarker, FilesetResolver } = await import(MEDIAPIPE_BUNDLE);
+  const fileset = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM);
+  const guardedFactory = (_fileset, options) => createLandmarkerGuarded({
+    consent,
+    options,
+    factory: (guardedOptions) => FaceLandmarker.createFromOptions(fileset, guardedOptions),
+  });
+  const built = await createLandmarkerWithFallback(
+    guardedFactory,
+    fileset,
+    { modelAssetPath: FACE_MODEL, runningMode: "VIDEO", outputFaceBlendshapes: false },
+    (message) => { $("gate-line").textContent = message; },
+  );
+  return built.landmarker;
+}
+
+async function runCapture() {
+  assertConsentGranted(consent, "the capture screen");
+  const runId = ++captureRun;
+  if (scratch) { releaseCapture(scratch); scratch = null; }
+
+  setCaptureTheme(true);
+  exposureHalo?.reset();
+  $("gate-line").textContent = "Opening the camera.";
+  renderCalibration([]);
+
+  const video = $("preview");
+  video.hidden = false;
+
+  // negotiate:false — the exposure lock waits until the preview is live and
+  // auto-exposure has converged. Locking on the line after getUserMedia pins
+  // the sensor to its dark opening value (CLAUDE.md item 53).
+  const opened = await openCamera({
+    consent, mediaDevices: navigator.mediaDevices, negotiate: false,
+  });
+  if (runId !== captureRun) {
+    releaseCapture({ stream: opened.stream, images: [], landmarks: [], canvas: null });
+    return;
   }
-  
+
+  let landmarker = null;
+  try {
+    await attachCameraPreview(video, opened.stream);
+    const focus = await ensureContinuousFocus(opened.track);
+    opened.focusSupported = focus.supported;
+    landmarker = await buildLandmarker();
+  } catch (error) {
+    releaseCapture({
+      stream: opened.stream, images: [], landmarks: [], canvas: null, landmarker, video,
+    });
+    setCaptureTheme(false);
+    throw error;
+  }
+
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  // Acquired after the camera opened, so a refused camera never leaves the
+  // phone awake, and released by releaseCapture() on every way out.
+  const wakeLock = createScreenWakeLock({ wakeLock: navigator.wakeLock, documentRef: document });
+  wakeLock.acquire();
+  scratch = {
+    canvas, images: [], landmarks: [], stream: opened.stream, landmarker, video, wakeLock,
+  };
+
+  let captureMode = "auto";
+  let captureSettled = false;
+  let negotiationStarted = false;
+  let exposureReleaseStarted = false;
+
+  const latch = new GreenLatch();
+  const smoother = new PolygonSmoother();
+  const drift = [];
+  let previous = null;
+  const startedAt = performance.now();
+
+  const history = await store.all();
+  const scleraHistory = history.map((r) => r.sclera && r.sclera.rawRatios).filter(Boolean);
+
+  const burst = {};
+  let collecting = 0;
+  let lastRois = null, lastSclera = null, lastMargins = null, lastTier = null;
+
+  const stopAfterLoopError = (error) => {
+    if (runId !== captureRun) return;
+    console.error("beta: live capture stopped", error);
+    captureRun++;
+    if (scratch) releaseCapture(scratch);
+    scratch = null;
+    setCaptureTheme(false);
+    $("gate-line").textContent = error?.name
+      ? describeCameraError(error)
+      : "The bench closed the camera. Open it again to continue.";
+  };
+
+  // The re-schedule is the last statement of the body and the body is wrapped,
+  // so one throwing frame reports itself and tears the capture down instead of
+  // leaving a live camera behind a dead loop (CLAUDE.md item 50).
+  const scheduleStep = () => requestAnimationFrame((time) => {
+    step(time).catch(stopAfterLoopError);
+  });
+
+  const step = async (nowMs) => {
+    if (!scratch || runId !== captureRun) return;
+    canvas.width = video.videoWidth || 1280;
+    canvas.height = video.videoHeight || 960;
+
+    // Drawn WITHOUT a flip: the preview's mirroring is a CSS transform, which
+    // does not touch the pixels drawImage and detectForVideo see. Flipping
+    // here would put the buffer in the opposite space from the landmarks and
+    // swap every off-midline region (CLAUDE.md item 44).
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    scratch.images = [image];
+    const clearFrame = () => { image.data.fill(0); if (scratch) scratch.images = []; };
+
+    const result = landmarker.detectForVideo(video, nowMs);
+    const mesh = result && result.faceLandmarks && result.faceLandmarks[0];
+
+    if (!mesh) {
+      $("gate-line").textContent = "Bring your face into the frame.";
+      exposureHalo?.setCaptureState("seeking");
+      clearFrame();
+      scheduleStep();
+      return;
+    }
+
+    const pts = mesh.map((p) => ({
+      x: p.x * canvas.width,
+      y: p.y * canvas.height,
+      z: typeof p.z === "number" ? p.z * canvas.width : undefined,
+    }));
+    if (previous) {
+      const d = pts.reduce(
+        (s, p, i) => s + Math.hypot(p.x - previous[i].x, p.y - previous[i].y), 0) / pts.length;
+      drift.push(d);
+      if (drift.length > 5) drift.shift();
+      previous.length = 0;
+    }
+    previous = pts;
+    scratch.landmarks = [pts];
+
+    lastRois = readRois(image, pts, { mirrored: false }, color);
+    lastSclera = sampleSclera(image, pts, { mirrored: false }, { samples: scleraHistory });
+    smoother.push(Object.fromEntries(Object.entries(lastRois.rois)
+      .map(([k, v]) => [k, v.polygons.map((p) => p.hull)])));
+
+    const stats = frameStats(image, lastRois, canvas.width, drift, headPose(pts));
+    const elapsedMs = nowMs - startedAt;
+    const gates = evaluateGates(stats, pts, lastSclera, { elapsedMs });
+
+    const instruction = captureInstruction(gates);
+    $("gate-line").textContent = instruction.detail || instruction.title;
+
+    // Warm-up first, then lock. `captureSettled` gates the LATCH, not the
+    // gates, so the user keeps live feedback but cannot complete a hold that
+    // ends in a burst lit differently frame to frame.
+    if (!negotiationStarted && gates.pass) {
+      negotiationStarted = true;
+      settleAndNegotiate(opened.track)
+        .then((negotiated) => {
+          if (runId === captureRun) captureMode = negotiated.captureMode;
+        })
+        .catch((error) => {
+          console.warn("beta: capture mode negotiation failed", error);
+          if (runId === captureRun) captureMode = "auto";
+        })
+        .finally(() => { if (runId === captureRun) captureSettled = true; });
+      latch.reset();
+    }
+
+    // A lock correct when taken is wrong the moment the subject turns towards
+    // a window. Once only — flipping back and forth is itself a moving
+    // illuminant.
+    if (!exposureReleaseStarted
+        && (captureMode === "locked" || captureMode === "partial")
+        && gates.failures.some((f) => f.id === "underexposed" || f.id === "overexposed")) {
+      exposureReleaseStarted = true;
+      captureSettled = false;
+      latch.reset();
+      releaseCaptureMode(opened.track)
+        .then((reverted) => {
+          if (runId !== captureRun) return;
+          captureMode = reverted.captureMode;
+          captureSettled = true;
+        })
+        .catch((error) => {
+          console.warn("beta: exposure hand-back failed", error);
+          if (runId === captureRun) captureSettled = true;
+        });
+    }
+
+    const held = latch.update(gates.pass && captureSettled, nowMs);
+    exposureHalo?.setCaptureState(haloStateFromCapture({
+      underexposed: gates.failures.some((f) => f.id === "underexposed"),
+      gatesPass: gates.pass,
+      captureSettled,
+    }), held.progress);
+
+    renderCalibration(calibrationLines({
+      luma: cheekLuma(stats),
+      captureMode,
+      haloLevel: exposureHalo?.level,
+      coverage: lastRois.validFraction,
+    }));
+
+    if (held.ready) {
+      collecting = BURST_FRAMES;
+      lastMargins = gates.margins;
+      lastTier = gates.captureTier;
+    }
+
+    if (collecting > 0) {
+      for (const [name, roi] of Object.entries(lastRois.rois)) {
+        if (!roi.pixels.length) continue;
+        (burst[name] ||= []).push(trimmedMedianLab(roi.pixels, color));
+      }
+      collecting--;
+      if (collecting === 0) {
+        // The NEGOTIATED mode, not the one openCamera returned — that is
+        // "pending", and exposure may have been handed back mid-hold.
+        await finish(burst, lastRois, lastSclera, { ...opened, captureMode },
+          history, lastMargins, lastTier, image, pts, stats);
+        return;
+      }
+    }
+
+    clearFrame();
+    scheduleStep();
+  };
+  scheduleStep();
+}
+
+function cheekLuma(stats) {
+  const values = [stats?.cheekMedianL?.left, stats?.cheekMedianL?.right].filter(Number.isFinite);
+  if (!values.length) return null;
+  return values.reduce((a, b) => a + b, 0) / values.length;
+}
+
+function correctLab(lab, gains) {
+  // Round-trip through linear RGB, because the gains are diagonal in LINEAR
+  // space. Applying them to Lab coordinates directly would be a different
+  // operation wearing the same name.
+  const { L, a, b } = lab;
+  const fy = (L + 16) / 116, fx = fy + a / 500, fz = fy - b / 200;
+  const inv = (t) => (t > 6 / 29 ? t ** 3 : 3 * (6 / 29) ** 2 * (t - 4 / 29));
+  const X = 95.047 * inv(fx), Y = 100 * inv(fy), Z = 108.883 * inv(fz);
+  const r = (3.2404542 * X - 1.5371385 * Y - 0.4985314 * Z) / 100;
+  const g = (-0.9692660 * X + 1.8760108 * Y + 0.0415560 * Z) / 100;
+  const bl = (0.0556434 * X - 0.2040259 * Y + 1.0572252 * Z) / 100;
+  return color.labFromLinear({ r: r * gains.r, g: g * gains.g, b: bl * gains.b });
+}
+
+/**
+ * The engine scalars for this frame.
+ *
+ * This is the classic whole-frame path: white balance ONCE over the frame,
+ * then per-region statistics. Never per region — normalising each region
+ * separately drives them all toward grey and erases the between-region
+ * differences the method measures (CLAUDE.md item 1).
+ */
+function engineScalars(image, pts) {
+  let balanced = null;
+  let regions = null;
+  try {
+    balanced = shadesOfGray(Uint8ClampedArray.from(image.data));
+    ({ regions } = extractRegions(balanced, image.width, image.height, pts));
+    const noise = sensorNoiseConfidence(regions);
+    const boundarySensitive = Object.values(regions).some((r) => r && r.boundarySensitive);
+    return { scalars: rawScalars(regions), noise, boundarySensitive };
+  } finally {
+    balanced?.fill?.(0);
+    eraseExtractedRegions(regions);
+  }
+}
+
+async function finish(burst, rois, sclera, opened, history, gateMargins, captureTier,
+  image, pts, stats) {
+  const reduced = reduceBurst(burst);
+  const rawLab = reduced.lab;
+  const correctedLab = {};
+  for (const [name, lab] of Object.entries(rawLab)) {
+    correctedLab[name] = !lab ? null : sclera.gains ? correctLab(lab, sclera.gains) : { ...lab };
+  }
+
+  const lumRatio = {};
+  for (const [name, roi] of Object.entries(rois.rois)) {
+    if (roi.pixels.length) lumRatio[name] = lumRatioP90P50(roi.pixels, color);
+  }
+
+  const metrics = computeReadingMetrics({ rawLab, correctedLab, lumRatio });
+  const confidence = readingConfidence({
+    scleraConfidenceValue: sclera.confidenceValue,
+    validFraction: rois.validFraction,
+    frameJitter: reduced.frameJitter.overall,
+    captureTier,
+  });
+
+  const { scalars, noise, boundarySensitive } = engineScalars(image, pts);
+  let integrated = null;
+  try {
+    integrated = measureIntegratedReading(image, pts);
+  } catch (error) {
+    // A frame that cannot carry all twelve palaces still carries a colour
+    // reading. Recorded as absent, never as measured-and-empty.
+    console.warn("beta: integrated reading unavailable", error);
+  }
+
+  const timestampIso = new Date().toISOString();
+  const now = new Date();
+  const canonicalDay = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const captureClass = opened.captureMode || "auto";
+  const interpreted = interpretReading(metrics.corrected, history, {
+    confidence, timestampIso, captureMode: captureClass,
+  });
+
+  const reading = buildReading({
+    timestampIso,
+    canonicalDay,
+    captureClass,
+    metrics,
+    axes: axesOf(metrics.corrected),
+    interpreted,
+    integrated,
+    captureTier,
+    consentVersion: consent.read() && consent.read().version,
+    gateMargins,
+    sclera,
+    roiValidity: Object.fromEntries(Object.entries(rois.rois).map(([k, v]) => [k, v.valid])),
+    frameJitter: reduced.frameJitter.overall,
+    confidence,
+    valid: rois.accepted,
+    baselineVersion: BASELINE_VERSION,
+  });
+
+  // The pixels and the mesh go now, in this tick, before anything renders.
+  releaseCapture(scratch);
+  scratch = null;
+  setCaptureTheme(false);
+
+  await store.put(reading);
+
+  const seal = sealStateFrom({
+    sealed: true,
+    boundarySensitive,
+    noiseConfidence: noise.confidence,
+  });
+  renderSeal(seal, now);
+  renderTags(seal.tags);
+
+  const calibrating = readingStateLabel(interpreted);
+  state.entries.unshift({
+    timestamp: now,
+    sealed: true,
+    attenuated: seal.attenuated,
+    deltas: interpreted.deltas,
+  });
+  setVoice(calibrating.calibrating
+    ? calibrating.text
+    : history.length === 0 ? VOICE.firstSeal : VOICE.sealed(formatTime(now)));
+
   renderRing();
   renderLedger();
-  renderArtifact();
+  renderArtifact(now);
+  $("gate-line").textContent = "";
 }
 
-// ───────────────────────────────────────────────────── NAVIGATION ───
+/** The abstain surface. No seal, and the gate's own worst-first instruction. */
+function renderAbstain(gates) {
+  const model = abstainModel(captureInstruction(gates));
+  renderSeal({ type: "abstain", variant: "outlined" }, new Date());
+  setVoice(model.line);
+  renderTags(model.action ? [model.action] : []);
+  state.entries.unshift({ timestamp: new Date(), sealed: false, attenuated: false, deltas: null });
+  renderRing();
+  renderLedger();
+}
 
-toLibrary.addEventListener('click', () => {
-  bridge.classList.add('lib');
-});
+/* ── share ─────────────────────────────────────────────────────────────── */
 
-toTracker.addEventListener('click', () => {
-  bridge.classList.remove('lib');
-});
-
-shareBtn.addEventListener('click', async () => {
-  // Share artifact via navigator.share (user-initiated only)
-  if (navigator.share) {
-    try {
-      artifactCanvas.toBlob(async (blob) => {
-        const file = new File([blob], 'mien-shiang-artifact.png', { type: 'image/png' });
-        await navigator.share({
-          title: 'Mien Shiang — Artifact',
-          text: 'The countenance is the exterior of the mind; the mind is the interior of the countenance.',
-          files: [file],
-        });
-      }, 'image/png');
-    } catch (err) {
-      // Share cancelled or failed — no error messaging per abstain-as-scarcity rule
-    }
+async function shareArtifact() {
+  if (!navigator.share) {
+    $("gate-line").textContent = "This browser cannot share from the page.";
+    return;
   }
-});
+  const canvas = $("artifact");
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+  if (!blob) {
+    console.warn("beta: artifact could not be rasterised");
+    return;
+  }
+  try {
+    await navigator.share({
+      title: "Mien Shiang",
+      files: [new File([blob], "mien-shiang-artifact.png", { type: "image/png" })],
+    });
+  } catch (error) {
+    // A cancelled share is the user's choice and says nothing on screen; a
+    // real failure is still reported rather than swallowed.
+    if (error && error.name !== "AbortError") console.warn("beta: share failed", error);
+  }
+}
 
-// ───────────────────────────────────────────────────── BOOT ───
+/* ── boot ──────────────────────────────────────────────────────────────── */
 
-function init() {
-  voice.textContent = VOICE.boot;
+export async function init(deps = {}) {
+  consent = deps.consent || createConsent();
+  store = deps.store || await openStore();
+
+  $("consent-title").textContent = VOICE.consentTitle;
+  $("consent-body").textContent = VOICE.consentBody;
+  $("consent-accept").textContent = VOICE.consentAccept;
+
+  exposureHalo = createExposureHalo({
+    root: $("exposure-halo"),
+    // Level only. The theme never enters this expression, so the capture-time
+    // halo-white override cannot change how bright the flash is.
+    onLevel: (level) => {
+      $("plate").style.setProperty("--halo-screen-strength", (0.18 + level * 0.72).toFixed(3));
+    },
+    reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
+  });
+
+  $("toLibrary").addEventListener("click", () => $("bridge").classList.add("lib"));
+  $("toTracker").addEventListener("click", () => $("bridge").classList.remove("lib"));
+  $("shareBtn").addEventListener("click", () => { shareArtifact(); });
+  $("go-capture").addEventListener("click", () => {
+    runCapture().catch((error) => {
+      console.error("beta: capture failed", error);
+      $("gate-line").textContent = describeCameraError(error);
+    });
+  });
+
+  // Both doors into biometric processing are behind this: the camera AND the
+  // mesh. assertConsentGranted throws rather than returning false, so a caller
+  // that forgets to check cannot proceed (CLAUDE.md item 41).
+  $("consent-accept").addEventListener("click", () => {
+    consent.grant();
+    showBench();
+  });
+
+  if (consent.isGranted()) showBench();
   renderArtifact();
   renderRing();
-  
-  // Demo first-run flow: deliberately refuse first capture, then accept
-  // This demonstrates the abstain vocabulary before the first seal
-  setTimeout(() => {
-    simulateCapture(false);  // First: refused
-  }, 500);
-  
-  setTimeout(() => {
-    simulateCapture(true);   // Second: accepted (establishes baseline)
-  }, 2000);
 }
 
-init();
+function showBench() {
+  $("consent-screen").hidden = true;
+  $("tracker").hidden = false;
+  setVoice(VOICE.boot);
+}
+
+export const __test__ = { engineScalars, cheekLuma, renderAbstain, state };

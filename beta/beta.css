@@ -27,11 +27,15 @@
   --l-dim: #5C564E;
   --l-cin: #B23A20;
 
-  /* Typography */
-  --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
-  --ui: 'Archivo', system-ui, sans-serif;
-  --serif: 'Fraunces', Georgia, serif;
-  --cjk: 'Noto Serif SC', serif;
+  /* Typography — the four stacks recorded in src/ui/qise/palette.js, verbatim.
+   * No @font-face and no webfont import: the CSP has no font-src, and the
+   * binaries are not committed, so these resolve to the system fallbacks. A
+   * family named here that palette.js does not record would make the beta
+   * diverge from production in type as well as skin. */
+  --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  --ui: 'Bricolage Grotesque', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --serif: 'EB Garamond', Garamond, Georgia, 'Times New Roman', serif;
+  --cjk: 'Noto Serif SC', 'Noto Serif CJK SC', 'Songti SC', 'Source Han Serif SC', serif;
 
   /* Scale: 13/15/17/21/28 */
   --fs-xs: 13px;
@@ -438,4 +442,84 @@ button:focus-visible,
 .library .sq:focus-visible {
   outline: 2px solid var(--l-ink);
   outline-offset: 2px;
+}
+
+/* ── capture surfaces ─────────────────────────────────────────────────────
+ * Added with the real pipeline. The preview and the halo sit inside .plate,
+ * which is already position:relative, so both fill it.
+ *
+ * The preview is mirrored by a CSS transform ONLY. That transform does not
+ * touch the pixels drawImage and detectForVideo receive, which is exactly why
+ * the capture loop draws the canvas unflipped (CLAUDE.md item 44).
+ */
+#preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+  background: var(--t-ground);
+}
+
+.halo {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* Driven by --halo-screen-strength, which beta.js computes from the halo
+   * LEVEL alone. No theme token appears in it, so the capture-time halo-white
+   * override cannot change the flash luminance. */
+  background: rgba(255, 255, 255, var(--halo-screen-strength, 0));
+  transition: background 120ms linear;
+}
+
+.gateline {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--t-dim);
+  min-height: 1.4em;
+  margin: 8px 0;
+  text-align: center;
+}
+
+.ctlrow {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.consent-title {
+  font-family: var(--ui);
+  font-size: 21px;
+  margin: 24px 0 12px;
+}
+
+.consent-body {
+  font-family: var(--serif);
+  font-size: 17px;
+  line-height: 1.5;
+  margin-bottom: 24px;
+  max-width: 34em;
+}
+
+/* The capture sequence overrides the theme to halo-white. Skin tokens only —
+ * nothing here feeds the halo's own strength, which is why the halo-theme test
+ * can assert the flash luminance is identical under either theme. */
+:root[data-theme="halo-white"] .tracker {
+  --t-ground: #F4F2EC;
+  --t-type: #14140F;
+  --t-dim: #5C564E;
+}
+
+/* The consent gate is an overlay, NOT a third .screen: .bridge is a 200%
+ * two-panel slider and a third panel would shift the library transform. */
+.consent {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: var(--t-ground);
+  color: var(--t-type);
+  font-family: var(--mono);
+  padding: 0 20px;
+  overflow-y: auto;
 }
