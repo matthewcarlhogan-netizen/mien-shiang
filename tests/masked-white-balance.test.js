@@ -59,8 +59,8 @@ test("a masked sample is unaffected by what the background changes to", () => {
 
   // Compare only the face-region pixels: the estimate must not have moved,
   // so the correction applied to the identical face content must not either.
-  for (let y = FACE.y0; y < FACE.y1; y += 7) {
-    for (let x = FACE.x0; x < FACE.x1; x += 7) {
+  for (let y = FACE.y0; y < FACE.y1; y++) {
+    for (let x = FACE.x0; x < FACE.x1; x++) {
       const i = (y * W + x) * 4;
       assert.equal(withDimBg[i], withBrightBg[i], `R differs at (${x},${y})`);
       assert.equal(withDimBg[i + 1], withBrightBg[i + 1], `G differs at (${x},${y})`);
@@ -166,4 +166,30 @@ test("the real face union covers a plausible minority of the working canvas, on 
   // individual zone survives on this fixture).
   assert.ok(fraction > 0.05 && fraction < 0.6,
     `face union covers ${(fraction * 100).toFixed(1)}% of the frame — expected a real minority`);
+});
+
+test("the production ROI union pins a background swap, with an unmasked negative control", () => {
+  const w = 192, h = 256;
+  const points = canonicalFace({ bizygomatic: 115.25, cx: 96, cy: 128 });
+  const mask = unionFootprintMask(Object.values(ROIS), points, w, h);
+  assert.ok(mask.some(Boolean), "non-empty production geometry is required");
+  const frame = (background) => {
+    const data = new Uint8ClampedArray(w * h * 4);
+    for (let i = 0; i < mask.length; i++) {
+      const skin = [180 + (i % w < w / 2 ? 8 : 0), 130, 110];
+      data.set([...(mask[i] ? skin : background), 255], i * 4);
+    }
+    return data;
+  };
+  const dim = frame(DIM_BG), bright = frame(BRIGHT_BG);
+  const a = shadesOfGray(dim, 6, mask), b = shadesOfGray(bright, 6, mask);
+  const oldA = shadesOfGray(dim), oldB = shadesOfGray(bright);
+  let changedWithoutMask = 0;
+  for (let i = 0; i < mask.length; i++) if (mask[i]) {
+    for (let c = 0; c < 3; c++) {
+      assert.equal(a[i * 4 + c], b[i * 4 + c]);
+      if (oldA[i * 4 + c] !== oldB[i * 4 + c]) changedWithoutMask++;
+    }
+  }
+  assert.ok(changedWithoutMask > 0, "negative control must detect the old background dependence");
 });

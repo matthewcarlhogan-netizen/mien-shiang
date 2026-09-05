@@ -4,7 +4,7 @@
  */
 
 import { geometryReport } from "../geometry.js";
-import { rawScalars, shadesOfGray } from "../engine.js";
+import { rawScalars, balanceFrame } from "../engine.js";
 import { composeReading } from "../reading/index.js";
 import { extractRegions, eraseExtractedRegions } from "../region-extractor.js";
 import { PALACES } from "../reading/twelve-palaces.js";
@@ -172,13 +172,18 @@ export function measureIntegratedReading(image, points, documentRef = document, 
   let balanced = null;
   let regions = null;
   try {
-    const balance = deps.shadesOfGray || shadesOfGray;
     const extract = deps.extractRegions || extractRegions;
-    balanced = balance(image.data);
+    // Deliberately remains whole-frame. This geometry/surface path is NOT the
+    // sclera-corrected longitudinal axes and is not migrated by PR #52.
+    const result = deps.shadesOfGray
+      ? { data: deps.shadesOfGray(image.data), methodVersion: null }
+      : balanceFrame(image.data);
+    balanced = result.data;
     ({ regions } = extract(
       balanced, image.width, image.height, points, documentRef,
     ));
-    const reading = projectIntegratedReading(composeReading(geometry, null, rawScalars(regions)));
+    const reading = projectIntegratedReading(composeReading(geometry, null,
+      rawScalars(regions, { methodVersion: result.methodVersion })));
     assertCompletePalaceStructure(reading?.twelvePalaces);
     return reading;
   } finally {

@@ -17,6 +17,8 @@ import {
   ERYTHEMA_TRIM_LO, ERYTHEMA_TRIM_HI,
 } from "./utils/textureAnalyzer.js";
 
+import { MEASUREMENT_METHOD } from "./measurement-method.js";
+
 // ---------------------------------------------------------------- colour ----
 
 // EI = 100*log10(R_red/R_green)   MI = 100*log10(1/R_red)
@@ -74,6 +76,11 @@ export function srgbToLinear(v) {
  *   per-zone call.
  */
 export function shadesOfGray(data, p = 6, sampleMask = null) {
+  return balanceFrame(data, p, sampleMask).data;
+}
+
+/** The same arithmetic with its EFFECTIVE method, including fallback. */
+export function balanceFrame(data, p = 6, sampleMask = null) {
   const len = data.length;
 
   /* Both loops below are table-driven on the WHOLE FRAME — three pow() and
@@ -119,12 +126,19 @@ export function shadesOfGray(data, p = 6, sampleMask = null) {
   };
 
   let { sr, sg, sb, n } = accumulate(Boolean(sampleMask));
+  let masked = Boolean(sampleMask);
   // A sample too small to trust falls back to the whole frame — the ORIGINAL
   // always-available estimate — rather than a gain fit to a handful of
   // pixels, or a refusal. This is the only fallback path; there is no
   // per-region retry, which is exactly what item 1 forbids.
-  if (sampleMask && n < 16) ({ sr, sg, sb, n } = accumulate(false));
-  if (n < 16) return data;
+  if (sampleMask && n < 16) {
+    ({ sr, sg, sb, n } = accumulate(false));
+    masked = false;
+  }
+  if (n < 16) return { data, methodVersion: null };
+  const methodVersion = p === 6
+    ? (masked ? MEASUREMENT_METHOD.roiUnion : MEASUREMENT_METHOD.wholeFrame)
+    : null;
 
   let ir = Math.pow(sr / n, 1 / p);
   let ig = Math.pow(sg / n, 1 / p);
@@ -158,7 +172,7 @@ export function shadesOfGray(data, p = 6, sampleMask = null) {
       out[i + 3] = data[i + 3];
     }
   }
-  return out;
+  return { data: out, methodVersion };
 }
 
 export function erythemaIndex(r, g) {
@@ -635,6 +649,9 @@ export function regionStats(rgba, mask, w, h) {
  * sample, in that order, for the reason regionStats() does the same: the
  * second selection inherits the first's partial ordering.
  */
+// UNCALIBRATED starting points in EI units (100*log10(linear R/linear G)),
+// not CIE Delta E, error bounds or probabilities. See the low-end/device
+// protocol in docs/PR52_RELEASE_GATES.md before proposing any tuning.
 export const BOUNDARY_SENSITIVITY_EI_THRESHOLD = 1.5;
 export const BOUNDARY_SENSITIVITY_FOCAL_THRESHOLD = 1.5;
 
@@ -695,27 +712,23 @@ export function boundarySensitivity(rgba, fullMask, erodedMask, w, h) {
 }
 
 /**
- * The high-frequency/low-frequency ceiling that separates ordinary sensor
- * noise from a forced-high-ISO capture, in units of the four-neighbour
+ * A high-frequency-energy ceiling, in units of the four-neighbour
  * Laplacian variance laplacianResponses() returns.
  *
  * UNCALIBRATED against a real device, in the same sense every constant in
  * this file that predates labelled data is uncalibrated — there is no corpus
- * of real high-ISO phone photos here to fit against. What it IS calibrated
- * against: the same synthetic method item 4 used to derive
+ * of real high-ISO phone photos here to fit against. Its initial synthetic
+ * rationale uses the same style of experiment item 4 used to derive
  * NOISE_FLOOR_STRUCTURENESS — measuring this exact statistic on a flat 8-bit
  * patch at increasing Gaussian noise sigma:
  *
  *   sigma (levels)   1     2     3     4      5      6      8     10    15
  *   variance         8.3   28.8  61.8  109.1  168.8  243.4  430.6 673.3 1509.2
  *
- * A well-exposed phone capture's residual per-pixel noise after ISP
- * denoising is ordinarily a few levels of sigma; a capture forced to a high
- * ISO by insufficient light visibly grains at roughly double that. 200 sits
- * inside the gap between the two regimes with margin on both sides, the same
- * shape of choice as item 4's clamp — not fit to a boundary, sitting between
- * two measured regimes. Revisit if real device photos at known ISO are ever
- * collected.
+ * 200 lies between the sigma-5 and sigma-6 synthetic values. That separation
+ * does NOT establish a phone's noise distribution or ISO: texture, sharpening
+ * and denoising confound it. No physical-device calibration is claimed. Keep
+ * this advisory; see docs/PR52_RELEASE_GATES.md for the low-end tuning protocol.
  */
 export const SENSOR_NOISE_VARIANCE_CEILING = 200;
 
@@ -806,6 +819,8 @@ export function sensorNoiseConfidence(regions, baselineZones = BASELINE_ZONES) {
  */
 export function rawScalars(regions, opts = {}) {
   const adaptive = opts.adaptive !== false;
+  const methodVersion = Object.values(MEASUREMENT_METHOD).includes(opts.methodVersion)
+    ? opts.methodVersion : null;
 
   /* ── PHASE A ──────────────────────────────────────────────────────────────
    * One Hessian pass per zone, producing a field that does NOT yet depend on
@@ -891,6 +906,7 @@ export function rawScalars(regions, opts = {}) {
     return {
       zones: {},
       baseline: {
+        methodVersion,
         regime: "low", n: 0,
         reason: "Not enough clear skin visible to set a baseline.",
       },
@@ -903,6 +919,7 @@ export function rawScalars(regions, opts = {}) {
   const baselineBlur = med(baseBlur);
   const noise = sensorNoiseConfidence(regions, BASELINE_ZONES);
   const baseline = {
+    methodVersion,
     ei: med(baseEi), mi: med(baseMi), contrast: med(baseC), ridge: med(baseR),
     ita, band: itaBand(ita), regime, reason, n: basePx,
     /** The per-image ridge normaliser actually used, and how it was reached.

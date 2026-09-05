@@ -15,7 +15,7 @@ import assert from "node:assert/strict";
 
 import { erodeMask, BOUNDARY_EROSION_PX } from "../src/roi.js";
 import {
-  boundarySensitivity, BOUNDARY_SENSITIVITY_EI_THRESHOLD, BOUNDARY_SENSITIVITY_FOCAL_THRESHOLD,
+  boundarySensitivity, regionStats, BOUNDARY_SENSITIVITY_EI_THRESHOLD, BOUNDARY_SENSITIVITY_FOCAL_THRESHOLD,
 } from "../src/engine.js";
 
 const W = 40, H = 40;
@@ -148,4 +148,42 @@ test("a region too small to erode fails SENSITIVE, not silently stable", () => {
   const result = boundarySensitivity(rgba, mask, eroded, W, H);
   assert.equal(result.sensitive, true);
   assert.equal(result.reason, "eroded_too_small");
+});
+
+test("boundary sensitivity correlates with measured focal-EI variation under translated hull jitter", (t) => {
+  // Fixed pixels, moving hulls: unlike the static ring fixture, this actually
+  // changes which samples a landmark shift admits. Sweep boundary contrast,
+  // not the decision thresholds. This is a mechanism test, not device proof.
+  const rows = [0, 10, 20, 40, 60, 80].map((contrast) => {
+    const rgba = new Uint8ClampedArray(W * H * 4);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const edge = x < 9;
+      rgba.set([180 + (edge ? contrast / 2 : 0), 130 - (edge ? contrast : 0), 110, 255], (y * W + x) * 4);
+    }
+    const masks = [-3, -2, -1, 0, 1, 2, 3].map((dx) => {
+      const mask = new Uint8Array(W * H);
+      for (let y = 7; y < 33; y++) for (let x = 7 + dx; x < 33 + dx; x++) mask[y * W + x] = 1;
+      return mask;
+    });
+    const observed = masks.map((mask) => regionStats(rgba, mask, W, H).focalEi);
+    const diagnostics = masks.map((mask) => boundarySensitivity(rgba, mask, erodeMask(mask, W, H), W, H));
+    return {
+      contrast,
+      variation: Math.max(...observed) - Math.min(...observed),
+      sensitivity: Math.max(...diagnostics.map((d) => d.deltaFocalEi)),
+      flagged: diagnostics.some((d) => d.sensitive),
+    };
+  });
+  assert.equal(rows[0].variation, 0, "negative control: shifting a uniform patch changes nothing");
+  assert.equal(rows[0].flagged, false);
+  assert.ok(rows.at(-1).variation > 1.5, "positive control: moving the hull changes the measured statistic");
+  assert.equal(rows.at(-1).flagged, true);
+  const mean = (key) => rows.reduce((s, r) => s + r[key], 0) / rows.length;
+  const mx = mean("variation"), my = mean("sensitivity");
+  const cov = rows.reduce((s, r) => s + (r.variation - mx) * (r.sensitivity - my), 0);
+  const vx = rows.reduce((s, r) => s + (r.variation - mx) ** 2, 0);
+  const vy = rows.reduce((s, r) => s + (r.sensitivity - my) ** 2, 0);
+  const correlation = cov / Math.sqrt(vx * vy);
+  assert.ok(Number.isFinite(correlation) && correlation > 0.9, `mechanism correlation: ${correlation}`);
+  t.diagnostic(JSON.stringify({ correlation, rows }));
 });

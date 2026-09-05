@@ -126,7 +126,7 @@ test("a perfectly flat history cannot make every reading remarkable", () => {
   // an infinite margin — the exact failure `ping` exists to prevent.
   const flat = Array.from({ length: 34 }, (_, i) => ({
     timestampIso: new Date(Date.UTC(2026, 6, 1 + i)).toISOString(),
-    valid: true, axes: typical(),
+    valid: true, baselineVersion: "v2", axes: typical(),
   }));
   const floor = noiseFloor(flat);
   for (const key of COMPASS_AXES) {

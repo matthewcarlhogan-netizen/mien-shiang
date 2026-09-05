@@ -23,6 +23,11 @@
  * that stops a reading pulling its own comparison toward itself.
  */
 
+import { MEASUREMENT_METHOD, sameMeasurementMethod, qiseMethodOf } from "../measurement-method.js";
+
+/** Existing Qi Se axes are sclera-corrected, NOT either Shades-of-Gray path. */
+export const BASELINE_METHOD_VERSION = MEASUREMENT_METHOD.qiseCorrected;
+
 /** Trailing valid readings the baseline is taken over. */
 export const BASELINE_WINDOW = 30;
 
@@ -115,25 +120,27 @@ export function axesOf(metrics) {
  *
  * @param {Array<{axes:Object, valid?:boolean}>} history oldest first
  */
-export function computeBaseline(history) {
-  const valid = (history || []).filter((r) => r && r.axes && r.valid !== false);
+export function computeBaseline(history, methodVersion = BASELINE_METHOD_VERSION) {
+  const valid = (history || []).filter((r) => r && r.axes && r.valid !== false
+    && sameMeasurementMethod(qiseMethodOf(r), methodVersion));
   const eligible = valid.slice(0, Math.max(0, valid.length - BASELINE_EXCLUDE_RECENT));
   const window = eligible.slice(-BASELINE_WINDOW);
 
   if (window.length === 0) {
-    return { n: 0, axes: null, ready: false, totalValid: valid.length };
+    return { methodVersion, n: 0, axes: null, ready: false, totalValid: valid.length };
   }
 
   const axes = {};
   for (const key of COMPASS_AXES) {
     axes[key] = median(window.map((r) => r.axes[key]));
   }
-  return { n: window.length, axes, ready: true, totalValid: valid.length };
+  return { methodVersion, n: window.length, axes, ready: true, totalValid: valid.length };
 }
 
 /** Two MADs per axis, floored. Derived from the user's own variability. */
-export function noiseFloor(history) {
-  const valid = (history || []).filter((r) => r && r.axes && r.valid !== false);
+export function noiseFloor(history, methodVersion = BASELINE_METHOD_VERSION) {
+  const valid = (history || []).filter((r) => r && r.axes && r.valid !== false
+    && sameMeasurementMethod(qiseMethodOf(r), methodVersion));
   const eligible = valid.slice(0, Math.max(0, valid.length - BASELINE_EXCLUDE_RECENT));
   const window = eligible.slice(-BASELINE_WINDOW);
 
@@ -146,8 +153,9 @@ export function noiseFloor(history) {
 }
 
 /** Today's axes minus the baseline's. Null where either side is missing. */
-export function deltasFrom(axes, baseline) {
+export function deltasFrom(axes, baseline, methodVersion = BASELINE_METHOD_VERSION) {
   if (!axes || !baseline || !baseline.axes) return null;
+  if (!sameMeasurementMethod(methodVersion, baseline.methodVersion)) return null;
   const out = {};
   for (const key of COMPASS_AXES) {
     const today = axes[key], base = baseline.axes[key];
@@ -347,13 +355,16 @@ export const BASELINE_VERSION = "v2";
 export function interpretReading(metrics, history, options = {}) {
   const axes = axesOf(metrics);
   const currentTimestamp = options.timestampIso;
+  const methodVersion = options.methodVersion === undefined
+    ? BASELINE_METHOD_VERSION : options.methodVersion;
   
   // Segmentation: baseline/history by algorithm version and capture class.
   // We filter history to match current algorithm and capture class.
   // Legacy unversioned rows are excluded entirely.
   const captureMode = options.captureMode || "auto";
-  const historyToUse = history.filter(r => 
-    r.baselineVersion === BASELINE_VERSION && 
+  const historyToUse = (history || []).filter(r => r &&
+    sameMeasurementMethod(qiseMethodOf(r), methodVersion) &&
+    r.baselineVersion === BASELINE_VERSION &&
     (r.captureClass === captureMode)
   );
 
@@ -382,7 +393,7 @@ export function interpretReading(metrics, history, options = {}) {
     };
   }
 
-  const baseline = computeBaseline(validHistory);
+  const baseline = computeBaseline(validHistory, methodVersion);
   if (!baseline.ready) {
     return {
       state: "calibrating", readingsSoFar: validCount, needed: CALIBRATING_READINGS + 1,
@@ -390,8 +401,8 @@ export function interpretReading(metrics, history, options = {}) {
     };
   }
 
-  const floor = noiseFloor(validHistory);
-  const deltas = deltasFrom(axes, baseline);
+  const floor = noiseFloor(validHistory, methodVersion);
+  const deltas = deltasFrom(axes, baseline, methodVersion);
   const compass = projectCompass(deltas, floor);
   
   return {

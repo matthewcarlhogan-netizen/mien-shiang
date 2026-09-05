@@ -7,7 +7,7 @@
  * an identity is biometric data, and the safest way to hold it is not to.
  */
 
-import { analyse, rawScalars, shadesOfGray, UNAVAILABLE } from "./engine.js";
+import { analyse, rawScalars, balanceFrame, UNAVAILABLE } from "./engine.js";
 import { runRules } from "./rules.js";
 import { readComplexion } from "./adapters/entertainment.js";
 import { evaluateSafety } from "./adapters/safety.js";
@@ -116,7 +116,7 @@ export async function runAnalysis(file, unmirror, onProgress) {
   // the correction it produces is still applied to every pixel, background
   // included, exactly as before this existed.
   const faceMask = unionFootprintMask(Object.values(ROIS), pts, w, h);
-  const balanced = shadesOfGray(img.data, 6, faceMask);
+  const { data: balanced, methodVersion } = balanceFrame(img.data, 6, faceMask);
 
   const { regions, dropped: droppedRegions } = extractRegions(balanced, w, h, pts);
 
@@ -125,7 +125,7 @@ export async function runAnalysis(file, unmirror, onProgress) {
   // consume THE SAME object and neither owns it. `rawScalars()` sits below
   // labelling on purpose: `analyse()` emits condition names, which are
   // clinical vocabulary, so Module A must never be built on it.
-  const raw = rawScalars(regions);
+  const raw = rawScalars(regions, { methodVersion });
 
   // Module A — entertainment. Glow/vitality values only.
   const complexion = readComplexion(raw);

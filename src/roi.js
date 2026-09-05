@@ -28,17 +28,13 @@
 export const MIN_ROI_PX = 8;
 
 /**
- * How far a MediaPipe landmark can be expected to move between two otherwise
- * identical detections (GPU vs CPU delegate, or one device vs another) before
- * a boundary-sensitivity check has anything to catch. Not measured against
- * this repo's own landmarker output — no cross-device landmark corpus exists
- * here to measure it from — but taken from the magnitude actually cited when
- * this diagnostic was commissioned ("MediaPipe's GPU-backed landmarks shift by
- * even 2 pixels"), plus 1px for the canvas alpha-threshold rasterisation in
- * region-extractor.js, which can itself move a boundary pixel in or out on a
- * sub-pixel hull shift. Uncalibrated in the sense every constant in this file
- * that predates real device data is uncalibrated — revisit if real landmark
- * jitter is ever measured across devices.
+ * Diagnostic probe radius in WORKING-IMAGE pixels, not a measured guarantee
+ * about MediaPipe jitter. The design assumption is a 2px shift plus a 1px
+ * rasterisation margin. Both are uncalibrated. A fixed 3px means a different
+ * fraction of a zone at each resolution; changing it needs device evidence,
+ * not a convenient pass rate. See docs/PR52_RELEASE_GATES.md for scale and
+ * low-end tuning limitations. The translated-hull test proves the mechanism
+ * on a synthetic +/-3px sweep, not this assumption on real faces.
  */
 export const BOUNDARY_EROSION_PX = 3;
 
