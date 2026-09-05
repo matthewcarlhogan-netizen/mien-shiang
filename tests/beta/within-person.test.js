@@ -65,7 +65,7 @@ test("within-person: ledger encodes relative deltas only", () => {
   for (const pattern of absValuePatterns) {
     const m = stripped.match(pattern);
     assert.equal(m, null,
-      `within-person: should not present absolute values as population metrics: "${m[0]}"`);
+      m ? `within-person: should not present absolute values as population metrics: "${m[0]}"` : undefined);
   }
 });
 

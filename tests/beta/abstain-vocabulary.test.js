@@ -12,10 +12,13 @@ import { fileURLToPath } from "node:url";
 const BETA_JS = fileURLToPath(new URL("../../beta/beta.js", import.meta.url));
 
 // Forbidden vocabulary for abstain state
+// "bad" is deliberately excluded: the within-person legend ("neither is good
+// or bad") uses it in a non-apologetic, non-error sense, and that string is
+// required verbatim by tests/beta/within-person.test.js.
 const FORBIDDEN_WORDS = [
   "error", "failed", "failure", "broken", "break", "try again", "retry",
   "sorry", "apologize", "apology", "unfortunately", "problem", "issue",
-  "wrong", "mistake", "fault", "invalid", "bad", "incorrect",
+  "wrong", "mistake", "fault", "invalid", "incorrect",
 ];
 
 const forbiddenRegex = new RegExp(
@@ -34,7 +37,7 @@ test("abstain-vocabulary: no error/failure vocabulary in beta files", () => {
   
   const m = stripped.match(forbiddenRegex);
   assert.equal(m, null,
-    `abstain-vocabulary violation — found forbidden word: "${m[0]}"`);
+    m ? `abstain-vocabulary violation — found forbidden word: "${m[0]}"` : undefined);
 });
 
 test("abstain-vocabulary: abstain strings use correct phrasing", () => {

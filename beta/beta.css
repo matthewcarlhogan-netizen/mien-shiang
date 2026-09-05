@@ -5,7 +5,10 @@
  */
 
 /* ──────────────────────────────────────────────────────────────── FONTS ─── */
-@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=Fraunces:ital,wght@0,400;0,600;1,500&family=IBM+Plex+Mono:wght@400;500&family=Noto+Serif+SC:wght@600&display=swap');
+/* No webfont import — the app loads no third-party assets on render, the
+ * same rule sharecard.js follows (see CLAUDE.md item 26). Each family below
+ * is a preference only; the stack falls through to a system font wherever
+ * the named face is unavailable. */
 
 /* ───────────────────────────────────────────────────────────── TOKENS ─── */
 :root {
