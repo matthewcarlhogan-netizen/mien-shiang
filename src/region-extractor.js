@@ -1,8 +1,8 @@
 /* Shared browser-side extraction for the classic facial zones. */
 
-import { regionStats } from "./engine.js";
+import { regionStats, boundarySensitivity } from "./engine.js";
 import { ROIS } from "./zones.js";
-import { roiFootprint } from "./roi.js";
+import { roiFootprint, erodeMask } from "./roi.js";
 
 /** Extract all configured regions from an already white-balanced RGBA buffer. */
 export function extractRegions(balanced, w, h, pts, documentRef = document, deps = {}) {
@@ -47,8 +47,17 @@ export function extractRegions(balanced, w, h, pts, documentRef = document, deps
         }
       }
 
+      // Landmark-jitter confidence, not a second measurement: does this
+      // zone's own erythema centre move if its hull had landed a few px
+      // differently? Computed from the SAME rgba/mask this zone's stats
+      // already used, never fed back into stats itself. See engine.js.
+      const eroded = erodeMask(mask, rw, rh);
+      const boundary = boundarySensitivity(rgba, mask, eroded, rw, rh);
+
       regions[key] = {
         ...def, key, hull, w: rw, h: rh, mask,
+        boundarySensitive: boundary.sensitive,
+        boundaryDeltaEi: boundary.deltaEi,
         stats: statsFor(rgba, mask, rw, rh),
       };
       committed = true;

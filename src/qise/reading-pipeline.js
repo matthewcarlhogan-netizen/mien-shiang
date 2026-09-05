@@ -28,6 +28,7 @@ import {
 } from "./reading-state.js";
 import { composeReading } from "./reflection.js";
 import { stateKey } from "./reading-state.js";
+import { sameMeasurementMethod, qiseMethodOf } from "../measurement-method.js";
 
 /** Days since the Unix epoch for a canonical `YYYY-MM-DD`. Pure; no clock. */
 export function dayIndex(canonicalDay) {
@@ -61,6 +62,7 @@ export function segmentOf(history, reading) {
     r
     && r.valid !== false
     && r.baselineVersion === reading.baselineVersion
+    && sameMeasurementMethod(qiseMethodOf(r), qiseMethodOf(reading))
     && r.captureClass === reading.captureClass
     && (reading.lineageId ? r.lineageId === reading.lineageId : true)
     && r.timestampIso !== reading.timestampIso);

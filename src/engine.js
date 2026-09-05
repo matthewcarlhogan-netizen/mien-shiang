@@ -17,6 +17,8 @@ import {
   ERYTHEMA_TRIM_LO, ERYTHEMA_TRIM_HI,
 } from "./utils/textureAnalyzer.js";
 
+import { MEASUREMENT_METHOD } from "./measurement-method.js";
+
 // ---------------------------------------------------------------- colour ----
 
 // EI = 100*log10(R_red/R_green)   MI = 100*log10(1/R_red)
@@ -57,7 +59,28 @@ export function srgbToLinear(v) {
  *  MUST be applied to the whole frame, once — never per region. Normalising
  *  each region separately drives them all toward grey and erases exactly the
  *  between-region differences this whole method measures. */
-export function shadesOfGray(data, p = 6) {
+/**
+ * @param {Uint8ClampedArray|Uint8Array|Array} data RGBA buffer, whole frame
+ * @param {number} p Minkowski order
+ * @param {Uint8Array|null} sampleMask ONE ENTRY PER PIXEL (not per RGBA
+ *   component — length data.length/4), restricting which pixels feed the
+ *   illuminant ESTIMATE. Never restricts which pixels the resulting gain is
+ *   APPLIED to: the second pass below is unconditional over every pixel,
+ *   background included, exactly as it always was. That is the whole
+ *   distinction CLAUDE.md item 1 exists to enforce — "applied ONCE, to the
+ *   WHOLE FRAME" describes the APPLICATION, and restricting the SAMPLE that
+ *   feeds a single frame-wide estimate is not the same operation as
+ *   estimating and applying separately per region. Do not let sampleMask
+ *   grow a second call site that also gates the application loop — that
+ *   would be item 1's bug again, just reached through a mask instead of a
+ *   per-zone call.
+ */
+export function shadesOfGray(data, p = 6, sampleMask = null) {
+  return balanceFrame(data, p, sampleMask).data;
+}
+
+/** The same arithmetic with its EFFECTIVE method, including fallback. */
+export function balanceFrame(data, p = 6, sampleMask = null) {
   const len = data.length;
 
   /* Both loops below are table-driven on the WHOLE FRAME — three pow() and
@@ -69,27 +92,53 @@ export function shadesOfGray(data, p = 6) {
    * future higher-bit-depth buffer) still gets the arithmetic. */
   const byteInput = data instanceof Uint8ClampedArray || data instanceof Uint8Array;
 
-  let sr = 0, sg = 0, sb = 0, n = 0;
-  if (byteInput) {
-    const pw = new Float64Array(256);
-    for (let v = 0; v < 256; v++) pw[v] = Math.pow(v, p);
-    for (let i = 0; i < len; i += 4) {
-      if (data[i + 3] < 8) continue;
-      sr += pw[data[i]];
-      sg += pw[data[i + 1]];
-      sb += pw[data[i + 2]];
-      n++;
+  /* Accumulation only — never touches `out`. Kept as one function so the
+   * masked and unmasked passes cannot drift into two copies of the same
+   * pow-table arithmetic (item 47's lesson). Called with useMask=false this
+   * is line-for-line the loop this function has always run, so the
+   * no-sampleMask caller's result is unaffected — confirmed by engine-bench's
+   * fingerprint, which is an EMPTY diff for every existing (unmasked) call
+   * site. */
+  const accumulate = (useMask) => {
+    let sr = 0, sg = 0, sb = 0, n = 0;
+    if (byteInput) {
+      const pw = new Float64Array(256);
+      for (let v = 0; v < 256; v++) pw[v] = Math.pow(v, p);
+      for (let i = 0; i < len; i += 4) {
+        if (data[i + 3] < 8) continue;
+        if (useMask && !sampleMask[i >> 2]) continue;
+        sr += pw[data[i]];
+        sg += pw[data[i + 1]];
+        sb += pw[data[i + 2]];
+        n++;
+      }
+    } else {
+      for (let i = 0; i < len; i += 4) {
+        if (data[i + 3] < 8) continue;
+        if (useMask && !sampleMask[i >> 2]) continue;
+        sr += Math.pow(data[i], p);
+        sg += Math.pow(data[i + 1], p);
+        sb += Math.pow(data[i + 2], p);
+        n++;
+      }
     }
-  } else {
-    for (let i = 0; i < len; i += 4) {
-      if (data[i + 3] < 8) continue;
-      sr += Math.pow(data[i], p);
-      sg += Math.pow(data[i + 1], p);
-      sb += Math.pow(data[i + 2], p);
-      n++;
-    }
+    return { sr, sg, sb, n };
+  };
+
+  let { sr, sg, sb, n } = accumulate(Boolean(sampleMask));
+  let masked = Boolean(sampleMask);
+  // A sample too small to trust falls back to the whole frame — the ORIGINAL
+  // always-available estimate — rather than a gain fit to a handful of
+  // pixels, or a refusal. This is the only fallback path; there is no
+  // per-region retry, which is exactly what item 1 forbids.
+  if (sampleMask && n < 16) {
+    ({ sr, sg, sb, n } = accumulate(false));
+    masked = false;
   }
-  if (n < 16) return data;
+  if (n < 16) return { data, methodVersion: null };
+  const methodVersion = p === 6
+    ? (masked ? MEASUREMENT_METHOD.roiUnion : MEASUREMENT_METHOD.wholeFrame)
+    : null;
 
   let ir = Math.pow(sr / n, 1 / p);
   let ig = Math.pow(sg / n, 1 / p);
@@ -123,7 +172,7 @@ export function shadesOfGray(data, p = 6) {
       out[i + 3] = data[i + 3];
     }
   }
-  return out;
+  return { data: out, methodVersion };
 }
 
 export function erythemaIndex(r, g) {
@@ -560,6 +609,203 @@ export function regionStats(rgba, mask, w, h) {
 }
 
 /**
+ * How far a zone's own scalar would move if its ROI boundary had landed a
+ * few pixels differently — the confidence signal for landmark jitter that
+ * item 33/18's `basis` pattern already uses for other kinds of partial
+ * measurement, applied here instead of touching what regionStats() returns.
+ *
+ * Deliberately NOT built by feeding a continuously-weighted mask into
+ * regionStats(): every scalar it produces (ei, mi, L, b, focalEi) is a
+ * TRIMMED-MEDIAN or percentile statistic taken by selectKth's unweighted
+ * three-way partition (textureAnalyzer.js, item 46). There is no weighted
+ * order-statistic anywhere in this codebase, and inventing one — a sort-and
+ * -accumulate-weight algorithm, not the current O(n) selection — to answer a
+ * confidence question would double the numerically delicate surface area
+ * items 30/46 exist to keep small, with none of their existing NaN-partition
+ * or tie-band tests protecting it. So this compares the SAME unweighted
+ * statistics computed over two masks (the full one and one eroded by
+ * BOUNDARY_EROSION_PX) instead: same selection code, same guarantees, zero
+ * change to any existing scalar.
+ *
+ * BOTH the trimmed centre AND the focal excess are compared, not the centre
+ * alone, and that is not redundancy — it was the first version's bug. A
+ * boundary-jitter ring is, almost by construction, a MINORITY of a real
+ * zone's pixels, and item 30 already proves the point that matters here: "the
+ * median of a symmetric trim is the median" — robustCentreOf() picks the
+ * value at a middle RANK, so any contamination under 50% of the sample cannot
+ * move it, however extreme that contamination is. A synthetic test with a 34%
+ * boundary ring at full saturation moved the centre by exactly zero before
+ * this comment was corrected. focalExcessOf() is the statistic item 30 built
+ * for precisely this shape of contamination — a raised MINORITY tail — so it
+ * is what actually catches a boundary ring in the realistic case. The centre
+ * comparison is kept as a backstop for thin, near-MIN_ROI_PX zones where a
+ * jitter genuinely can flip a majority of the pixels.
+ *
+ * Only the erythema-index sample is used, not the full regionStats() — ei is
+ * the cheapest of the four order statistics (two channels, no GLCM) and the
+ * one the safety gate is most sensitive to (item 2), so it is the one worth
+ * spending the extra pass on for every zone rather than the whole
+ * regionStats() output. Centre and focal excess are taken off the SAME
+ * sample, in that order, for the reason regionStats() does the same: the
+ * second selection inherits the first's partial ordering.
+ */
+// UNCALIBRATED starting points in EI units (100*log10(linear R/linear G)),
+// not CIE Delta E, error bounds or probabilities. See the low-end/device
+// protocol in docs/PR52_RELEASE_GATES.md before proposing any tuning.
+export const BOUNDARY_SENSITIVITY_EI_THRESHOLD = 1.5;
+export const BOUNDARY_SENSITIVITY_FOCAL_THRESHOLD = 1.5;
+
+function erythemaSampleOver(rgba, mask, w, h) {
+  const px = w * h;
+  let n = 0;
+  for (let i = 0; i < px; i++) if (mask[i]) n++;
+  if (n < 32) return null; // too few surviving pixels for a meaningful statistic
+
+  const ei = new Float64Array(n);
+  let j = 0;
+  for (let i = 0; i < px; i++) {
+    if (!mask[i]) continue;
+    const p = i * 4;
+    const R = srgbToLinear(rgba[p]), G = srgbToLinear(rgba[p + 1]);
+    ei[j++] = 100 * Math.log10((R + EPS) / (G + EPS));
+  }
+  return ei;
+}
+
+/**
+ * @param {Uint8ClampedArray} rgba region-local RGBA, as regionStats() takes
+ * @param {Uint8Array} fullMask the region's ordinary hull mask
+ * @param {Uint8Array} erodedMask `erodeMask(fullMask, w, h)` from roi.js
+ * @returns {{sensitive:boolean, deltaEi:number|null, deltaFocalEi:number|null, reason?:string}}
+ */
+export function boundarySensitivity(rgba, fullMask, erodedMask, w, h) {
+  const fullEi = erythemaSampleOver(rgba, fullMask, w, h);
+  const erodedEi = erythemaSampleOver(rgba, erodedMask, w, h);
+
+  // A mask too small to evaluate is not evidence of stability — the erosion
+  // ran out of interior before it ran out of jitter margin, which is itself
+  // the failure mode this flag exists to surface. Fails toward "sensitive".
+  if (!fullEi || !erodedEi) {
+    return {
+      sensitive: true, deltaEi: null, deltaFocalEi: null,
+      reason: !erodedEi ? "eroded_too_small" : "full_too_small",
+    };
+  }
+
+  const fullCentre = robustCentreOf(fullEi, ERYTHEMA_TRIM_LO, ERYTHEMA_TRIM_HI);
+  const fullFocal = focalExcessOf(fullEi);
+  const erodedCentre = robustCentreOf(erodedEi, ERYTHEMA_TRIM_LO, ERYTHEMA_TRIM_HI);
+  const erodedFocal = focalExcessOf(erodedEi);
+
+  const deltaEi = Math.abs(fullCentre - erodedCentre);
+  // focalExcessOf() needs 16+ samples; below that it returns NaN, which must
+  // not read as "no excess" — an eroded sample that shrank below the floor is
+  // exactly the case this flag exists to catch, not a reason to stay quiet.
+  const deltaFocalEi = Number.isNaN(fullFocal) || Number.isNaN(erodedFocal)
+    ? null : Math.abs(fullFocal - erodedFocal);
+
+  const sensitive = deltaEi > BOUNDARY_SENSITIVITY_EI_THRESHOLD
+    || deltaFocalEi === null
+    || deltaFocalEi > BOUNDARY_SENSITIVITY_FOCAL_THRESHOLD;
+
+  return { sensitive, deltaEi, deltaFocalEi };
+}
+
+/**
+ * A high-frequency-energy ceiling, in units of the four-neighbour
+ * Laplacian variance laplacianResponses() returns.
+ *
+ * UNCALIBRATED against a real device, in the same sense every constant in
+ * this file that predates labelled data is uncalibrated — there is no corpus
+ * of real high-ISO phone photos here to fit against. Its initial synthetic
+ * rationale uses the same style of experiment item 4 used to derive
+ * NOISE_FLOOR_STRUCTURENESS — measuring this exact statistic on a flat 8-bit
+ * patch at increasing Gaussian noise sigma:
+ *
+ *   sigma (levels)   1     2     3     4      5      6      8     10    15
+ *   variance         8.3   28.8  61.8  109.1  168.8  243.4  430.6 673.3 1509.2
+ *
+ * 200 lies between the sigma-5 and sigma-6 synthetic values. That separation
+ * does NOT establish a phone's noise distribution or ISO: texture, sharpening
+ * and denoising confound it. No physical-device calibration is claimed. Keep
+ * this advisory; see docs/PR52_RELEASE_GATES.md for the low-end tuning protocol.
+ */
+export const SENSOR_NOISE_VARIANCE_CEILING = 200;
+
+/**
+ * Four-neighbour discrete Laplacian, restricted to fully-interior masked
+ * pixels — a pixel whose neighbour crosses the mask boundary is skipped
+ * rather than treated as a 0-valued neighbour, so the boundary itself (which
+ * is a real edge, not noise) cannot inflate the estimate.
+ *
+ * Same statistic as qise/framestats.js's spatialLaplacianVariance(), used
+ * there in the opposite direction (LOW variance flags a blurred/filtered
+ * frame; HIGH variance here flags a noisy one). Reimplemented against this
+ * tree's (gray, mask, w, h) typed-array shape rather than qise's per-pixel
+ * object list — the two module trees do not import from each other (see
+ * CLAUDE.md's Qi Se tracker separation) and the data representations are not
+ * interchangeable without a full copy. If the formula changes, change it in
+ * both places.
+ */
+function laplacianResponses(gray, mask, w, h) {
+  const responses = [];
+  for (let y = 1; y < h - 1; y++) {
+    const row = y * w;
+    for (let x = 1; x < w - 1; x++) {
+      const i = row + x;
+      if (!mask[i] || !mask[i - 1] || !mask[i + 1] || !mask[i - w] || !mask[i + w]) continue;
+      responses.push(4 * gray[i] - gray[i - 1] - gray[i + 1] - gray[i - w] - gray[i + w]);
+    }
+  }
+  return responses;
+}
+
+/**
+ * Whole-capture sensor-noise confidence, pooled from the SAME peripheral
+ * baseline zones item 6 already uses for the colour baseline.
+ *
+ * Pooled across zones, never taken per-zone — the identical reasoning item
+ * 4/27 already established for structureness: a single small zone's
+ * high-frequency energy is dominated by whatever texture that one patch
+ * happens to have (a stray hair, a pore cluster), and pooling is what turns
+ * "is the WHOLE capture unusually noisy" into a question with a stable
+ * answer instead of one zone's luck.
+ *
+ * A CONFIDENCE FLAG, never a hard rejection — unlike the low-ITA erythema
+ * regime, this never suppresses an observation, only degrades trust in it.
+ * There is no labelled data here to say where a hard cutoff belongs, and a
+ * continuum degraded into a boolean pass/fail would assert a precision this
+ * measurement does not have. UI-surfaceable, not UI-blocking.
+ */
+export function sensorNoiseConfidence(regions, baselineZones = BASELINE_ZONES) {
+  const pooled = [];
+  let zonesRead = 0;
+  for (const key of baselineZones) {
+    const r = regions[key];
+    if (!r || !r.stats || !r.stats.gray) continue;
+    zonesRead++;
+    for (const v of laplacianResponses(r.stats.gray, r.mask, r.w, r.h)) pooled.push(v);
+  }
+  // Same floor as regionStats()'s own refusal (item: "too few pixels for the
+  // colorimetry to mean anything") — below it a variance estimate is noise
+  // about noise, not a measurement.
+  if (pooled.length < 256) {
+    return { confidence: "unknown", noiseVariance: null, reason: "not_enough_baseline_pixels", zonesRead };
+  }
+
+  const mean = pooled.reduce((s, v) => s + v, 0) / pooled.length;
+  const variance = pooled.reduce((s, v) => s + (v - mean) ** 2, 0) / pooled.length;
+  const degraded = variance > SENSOR_NOISE_VARIANCE_CEILING;
+
+  return {
+    confidence: degraded ? "degraded" : "full",
+    noiseVariance: variance,
+    reason: degraded ? "high_frequency_energy_exceeds_flat_skin_ceiling" : "",
+    zonesRead,
+  };
+}
+
+/**
  * Whole-face analysis.
  *
  * SELF-REFERENCE is the point: every value is a difference between one region
@@ -573,6 +819,8 @@ export function regionStats(rgba, mask, w, h) {
  */
 export function rawScalars(regions, opts = {}) {
   const adaptive = opts.adaptive !== false;
+  const methodVersion = Object.values(MEASUREMENT_METHOD).includes(opts.methodVersion)
+    ? opts.methodVersion : null;
 
   /* ── PHASE A ──────────────────────────────────────────────────────────────
    * One Hessian pass per zone, producing a field that does NOT yet depend on
@@ -658,6 +906,7 @@ export function rawScalars(regions, opts = {}) {
     return {
       zones: {},
       baseline: {
+        methodVersion,
         regime: "low", n: 0,
         reason: "Not enough clear skin visible to set a baseline.",
       },
@@ -668,7 +917,9 @@ export function rawScalars(regions, opts = {}) {
   const ita = itaDegrees(med(baseL), med(baseB));
   const { regime, reason } = erythemaConfidence(ita);
   const baselineBlur = med(baseBlur);
+  const noise = sensorNoiseConfidence(regions, BASELINE_ZONES);
   const baseline = {
+    methodVersion,
     ei: med(baseEi), mi: med(baseMi), contrast: med(baseC), ridge: med(baseR),
     ita, band: itaBand(ita), regime, reason, n: basePx,
     /** The per-image ridge normaliser actually used, and how it was reached.
@@ -679,6 +930,12 @@ export function rawScalars(regions, opts = {}) {
     ridgeScaleClamped: calibration.clamped, ridgeScaleFallback: calibration.fallback,
     ridgeScaleSamples: calibration.n,
     blurSigma: baselineBlur,
+    /** Confidence, not a gate — see sensorNoiseConfidence(). Surfaced so the
+     *  UI can flag "this light was hard on the camera" without this module
+     *  deciding to withhold anything on its own. */
+    sensorNoiseVariance: noise.noiseVariance,
+    sensorNoiseConfidence: noise.confidence,
+    sensorNoiseReason: noise.reason,
   };
 
   const zones = {};

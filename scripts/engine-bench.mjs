@@ -35,7 +35,8 @@
 import { writeFileSync } from "node:fs";
 import { ROIS } from "../src/zones.js";
 import { roiFootprint } from "../src/roi.js";
-import { shadesOfGray, regionStats, rawScalars, analyse } from "../src/engine.js";
+import { shadesOfGray, balanceFrame, regionStats, rawScalars, analyse } from "../src/engine.js";
+import { unionFootprintMask } from "../src/roi.js";
 import { canonicalFace } from "../tests/fixtures/canonical-face.js";
 
 const W = 768, H = 1024;
@@ -106,8 +107,7 @@ function fillHull(hull, x0, y0, rw, rh) {
   return mask;
 }
 
-function buildRegions(balanced) {
-  const pts = canonicalFace();
+function buildRegions(balanced, pts) {
   const regions = {};
   for (const [key, def] of Object.entries(ROIS)) {
     const fp = roiFootprint(def, pts, W, H);
@@ -169,8 +169,13 @@ function time(label, reps, fn) {
 
 // ────────────────────────────────────────────────────────────────── run ─────
 const frame = buildFrame();
-const balanced = shadesOfGray(frame);
-const regions = buildRegions(balanced);
+const pts = canonicalFace();
+// Same mask analysis.js now builds and passes — the benchmark stops being
+// representative of production the moment its call sites diverge from the
+// real ones, and this is the whole point of this script per its own header.
+const faceMask = unionFootprintMask(Object.values(ROIS), pts, W, H);
+const { data: balanced, methodVersion } = balanceFrame(frame, 6, faceMask);
+const regions = buildRegions(balanced, pts);
 
 const zoneCount = Object.keys(regions).length;
 if (zoneCount === 0) {
@@ -182,15 +187,15 @@ for (const r of Object.values(regions)) for (const m of r.mask) masked += m;
 console.log(`frame ${W}x${H}   zones ${zoneCount}   masked px ${masked}\n`);
 
 console.log("timings");
-const wb = time("shadesOfGray (whole frame)", 12, () => shadesOfGray(frame));
+const wb = time("shadesOfGray (whole frame)", 12, () => shadesOfGray(frame, 6, faceMask));
 const st = time("regionStats (all zones)", 12, () => {
   for (const r of Object.values(regions)) r.stats = regionStats(r.rgba, r.mask, r.w, r.h);
 });
 for (const r of Object.values(regions)) r.stats = regionStats(r.rgba, r.mask, r.w, r.h);
-const rs = time("rawScalars (ridge pyramid)", 8, () => rawScalars(regions));
+const rs = time("rawScalars (ridge pyramid)", 8, () => rawScalars(regions, { methodVersion }));
 console.log(`  ${"TOTAL".padEnd(30)} ${(wb + st + rs).toFixed(2).padStart(7)} ms\n`);
 
-const raw = rawScalars(regions);
+const raw = rawScalars(regions, { methodVersion });
 const obs = analyse(regions, raw);
 const fp = fingerprint(raw, obs);
 

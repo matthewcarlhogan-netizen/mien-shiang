@@ -22,6 +22,7 @@
  */
 
 import { projectIntegratedReading } from "./integrated.js";
+import { MEASUREMENT_METHOD, sameMeasurementMethod } from "../measurement-method.js";
 
 export const DB_NAME = "qise";
 export const DB_VERSION = 2;
@@ -74,6 +75,13 @@ function scalarMap(obj, allowKeys = null) {
  */
 export function toRecord(reading) {
   const r = reading || {};
+  // The existing v2 schema encodes sclera-corrected axes. Do not strip an
+  // incompatible method tag and accidentally relabel it as a legacy v2 row.
+  // Other methods need their own approved schema, not a silent migration.
+  if (Object.hasOwn(r, "methodVersion")
+      && !sameMeasurementMethod(r.methodVersion, MEASUREMENT_METHOD.qiseCorrected)) {
+    throw new TypeError("Incompatible measurement method for the Qi Se record schema.");
+  }
   return {
     timestampIso: r.timestampIso,
 

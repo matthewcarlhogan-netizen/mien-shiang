@@ -7,7 +7,7 @@
  * an identity is biometric data, and the safest way to hold it is not to.
  */
 
-import { analyse, rawScalars, shadesOfGray, UNAVAILABLE } from "./engine.js";
+import { analyse, rawScalars, balanceFrame, UNAVAILABLE } from "./engine.js";
 import { runRules } from "./rules.js";
 import { readComplexion } from "./adapters/entertainment.js";
 import { evaluateSafety } from "./adapters/safety.js";
@@ -17,6 +17,8 @@ import { createLandmarkerWithFallback } from "./landmarker.js";
 import { geometryReport } from "./geometry.js";
 import { expressionState } from "./expression.js";
 import { extractRegions } from "./region-extractor.js";
+import { ROIS } from "./zones.js";
+import { unionFootprintMask } from "./roi.js";
 
 const BUNDLE = new URL("./vendor/mediapipe/vision_bundle.mjs", import.meta.url).href;
 const WASM = new URL("./vendor/mediapipe/wasm", import.meta.url).href;
@@ -108,7 +110,13 @@ export async function runAnalysis(file, unmirror, onProgress) {
 
   onProgress?.("Measuring…");
   const img = ctx.getImageData(0, 0, w, h);
-  const balanced = shadesOfGray(img.data);      // ONCE, whole frame
+  // ONCE, applied to the whole frame — see the doc comment on shadesOfGray()
+  // in engine.js. `faceMask` restricts only which pixels feed the illuminant
+  // ESTIMATE (a bright window or wall behind the subject should not bias it);
+  // the correction it produces is still applied to every pixel, background
+  // included, exactly as before this existed.
+  const faceMask = unionFootprintMask(Object.values(ROIS), pts, w, h);
+  const { data: balanced, methodVersion } = balanceFrame(img.data, 6, faceMask);
 
   const { regions, dropped: droppedRegions } = extractRegions(balanced, w, h, pts);
 
@@ -117,7 +125,7 @@ export async function runAnalysis(file, unmirror, onProgress) {
   // consume THE SAME object and neither owns it. `rawScalars()` sits below
   // labelling on purpose: `analyse()` emits condition names, which are
   // clinical vocabulary, so Module A must never be built on it.
-  const raw = rawScalars(regions);
+  const raw = rawScalars(regions, { methodVersion });
 
   // Module A — entertainment. Glow/vitality values only.
   const complexion = readComplexion(raw);

@@ -28,6 +28,57 @@
 export const MIN_ROI_PX = 8;
 
 /**
+ * Diagnostic probe radius in WORKING-IMAGE pixels, not a measured guarantee
+ * about MediaPipe jitter. The design assumption is a 2px shift plus a 1px
+ * rasterisation margin. Both are uncalibrated. A fixed 3px means a different
+ * fraction of a zone at each resolution; changing it needs device evidence,
+ * not a convenient pass rate. See docs/PR52_RELEASE_GATES.md for scale and
+ * low-end tuning limitations. The translated-hull test proves the mechanism
+ * on a synthetic +/-3px sweep, not this assumption on real faces.
+ */
+export const BOUNDARY_EROSION_PX = 3;
+
+/**
+ * Binary morphological erosion: a masked pixel survives only if every pixel
+ * within `radiusPx` (Chebyshev / box neighbourhood, not a circular one — a
+ * square structuring element is what a `radiusPx`-wide jitter in any
+ * direction actually threatens, and it is cheap to get exactly right) is
+ * ALSO masked. What remains is the pixels that would stay inside the region
+ * even if the hull that produced `mask` had landed `radiusPx` px differently.
+ *
+ * Pure array math over an already-rasterised mask, not a polygon offset of
+ * the hull — the hull is a geometric contour, but what a boundary-sensitivity
+ * check actually needs to know is which raster pixels are robust to a small
+ * shift of that contour, and eroding the raster answers that directly without
+ * a second, only-approximately-equivalent computational-geometry codepath.
+ */
+export function erodeMask(mask, w, h, radiusPx = BOUNDARY_EROSION_PX) {
+  const r = Math.max(0, radiusPx | 0);
+  const eroded = new Uint8Array(w * h);
+  if (r === 0) { eroded.set(mask); return eroded; }
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      if (!mask[i]) continue;
+
+      let survives = true;
+      for (let dy = -r; dy <= r && survives; dy++) {
+        const ny = y + dy;
+        if (ny < 0 || ny >= h) { survives = false; break; }
+        const rowBase = ny * w;
+        for (let dx = -r; dx <= r; dx++) {
+          const nx = x + dx;
+          if (nx < 0 || nx >= w || !mask[rowBase + nx]) { survives = false; break; }
+        }
+      }
+      eroded[i] = survives ? 1 : 0;
+    }
+  }
+  return eroded;
+}
+
+/**
  * Convex hull of the selected landmarks, expanded about its centroid by `pad`.
  *
  * @returns {Array<{x:number,y:number}>|null} null when fewer than 3 landmarks
@@ -58,6 +109,65 @@ export function hullFor(idx, pts, pad) {
     x: cx + (q.x - cx) * (1 + pad),
     y: cy + (q.y - cy) * (1 + pad),
   }));
+}
+
+/**
+ * Even-odd fill of a hull into a full-frame mask, in the hull's own
+ * (frame-absolute) coordinates — no DOM, no canvas, so it is reachable from
+ * `node --test` where region-extractor.js's real 2D context is not.
+ * Pixel centres are sampled at `+0.5`, matching the convention
+ * scripts/engine-bench.mjs already uses for its own non-DOM equivalent of
+ * region-extractor.js's canvas fill.
+ *
+ * @param {Array<{x:number,y:number}>} hull
+ * @param {Uint8Array} into a w*h mask, OR'd in place (existing 1s untouched)
+ */
+export function rasteriseHullInto(hull, into, w, h) {
+  const n = hull.length;
+  if (n < 3) return;
+  for (let y = 0; y < h; y++) {
+    const py = y + 0.5;
+    for (let x = 0; x < w; x++) {
+      if (into[y * w + x]) continue; // already covered by an earlier hull
+      const px = x + 0.5;
+      let inside = false;
+      for (let i = 0, j = n - 1; i < n; j = i++) {
+        const yi = hull[i].y, yj = hull[j].y;
+        if ((yi > py) !== (yj > py)) {
+          const xint = hull[i].x + ((py - yi) / (yj - yi)) * (hull[j].x - hull[i].x);
+          if (px < xint) inside = !inside;
+        }
+      }
+      if (inside) into[y * w + x] = 1;
+    }
+  }
+}
+
+/**
+ * The union of every zone's hull, as one full-frame mask — "the face, as far
+ * as the measurement config already knows how to find it", built from
+ * existing, already-tested ROI geometry rather than a new face-oval landmark
+ * set with its own degenerate-hull risk (item 23's whole lesson).
+ *
+ * A zone that drops (roiFootprint's `dropped` reason) contributes nothing
+ * and is skipped rather than failing the whole union — losing one zone's
+ * worth of sample pixels out of a dozen-plus is not the same failure as
+ * losing the only zone a caller supplied one of, and shadesOfGray()'s own
+ * too-small-sample fallback is what protects the pathological case where
+ * every zone drops.
+ *
+ * @param {Array<{idx:number[], pad:number}>} defs e.g. Object.values(ROIS)
+ * @param {Array<{x:number,y:number}>} pts
+ * @returns {Uint8Array} w*h, one entry per pixel
+ */
+export function unionFootprintMask(defs, pts, w, h) {
+  const mask = new Uint8Array(w * h);
+  for (const def of defs) {
+    const fp = roiFootprint(def, pts, w, h);
+    if (fp.dropped) continue;
+    rasteriseHullInto(fp.hull, mask, w, h);
+  }
+  return mask;
 }
 
 /**

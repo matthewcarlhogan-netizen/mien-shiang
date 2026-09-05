@@ -5,9 +5,10 @@
  * second launch works with no connection at all. */
 // Bumped when the shell list changes: the activate handler deletes every cache
 // whose name is not CACHE, so a stale v1 holding an old SHELL cannot survive.
-const CACHE = "mienshiang-v23";
+const CACHE = "mienshiang-v24";
 const SHELL = [
   "./", "./index.html", "./ui.js", "./analysis.js", "./engine.js",
+  "./measurement-method.js",
   // Measurement calibration. Owned by neither module; engine.js imports both,
   // so omitting them here breaks the app offline rather than degrading it.
   "./utils/calibrationEngine.js", "./utils/textureAnalyzer.js",
