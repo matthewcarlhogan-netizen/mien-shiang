@@ -14,9 +14,9 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
-import { VOICE, BOUNDARY_TAG, NOISE_TAG } from "../../beta/beta-model.js";
+import { VOICE, BOUNDARY_TAG, NOISE_TAG } from "../../src/beta/beta-model.js";
 
-const BETA_DIR = fileURLToPath(new URL("../../beta", import.meta.url));
+const BETA_DIR = fileURLToPath(new URL("../../src/beta", import.meta.url));
 
 /* Disease names are rejected on EVERY surface — no bucket is exempt. */
 const DISEASE_TERMS = [

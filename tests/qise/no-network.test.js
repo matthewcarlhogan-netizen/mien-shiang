@@ -27,7 +27,7 @@ const SRC = join(REPO, "src");
 // beta/ is in scope because a guard that does not scan the beta is not a beta
 // gate. The beta ships the same capture path from a different URL, so a fetch
 // there would break the same promise in the same product.
-const TREES = [join(SRC, "qise"), join(SRC, "ui", "qise"), join(REPO, "beta")];
+const TREES = [join(SRC, "qise"), join(SRC, "ui", "qise"), join(SRC, "beta")];
 
 const walk = (dir) => (existsSync(dir) ? readdirSync(dir).flatMap((n) => {
   const p = join(dir, n);
@@ -45,7 +45,7 @@ test("the guard is scanning a real corpus", () => {
   assert.ok(files.length >= 10, `only ${files.length} files found under src/qise and src/ui/qise`);
   assert.ok(files.some((f) => rel(f) === "src/qise/color.js"));
   assert.ok(files.some((f) => rel(f) === "src/ui/qise/app.js"));
-  assert.ok(files.some((f) => rel(f) === "beta/beta.js"),
+  assert.ok(files.some((f) => rel(f) === "src/beta/beta.js"),
     "the beta capture path must be inside this guard");
 });
 

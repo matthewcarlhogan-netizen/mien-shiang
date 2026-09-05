@@ -57,7 +57,7 @@ test("the strength the page paints is a function of LEVEL alone", () => {
   // read the level and nothing else; a theme token inside it is what would
   // make the flash theme-dependent.
   const source = readFileSync(
-    fileURLToPath(new URL("../../beta/beta.js", import.meta.url)), "utf8");
+    fileURLToPath(new URL("../../src/beta/beta.js", import.meta.url)), "utf8");
   const match = source.match(/--halo-screen-strength[^\n]*\n?[^\n]*/);
   assert.ok(match, "beta.js must set --halo-screen-strength");
   const expression = match[0];
@@ -68,7 +68,7 @@ test("the strength the page paints is a function of LEVEL alone", () => {
 
 test("the halo-white theme block declares skin tokens only", () => {
   const css = readFileSync(
-    fileURLToPath(new URL("../../beta/beta.css", import.meta.url)), "utf8");
+    fileURLToPath(new URL("../../src/beta/beta.css", import.meta.url)), "utf8");
   const block = css.match(/\[data-theme="halo-white"\][^{]*\{([^}]*)\}/);
   assert.ok(block, "beta.css must define the halo-white override");
   assert.ok(!block[1].includes("--halo-screen-strength"),

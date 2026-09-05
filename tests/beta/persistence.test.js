@@ -11,7 +11,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildReading } from "../../beta/beta-model.js";
+import { buildReading, readingStateLabel } from "../../src/beta/beta-model.js";
 import { toRecord, findForbiddenKeys, FORBIDDEN_KEY_PATTERN } from "../../src/qise/store.js";
 
 const metrics = {
@@ -90,4 +90,25 @@ test("readings 1-3 are recorded as calibrating, never as a finished compass", ()
   assert.equal(record.readingState, "calibrating");
   assert.equal(record.compass, null,
     "a compass built from no baseline would be a reading of nothing");
+});
+
+test("the calibrating label counts to the baseline's real target", () => {
+  /* `needed` from qise/baseline.js is already the target — CALIBRATING_READINGS,
+   * or one more once a baseline exists but is not ready. Only the current
+   * reading gets the +1; adding it to both put the finish line one further out
+   * than the baseline actually requires. */
+  const first = readingStateLabel({ state: "calibrating", readingsSoFar: 0, needed: 3 });
+  assert.equal(first.calibrating, true);
+  assert.match(first.text, /reading 1 of 3\b/);
+
+  const last = readingStateLabel({ state: "calibrating", readingsSoFar: 2, needed: 3 });
+  assert.match(last.text, /reading 3 of 3\b/);
+
+  // The second calibrating branch: a baseline exists but is not ready yet.
+  const notReady = readingStateLabel({ state: "calibrating", readingsSoFar: 3, needed: 4 });
+  assert.match(notReady.text, /reading 4 of 4\b/);
+
+  const read = readingStateLabel({ state: "read" });
+  assert.equal(read.calibrating, false);
+  assert.equal(read.text, "");
 });
