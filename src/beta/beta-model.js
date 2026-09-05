@@ -217,9 +217,14 @@ export function buildReading({
  */
 export function readingStateLabel(interpreted) {
   if (!interpreted || interpreted.state !== "read") {
+    // `needed` is already the target count from qise/baseline.js
+    // (CALIBRATING_READINGS, or one more once a baseline exists but is not
+    // ready). Only the CURRENT reading needs the +1, because readingsSoFar
+    // counts the ones already banked, not this one. Adding it to both told the
+    // reader the baseline was further away than it is.
     const soFar = (interpreted && interpreted.readingsSoFar) ?? 0;
     const needed = (interpreted && interpreted.needed) ?? 3;
-    return { calibrating: true, text: VOICE.calibrating(soFar + 1, needed + 1) };
+    return { calibrating: true, text: VOICE.calibrating(soFar + 1, needed) };
   }
   return { calibrating: false, text: "" };
 }
