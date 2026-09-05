@@ -175,6 +175,27 @@ async function build() {
     copied++;
   }
 
+  // Copy beta/ → dist/beta/ for the Beta Scanner UI
+  const BETA = join(REPO, "beta");
+  if (existsSync(BETA)) {
+    for (const file of walk(BETA)) {
+      const rel = relative(BETA, file);
+      const dest = join(DIST, "beta", rel);
+      mkdirSync(dirname(dest), { recursive: true });
+      copyFileSync(file, dest);
+      copied++;
+    }
+  }
+
+  // Copy docs/design-prototype.html → dist/docs/design-prototype.html
+  const designProtoSrc = join(REPO, "docs", "design-prototype.html");
+  if (existsSync(designProtoSrc)) {
+    const designProtoDest = join(DIST, "docs", "design-prototype.html");
+    mkdirSync(dirname(designProtoDest), { recursive: true });
+    copyFileSync(designProtoSrc, designProtoDest);
+    copied++;
+  }
+
   const stubbed = [];
   if (!flavour.moduleB) {
     writeFileSync(join(DIST, "adapters", "safety.js"), STUB_SAFETY, "utf8");

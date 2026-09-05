@@ -1,0 +1,540 @@
+/* Beta Scanner UI — Design System CSS
+ * Two registers: tracker (black world) and library stub (paper world).
+ * Transition via 200% wrapper with translateX, 240ms cubic-bezier.
+ * No serif in tracker; serif only in library stub.
+ */
+
+/* ──────────────────────────────────────────────────────────────── FONTS ─── */
+/* No webfont import — the app loads no third-party assets on render, the
+ * same rule sharecard.js follows (see CLAUDE.md item 26). Each family below
+ * is a preference only; the stack falls through to a system font wherever
+ * the named face is unavailable. */
+
+/* ───────────────────────────────────────────────────────────── TOKENS ─── */
+:root {
+  /* Tracker register (black world) */
+  --t-ground: #0B0B0C;
+  --t-type: #EDEAE3;
+  --t-hair: #2A2A2C;
+  --t-dim: #8A857C;
+  --t-cin: #C8452A;  /* cinnabar — seal + sealed-ring ticks ONLY */
+  --gilt: #A9803B;  /* gilt — beta banner ONLY */
+
+  /* Library stub register (paper world) */
+  --l-paper: #F6F2E9;
+  --l-ink: #1C1A17;
+  --l-hair: #D9D2C3;
+  --l-dim: #5C564E;
+  --l-cin: #B23A20;
+
+  /* Typography — the four stacks recorded in src/ui/qise/palette.js, verbatim.
+   * No @font-face and no webfont import: the CSP has no font-src, and the
+   * binaries are not committed, so these resolve to the system fallbacks. A
+   * family named here that palette.js does not record would make the beta
+   * diverge from production in type as well as skin. */
+  --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  --ui: 'Bricolage Grotesque', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --serif: 'EB Garamond', Garamond, Georgia, 'Times New Roman', serif;
+  --cjk: 'Noto Serif SC', 'Noto Serif CJK SC', 'Songti SC', 'Source Han Serif SC', serif;
+
+  /* Scale: 13/15/17/21/28 */
+  --fs-xs: 13px;
+  --fs-sm: 15px;
+  --fs-md: 17px;
+  --fs-lg: 21px;
+  --fs-xl: 28px;
+}
+
+/* ───────────────────────────────────────────────────────────── RESET ─── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #000;
+  min-height: 100dvh;
+  /* The bridge is deliberately two viewport widths wide. Without clipping
+   * here, a horizontal wheel or a touch pan scrolls between the two panes
+   * independently of the .lib transform, so the navigation state and what is
+   * on screen stop agreeing. */
+  overflow-x: hidden;
+}
+
+/* ──────────────────────────────────────────────────────────── TRANSITION ─── */
+.bridge {
+  display: flex;
+  width: 200%;
+  height: 100dvh;
+  transition: transform 240ms cubic-bezier(.2, 0, 0, 1);
+}
+
+.bridge.lib {
+  transform: translateX(-50%);
+}
+
+.screen {
+  width: 50%;
+  overflow-y: auto;
+  padding: 0 20px 96px;
+}
+
+/* ───────────────────────────────────────────────────────── TRACKER REGISTER ─── */
+.tracker {
+  background: var(--t-ground);
+  color: var(--t-type);
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* NO SERIF in tracker — enforced by font-family declaration above */
+.tracker * {
+  font-family: var(--mono);
+}
+
+.tracker .ui-control {
+  font-family: var(--ui);
+}
+
+/* Banner */
+.banner {
+  font: 500 10px/1.6 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gilt);
+  border-bottom: 1px solid var(--gilt);
+  padding: 10px 0;
+}
+
+/* Voice line */
+.voice {
+  padding: 14px 0 10px;
+  font: 400 var(--fs-xs)/1.6 var(--mono);
+}
+
+/* Plate viewfinder */
+.plate {
+  position: relative;
+  aspect-ratio: 3/4;
+  border: 1px solid var(--t-hair);
+  background: transparent;
+}
+
+.plate i {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-color: var(--t-type);
+}
+
+.plate .tl {
+  top: -1px;
+  left: -1px;
+  border-top: 1px solid var(--t-type);
+  border-left: 1px solid var(--t-type);
+}
+
+.plate .tr {
+  top: -1px;
+  right: -1px;
+  border-top: 1px solid var(--t-type);
+  border-right: 1px solid var(--t-type);
+}
+
+.plate .bl {
+  bottom: -1px;
+  left: -1px;
+  border-bottom: 1px solid var(--t-type);
+  border-left: 1px solid var(--t-type);
+}
+
+.plate .br {
+  bottom: -1px;
+  right: -1px;
+  border-bottom: 1px solid var(--t-type);
+  border-right: 1px solid var(--t-type);
+}
+
+.plate .oval {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 52%;
+  height: 68%;
+  transform: translate(-50%, -50%);
+  border: 1px dashed var(--t-hair);
+  border-radius: 50%;
+}
+
+/* Calibration theater */
+.calibration {
+  padding: 10px 0;
+  font: 400 var(--fs-xs)/1.6 var(--mono);
+  color: var(--t-dim);
+}
+
+.calibration .line {
+  padding: 2px 0;
+}
+
+/* Seal row */
+.sealrow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 0 6px;
+  min-height: 64px;
+}
+
+.seal {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  font: 500 10px var(--mono);
+  color: var(--t-type);
+}
+
+.seal.filled {
+  background: var(--t-cin);
+}
+
+.seal.outlined {
+  border: 1.5px solid var(--t-type);
+}
+
+.seal.dashed {
+  border: 1.5px dashed var(--t-cin);
+  color: var(--t-dim);
+}
+
+/* Stamp animation */
+.seal.stamp {
+  animation: stampAnim 90ms ease-out forwards;
+}
+
+@keyframes stampAnim {
+  0% { transform: scale(1.03); }
+  100% { transform: scale(1); }
+}
+
+/* Tags / flags */
+.tags {
+  font: 400 11px/1.7 var(--mono);
+  color: var(--t-dim);
+  white-space: pre-line;
+}
+
+.tag {
+  display: inline-block;
+  padding: 2px 6px;
+  margin-right: 6px;
+  border: 1px solid var(--t-hair);
+  border-radius: 2px;
+}
+
+/* Controls */
+.ctl {
+  font: 500 11px var(--ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--t-type);
+  background: none;
+  border: 1px solid var(--t-hair);
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+.ctl:hover {
+  border-color: var(--t-type);
+}
+
+.ctl:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Seal ring (hero) */
+.ringwrap {
+  padding: 10px 0 2px;
+}
+
+.ringwrap svg {
+  display: block;
+  margin: 0 auto;
+  width: min(70vw, 250px);
+  height: auto;
+}
+
+/* Ledger */
+.ledger {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 0 6px;
+}
+
+.sq {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  appearance: none;
+  font: inherit;
+}
+
+.sq:focus-visible {
+  outline: 2px solid var(--t-type);
+  outline-offset: 1px;
+}
+
+.sq:hover {
+  outline: 1px solid var(--t-type);
+}
+
+.sq.att {
+  border: 1px dashed var(--t-cin);
+}
+
+.sq.selected {
+  outline: 2px solid var(--t-type);
+}
+
+/* Legend */
+.legend {
+  font: 400 10px/1.6 var(--mono);
+  color: var(--t-dim);
+  padding: 6px 0;
+}
+
+/* Readout line */
+.readout {
+  font: 400 var(--fs-xs)/1.6 var(--mono);
+  color: var(--t-type);
+  padding: 8px 0;
+  border-top: 1px solid var(--t-hair);
+  margin-top: 8px;
+}
+
+/* Share artifact */
+.sharewrap {
+  padding: 14px 0;
+  border-top: 1px solid var(--t-hair);
+}
+
+.sharewrap canvas {
+  width: 160px;
+  height: 160px;
+  border: 1px solid var(--t-hair);
+  display: block;
+  margin-bottom: 10px;
+}
+
+/* Footnote */
+.footnote {
+  padding: 14px 0 0;
+  border-top: 1px solid var(--t-hair);
+  font: 400 var(--fs-sm)/1.8 var(--mono);
+}
+
+.footnote .cite {
+  color: var(--t-dim);
+}
+
+.linkbtn {
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--t-hair);
+  color: var(--t-type);
+  font: 500 11px var(--ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 12px 0 2px;
+  cursor: pointer;
+}
+
+.linkbtn:hover {
+  border-color: var(--t-type);
+}
+
+/* ─────────────────────────────────────────────────────── LIBRARY STUB REGISTER ─── */
+.library {
+  background: var(--l-paper);
+  color: var(--l-ink);
+  font-family: var(--serif);
+}
+
+/* Mono in library is provenance/folio metadata ONLY, not voice */
+.library .prov,
+.library .libsub {
+  font-family: var(--mono);
+}
+
+.libhead {
+  font: 600 var(--fs-xl)/1.2 var(--serif);
+  padding: 26px 0 4px;
+}
+
+.libsub {
+  font: 400 11px var(--mono);
+  color: var(--l-dim);
+  padding: 0 0 14px;
+  border-bottom: 1px solid var(--l-hair);
+}
+
+.toc {
+  list-style: none;
+  margin: 0;
+  padding: 6px 0;
+}
+
+.toc li {
+  font: 500 var(--fs-md)/1.4 var(--serif);
+  padding: 12px 0;
+  border-bottom: 1px solid var(--l-hair);
+}
+
+.toc .prov {
+  display: block;
+  font: 400 10px var(--mono);
+  color: var(--l-dim);
+  padding-top: 3px;
+}
+
+.libnote {
+  font: italic 500 var(--fs-sm)/1.5 var(--serif);
+  color: var(--l-cin);
+  padding: 16px 0;
+}
+
+.ctl.dark {
+  color: var(--l-ink);
+  border-color: var(--l-hair);
+}
+
+.ctl.dark:hover {
+  border-color: var(--l-ink);
+}
+
+/* ───────────────────────────────────────────────────── REDUCED MOTION ─── */
+@media (prefers-reduced-motion: reduce) {
+  .bridge {
+    transition: none;
+  }
+  
+  .seal.stamp {
+    animation: none;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────── UTILITIES ─── */
+.hidden {
+  display: none !important;
+}
+
+.fade-in {
+  animation: fadeIn 160ms linear forwards;
+}
+
+@keyframes fadeIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* Focus states for accessibility */
+button:focus-visible,
+.sq:focus-visible,
+.linkbtn:focus-visible {
+  outline: 2px solid var(--t-type);
+  outline-offset: 2px;
+}
+
+.library button:focus-visible,
+.library .sq:focus-visible {
+  outline: 2px solid var(--l-ink);
+  outline-offset: 2px;
+}
+
+/* ── capture surfaces ─────────────────────────────────────────────────────
+ * Added with the real pipeline. The preview and the halo sit inside .plate,
+ * which is already position:relative, so both fill it.
+ *
+ * The preview is mirrored by a CSS transform ONLY. That transform does not
+ * touch the pixels drawImage and detectForVideo receive, which is exactly why
+ * the capture loop draws the canvas unflipped (CLAUDE.md item 44).
+ */
+#preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+  background: var(--t-ground);
+}
+
+.halo {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* Driven by --halo-screen-strength, which beta.js computes from the halo
+   * LEVEL alone. No theme token appears in it, so the capture-time halo-white
+   * override cannot change the flash luminance. */
+  background: rgba(255, 255, 255, var(--halo-screen-strength, 0));
+  transition: background 120ms linear;
+}
+
+.gateline {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--t-dim);
+  min-height: 1.4em;
+  margin: 8px 0;
+  text-align: center;
+}
+
+.ctlrow {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.consent-title {
+  font-family: var(--ui);
+  font-size: 21px;
+  margin: 24px 0 12px;
+}
+
+.consent-body {
+  font-family: var(--serif);
+  font-size: 17px;
+  line-height: 1.5;
+  margin-bottom: 24px;
+  max-width: 34em;
+}
+
+/* The capture sequence overrides the theme to halo-white. Skin tokens only —
+ * nothing here feeds the halo's own strength, which is why the halo-theme test
+ * can assert the flash luminance is identical under either theme. */
+:root[data-theme="halo-white"] .tracker {
+  --t-ground: #F4F2EC;
+  --t-type: #14140F;
+  --t-dim: #5C564E;
+}
+
+/* The consent gate is an overlay, NOT a third .screen: .bridge is a 200%
+ * two-panel slider and a third panel would shift the library transform. */
+.consent {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: var(--t-ground);
+  color: var(--t-type);
+  font-family: var(--mono);
+  padding: 0 20px;
+  overflow-y: auto;
+}

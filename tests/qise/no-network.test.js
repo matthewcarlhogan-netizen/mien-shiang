@@ -22,8 +22,12 @@ import { join, relative } from "node:path";
 
 import { stripComments } from "../../scripts/copy-scan.js";
 
-const SRC = fileURLToPath(new URL("../../src", import.meta.url));
-const TREES = [join(SRC, "qise"), join(SRC, "ui", "qise")];
+const REPO = fileURLToPath(new URL("../..", import.meta.url));
+const SRC = join(REPO, "src");
+// beta/ is in scope because a guard that does not scan the beta is not a beta
+// gate. The beta ships the same capture path from a different URL, so a fetch
+// there would break the same promise in the same product.
+const TREES = [join(SRC, "qise"), join(SRC, "ui", "qise"), join(REPO, "beta")];
 
 const walk = (dir) => (existsSync(dir) ? readdirSync(dir).flatMap((n) => {
   const p = join(dir, n);
@@ -31,7 +35,7 @@ const walk = (dir) => (existsSync(dir) ? readdirSync(dir).flatMap((n) => {
 }) : []);
 
 const files = TREES.flatMap(walk).filter((f) => f.endsWith(".js"));
-const rel = (f) => relative(SRC, f).replace(/\\/g, "/");
+const rel = (f) => relative(REPO, f).replace(/\\/g, "/");
 
 const NETWORK = /\b(fetch|XMLHttpRequest|WebSocket|sendBeacon|EventSource)\b/;
 
@@ -39,8 +43,10 @@ test("the guard is scanning a real corpus", () => {
   // A lint that passes because it scanned nothing is the false-green this repo
   // has shipped twice.
   assert.ok(files.length >= 10, `only ${files.length} files found under src/qise and src/ui/qise`);
-  assert.ok(files.some((f) => rel(f) === "qise/color.js"));
-  assert.ok(files.some((f) => rel(f) === "ui/qise/app.js"));
+  assert.ok(files.some((f) => rel(f) === "src/qise/color.js"));
+  assert.ok(files.some((f) => rel(f) === "src/ui/qise/app.js"));
+  assert.ok(files.some((f) => rel(f) === "beta/beta.js"),
+    "the beta capture path must be inside this guard");
 });
 
 test("no file in the feature calls out to the network", () => {

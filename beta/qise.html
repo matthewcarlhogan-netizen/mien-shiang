@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="referrer" content="no-referrer" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; media-src 'self' blob:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'" />
+<meta name="theme-color" id="theme-color" content="#0B0B0C" />
+<title>Qi Se tracker — BETA</title>
+<link rel="stylesheet" href="./beta.css" />
+</head>
+<body>
+<section class="consent" id="consent-screen">
+  <div class="banner">Beta — instrument in calibration; readings are yours alone, nothing leaves this device.</div>
+  <div class="consent-title" id="consent-title"></div>
+  <div class="consent-body" id="consent-body"></div>
+  <button class="ctl" id="consent-accept"></button>
+</section>
+
+<div class="bridge" id="bridge">
+  <section class="screen tracker" id="tracker" hidden>
+    <div class="banner">Beta — instrument in calibration; readings are yours alone, nothing leaves this device.</div>
+    <div class="voice" id="voice">The bench is open.</div>
+
+    <div class="plate" id="plate">
+      <i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i>
+      <video id="preview" playsinline muted autoplay></video>
+      <div class="halo" id="exposure-halo"></div>
+      <div class="oval"></div>
+    </div>
+
+    <div class="gateline" id="gate-line"></div>
+    <div class="ctlrow">
+      <button class="ctl" id="go-capture">Open the camera</button>
+    </div>
+
+    <div class="calibration" id="calibration"></div>
+    
+    <div class="sealrow">
+      <div id="seal"></div>
+      <div class="tags" id="tags"></div>
+    </div>
+    
+    <div class="ringwrap">
+      <svg id="ring" viewBox="0 0 200 200"></svg>
+    </div>
+    
+    <div class="ledger" id="ledger"></div>
+    <div class="legend">cooler ↔ warmer than the baseline — neither direction is better or worse</div>
+    
+    <div class="readout" id="readout"></div>
+    
+    <div class="sharewrap">
+      <canvas id="artifact" width="320" height="320"></canvas>
+      <div>
+        <button class="ctl" id="shareBtn">Share artifact</button>
+      </div>
+    </div>
+    
+    <div class="footnote">
+      <span class="cite">Readings compare this face to its own baseline, never to anyone else's.</span>
+      <br>
+      <button class="linkbtn" id="toLibrary">Open the study →</button>
+    </div>
+  </section>
+  
+  <section class="screen library" id="library">
+    <div class="libhead">The Study</div>
+    <div class="libsub">heritage library — stub · table of contents</div>
+    <ul class="toc">
+      <li>Three Sections<span class="prov">San Ting · 神相全編, 卷一「面三停」</span></li>
+      <li>Twelve Palaces<span class="prov">Shi Er Gong · 神相全編, 卷一「十二宮訣」</span></li>
+      <li>Five Elements<span class="prov">Wu Xing · lineage variance on attribution</span></li>
+      <li>Disagreement index<span class="prov">112 entries · sources cite against each other</span></li>
+    </ul>
+    <div class="libnote">Depth is paid. Rigor is not.</div>
+    <button class="ctl dark" id="toTracker">Return to the bench →</button>
+  </section>
+</div>
+
+<script type="module" src="./boot.js"></script>
+</body>
+</html>
