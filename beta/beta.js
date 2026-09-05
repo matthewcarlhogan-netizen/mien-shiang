@@ -136,8 +136,13 @@ function renderLedger() {
   const el = $("ledger");
   el.textContent = "";
   for (const square of ledgerModel(state.entries)) {
-    const sq = document.createElement("div");
+    // A <button>, not a <div>: focusable, Enter/Space-activated and announced
+    // without re-implementing any of it. .sq:focus-visible can never apply to
+    // something the keyboard cannot reach.
+    const sq = document.createElement("button");
+    sq.type = "button";
     sq.className = "sq";
+    sq.setAttribute("aria-label", `Session ${square.index + 1}`);
     if (square.attenuated) sq.classList.add("att");
     if (square.warmth === null) {
       sq.style.background = TRACKER_HAIR;
@@ -619,8 +624,8 @@ export async function init(deps = {}) {
     reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
   });
 
-  $("toLibrary").addEventListener("click", () => $("bridge").classList.add("lib"));
-  $("toTracker").addEventListener("click", () => $("bridge").classList.remove("lib"));
+  $("toLibrary").addEventListener("click", () => showPane("library"));
+  $("toTracker").addEventListener("click", () => showPane("tracker"));
   $("shareBtn").addEventListener("click", () => { shareArtifact(); });
   $("go-capture").addEventListener("click", () => {
     runCapture().catch((error) => {
@@ -637,9 +642,31 @@ export async function init(deps = {}) {
     showBench();
   });
 
+  $("library").inert = true;
+  $("library").setAttribute("aria-hidden", "true");
   if (consent.isGranted()) showBench();
   renderArtifact();
   renderRing();
+}
+
+/**
+ * Move between the two panes.
+ *
+ * The transform alone only moves the pixels: the off-screen pane keeps its
+ * controls in the tab order and in the accessibility tree, and focus stays on
+ * a button that has just slid out of view. `inert` removes both, and focus is
+ * moved deliberately to the pane that arrived.
+ */
+function showPane(name) {
+  const toLibrary = name === "library";
+  $("bridge").classList.toggle("lib", toLibrary);
+  const tracker = $("tracker");
+  const library = $("library");
+  tracker.inert = toLibrary;
+  tracker.setAttribute("aria-hidden", String(toLibrary));
+  library.inert = !toLibrary;
+  library.setAttribute("aria-hidden", String(!toLibrary));
+  (toLibrary ? $("toTracker") : $("toLibrary")).focus();
 }
 
 function showBench() {

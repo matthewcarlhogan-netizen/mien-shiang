@@ -113,17 +113,27 @@ test("the readout states deltas as deltas, signed", () => {
 });
 
 test("no beta surface compares the reader to other people", () => {
+  /* Anchored patterns, not substrings. A bare "top " matched inside "stop
+   * agreeing" and a bare "rank" would match "frank" — the same segment-vs-
+   * substring defect as CLAUDE.md item 40, which this file has now hit once
+   * in each direction. The phrase has to be the comparison, not a fragment
+   * of an unrelated word. */
   const POPULATION = [
-    "average", "percentile", "rank", "compared to others", "population",
-    "than most", "better than", "worse than", "score of", "top ", "above average",
+    /\baverage\b/, /\bpercentile\b/, /\branked?\b/, /\bcompared to others\b/,
+    /\bpopulation\b/, /\bthan most\b/, /\b(better|worse) than\b/,
+    /\bscore of\b/, /\btop \d/, /\babove average\b/,
   ];
   for (const name of readdirSync(BETA_DIR)) {
     const raw = readFileSync(join(BETA_DIR, name), "utf8");
     // A comment explaining why a comparison is forbidden is not a comparison.
-    const text = (name.endsWith(".js") ? stripComments(raw) : raw).toLowerCase();
-    for (const phrase of POPULATION) {
-      assert.ok(!text.includes(phrase),
-        `beta/${name} contains a population comparison: "${phrase}"`);
+    const text = (/\.(js|css)$/.test(name) ? stripComments(raw) : raw).toLowerCase();
+    for (const pattern of POPULATION) {
+      assert.ok(!pattern.test(text),
+        `beta/${name} contains a population comparison: ${pattern}`);
     }
   }
+
+  // Positive control: the scan must still catch a real one.
+  assert.ok(POPULATION.some((p) => p.test("you are in the top 10% of faces")));
+  assert.ok(POPULATION.some((p) => p.test("above average symmetry")));
 });
