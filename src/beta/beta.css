@@ -17,7 +17,12 @@
   --t-type: #EDEAE3;
   --t-hair: #2A2A2C;
   --t-dim: #8A857C;
-  --t-cin: #C8452A;  /* cinnabar — seal + sealed-ring ticks ONLY */
+
+  /* Mineral pigment accents — semantic states */
+  --t-cin: #C8452A;  /* cinnabar (朱砂) — sealed state, success */
+  --t-mal: #4A8B6E;  /* malachite (孔雀石) — measurement, reading available */
+  --t-azu: #3E5B7D;  /* azurite (石青) — pending, processing */
+  --t-orpiment: #C89B3B;  /* orpiment (雄黄) — caution, attenuated */
   --gilt: #A9803B;  /* gilt — beta banner ONLY */
 
   /* Library stub register (paper world) */
@@ -43,6 +48,18 @@
   --fs-md: 17px;
   --fs-lg: 21px;
   --fs-xl: 28px;
+}
+
+/* ───────────────────────────────────────────────────────── TYPOGRAPHY ─── */
+/* Chinese text layout (clreq): line-height strictly in the 1.5–2.0em range.
+ * This governs vertical spacing for CJK characters and the punctuation marks.
+ * The range accommodates both traditional and simplified Han, and ensures
+ * proper centering of diacritics. Specific marks (U+2E3A, U+2014, U+2013,
+ * U+2026, U+00B7) must render with precise vertical alignment; verify via
+ * visual regression snapshots. */
+.tracker {
+  --clreq-line-height: 1.6;
+  line-height: var(--clreq-line-height);
 }
 
 /* ───────────────────────────────────────────────────────────── RESET ─── */
