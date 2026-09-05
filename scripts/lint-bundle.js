@@ -81,6 +81,11 @@ export const REVENUECAT_HOST = "api.revenuecat.com";
 export const DOC_LINK_ALLOWLIST = [
   /^https:\/\/github\.com\/google-ai-edge\/mediapipe$/,
   /^https:\/\/www\.revenuecat\.com\/privacy$/,
+  /* Google Fonts — used by beta/ for webfont @import.
+   * The font families (Archivo, Fraunces, IBM Plex Mono, Noto Serif SC) are
+   * loaded via @import in beta.css; no analysis data is sent, only the font
+   * request itself which returns static font files. */
+  /^https:\/\/fonts\.googleapis\.com\/css2\?family=/,
 ];
 
 /**
