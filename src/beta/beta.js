@@ -37,6 +37,7 @@ import {
   openCamera, attachCameraPreview, ensureContinuousFocus, settleAndNegotiate,
   releaseCaptureMode, releaseCapture, createLandmarkerGuarded, GreenLatch,
   PolygonSmoother, BURST_FRAMES, trimmedMedianLab, reduceBurst, describeCameraError,
+  requestCameraRefocus,
 } from "../qise/camera.js";
 import { createLandmarkerWithFallback } from "../landmarker.js";
 import { evaluateGates, captureInstruction } from "../qise/gates.js";
@@ -315,6 +316,8 @@ async function runCapture() {
   let previous = null;
   const startedAt = performance.now();
   let underexposureStartMs = null;
+  let softSince = null;
+  let refocusStarted = false;
 
   const history = await store.all();
   const scleraHistory = history.map((r) => r.sclera && r.sclera.rawRatios).filter(Boolean);
@@ -402,6 +405,22 @@ async function runCapture() {
     } else {
       underexposureStartMs = null;
     }
+
+    // Soft threshold, not a one-frame trigger: a phone's continuous autofocus
+    // hunts briefly and recovers on its own far more often than it stays
+    // stuck. 700ms mirrors src/ui/qise/app.js's production trigger — see
+    // CLAUDE.md item 42 on why a shorter threshold would fire on ordinary
+    // handheld jitter instead of a real focus loss.
+    const soft = gates.failures.some((f) => f.id === "filter");
+    softSince = soft ? (softSince ?? nowMs) : null;
+    if (soft && opened.focusSupported && !refocusStarted
+        && softSince !== null && nowMs - softSince >= 700) {
+      refocusStarted = true;
+      requestCameraRefocus(opened.track).catch((error) => {
+        console.warn("beta: automatic refocus failed", error);
+      });
+    }
+    if (!soft) refocusStarted = false;
 
     const issueForMs = underexposureStartMs !== null ? nowMs - underexposureStartMs : 0;
     if (shouldUseScreenFlash({

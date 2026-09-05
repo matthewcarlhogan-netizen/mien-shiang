@@ -1,16 +1,22 @@
-# Capture-controller / beta-halo parity — Gemini 2.5 Flash execution handoff
+# Capture-controller / beta-halo parity — verification record and handoff
 
 **Branch:** `claude/capture-controller-rebuild-hw1pdf`
 
 This replaces the pasted "Phase 2: Capture Controller Rebuild" plan for this branch. Per
 `CLAUDE.md`'s cost-control policy and `docs/AI_CONTEXT_BUDGET.md`, Claude's job on a plan this
-detailed is to verify it against current `main`, not to execute it — implementation from an
-approved, verified specification is Gemini 2.5 Flash's job. The plan turned out not to be
-verified: several of its P0/P1 claims are accurate, but several of its proposed fixes contradict
-code that already exists and already does the job differently, on purpose. Executing the plan as
-written would revert deliberate design decisions and reintroduce duplication it claims to remove.
-Everything below is checked against the working tree at the tip of this branch (same as `main` —
-`git status` is clean, no local commits ahead).
+detailed is to verify it against current `main` first — implementation from an approved, verified
+specification is otherwise Gemini 2.5 Flash's job. The plan turned out not to be verified: several
+of its P0/P1 claims were accurate, but several of its proposed fixes contradicted code that already
+existed and already did the job differently, on purpose. Executing the plan as written would have
+reverted deliberate design decisions and reintroduced duplication it claimed to remove.
+
+**Update:** after writing the verification below, the user asked for the corrected, narrow items to
+be implemented directly rather than hand this document to a separate executor — the remaining scope
+after correction turned out small enough (one ~15-line addition, one file rewrite) to verify
+end-to-end in this session rather than round-trip it. Tasks 1, 2 and 4 below are marked with their
+actual outcome. Task 3 was investigated and intentionally left undone — see its section. Everything
+was checked against the real code, not assumed; several findings below only emerged by actually
+running the affected code, not by reading it.
 
 ---
 
@@ -79,8 +85,12 @@ or reimplemented. `src/ui/qise/app.js` imports and uses all of them
 `createLandmarkerGuarded`, `GreenLatch`, `PolygonSmoother`, `BURST_FRAMES`, `trimmedMedianLab`,
 `reduceBurst`, `describeCameraError` (`src/beta/beta.js:36-40`) — **but not**
 `requestCameraRefocus`, `negotiateCaptureMode`, `canNegotiateCaptureMode`, or
-`exposureAssistState`. That import gap — not a missing module — is the real defect. **Do not
-create `src/qise/autofocus.js` or `src/qise/captureController.js`.**
+`exposureAssistState`. **Update, see Task 2:** of those four, only `requestCameraRefocus` turned
+out to be a genuine functional gap once `app.js`'s actual call sites (not just its import list)
+were compared against `beta.js`'s — the other three are already achieved differently or drive UI
+beta doesn't have. Either way, **do not create `src/qise/autofocus.js` or
+`src/qise/captureController.js`** — nothing found here needed a new module; it needed reading how
+the existing one is actually used.
 
 ### Blocker 5 — `src/qise/illumination.js` is not a lighting-readiness gate; it is a different, already-shipped feature
 
@@ -104,12 +114,14 @@ pass.**
 
 ## Verified findings that ARE accurate and safe to act on
 
-1. **Beta halo DOM gap — confirmed.** `src/beta/qise.html:28`'s
-   `<div class="halo" id="exposure-halo"></div>` has no `[data-halo-progress]` child.
-   `createExposureHalo()` (`src/ui/qise/exposure-halo.js:34-35`) does
-   `root.querySelector("[data-halo-progress]")` and `[data-halo-value]`, gets `null` for both, and
-   degrades silently — no error, the ring simply never renders. Confirmed against the real
-   production markup, which has the child elements (`src/qise.html:415-424`).
+1. **Beta halo DOM "gap" — RETRACTED, see Task 1.** `src/beta/qise.html:28`'s
+   `<div class="halo" id="exposure-halo"></div>` does have no `[data-halo-progress]` child, and
+   `createExposureHalo()` does get `null` for it — that part of the original plan's observation was
+   accurate. But `beta.js` never reads `[data-halo-progress]`/`[data-halo-value]` in the first
+   place; it drives a full-screen flash overlay through the module's `onLevel` callback instead,
+   which works identically with or without those elements. There is no rendering gap in beta — see
+   Task 1 for the full evidence. Left in this list, struck through in effect, so nobody re-derives
+   the same wrong conclusion from `exposure-halo.js` alone without also reading `beta.js`.
 2. **E2E test gap — confirmed.** All four tests in `e2e/beta-camera-integration.spec.js` avoid
    asserting success by design: *"Don't assert on errors; synthetic camera setup might have
    expected warnings"* (line 93), *"may not reach a successful reading depending on synthetic
@@ -125,46 +137,66 @@ pass.**
    display, not a confirmed, measured defect the way the items in CLAUDE.md's "will silently
    break" list are. See Task 3.
 4. **`beta.js` is missing four of the eight capture-quality functions `camera.js` already exports
-   and `app.js` already uses** — confirmed (Blocker 4). This is real, narrow, mechanical work.
+   and `app.js` already uses — partially confirmed, narrowed by Task 2.** The import gap itself is
+   real, but only one of the four (`requestCameraRefocus`) turned out to be missing *functionality*;
+   the other three (`negotiateCaptureMode`, `canNegotiateCaptureMode`, `exposureAssistState`) are
+   equivalent-behaviour-via-a-different-composition or drive UI beta doesn't have. See Task 2 for
+   the breakdown.
 
 ---
 
-## TASK 1 — beta halo DOM parity (mechanical, low risk, no product decision needed)
+## TASK 1 — beta halo DOM parity — WITHDRAWN, the original P0 claim was wrong
 
-**Permitted files:** `src/beta/qise.html`, `src/beta/beta.css`.
+**Status: no fix made. The premise was checked by reading `src/beta/beta.js`'s actual wiring, not
+just `exposure-halo.js` in isolation, and it doesn't hold.**
 
-1. Open `src/qise.html`, find the `id="exposure-halo"` block (around line 415) and copy its
-   internal structure — the `<svg>` with `.halo-track` and `.halo-progress[data-halo-progress]`
-   ellipses — into `src/beta/qise.html` in place of the current empty
-   `<div class="halo" id="exposure-halo"></div>` (around line 28). Keep beta's existing `id` and
-   outer class (`halo`) so `src/beta/beta.css:497 .halo { ... }` still applies; do not rename
-   selectors.
-2. Add `data-state="seeking" data-dragging="false"` to the halo root, matching production. Do
-   **not** invent new state values — the only three that exist are `seeking` / `adjust` /
-   `perfect` (`haloStateFromCapture()`, `src/ui/qise/exposure-halo.js:25-30`).
-3. Grep `src/beta/beta.css` for `halo-track` / `halo-progress` before adding any CSS — if rules
-   for those classes don't exist yet, port them from production's stylesheet (find via
-   `grep -rn "halo-track\|halo-progress" src/`) rather than writing new ones from scratch.
-4. Do **not** add a `[data-halo-value]` element — production doesn't use one either; the readout
-   text already has its own element (`#capture-coach` in production; check what beta's equivalent
-   is, likely `#gate-line` or `#voice`, and leave it as-is).
+`src/beta/beta.js:686-691` wires `createExposureHalo`'s `onLevel` callback to set
+`--halo-screen-strength` on `#plate`, and `src/beta/beta.css:497-504` uses that variable to paint
+`.halo` as a **plain full-bleed white overlay** — `background: rgba(255, 255, 255,
+var(--halo-screen-strength, 0))`, explicitly commented as driven "from the halo LEVEL alone." That
+`onLevel` callback fires regardless of whether `[data-halo-progress]`/`[data-halo-value]` exist —
+`createExposureHalo()` guards both with `if (progress)`/`if (valueLabel)` before touching them.
+Beta's whole design is a screen-as-light-source flash (matching CLAUDE.md item 52), never an SVG
+progress ring; the ring is production's design, in a different file, styled by a different
+selector. There is no drag/pointer interaction in `beta.js` either — light only turns on
+automatically via `shouldUseScreenFlash()`, never by user gesture, so the "Slide up for light"
+text path in `exposure-halo.js` is simply unused code in both apps (confirmed: no
+`[data-halo-value]` element exists anywhere in the repo outside the module itself).
 
-**Verify:** after the change, `document.querySelector('#exposure-halo [data-halo-progress]')`
-must be non-null in `src/beta/qise.html`, and `dist/beta/qise.html` after `npm run build`.
+Copying production's `<svg>` ring markup into beta, as originally proposed, would have laid an
+unused progress ring on top of a full-screen white flash overlay that was never meant to have one —
+a plausible-sounding fix for a symptom (`[data-halo-progress]` is null) that isn't a defect in
+beta's actual, different design. **Do not implement this task.** If beta's `data-state`
+(`seeking`/`adjust`/`perfect`, set by `setCaptureState()`) turning into a no-op in `beta.css` — it
+has zero matching CSS rules today — is itself something worth a visible treatment, that is a new
+product/UX question, not a bug fix, and belongs to the product owner.
 
-## TASK 2 — wire `beta.js` to the four capture functions it doesn't call yet
+## TASK 2 — wire `beta.js` to missing capture functions — DONE, narrowed after deeper verification
 
-**Permitted files:** `src/beta/beta.js` only.
+**Status: implemented.** Reading `app.js`'s actual call sites (not just its import list) showed
+that only one of the original four "missing" functions is a real gap:
 
-Add `requestCameraRefocus`, `negotiateCaptureMode`, `canNegotiateCaptureMode`,
-`exposureAssistState` to the existing `from "../qise/camera.js"` import at `src/beta/beta.js:37`.
-Before writing any call site, read how `src/ui/qise/app.js` uses each of these four functions
-(search for each name in `app.js`) and mirror the call sites and state transitions — same
-arguments, same order relative to `settleAndNegotiate`/`ensureContinuousFocus`, same handling of
-their return values. This is a parity change: beta should end up doing what production already
-does, not a new design. Do not add new parameters or new thresholds to any of the four functions
-themselves — they are shared, tested code (`tests/qise/camera.test.js` may already cover some of
-this; do not weaken any existing assertion there).
+- `negotiateCaptureMode` / `canNegotiateCaptureMode` — **not a gap.** `beta.js` already achieves
+  the same one-shot exposure-negotiation semantics via `settleAndNegotiate(opened.track)`, gated on
+  `!negotiationStarted && gates.pass` (`src/beta/beta.js:423-435`) — the same guard shape as
+  `app.js`'s `modeNegotiationStarted` flag around `canNegotiateCaptureMode`/`negotiateCaptureMode`
+  (`src/ui/qise/app.js:488-505`). Different composition, same behaviour. Left untouched.
+- `exposureAssistState` — **not a confirmed gap.** It drives production-only manual UI
+  (`#screen-light`, `#refocus-camera`, `#use-current-light` buttons) that don't exist in beta's
+  markup. Beta already has its own, simpler automatic mechanism
+  (`shouldUseScreenFlash()` + `exposureHalo.setLevel(1)`, `src/beta/beta.js:406-415`) with no manual
+  offer/dismiss UI at all. Whether beta *should* grow the richer manual UI is a product decision,
+  not a defect — left untouched.
+- `requestCameraRefocus` — **the one real, confirmed gap.** `beta.js` already computes
+  `opened.focusSupported` (`src/beta/beta.js:287`, via `ensureContinuousFocus`) but never used it —
+  there was no equivalent of `app.js`'s 700ms soft-focus-loss refocus trigger
+  (`src/ui/qise/app.js:474-481`) anywhere in beta's loop.
+
+Implemented: added `requestCameraRefocus` to the `../qise/camera.js` import, added `softSince` /
+`refocusStarted` state (mirroring `underexposureStartMs`'s pattern already in the file), and added
+the same 700ms-threshold trigger block right after `gates.failures` is computed, gated on
+`gates.failures.some(f => f.id === "filter")` — the same gate id `app.js` checks. `npm test` still
+1344/1344 after the change; no gate threshold or shared `camera.js` function was touched.
 
 ## TASK 3 — CONDITIONAL: distinct-frame guard, only if evidence shows it matters here
 
@@ -196,23 +228,36 @@ The duplicate-frame risk is architecturally plausible but not demonstrated in th
    of a measurement. Add a unit test in `tests/qise/camera.test.js` proving the new helper accepts
    a genuinely new frame and rejects a repeated one.
 
-## TASK 4 — real E2E assertions, scoped to what the fixture can prove
+## TASK 4 — real E2E assertions — DONE, and this is where the actual bug was
 
-**Permitted files:** `e2e/beta-camera-integration.spec.js` only.
+**Status: implemented and verified, by actually running the suite, not just reading it.**
 
-Replace the soft/no-op assertions with real ones, but only assert what
-`tests/fixtures/synthetic-face.y4m` can actually be shown to produce — check
-`scripts/generate-synthetic-face-video.mjs` first to know what the fixture contains before writing
-an assertion against it.
+The e2e test gap was worse than the original plan described. `e2e/beta-camera-integration.spec.js`
+used `test.use({ launchArgs: [...] })` — **`launchArgs` is not a real Playwright Test option** (the
+real one is `launchOptions.args`). It was silently ignored on every run, so Chromium launched with
+**no fake camera device at all**. Verified directly, with the file as it stood on `main`:
+`getUserMedia` failed `NotFoundError: Requested device not found`, `#preview`'s `srcObject` stayed
+`false`, and the gate line read *"No front camera was found."* — on every one of the four "camera
+integration" tests, on every run, presumably since the file was added. All four tests still
+"passed" only because none of them asserted on that failure — exactly the false-green class of
+defect `CLAUDE.md`'s verification protocol (§2) warns about.
 
-- After Task 1 lands: assert `page.locator('[data-halo-progress]')` exists — this alone pins the
-  P0 DOM defect shut.
-- Assert the `#gate-line` text content actually changes at least once during the wait window
-  (proves gates are live) — do not assert a specific pass/fail outcome unless you've confirmed by
-  running it that the fixture reliably produces that outcome.
-- Do not add an assertion that the full burst completes and reading-surfaces become visible unless
-  you first run the test and confirm the synthetic fixture reliably clears all ten gates. A
-  flaky assertion is worse than the current honest gap.
+The file was also missing `--use-fake-device-for-media-stream` — required alongside
+`--use-file-for-fake-video-capture`, which does nothing without it (confirmed by testing the two
+flags independently).
+
+Fixed both flags and rewrote all four tests with real assertions, verified to actually pass against
+a genuinely-attached synthetic stream (`srcObject: true`, `videoWidth/Height: 320x240`, MediaPipe's
+"Created TensorFlow Lite XNNPACK delegate" log present, meaning inference is actually running) and
+to actually fail against the old broken code (reproduced both states directly before writing the
+final assertions — the negative and positive control CLAUDE.md's verification protocol §3
+requires).
+
+**What the fixture still cannot prove, honestly stated in the file's own header comment:**
+`tests/fixtures/synthetic-face.y4m` is a procedurally-drawn skin-toned ellipse with texture noise,
+not real facial geometry — MediaPipe's FaceLandmarker never finds a 478-point mesh in it, so the
+gate line settles on "Bring your face into the frame." and stays there; a real burst/reading was
+never achievable with this fixture and no assertion claims otherwise.
 
 ---
 
@@ -231,14 +276,27 @@ an assertion against it.
 
 ## Definition of done
 
-- [ ] `npm test` passes, count quoted verbatim (currently 1344 across 76 files — re-verify by
-      running it, don't trust that number without running it), no test deleted or skipped.
-- [ ] `npm run lint:bundle` passes.
-- [ ] `[data-halo-progress]` present in `dist/beta/qise.html` after `npm run build`.
-- [ ] E2E suite run and its output quoted per test (pass/fail), not just "it ran".
-- [ ] If Task 3 was attempted: the diagnostic's actual duplicate-frame count is quoted, and either
-      the engine-bench fingerprint diff is quoted as empty, or the task was stopped and reported
-      per step 2.
-- [ ] Explicit statement of which blockers (1-5) still stand — all five should still stand after
-      Tasks 1/2/4, since none of them touch a blocked area. Task 3 is the only one with a
-      conditional path.
+- [x] `npm test` passes, count quoted verbatim: `tests 1344 / pass 1344 / fail 0`, re-run after
+      each of Task 2 and Task 4 (both source-affecting), no test deleted or skipped.
+- [ ] `npm run lint:bundle` — run against `dist/`, not yet executed as part of this pass; run
+      before merge.
+- [x] Task 1 (halo DOM): investigated and withdrawn — no DOM/CSS change made, see its section.
+- [x] Task 2 (beta.js parity): `requestCameraRefocus` wired in, matching `app.js`'s 700ms
+      soft-focus trigger. `negotiateCaptureMode`/`canNegotiateCaptureMode`/`exposureAssistState`
+      confirmed not to be gaps and left untouched.
+- [ ] Task 3 (frame-duplication guard): **not attempted.** No diagnostic was run — this sandbox has
+      no real 120Hz display to reproduce the claimed condition on, and inventing a fix for an
+      unconfirmed condition is exactly what this repo's engineering culture (CLAUDE.md, items 30
+      and 43) warns against. Left for whoever has real device access to run the diagnostic in this
+      task's original section first.
+- [x] Task 4 (e2e assertions): implemented; all four rewritten tests pass, verified against both
+      the broken and fixed flag configuration (positive and negative control).
+- [x] Explicit statement of which blockers (1-5) still stand: all five still stand. Nothing
+      implemented touches a gate threshold, adds a new module, changes the halo's semantics, or
+      touches `illumination.js`.
+- [x] Playwright's browser project in this sandbox lacks the `chromium_headless_shell` binary
+      Playwright 1.49's default project expects (`/opt/pw-browsers/chromium` is the full browser,
+      not the headless-shell variant) — all e2e verification above used a temporary,
+      **uncommitted** local config override (`executablePath` pointed at the full browser) that was
+      removed before every commit. This is a sandbox tooling gap, not a repo defect; CI's own
+      "browser" check already runs this suite with its own Playwright install.
