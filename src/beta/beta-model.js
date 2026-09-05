@@ -75,7 +75,7 @@ export function sealStateFrom({ sealed, boundarySensitive = false, noiseConfiden
  */
 export function calibrationLines({ luma, captureMode, haloLevel, coverage } = {}) {
   const lines = [];
-  if (Number.isFinite(luma)) lines.push(`LUMA ${Math.round(luma)}`);
+  if (Number.isFinite(luma)) lines.push(`L* ${Math.round(luma)}`);
   if (typeof captureMode === "string" && captureMode) lines.push(`WB ${captureMode.toUpperCase()}`);
   if (Number.isFinite(haloLevel)) lines.push(`HALO ${Math.round(haloLevel * 100)}%`);
   if (Number.isFinite(coverage)) lines.push(`READABLE ${Math.round(coverage * 100)}%`);
