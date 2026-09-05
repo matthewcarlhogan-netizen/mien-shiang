@@ -77,11 +77,11 @@ stubs when the flag is off.
 
 `package-lock.json` pins the declared dependencies for reproducible `npm ci` installs.
 
-1194 across 76 files, measured 30 August 2026 by running `npm test` directly rather than trusting
+1344 across 76 files, measured 5 September 2026 by running `npm test` directly rather than trusting
 this line — the exact commands and sub-counts age quickly as the suite grows, so verify with the
 runner rather than updating this sentence again.
 
-**All 1194 pass.** The long-standing `copy-guard` failure on
+**All 1344 pass.** The long-standing `copy-guard` failure on
 `TCM-202-DAMP-HEAT.recommend[1]` is resolved — that line moved to Module B in
 the Phase 2 split (see item 19). If a test fails, it is a real defect.
 
@@ -510,7 +510,7 @@ cache, which does not contain the new module.
 release that works perfectly on a fresh install.
 **Cause:** new entry in `SHELL`, unchanged `CACHE` name.
 
-Currently `mienshiang-v19` (bumped when `qise/wakelock.js` was added).
+Currently `mienshiang-v24` (bumped when beta scanner UI enhancements were added).
 
 **The version is coupled to `index.html`, which is easy to miss.** The entry
 redirect is `location.replace("./qise.html?v=<n>")`, and `<n>` must equal the
@@ -1497,6 +1497,32 @@ changed, and item 18's rule applies: do not compare across it.
 **Locking is still right.** A burst measured under a moving AE is a burst
 measured under two illuminants. The defect was never that the lock existed, it
 was when it was taken.
+
+### 54. An unmeasurable gate must not print a fix for a cause that was never measured
+
+When a gate fails, its instruction names the underlying cause and offers a fix.
+For gates whose failures arise from unmeasurable conditions (e.g., lack of a
+sclera sample, a non-extractable zone), the instruction must name what is
+missing, never a fix for a symptom that was never observed.
+
+**Symptom:** a gate says *"Too dark — find more light"* when the real problem is
+that no sclera sample was available to establish a baseline for comparison.
+Adding light cannot help because the gate never measured the brightness in the
+first place — only the absence of a sample.
+**Cause:** an instruction that assumes a measurement happened when the preceding
+gate conditions only confirm that measurement was not possible. The two are
+different failures and need different answers from the user.
+**Pinned by:** `a missing or unmeasurable condition is distinguished from a
+measurement that shows a defect` — every gate must carry both an `id` (naming
+the *measurement* it tried to make, e.g., `sclera_colour`) and a `reason` (naming
+why it could not, e.g., `too_few_pixels`), so the rendering layer can address
+the actual problem rather than a symptom of the missing data.
+
+Related: `zoneNotExtracted` (a bug in geometry) and `colourNotMeasurable` (a deep
+skin limit) are both legitimate failures, but they are not the same, and a gate
+that conflates them will offer a fix to the wrong question. Do **not** merge
+these refusal reasons. The deep-skin refusal is correct and must not be weakened
+in pursuit of a simpler code path.
 
 
 ### 24. The summary may only repeat what was measured

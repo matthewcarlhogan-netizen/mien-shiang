@@ -42,7 +42,7 @@ import { createLandmarkerWithFallback } from "../landmarker.js";
 import { evaluateGates, captureInstruction } from "../qise/gates.js";
 import { frameStats } from "../qise/framestats.js";
 import { createScreenWakeLock } from "../qise/wakelock.js";
-import { createExposureHalo, haloStateFromCapture } from "../ui/qise/exposure-halo.js";
+import { createExposureHalo, haloStateFromCapture, shouldUseScreenFlash } from "../ui/qise/exposure-halo.js";
 import { readRois } from "../qise/rois.js";
 import { sampleSclera } from "../qise/sclera.js";
 import { headPose } from "../qise/pose.js";
@@ -210,20 +210,43 @@ function setCaptureTheme(on) {
 
 async function buildLandmarker() {
   assertConsentGranted(consent, "FaceLandmarker");
-  const { FaceLandmarker, FilesetResolver } = await import(MEDIAPIPE_BUNDLE);
-  const fileset = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM);
-  const guardedFactory = (_fileset, options) => createLandmarkerGuarded({
-    consent,
-    options,
-    factory: (guardedOptions) => FaceLandmarker.createFromOptions(fileset, guardedOptions),
-  });
-  const built = await createLandmarkerWithFallback(
-    guardedFactory,
-    fileset,
-    { modelAssetPath: FACE_MODEL, runningMode: "VIDEO", outputFaceBlendshapes: false },
-    (message) => { $("gate-line").textContent = message; },
-  );
-  return built.landmarker;
+  try {
+    const { FaceLandmarker, FilesetResolver } = await import(MEDIAPIPE_BUNDLE);
+    const fileset = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM);
+    const guardedFactory = (_fileset, options) => createLandmarkerGuarded({
+      consent,
+      options,
+      factory: (guardedOptions) => FaceLandmarker.createFromOptions(fileset, guardedOptions),
+    });
+    const built = await createLandmarkerWithFallback(
+      guardedFactory,
+      fileset,
+      { modelAssetPath: FACE_MODEL, runningMode: "VIDEO", outputFaceBlendshapes: false },
+      (message) => { $("gate-line").textContent = message; },
+    );
+    return built.landmarker;
+  } catch (error) {
+    $("gate-line").textContent = "The reading model failed to load. Refresh the page.";
+    throw error;
+  }
+}
+
+function setPlateAspectRatio(video) {
+  if (!video.videoWidth || !video.videoHeight) return;
+  const plate = $("plate");
+  if (plate) {
+    plate.style.aspectRatio = `${video.videoWidth} / ${video.videoHeight}`;
+  }
+}
+
+function hideReadingSurfaces() {
+  const surfaces = $("reading-surfaces");
+  if (surfaces) surfaces.hidden = true;
+}
+
+function showReadingSurfaces() {
+  const surfaces = $("reading-surfaces");
+  if (surfaces) surfaces.hidden = false;
 }
 
 async function runCapture() {
@@ -233,6 +256,12 @@ async function runCapture() {
 
   setCaptureTheme(true);
   exposureHalo?.reset();
+  hideReadingSurfaces();
+  const captureBtn = $("go-capture");
+  if (captureBtn) {
+    captureBtn.disabled = true;
+    captureBtn.textContent = "Capturing…";
+  }
   $("gate-line").textContent = "Opening the camera.";
   renderCalibration([]);
 
@@ -253,6 +282,7 @@ async function runCapture() {
   let landmarker = null;
   try {
     await attachCameraPreview(video, opened.stream);
+    setPlateAspectRatio(video);
     const focus = await ensureContinuousFocus(opened.track);
     opened.focusSupported = focus.supported;
     landmarker = await buildLandmarker();
@@ -284,6 +314,7 @@ async function runCapture() {
   const drift = [];
   let previous = null;
   const startedAt = performance.now();
+  let underexposureStartMs = null;
 
   const history = await store.all();
   const scleraHistory = history.map((r) => r.sclera && r.sclera.rawRatios).filter(Boolean);
@@ -299,6 +330,11 @@ async function runCapture() {
     if (scratch) releaseCapture(scratch);
     scratch = null;
     setCaptureTheme(false);
+    const captureBtn = $("go-capture");
+    if (captureBtn) {
+      captureBtn.disabled = false;
+      captureBtn.textContent = "Open the camera";
+    }
     $("gate-line").textContent = error?.name
       ? describeCameraError(error)
       : "The bench closed the camera. Open it again to continue.";
@@ -359,6 +395,24 @@ async function runCapture() {
     const stats = frameStats(image, lastRois, canvas.width, drift, headPose(pts));
     const elapsedMs = nowMs - startedAt;
     const gates = evaluateGates(stats, pts, lastSclera, { elapsedMs });
+
+    const isUnderexposed = gates.failures.some((f) => f.id === "underexposed");
+    if (isUnderexposed) {
+      if (underexposureStartMs === null) underexposureStartMs = nowMs;
+    } else {
+      underexposureStartMs = null;
+    }
+
+    const issueForMs = underexposureStartMs !== null ? nowMs - underexposureStartMs : 0;
+    if (shouldUseScreenFlash({
+      issuePresent: isUnderexposed,
+      issueForMs,
+      enabled: exposureHalo?.level > 0,
+      dismissed: false,
+      illuminationActive: false,
+    })) {
+      exposureHalo?.setLevel(1);
+    }
 
     const instruction = captureInstruction(gates);
     $("gate-line").textContent = instruction.detail || instruction.title;
@@ -548,6 +602,11 @@ async function finish(burst, rois, sclera, opened, history, gateMargins, capture
   releaseCapture(scratch);
   scratch = null;
   setCaptureTheme(false);
+  const captureBtn = $("go-capture");
+  if (captureBtn) {
+    captureBtn.disabled = false;
+    captureBtn.textContent = "Open the camera";
+  }
 
   await store.put(reading);
 
@@ -573,6 +632,7 @@ async function finish(burst, rois, sclera, opened, history, gateMargins, capture
   renderRing();
   renderLedger();
   renderArtifact(now);
+  showReadingSurfaces();
   $("gate-line").textContent = "";
 }
 
@@ -585,6 +645,7 @@ function renderAbstain(gates) {
   state.entries.unshift({ timestamp: new Date(), sealed: false, attenuated: false, deltas: null });
   renderRing();
   renderLedger();
+  showReadingSurfaces();
 }
 
 /* ── share ─────────────────────────────────────────────────────────────── */
@@ -653,8 +714,6 @@ export async function init(deps = {}) {
   $("library").inert = true;
   $("library").setAttribute("aria-hidden", "true");
   if (consent.isGranted()) showBench();
-  renderArtifact();
-  renderRing();
 }
 
 /**
