@@ -511,8 +511,16 @@ async function runCapture() {
 
   const step = async (nowMs) => {
     if (!scratch || runId !== captureRun) return;
-    canvas.width = video.videoWidth || 1280;
-    canvas.height = video.videoHeight || 960;
+    // Reassigning canvas.width/height reallocates and clears the backing
+    // bitmap even when the value is unchanged — real cost on every processed
+    // frame now that the frame scheduler already dedupes repaints. Guarded so
+    // it only happens on an actual dimension change (stream start, or a
+    // format change mid-session); drawImage below still repaints every pixel
+    // every frame regardless, so skipping the reassignment changes no output.
+    const frameWidth = video.videoWidth || 1280;
+    const frameHeight = video.videoHeight || 960;
+    if (canvas.width !== frameWidth) canvas.width = frameWidth;
+    if (canvas.height !== frameHeight) canvas.height = frameHeight;
 
     // Drawn WITHOUT a flip: the preview's mirroring is a CSS transform, which
     // does not touch the pixels drawImage and detectForVideo see. Flipping
