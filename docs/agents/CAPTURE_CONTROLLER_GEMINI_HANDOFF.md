@@ -2,6 +2,49 @@
 
 **Branch:** `claude/capture-controller-rebuild-hw1pdf`
 
+---
+
+## SUPERSEDED, 6 September 2026 — read this before anything below
+
+While this document sat in draft PR #57, the product owner independently diagnosed the beta
+scanner directly against physical hardware ("could not complete a capture in any room") and
+shipped a full fix in PR #58 and #59, recorded in `docs/DECISION_REGISTER.md` under
+`DR-2026-09-06-SCANNER-CAPTURE-CORRECTION`. That fix is now on `main` and merged into this branch.
+
+**Two of this document's conclusions were wrong, not merely overtaken — worth stating plainly:**
+
+- **Task 1 (halo DOM) was NOT correctly withdrawn.** This document argued beta's halo was
+  *intentionally* a flash-only overlay with no ring, and that adding one would be a wrong fix for
+  a non-bug. The product owner's own audit lists "real halo markup" as a confirmed gap alongside
+  the others, and PR #58 added it: `#exposure-halo` is now the SVG ring (exactly the plan's
+  original ask), and the flash overlay moved to its own `#acquisition-fill` element — both present,
+  serving separate purposes, not one OR the other. My error was concluding from "the flash works
+  without a ring" that a ring was therefore unwanted, rather than recognising it as an independent,
+  additional gap. Evidence beats architecture-reading every time; I didn't have physical-device
+  evidence and the product owner did.
+- **Task 2's `exposureAssistState` dismissal was also incomplete.** I judged the missing manual
+  `#screen-light`/`#refocus-camera`/`#use-current-light` buttons as "beta's own simpler design,"
+  not a gap. PR #58 added exactly these buttons to beta, wired to the same state machine
+  production uses.
+- **Task 3 (the frame-duplication guard) was correctly left unimplemented, and has now been done
+  properly.** This document declined to build it without device evidence — the product owner had
+  that evidence and shipped `src/qise/frame-scheduler.js`, adopted by both capture loops.
+
+**What was actually still correct and remains true:** Blockers 1 and 2 (no threshold changes
+without recorded evidence; `BURST_FRAMES` stays whatever the shipped constant is) — see principle
+4 in the decision register entry: *"Thresholds are not the fix... it stays flagged rather than
+silently retuned."* Same conclusion, independently reached.
+
+**Net effect on this PR:** after merging `main`, this branch's own `src/beta/beta.js` change is
+byte-identical to what's already on `main` (superseded, correctly, no conflict in substance) and
+was dropped in favour of `main`'s version during the merge. The only two things this PR still
+contributes beyond `main` are this corrected document, and real (not soft) assertions in
+`e2e/beta-camera-integration.spec.js` beyond what PR #58 shipped for that file. See PR #57's
+description for the current, accurate scope.
+
+---
+
+
 This replaces the pasted "Phase 2: Capture Controller Rebuild" plan for this branch. Per
 `CLAUDE.md`'s cost-control policy and `docs/AI_CONTEXT_BUDGET.md`, Claude's job on a plan this
 detailed is to verify it against current `main` first — implementation from an approved, verified
