@@ -49,6 +49,21 @@ test.describe("beta capture reaches real finalisation — positive control", () 
     const ledgerBefore = await page.locator("#ledger .sq").count();
     expect(ledgerBefore).toBe(0);
 
+    // Phase 13's actual UI-state requirement, not just "a reading exists
+    // afterwards": poll the ring and the readiness chip while the capture
+    // runs and require BOTH the seeking state (before a good hold) and the
+    // perfect/ready state (during it) to have actually occurred — a ring
+    // that starts green from a CSS default would pass a snapshot-only check
+    // and prove nothing about the transition.
+    const haloStatesSeen = new Set();
+    const frameChipStatesSeen = new Set();
+    const poll = setInterval(() => {
+      page.locator("#exposure-halo").getAttribute("data-state")
+        .then((s) => s && haloStatesSeen.add(s)).catch(() => {});
+      page.locator('[data-guide="frame"]').getAttribute("data-state")
+        .then((s) => s && frameChipStatesSeen.add(s)).catch(() => {});
+    }, 100);
+
     await page.click("#go-capture");
 
     // Finalisation, not merely "the page did not crash": the reading
@@ -56,6 +71,10 @@ test.describe("beta capture reaches real finalisation — positive control", () 
     // gate line clears — all three are set together, at the end of
     // finish(), and nowhere else in the file.
     await expect(page.locator("#reading-surfaces")).not.toHaveAttribute("hidden", { timeout: 20000 });
+    clearInterval(poll);
+    expect([...haloStatesSeen]).toContain("seeking");
+    expect([...haloStatesSeen]).toContain("perfect");
+    expect([...frameChipStatesSeen]).toContain("ready");
     await expect(page.locator("#ledger .sq")).toHaveCount(1, { timeout: 5000 });
     await expect(page.locator("#gate-line")).toHaveText("", { timeout: 5000 });
 
