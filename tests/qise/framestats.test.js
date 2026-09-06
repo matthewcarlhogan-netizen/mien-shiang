@@ -20,7 +20,12 @@ test("motion is normalised to one camera width", () => {
   assert.equal(MOTION_REFERENCE_WIDTH, 1280);
   assert.equal(normaliseMotionPx([6, 6], 2560), 3);
   assert.equal(normaliseMotionPx([3, 3], 640), 6);
-  assert.equal(normaliseMotionPx([], 1280), 0);
+  // Empty is not a measurement of stillness. It is the absence of one — the
+  // shape literally the first mesh frame of a capture produces, since drift
+  // needs a previous frame to exist. Reporting 0 there was a fabricated
+  // pass, exactly the class of defect CLAUDE.md item 43 already names for an
+  // unmeasured pose axis.
+  assert.equal(normaliseMotionPx([], 1280), null);
 });
 
 test("frame statistics read exposure and cheeks from a synthetic capture", () => {

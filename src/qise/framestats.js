@@ -13,7 +13,14 @@ export const MOTION_REFERENCE_WIDTH = 1280;
 
 export function normaliseMotionPx(samples, frameWidth, referenceWidth = MOTION_REFERENCE_WIDTH) {
   const values = (samples || []).filter((value) => Number.isFinite(value));
-  if (!values.length) return 0;
+  // No samples is not "measured, and perfectly still" — it is nothing
+  // measured yet, which happens on literally the first mesh frame of every
+  // capture (drift needs a PREVIOUS frame to exist). Returning 0 there fed
+  // the motion gate a confident false pass, the same defect CLAUDE.md item 43
+  // describes for an unmeasured pose axis: `Math.abs(null)` reading as
+  // perfectly straight. `null` here makes the motion gate report itself
+  // unavailable instead, for exactly one frame, rather than lying.
+  if (!values.length) return null;
   const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
   if (!Number.isFinite(frameWidth) || frameWidth <= 0) return mean;
   return mean * (referenceWidth / frameWidth);
