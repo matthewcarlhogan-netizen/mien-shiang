@@ -136,4 +136,45 @@ test.describe("beta capture reaches real finalisation — positive control", () 
     expect(gateText.toLowerCase()).not.toMatch(/coloured|daylight|plain white/);
     await expect(page.locator("#reading-surfaces")).toHaveAttribute("hidden");
   });
+
+  test("a genuinely dark frame actually brightens the screen, not just the button text", async ({ page }) => {
+    // Regression test for a real bug reported from a physical device: the
+    // screen-assist state machine (ScreenAssistGuard) flipped correctly and
+    // the button/copy updated, but nothing ever called
+    // exposureHalo.setLevel(...), so --halo-screen-strength stayed at its
+    // default and the "screen light" was never actually rendered. A uniform
+    // near-black skin tone reliably trips `underexposed` while leaving pose,
+    // distance, motion and the sclera-derived illuminant gate untouched, so
+    // the assist is the only thing this frame can engage.
+    const capture = buildSyntheticCapture({ skin: [8, 8, 8] });
+    await installSyntheticCamera(page, capture);
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.goto("/beta/qise.html");
+
+    await page.click("#consent-accept");
+
+    const strengthBefore = await page.locator("#plate").evaluate(
+      (el) => getComputedStyle(el).getPropertyValue("--halo-screen-strength").trim(),
+    );
+
+    await page.click("#go-capture");
+
+    // SCREEN_FLASH_DELAY_MS is 700ms; give it a generous margin on a shared
+    // CI runner rather than pin the exact threshold here.
+    await expect(page.locator("#screen-light")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator("#screen-light")).toHaveText("Turn off screen light", { timeout: 5000 });
+
+    const strengthAfter = await page.locator("#plate").evaluate(
+      (el) => getComputedStyle(el).getPropertyValue("--halo-screen-strength").trim(),
+    );
+    expect(Number(strengthAfter)).toBeGreaterThan(Number(strengthBefore) || 0);
+    expect(Number(strengthAfter)).toBeGreaterThan(0.5);
+
+    // The visible flash must be explained by the on-screen text (gate-line
+    // renders the detail, falling back to the title), not left to contradict
+    // a leftover "sharpening" message (Phase 7: no unexplained flash).
+    await expect(page.locator("#gate-line")).toHaveText(
+      "Keep your face inside the guide — this turns off on its own once the room is enough.",
+    );
+  });
 });
