@@ -196,6 +196,105 @@ Use this register to stop prompts, discussions and implementation from collapsin
 - **Human and external gates:** the product owner retains product decisions and diff review. Consented participant/device evidence, source review, legal/rights review, the unresolved history-retention decision and store approval cannot be manufactured or self-certified by an agent. Superseded for cultural-review dependency by DR-2026-08-19-CULTURAL-REVIEW-RETIREMENT.
 - **Supersedes:** the unresolved state of this same decision record. Option A is parked, not the selected product direction.
 
+### DR-2026-09-06-SCANNER-CAPTURE-CORRECTION
+
+- **Date:** 6 September 2026
+- **Owner:** product owner
+- **Status:** approved and implemented
+- **Context:** the beta scanner could not complete a capture in any room. Root cause: an
+  `illuminant` gate that had no sclera sample to judge returned the same shape (`margin: -1`) as a
+  gate that measured a REAL problem, and `-1` sorted ahead of every genuine failure — so a face
+  failing only on eye visibility was told to change its lamps, unconditionally, forever. CLAUDE.md
+  item 54 had already claimed this was fixed and pinned by a test; neither existed. Diagnosed and
+  scoped in `docs/agents/BETA_CAPTURE_FIX_BRIEF.md` (PR #55, superseded by this record and its
+  implementation — see below). This correction also found the beta had never adopted several
+  capture-runtime behaviours production already had (autofocus recovery, the light escape hatch,
+  real halo markup), and that neither surface used distinct-video-frame scheduling or prevented a
+  screen-light assist from becoming the burst's illuminant.
+- **Decision — four principles, binding on this codebase's capture and gate architecture:**
+    1. **A Qi Se reading requires usable illuminant evidence.** Missing sclera evidence is not the
+       same product state as strange coloured light actually measured. `SCLERA UNAVAILABLE` routes
+       to an instruction about WHY the sclera could not be read (eyes, or darkness); only a
+       genuinely measured out-of-tolerance reading may show the coloured-light instruction.
+    2. **Missing evidence never becomes a fabricated measurement failure.** Every gate result now
+       carries a `status` of `"pass" | "fail" | "blocked" | "unavailable"`, not a bare margin.
+       Only `"fail"` is a real measurement outside its allowed range; `captureInstruction` prefers
+       any `"fail"` over a `"blocked"`/`"unavailable"` entry regardless of margin, and resolves a
+       blocked entry through its named `blockedBy` gate and `reason` rather than inventing a
+       diagnosis for a measurement that was never taken. Implemented generically in
+       `src/qise/gates.js`, not as a one-off patch to `illuminant` alone — `filter` uses the same
+       mechanism when the sharpness Laplacian could not be computed at all.
+    3. **Screen illumination is an acquisition aid, never the measurement's illuminant.** The
+       white screen-light assist may help find a face, let autofocus lock, and make the preview
+       readable, but a burst may never complete while it is active — a browser cannot standardise
+       a phone's own display brightness, so light bounced off it is not a controlled illuminant.
+       Every on/off transition resets the capture hold and releases any exposure/white-balance
+       lock taken under the light that just changed; once ambient light alone looks sustainable
+       for a full hold, the assist is tried off, and a fresh hold is required before any burst.
+       Implemented as `ScreenAssistGuard`/`gatesPassForHold()` in `src/qise/capture-runtime.js`
+       (new capacity for the beta) and as an equivalent gating condition on production's existing
+       `screenLightRequested` state (`src/ui/qise/app.js`) — production had exactly the gap this
+       decision describes, evidenced by its own code comment ("It stays on through the hold and
+       burst") until this correction.
+    4. **Thresholds are not the fix.** No focus, distance, sclera-minimum or exposure threshold
+       changed. The measurement-seam corrections above are architectural, not calibration; where a
+       measurement is itself under-evidenced (the underexposure metric's skin-reflectance
+       confound — already tracked below under Unresolved proposals) it stays flagged rather than
+       silently retuned.
+- **What was implemented (see PR opened from branch `claude/scanner-capture-correction`):**
+    - Gate dependency model (`src/qise/gates.js`, `src/qise/framestats.js`) — principle 1 and 2,
+      pinned by `tests/qise/gate-dependency.test.js`. This also corrects CLAUDE.md item 54, which
+      claimed this fix already existed; it did not, and item 54 is corrected in the same PR.
+    - `src/qise/frame-scheduler.js` — distinct decoded-video-frame scheduling
+      (`requestVideoFrameCallback`, with a `currentTime`-deduped `requestAnimationFrame` fallback),
+      adopted by both the beta and production capture loops. Neither previously distinguished a
+      display repaint from a new camera frame, which a 120Hz panel against a 30–60fps camera makes
+      routine.
+    - `src/qise/capture-runtime.js` — `ScreenAssistGuard` (principle 3), `RefocusRecovery` and
+      `StallTracker`, extracted so a decision that already existed correctly in production is
+      available to the beta rather than reimplemented divergently.
+    - `src/qise/frame-geometry.js` — the on-screen face guide is now sized from the SAME
+      `DISTANCE_MIN_FRACTION` the distance gate enforces, mapped through the actual
+      `object-fit: cover` crop, rather than an independently chosen percentage that could (and
+      did) silently disagree with what the gate measured.
+    - `src/qise/diagnostics.js` — a development-flag-gated (`?devtelemetry=1` / `?captdbg=1`),
+      non-biometric capture-telemetry recorder (device capabilities, frame throughput,
+      time-to-milestone, refocus/assist-cycle counts, per-blocker stall duration). No pixel, mesh
+      or landmark is ever accepted by any of its methods. For the next physical-device test.
+    - The beta's capture stage gained the real quality-ring markup its own JS had queried for
+      since it shipped (`createExposureHalo`'s `[data-halo-progress]` lookup had always returned
+      null), a neutral acquisition-light wash kept structurally separate from the ring's colour
+      states, the same four-chip readiness strip production uses, and hidden-by-default debug
+      output — a consumer mid-capture no longer sees `L*`/`WB`/`HALO` readouts.
+    - Two real bugs found in the existing Playwright e2e fixtures while building the verification
+      for this: `launchArgs` is not a Playwright Test option (the real key is
+      `launchOptions.args`), and `--use-file-for-fake-video-capture` alone registers no device
+      without `--use-fake-device-for-media-stream` alongside it. Both meant the fake camera never
+      engaged and every existing beta e2e test tolerated a real `NotFoundError`, passing anyway.
+    - `e2e/beta-capture-finalisation.spec.js` and `e2e/qise-capture-finalisation.spec.js` — genuine
+      positive and negative controls driving the REAL, unmodified capture code through a
+      canvas-painted synthetic face (built from the same canonical reference mesh every unit test
+      already uses) to an actually-stored reading, on both surfaces. Explicitly not a MediaPipe
+      accuracy test (the mesh is supplied, not detected) — the existing smoke tests against the
+      real bundle remain what proves MediaPipe itself still loads.
+- **What was deliberately NOT done, and why:** no threshold changed (principle 4); the underexposure
+  metric's skin-reflectance confound is not re-derived (already correctly tracked below, under
+  Unresolved proposals, as needing recorded physical-device evidence, not a guess); no rewrite of
+  production's illumination-check, selfie-upload, or twelve-palace reading logic — the two changes
+  to `src/ui/qise/app.js` are the frame-scheduler swap and the screen-assist hold-gating, verified
+  by a new e2e smoke test plus the full existing `qise-integration`/`qise-redesign` suites, which
+  all still pass; a full visual redesign of the capture journey is parked behind
+  `docs/VISUAL_DIRECTION.md`'s research-note prerequisite (a bounded note was produced alongside
+  this record — see `docs/design/CAPTURE_JOURNEY_RESEARCH_NOTE.md`).
+- **Physical-device verification (explicitly NOT claimed by this record):** everything above was
+  verified in a sandboxed Linux CI-style environment with a synthetic camera. What real Android
+  camera buffer dimensions and orientation are, what sclera pixel yield a real eye produces, and
+  whether the quality ring/refocus/assist behaviour reads correctly on an actual screen all remain
+  to be checked on a Samsung device — the diagnostics module above exists specifically so that
+  test can report back more than "it worked" or "it didn't".
+- **PR #55 disposition:** closed as superseded. It was a diagnosis-only handoff brief written
+  against an earlier state of `main`; this record and its implementation supersede it directly.
+
 ## Unresolved proposals
 
 These must not be implemented as settled decisions without approval:
