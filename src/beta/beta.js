@@ -333,11 +333,19 @@ function updateCaptureGuideChips(report) {
  * Every on/off flip goes through here — there is exactly one place a burst
  * could otherwise span two lighting conditions.
  */
-function makeAssistTransitionHandler({ latch, dropAssistLatch, track, getCaptureMode, setCaptureMode }) {
+function makeAssistTransitionHandler({ assist, latch, dropAssistLatch, track, getCaptureMode, setCaptureMode }) {
   return (transition) => {
     if (!transition.changed) return;
     latch.reset();
     dropAssistLatch.reset();
+    // The state machine flipping `assist.active` is not the same event as the
+    // screen actually lighting up — ScreenAssistGuard only tracks whether the
+    // assist SHOULD be on, it has never touched a pixel. Production's
+    // `setScreenLight` pairs its flag flip with this exact call; beta's own
+    // ScreenAssistGuard-based rewrite dropped it, so the button toggled and
+    // the burst gating behaved correctly while the screen itself stayed dark
+    // — "no ring light" was not a tuning problem, it was this missing line.
+    exposureHalo?.setLevel(assist.active ? 1 : 0);
     if (transition.releaseExposureLock) {
       releaseCaptureMode(track)
         .then((reverted) => { setCaptureMode(reverted.captureMode); })
@@ -454,7 +462,7 @@ async function runCapture() {
   let firstFaceRecorded = false;
 
   const applyAssistTransition = makeAssistTransitionHandler({
-    latch, dropAssistLatch, track: opened.track,
+    assist, latch, dropAssistLatch, track: opened.track,
     getCaptureMode: () => captureMode,
     setCaptureMode: (mode) => { captureMode = mode; },
   });
@@ -682,16 +690,20 @@ async function runCapture() {
     const before = stall.update(worstBlockerId, nowMs);
     if (before.blockerId) diagnostics.recordBlockerMs(before.blockerId, before.changed ? 0 : 16);
 
+    // `assist.active` now genuinely brightens the screen (see
+    // makeAssistTransitionHandler), so it must outrank the refocus message
+    // here: a real, visible flash with the text still saying "sharpening" is
+    // an unexplained flash by another name, and Phase 7 forbids exactly that.
     let shown = instruction;
-    if (refocusResult.recovering) {
-      shown = {
-        id: "filter", title: "Hold still — sharpening",
-        detail: "The camera is refocusing automatically.",
-      };
-    } else if (assist.active) {
+    if (assist.active) {
       shown = {
         id: "screen-light", title: "Using the screen for light",
         detail: "Keep your face inside the guide — this turns off on its own once the room is enough.",
+      };
+    } else if (refocusResult.recovering) {
+      shown = {
+        id: "filter", title: "Hold still — sharpening",
+        detail: "The camera is refocusing automatically.",
       };
     } else if (assistCycles >= 3) {
       // Locked decision 3's abstain/ask-for-better-light clause: the assist

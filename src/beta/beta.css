@@ -501,19 +501,26 @@ button:focus-visible,
   z-index: 3;
 }
 
-/* A peripheral neutral-white wash around the guide — acquisition help only.
+/* A neutral-white wash across the whole plate — acquisition help only.
  * Deliberately NOT the quality ring below: the photons used to help find a
  * face and let autofocus lock must stay colour-neutral, never yellow/orange,
- * so they cannot be mistaken for (or become) the measurement's illuminant. */
+ * so they cannot be mistaken for (or become) the measurement's illuminant.
+ *
+ * Previously a hollow ring — fully transparent out to 52% of the ellipse
+ * radius, which is almost exactly where the face guide sits. Combined with
+ * --halo-screen-strength never being set at all (see
+ * makeAssistTransitionHandler in beta.js), the assist was invisible: even
+ * fixing the missing setLevel call would only have lit the corners while the
+ * face itself sat in the dark hole. The centre now lifts too, so engaging
+ * the assist reads as "the screen just became a light", not a corner tint. */
 .acquisition-fill {
   position: absolute;
   inset: 0;
   z-index: 1;
   pointer-events: none;
   background: radial-gradient(
-    ellipse 39% 53% at 50% 49%,
-    rgba(255, 255, 255, 0) 0 52%,
-    rgba(255, 252, 242, calc(var(--halo-screen-strength, 0) * .72)) 69%,
+    ellipse 75% 85% at 50% 49%,
+    rgba(255, 252, 242, calc(var(--halo-screen-strength, 0) * .55)) 0%,
     rgba(255, 252, 242, var(--halo-screen-strength, 0)) 100%
   );
 }
