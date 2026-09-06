@@ -173,17 +173,6 @@ html, body {
   border-right: 1px solid var(--t-type);
 }
 
-.plate .oval {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 52%;
-  height: 68%;
-  transform: translate(-50%, -50%);
-  border: 1px dashed var(--t-hair);
-  border-radius: 50%;
-}
-
 /* Calibration theater */
 .calibration {
   padding: 10px 0;
@@ -494,15 +483,108 @@ button:focus-visible,
   background: var(--t-ground);
 }
 
-.halo {
+/* The face guide. Sized and positioned by faceGuideRect() in JS (inline
+ * left/top/width/height, in %) so it always represents the SAME buffer
+ * fraction the distance gate measures, whatever crop object-fit:cover is
+ * currently applying (CLAUDE.md-equivalent: src/qise/frame-geometry.js).
+ * The static fallback below is only what shows before the first real video
+ * dimensions are known. */
+.oval {
+  position: absolute;
+  left: 24%;
+  top: 16%;
+  width: 52%;
+  height: 68%;
+  border: 1px dashed var(--t-hair);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* A neutral-white wash across the whole plate — acquisition help only.
+ * Deliberately NOT the quality ring below: the photons used to help find a
+ * face and let autofocus lock must stay colour-neutral, never yellow/orange,
+ * so they cannot be mistaken for (or become) the measurement's illuminant.
+ *
+ * Previously a hollow ring — fully transparent out to 52% of the ellipse
+ * radius, which is almost exactly where the face guide sits. Combined with
+ * --halo-screen-strength never being set at all (see
+ * makeAssistTransitionHandler in beta.js), the assist was invisible: even
+ * fixing the missing setLevel call would only have lit the corners while the
+ * face itself sat in the dark hole. The centre now lifts too, so engaging
+ * the assist reads as "the screen just became a light", not a corner tint. */
+.acquisition-fill {
   position: absolute;
   inset: 0;
+  z-index: 1;
   pointer-events: none;
-  /* Driven by --halo-screen-strength, which beta.js computes from the halo
-   * LEVEL alone. No theme token appears in it, so the capture-time halo-white
-   * override cannot change the flash luminance. */
-  background: rgba(255, 255, 255, var(--halo-screen-strength, 0));
-  transition: background 120ms linear;
+  background: radial-gradient(
+    ellipse 75% 85% at 50% 49%,
+    rgba(255, 252, 242, calc(var(--halo-screen-strength, 0) * .55)) 0%,
+    rgba(255, 252, 242, var(--halo-screen-strength, 0)) 100%
+  );
+}
+
+/* The quality/hold ring. SEEKING (no colour), ADJUST (orpiment — a named,
+ * actionable problem), RECOVERING (azurite — the app is acting, not asking),
+ * READY/PERFECT (malachite — hold still). Colour never carries a state
+ * alone: #gate-line's text and the .capture-guide chips say the same thing
+ * in words. */
+.exposure-halo {
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  color: rgba(237, 234, 227, .68);
+  pointer-events: none;
+}
+
+.exposure-halo svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.halo-track, .halo-progress {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.halo-track {
+  stroke: currentColor;
+  stroke-width: 2;
+  opacity: .4;
+}
+
+.halo-progress {
+  stroke: var(--t-orpiment);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  transition: stroke .2s ease, stroke-dashoffset .16s linear;
+}
+
+.exposure-halo[data-state="adjust"] { color: var(--t-orpiment); }
+.exposure-halo[data-state="recovering"] { color: var(--t-azu); }
+.exposure-halo[data-state="recovering"] .halo-progress { stroke: var(--t-azu); }
+.exposure-halo[data-state="perfect"] { color: var(--t-mal); }
+.exposure-halo[data-state="perfect"] .halo-track,
+.exposure-halo[data-state="perfect"] .halo-progress {
+  stroke: var(--t-mal);
+  animation: beta-halo-perfect 1.25s ease-in-out infinite;
+}
+
+@keyframes beta-halo-perfect {
+  50% { opacity: .55; stroke-width: 6; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .exposure-halo[data-state="perfect"] .halo-track,
+  .exposure-halo[data-state="perfect"] .halo-progress {
+    animation: none;
+  }
 }
 
 .gateline {
@@ -514,10 +596,52 @@ button:focus-visible,
   text-align: center;
 }
 
+/* The four-chip readiness strip. Colour is never the only carrier: each
+ * chip's own label ("Face", "Light", "Clear", "Still") already says which
+ * measurement it stands for. */
+.capture-guide {
+  display: flex;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 6px 0 10px;
+  font: 400 11px/1.4 var(--mono);
+  color: var(--t-dim);
+}
+
+.capture-guide li {
+  padding: 3px 9px;
+  border: 1px solid var(--t-hair);
+  border-radius: 2px;
+}
+
+.capture-guide li[data-state="ready"] {
+  border-color: var(--t-mal);
+  color: var(--t-mal);
+}
+
+.capture-guide li[data-state="adjust"] {
+  border-color: var(--t-orpiment);
+  color: var(--t-orpiment);
+}
+
 .ctlrow {
   display: flex;
   justify-content: center;
   margin-bottom: 8px;
+}
+
+.capture-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.ctl[data-emphasis="true"] {
+  border-color: var(--t-orpiment);
+  color: var(--t-orpiment);
 }
 
 .consent-title {

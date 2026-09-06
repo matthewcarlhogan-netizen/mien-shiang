@@ -5,7 +5,7 @@
  * second launch works with no connection at all. */
 // Bumped when the shell list changes: the activate handler deletes every cache
 // whose name is not CACHE, so a stale v1 holding an old SHELL cannot survive.
-const CACHE = "mienshiang-v24";
+const CACHE = "mienshiang-v25";
 const SHELL = [
   "./", "./index.html", "./ui.js", "./analysis.js", "./engine.js",
   "./measurement-method.js",
@@ -39,6 +39,11 @@ const SHELL = [
   "./qise/illumination.js", "./qise/upload.js", "./qise/framestats.js",
   "./qise/wakelock.js",
   "./qise/gates.js", "./qise/camera.js", "./qise/metrics.js", "./qise/pose.js",
+  // Statically imported by ui/qise/app.js as of the scanner capture
+  // correction (DR-2026-09-06-SCANNER-CAPTURE-CORRECTION). Missing this is
+  // CLAUDE.md item 15's exact failure: a returning user on the old cache
+  // gets a module-not-found error, not a degraded app.
+  "./qise/frame-scheduler.js",
   "./qise/baseline.js", "./qise/store.js", "./qise/passages.js",
   "./qise/patterns.js", "./qise/composition.js", "./qise/integrated.js",
   "./ui/qise/palette.js", "./ui/qise/seal.js", "./ui/qise/screens.js",

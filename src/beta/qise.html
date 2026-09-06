@@ -24,17 +24,37 @@
 
     <div class="plate" id="plate">
       <i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i>
-      <video id="preview" playsinline muted autoplay></video>
-      <div class="halo" id="exposure-halo"></div>
-      <div class="oval"></div>
+      <video id="preview" playsinline muted autoplay aria-label="Camera preview"></video>
+      <div class="acquisition-fill" id="acquisition-fill" aria-hidden="true"></div>
+      <div class="oval" id="face-guide" aria-hidden="true"></div>
+      <div class="exposure-halo" id="exposure-halo" data-state="seeking" aria-hidden="true">
+        <svg viewBox="0 0 360 500" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+          <ellipse class="halo-track" cx="180" cy="250" rx="116" ry="190" pathLength="100"></ellipse>
+          <ellipse class="halo-progress" data-halo-progress cx="180" cy="250" rx="116" ry="190"
+                   pathLength="100"></ellipse>
+        </svg>
+      </div>
     </div>
 
-    <div class="gateline" id="gate-line"></div>
+    <div class="gateline" id="gate-line" role="status" aria-live="polite" aria-atomic="true"></div>
+
+    <ul class="capture-guide" id="capture-guide" aria-label="Scan readiness">
+      <li data-guide="frame" data-state="waiting">Face</li>
+      <li data-guide="light" data-state="waiting">Light</li>
+      <li data-guide="camera" data-state="waiting">Clear</li>
+      <li data-guide="steady" data-state="waiting">Still</li>
+    </ul>
+
     <div class="ctlrow">
       <button class="ctl" id="go-capture">Open the camera</button>
     </div>
+    <div class="capture-actions">
+      <button class="ctl" id="screen-light" type="button" aria-pressed="false" hidden>Turn on screen light</button>
+      <button class="ctl" id="use-current-light" type="button" hidden>Use this light anyway</button>
+      <button class="ctl" id="refocus-camera" type="button" hidden>Refocus camera</button>
+    </div>
 
-    <div class="calibration" id="calibration"></div>
+    <div class="calibration" id="calibration" hidden aria-hidden="true"></div>
 
     <div id="reading-surfaces" hidden>
       <div class="sealrow">

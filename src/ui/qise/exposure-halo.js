@@ -23,8 +23,13 @@ export function shouldUseScreenFlash({
 }
 
 export function haloStateFromCapture({ underexposed = false, gatesPass = false,
-  captureSettled = false } = {}) {
+  captureSettled = false, recovering = false } = {}) {
   if (gatesPass && captureSettled) return "perfect";
+  // Checked before `underexposed`: a soft frame recovering from autofocus is
+  // a DIFFERENT actionable state ("hold still — sharpening") from a dark one
+  // ("add light"), and conflating them under one colour would tell the user
+  // to fix the wrong thing while the app is already acting on the real one.
+  if (recovering) return "recovering";
   if (underexposed) return "adjust";
   return "seeking";
 }
