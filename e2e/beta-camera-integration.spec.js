@@ -21,12 +21,33 @@ import { test, expect } from "@playwright/test";
  * scripts/generate-synthetic-face-video.mjs. No real biometric data.
  */
 
-// Configure Chromium to use fake camera and synthetic video
+// Configure Chromium to use fake camera and synthetic video.
+//
+// `launchArgs` is not a real Playwright Test fixture — the actual property
+// is `launchOptions.args`. Playwright silently ignores unknown keys passed
+// to test.use(), so this shipped as dead configuration: getUserMedia never
+// received a fake device, every test in this file ran against whatever
+// camera hardware existed (none, in CI and this sandbox), and the specs
+// passed anyway because their assertions tolerate a NotFoundError rather
+// than requiring the synthetic capture to actually complete. This is
+// CLAUDE.md item 18a's shape again — a guard that compiles and never runs.
 test.use({
-  launchArgs: [
-    "--use-fake-ui-for-media-stream",
-    `--use-file-for-fake-video-capture=${process.cwd()}/tests/fixtures/synthetic-face.y4m`,
-  ],
+  launchOptions: {
+    args: [
+      "--use-fake-ui-for-media-stream",
+      // Two flags, not one. `--use-fake-ui-for-media-stream` only suppresses
+      // the permission PROMPT; it registers no device. Without
+      // `--use-fake-device-for-media-stream`, Chromium exposes no camera at
+      // all in a container with no real hardware, and getUserMedia rejects
+      // with NotFoundError — which is exactly what every test in this file
+      // silently tolerated until this was added, because none of them
+      // required the capture to actually reach a face. This flag is what
+      // makes `--use-file-for-fake-video-capture` (below) have anything to
+      // attach to.
+      "--use-fake-device-for-media-stream",
+      `--use-file-for-fake-video-capture=${process.cwd()}/tests/fixtures/synthetic-face.y4m`,
+    ],
+  },
 });
 
 test.beforeEach(async ({ page }) => {

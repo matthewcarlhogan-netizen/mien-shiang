@@ -27,6 +27,7 @@ import {
   ensureContinuousFocus, requestCameraRefocus,
 } from "../../qise/camera.js";
 import { createLandmarkerWithFallback } from "../../landmarker.js";
+import { createFrameScheduler } from "../../qise/frame-scheduler.js";
 import {
   fitSelfieDimensions, validateSelfieDimensions, validateSelfieFile,
 } from "../../qise/upload.js";
@@ -304,6 +305,13 @@ async function runCapture() {
 
   const latch = new GreenLatch();
   const illuminationLatch = new GreenLatch(ILLUMINATION_READY_MS);
+  // Locked decision 3, the other half: once the real gates have looked clean
+  // for a full hold's worth of time WHILE the screen assist is on, this is
+  // the cue to try turning it off and see whether ambient light alone can now
+  // sustain a genuine measurement. Fed the RAW gate pass, not the latch above
+  // — it is answering a different question ("is it safe to test dropping the
+  // assist"), not "is the frame ready to capture".
+  const dropScreenLightLatch = new GreenLatch();
   let observedScreenLightRevision = screenLightRevision;
   const smoother = new PolygonSmoother();
   const drift = [];
@@ -358,6 +366,7 @@ async function runCapture() {
     if (runId !== captureRun) return;
     console.error("qise: live capture stopped", error);
     captureRun++;
+    scheduler.stop();
     if (scratch) releaseCapture(scratch);
     scratch = null;
     clearIlluminationPhase();
@@ -372,14 +381,28 @@ async function runCapture() {
         : "The scanner stopped. Retry the camera, or choose a selfie below.";
     }
   };
-  const scheduleStep = () => requestAnimationFrame((time) => {
-    step(time).catch(stopAfterLoopError);
+  // Distinct DECODED video frames only, never a display repaint — a 120Hz
+  // panel against a 30-60fps camera means roughly half of every rAF tick
+  // used to re-read a video element with nothing new in it, which motion
+  // history, the green-hold latch and the burst could not tell apart from a
+  // second real sample (src/qise/frame-scheduler.js).
+  const scheduler = createFrameScheduler(video);
+  const scheduleStep = () => scheduler.schedule((frameInfo) => {
+    step(frameInfo.now).catch(stopAfterLoopError);
   });
 
   const step = async (nowMs) => {
     if (!scratch || runId !== captureRun) return;
-    canvas.width = video.videoWidth || 1280;
-    canvas.height = video.videoHeight || 960;
+    // Reassigning canvas.width/height reallocates and clears the backing
+    // bitmap even when the value is unchanged — real cost on every processed
+    // frame now that the frame scheduler already dedupes repaints. Guarded so
+    // it only happens on an actual dimension change (stream start, or a
+    // format change mid-session); drawImage below still repaints every pixel
+    // every frame regardless, so skipping the reassignment changes no output.
+    const frameWidth = video.videoWidth || 1280;
+    const frameHeight = video.videoHeight || 960;
+    if (canvas.width !== frameWidth) canvas.width = frameWidth;
+    if (canvas.height !== frameHeight) canvas.height = frameHeight;
 
     // ── THE CANVAS AND THE LANDMARKS MUST BE IN THE SAME SPACE ─────────────
     // Drawn WITHOUT a flip, deliberately. The preview is mirrored by a CSS
@@ -459,8 +482,11 @@ async function runCapture() {
       $("use-current-light").dataset.emphasis = String(currentLightAvailable);
 
       // Match the native front-camera behaviour: once darkness, uneven light,
-      // or softness persists, turn the whole screen into a neutral flash. It
-      // stays on through the hold and burst; a manual dismissal is respected.
+      // or softness persists, turn the whole screen into a neutral flash.
+      // Locked decision 3: it may help ACQUISITION, but it must be back off
+      // before the burst — see the latch gating above and the drop attempt
+      // just below, which is what actually gets it there. A manual
+      // dismissal is respected.
       if (shouldUseScreenFlash({
         issuePresent: flashIssue,
         issueForMs: flashIssueSince === null ? 0 : nowMs - flashIssueSince,
@@ -469,6 +495,20 @@ async function runCapture() {
         illuminationActive: Boolean(illuminationSession),
       })) {
         setScreenLight(true);
+      }
+
+      // Once the real gates have looked clean for a full hold's worth of
+      // time WHILE the assist is on, try dropping it. If the underlying
+      // issue is still there, `shouldUseScreenFlash` above re-arms it once
+      // `flashIssueSince` has aged past its own delay again — bounded on
+      // both sides, so this cannot flip faster than either persistence
+      // window allows. Suspended during the opt-in colour-response sequence,
+      // which manipulates the same screen for an unrelated reason.
+      if (screenLightRequested && !illuminationSession) {
+        const readyToDropAssist = dropScreenLightLatch.update(gates.pass, nowMs);
+        if (readyToDropAssist.ready) setScreenLight(false);
+      } else {
+        dropScreenLightLatch.reset();
       }
 
       if (soft && opened.focusSupported && !illuminationSession && !refocusStarted
@@ -611,11 +651,15 @@ async function runCapture() {
       // `captureSettled` gates the LATCH rather than the gates themselves, so
       // the user still sees live feedback during the warm-up; what they cannot
       // do is complete a hold that ends in a burst lit differently frame to
-      // frame.
-      const held = latch.update(gates.pass && captureSettled, nowMs);
+      // frame. `!screenLightRequested` is locked decision 3: the screen
+      // cannot be a calibrated illuminant, so a burst may not complete while
+      // it is the light source, whatever the gates say — see
+      // dropScreenLightLatch below, which is what actually gets the assist
+      // back off again once ambient light alone looks sustainable.
+      const held = latch.update(gates.pass && captureSettled && !screenLightRequested, nowMs);
       $("ring-fill").setAttribute("stroke-dashoffset", String(100 - Math.round(held.progress * 100)));
       exposureHalo?.setCaptureState(haloStateFromCapture({
-        underexposed, gatesPass: gates.pass, captureSettled,
+        underexposed, gatesPass: gates.pass, captureSettled, recovering: soft && refocusStarted,
       }), held.progress);
 
       if (held.ready) {
@@ -640,6 +684,7 @@ async function runCapture() {
           // the hold this reading was taken under "auto". The record has to
           // say which, because captureMode is what tells a later baseline that
           // the class of capture changed.
+          scheduler.stop();
           await finish(burst, lastRois, lastSclera, { ...opened, captureMode },
             history, lastMargins, illuminationSummary, lastCaptureTier, image, pts);
           return;

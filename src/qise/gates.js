@@ -86,9 +86,33 @@ export function interocularPx(landmarks) {
 /*
  * The gates, in the order they are declared.
  *
- * Each `evaluate` returns `{ value, limit, margin }` or null when the input
- * needed is absent. A gate that cannot be evaluated is reported as a failure
- * with a margin of -1 rather than skipped: a missing input is not a pass.
+ * Each `evaluate` returns one of three shapes:
+ *   { value, limit, margin }        a real measurement — PASS or FAIL
+ *   { blocked: true, blockedBy, reason }   a prerequisite is unavailable
+ *   null                             this gate itself has nothing to measure
+ *
+ * A gate that cannot be evaluated is reported as a failure with a margin of
+ * -1 rather than skipped: a missing input is not a pass. That much has not
+ * changed. What DOES matter, and did not exist before item 54's aftermath
+ * proved it was needed twice: BLOCKED and UNAVAILABLE are not the same
+ * failure as FAIL, and must never be shown as one.
+ *
+ * ── WHY BLOCKED IS NOT THE SAME AS FAIL ─────────────────────────────────────
+ * `illuminant` cannot judge a light it was never handed a sample of. When
+ * `sampleSclera` refuses — too few surviving pixels, or too dark to trust —
+ * illuminant has measured NOTHING, and returning `null` for that used to be
+ * indistinguishable from "measured, and it is unusual light": both landed at
+ * `margin: -1`, the floor of the scale, which SORTS AHEAD of every real
+ * failure. The result: a face that failed only on eye visibility was told to
+ * change its lamps, permanently, in every room, because the fabricated
+ * failure always outranked the real one. `blocked: true` with a `blockedBy`
+ * and a `reason` lets `captureInstruction` defer to the ACTUAL cause instead.
+ *
+ * The same shape covers `filter`: a Laplacian variance of `null` means the
+ * cheek ROIs did not carry enough pixels to run the kernel, not that the
+ * frame is blurry. Where that traces to `roiValidity` being short, it is
+ * reported blocked by roiValidity, not as a sharpness verdict on a value that
+ * was never computed.
  *
  * MESSAGES STATE THE FIX, NEVER THE FAULT. No "sorry", no "invalid", no
  * "failed". The user is trying to take a photograph, not passing an exam.
@@ -166,8 +190,21 @@ export const GATES = Object.freeze([
     // The coarse backstop only. The personal sclera baseline in Phase 2 is what
     // separates strange light from bloodshot eyes; this catches the case where
     // the illuminant is so far off neutral that no correction is trustworthy.
+    //
+    // This gate DEPENDS on the sclera sample: it has no illuminant to judge
+    // until `sampleSclera` produces `rawRatios`. A dependent gate returning
+    // `null` here is indistinguishable from a REAL illuminant failure once the
+    // harness collapses everything to `unevaluated`, and that collapse is
+    // exactly the defect this evaluate exists to avoid (see the BLOCKED vs
+    // FAILED note above `evaluateGates`). So this reports BLOCKED, carrying
+    // sclera's own refusal reason verbatim — "too_few_pixels" or "too_dark" —
+    // rather than inventing a coloured-light diagnosis for a measurement that
+    // was never taken.
     evaluate: (_stats, _landmarks, sclera) => {
-      if (!sclera || !sclera.rawRatios) return null;
+      if (!sclera) return { blocked: true, blockedBy: "sclera", reason: "no_sclera" };
+      if (!sclera.rawRatios) {
+        return { blocked: true, blockedBy: "sclera", reason: sclera.reason || "no_sclera" };
+      }
       const worst = Math.max(...["r", "g", "b"].map((k) => Math.abs(sclera.rawRatios[k] - 1)));
       return { value: worst, limit: SCLERA_ABSOLUTE_TOLERANCE, margin: marginBelow(worst, SCLERA_ABSOLUTE_TOLERANCE) };
     },
@@ -194,9 +231,26 @@ export const GATES = Object.freeze([
     // Defocus and smoothing filters both remove spatial high-frequency detail,
     // so the real four-neighbour Laplacian variance collapses. The UI names
     // both actionable causes instead of accusing every soft frame of filtering.
-    evaluate: ({ laplacianVariance }) => {
-      if (typeof laplacianVariance !== "number") return null;
-      return { value: laplacianVariance, limit: FILTER_MIN_LAPLACIAN_VARIANCE, margin: marginAbove(laplacianVariance, FILTER_MIN_LAPLACIAN_VARIANCE) };
+    //
+    // `laplacianVariance` is also `null` whenever the cheek ROIs did not carry
+    // enough located pixels to run the four-neighbour kernel at all (see
+    // `spatialLaplacianVariance`'s `minSamples` floor in framestats.js) — that
+    // is not a blur measurement, it is the ABSENCE of one, and item 54 exists
+    // precisely because those two were once conflated. When the ROI count is
+    // independently known to be short, this reports BLOCKED by roiValidity
+    // rather than guessing "soft" from a sharpness the frame never produced.
+    evaluate: ({ laplacianVariance, validRoiCount }) => {
+      if (typeof laplacianVariance === "number") {
+        return {
+          value: laplacianVariance,
+          limit: FILTER_MIN_LAPLACIAN_VARIANCE,
+          margin: marginAbove(laplacianVariance, FILTER_MIN_LAPLACIAN_VARIANCE),
+        };
+      }
+      if (typeof validRoiCount === "number" && validRoiCount < MIN_VALID_ROIS) {
+        return { blocked: true, blockedBy: "roiValidity", reason: "insufficient_roi_samples" };
+      }
+      return null;
     },
   },
   {
@@ -260,23 +314,163 @@ const CAPTURE_INSTRUCTIONS = Object.freeze({
   },
 });
 
-/** One plain next action, instead of making a person diagnose ten gates. */
+/**
+ * A gate whose reason names WHY it could not measure — the eyes were not
+ * legible, the scene was too dim to read them, or there was no sclera sample
+ * at all. Keyed by the gate that is BLOCKED, then by that gate's own
+ * `reason`, both of which come from the domain module that actually knows
+ * (sclera.js), never guessed here.
+ */
+const BLOCKED_INSTRUCTIONS = Object.freeze({
+  illuminant: {
+    too_few_pixels: {
+      title: "Open your eyes naturally",
+      detail: "The light check reads the whites of your eyes — keep both fully open and facing the lens.",
+    },
+    too_dark: {
+      title: "Add light before this check can run",
+      detail: "It's too dim to read your eyes clearly yet. Add light in front of you, then hold still.",
+    },
+    no_sclera: {
+      title: "Look into the lens",
+      detail: "Keep both eyes visible so the light check can run.",
+    },
+  },
+});
+
+/**
+ * A gate that could not be measured at all, and has no cleaner root cause to
+ * point at — distinct from BLOCKED_INSTRUCTIONS, which names a specific
+ * upstream reason. This is the honest fallback: say what is missing, never a
+ * fix for a symptom (blur, colour) that was never observed (CLAUDE.md item 54).
+ */
+const UNAVAILABLE_INSTRUCTIONS = Object.freeze({
+  filter: {
+    title: "Show more of your face",
+    detail: "Move a little closer so your cheeks fill the guide — sharpness can't be measured yet.",
+  },
+  pose: {
+    title: "Look straight at the camera",
+    detail: "Hold your head level so the angle can be measured.",
+  },
+  distance: {
+    title: "Bring your face into the oval",
+    detail: "Distance can't be measured until the eyes are visible.",
+  },
+  motion: {
+    title: "Hold still for a moment",
+    detail: "A couple of steady frames are needed before stillness can be measured.",
+  },
+  sclera: {
+    title: "Look into the lens",
+    detail: "Keep both eyes visible so they can be read.",
+  },
+  roiValidity: {
+    title: "Show your whole face",
+    detail: "Keep the forehead, temples, eyes and chin inside the oval.",
+  },
+  overexposed: {
+    title: "Bring your face into the oval",
+    detail: "Exposure can't be checked until skin is visible.",
+  },
+  underexposed: {
+    title: "Bring your face into the oval",
+    detail: "Exposure can't be checked until skin is visible.",
+  },
+  sidelight: {
+    title: "Bring your face into the oval",
+    detail: "Both cheeks need to be visible before they can be compared.",
+  },
+});
+
+/**
+ * Whether a failure entry represents a MEASUREMENT that came back outside its
+ * allowed range, as opposed to one that could not be taken at all.
+ *
+ * Reports built by `evaluateGates` always carry `status`. Reports built BY
+ * HAND — a handful of tests construct `{ id, message, unevaluated }` directly
+ * to drive `captureInstruction` without a full gate run — do not, and for
+ * those the pre-existing contract holds: anything not explicitly marked
+ * `unevaluated` is a real failure. Absence of `status` must fall back to that
+ * older, narrower signal rather than silently reclassifying every hand-built
+ * fixture as unmeasurable.
+ */
+const isMeasuredFailure = (failure) => (
+  failure.status ? failure.status === "fail" : !failure.unevaluated
+);
+
+const instructionForFailure = (failure) => ({
+  id: failure.id,
+  ...(CAPTURE_INSTRUCTIONS[failure.id] || {
+    title: failure.message,
+    detail: "Follow the guide in the camera preview.",
+  }),
+});
+
+/**
+ * Resolve a BLOCKED or UNAVAILABLE entry to an instruction naming its real
+ * cause, never a fix for the symptom it could not observe.
+ *
+ * Two rungs, cheapest and most specific first:
+ *  1. The gate that blocks this one is ITSELF present among this frame's
+ *     failures as a genuine measured failure (e.g. sclera failing its own
+ *     pixel-count floor) — use that gate's own, already-correct instruction.
+ *     This is what makes `too_few_pixels` show "open your eyes wider" without
+ *     illuminant needing to know that copy exists.
+ *  2. The blocking gate PASSED on its own terms but the dependent still could
+ *     not measure (sclera's pixel count is fine; its median lightness is not
+ *     — `too_dark`). There is no failing entry to defer to, so the reason
+ *     travels via `BLOCKED_INSTRUCTIONS`, keyed by gate and by that reason.
+ * Failing both, `UNAVAILABLE_INSTRUCTIONS` is the honest fallback: the
+ * measurement itself could not be obtained, and the copy says so.
+ */
+function instructionForDependent(entry, allFailures) {
+  if (entry.blockedBy) {
+    const root = allFailures.find(
+      (failure) => failure.id === entry.blockedBy && isMeasuredFailure(failure),
+    );
+    if (root) return instructionForFailure(root);
+    const reasonTable = BLOCKED_INSTRUCTIONS[entry.id];
+    if (reasonTable && entry.reason && reasonTable[entry.reason]) {
+      return { id: entry.id, ...reasonTable[entry.reason] };
+    }
+  }
+  if (UNAVAILABLE_INSTRUCTIONS[entry.id]) {
+    return { id: entry.id, ...UNAVAILABLE_INSTRUCTIONS[entry.id] };
+  }
+  return instructionForFailure(entry);
+}
+
+/**
+ * One plain next action, instead of making a person diagnose ten gates.
+ *
+ * MEASURED failures are considered first, worst-first as `evaluateGates`
+ * already ordered them — a gate that came back outside its allowed range is
+ * always more informative than one that could not be read at all. Only when
+ * NOTHING has actually been measured as a defect does a BLOCKED or
+ * UNAVAILABLE entry surface, and even then it is resolved to its root cause
+ * rather than shown as its own generic complaint (see `instructionForDependent`).
+ *
+ * This is the fix for CLAUDE.md item 54: previously every unevaluated gate
+ * carried `margin: -1`, the floor of the scale, which sorted it ahead of
+ * every REAL failure and let "the light check has no sclera sample" print as
+ * "this light is unusual" — a diagnosis of a condition nobody measured.
+ */
 export function captureInstruction(report) {
   if (!report) {
     return { id: "starting", title: "Opening the camera", detail: "Bring your face into the oval." };
   }
-  const failure = report.failures && report.failures[0];
-  if (!failure) {
+  const failures = report.failures || [];
+  if (failures.length === 0) {
     return {
       id: "ready",
       title: "That's it — hold still",
       detail: "Keep looking at the lens. The photo takes itself.",
     };
   }
-  return { id: failure.id, ...(CAPTURE_INSTRUCTIONS[failure.id] || {
-    title: failure.message,
-    detail: "Follow the guide in the camera preview.",
-  }) };
+  const primary = failures.find(isMeasuredFailure);
+  if (primary) return instructionForFailure(primary);
+  return instructionForDependent(failures[0], failures);
 }
 
 /**
@@ -320,6 +514,17 @@ export function captureGuide(report) {
 /**
  * Run every gate.
  *
+ * Every entry in `failures` (and every entry in `results`, reachable via
+ * `worst`) carries a `status` of `"fail"`, `"blocked"` or `"unavailable"`.
+ * Only `"fail"` is a measurement that came back outside its allowed range;
+ * the other two mean nothing was measured, for two different reasons
+ * (`blockedBy`/`reason` name which, see the note above `GATES`). Consumers
+ * choosing what to TELL the user — `captureInstruction` — must prefer a
+ * `"fail"` over either of the other two, never rank them by margin alone:
+ * margin is `-1` for both non-measurements by construction, which is exactly
+ * what let a blocked gate outrank a real one before this file distinguished
+ * them.
+ *
  * @param {Object} frameStats see the individual gates for the fields each uses
  * @param {Array<{x:number,y:number}>} landmarks
  * @param {Object} scleraResult from sampleSclera
@@ -334,19 +539,41 @@ export function evaluateGates(frameStats, landmarks, scleraResult, options = {})
   for (const gate of GATES) {
     const outcome = gate.evaluate(stats, landmarks, scleraResult);
 
-    if (outcome === null) {
+    if (outcome === null || outcome.blocked) {
       // A gate that could not be evaluated is a failure, not a pass. Treating
       // an absent input as "nothing to complain about" is how a capture path
-      // ships with half its checks quietly inert.
+      // ships with half its checks quietly inert. `margin` stays -1, the
+      // floor of the scale, so the RING and the grace/tolerance machinery
+      // below are completely unchanged — a blocked or unavailable gate is
+      // excluded from `ASSISTED_LIMITS` tolerance exactly as an unevaluated
+      // one always was (both carry `unevaluated: true`).
+      //
+      // What DOES change is which of these a person is TOLD about:
+      // `status` distinguishes a gate with nowhere to point (`unavailable`)
+      // from one with a named, upstream cause (`blocked`, `blockedBy`,
+      // `reason`) — `captureInstruction` uses this to defer to the root
+      // cause instead of printing a diagnosis for a measurement that was
+      // never taken.
       margins[gate.id] = -1;
-      const f = { id: gate.id, message: gate.message, margin: -1, unevaluated: true };
+      const f = outcome && outcome.blocked
+        ? {
+          id: gate.id, message: gate.message, margin: -1, unevaluated: true,
+          status: "blocked", blockedBy: outcome.blockedBy || null, reason: outcome.reason || null,
+        }
+        : {
+          id: gate.id, message: gate.message, margin: -1, unevaluated: true,
+          status: "unavailable", blockedBy: null, reason: null,
+        };
       failures.push(f);
       results.push(f);
       continue;
     }
 
     margins[gate.id] = outcome.margin;
-    const entry = { id: gate.id, message: gate.message, margin: outcome.margin, value: outcome.value, limit: outcome.limit };
+    const entry = {
+      id: gate.id, message: gate.message, margin: outcome.margin, value: outcome.value, limit: outcome.limit,
+      unevaluated: false, status: outcome.margin < 0 ? "fail" : "pass", blockedBy: null, reason: null,
+    };
     results.push(entry);
     if (outcome.margin < 0) failures.push(entry);
   }

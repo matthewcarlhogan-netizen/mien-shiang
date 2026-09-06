@@ -77,11 +77,11 @@ stubs when the flag is off.
 
 `package-lock.json` pins the declared dependencies for reproducible `npm ci` installs.
 
-1344 across 76 files, measured 5 September 2026 by running `npm test` directly rather than trusting
+1394 across 97 files, measured 6 September 2026 by running `npm test` directly rather than trusting
 this line — the exact commands and sub-counts age quickly as the suite grows, so verify with the
 runner rather than updating this sentence again.
 
-**All 1344 pass.** The long-standing `copy-guard` failure on
+**All 1394 pass.** The long-standing `copy-guard` failure on
 `TCM-202-DAMP-HEAT.recommend[1]` is resolved — that line moved to Module B in
 the Phase 2 split (see item 19). If a test fails, it is a real defect.
 
@@ -510,7 +510,7 @@ cache, which does not contain the new module.
 release that works perfectly on a fresh install.
 **Cause:** new entry in `SHELL`, unchanged `CACHE` name.
 
-Currently `mienshiang-v24` (bumped when beta scanner UI enhancements were added).
+Currently `mienshiang-v25` (bumped when frame-scheduler.js entered ui/qise/app.js's static import graph).
 
 **The version is coupled to `index.html`, which is easy to miss.** The entry
 redirect is `location.replace("./qise.html?v=<n>")`, and `<n>` must equal the
@@ -1505,18 +1505,51 @@ For gates whose failures arise from unmeasurable conditions (e.g., lack of a
 sclera sample, a non-extractable zone), the instruction must name what is
 missing, never a fix for a symptom that was never observed.
 
-**Symptom:** a gate says *"Too dark — find more light"* when the real problem is
-that no sclera sample was available to establish a baseline for comparison.
-Adding light cannot help because the gate never measured the brightness in the
-first place — only the absence of a sample.
-**Cause:** an instruction that assumes a measurement happened when the preceding
-gate conditions only confirm that measurement was not possible. The two are
-different failures and need different answers from the user.
-**Pinned by:** `a missing or unmeasurable condition is distinguished from a
-measurement that shows a defect` — every gate must carry both an `id` (naming
-the *measurement* it tried to make, e.g., `sclera_colour`) and a `reason` (naming
-why it could not, e.g., `too_few_pixels`), so the rendering layer can address
-the actual problem rather than a symptom of the missing data.
+**This entry previously claimed to be fixed and pinned by a test. Neither
+existed.** The code below was the ACTUAL shape of `evaluateGates`/
+`captureInstruction` while this item asserted the opposite, for one full
+release: an unevaluated gate carried `margin: -1`, the floor of the scale,
+which sorted ahead of every real failure, and no test anywhere in the suite
+constructed the scenario this item describes. That is the exact failure mode
+CLAUDE.md's own Verification Protocol exists to catch — a claim of a fix with
+no pasted evidence — and it reached this file anyway. The real fix landed in
+`DR-2026-09-06-SCANNER-CAPTURE-CORRECTION` (`docs/DECISION_REGISTER.md`); what
+follows is now true of the code, not aspirational.
+
+**Symptom:** a gate says *"Turn off coloured lamps and use daylight or a plain
+white lamp"* when the real problem is that no sclera sample was available to
+establish a baseline for comparison. Changing the light cannot help because the
+gate never measured the light in the first place — only the absence of a
+sample. On an otherwise PERFECT frame (correct pose, distance, exposure, even
+cheeks, sharp, every ROI valid, motionless), a sclera sample that never
+gathered 150 pixels produced exactly this message, unconditionally, in every
+room, forever.
+**Cause:** `evaluateGates` collapsed "this gate could not be evaluated" and
+"this gate measured a real defect" to the same shape — `margin: -1`,
+`unevaluated: true` — and `captureInstruction` picked `failures[0]` by margin
+alone. `-1` is the floor `clampMargin` ever produces, so an unmeasured gate
+could never be outranked by a measured one, however severe.
+**Fix:** every gate result now carries an explicit `status` —
+`"pass" | "fail" | "blocked" | "unavailable"`. `blocked` additionally names
+`blockedBy` (the prerequisite gate) and a `reason`, sourced from the domain
+module that actually knows it (`sampleSclera`'s own `too_few_pixels` /
+`too_dark`), never guessed at the gate level. `captureInstruction` prefers any
+`"fail"` over a `"blocked"`/`"unavailable"` entry regardless of margin, and
+resolves a blocked entry through its `blockedBy` gate's own instruction first,
+falling back to a reason-keyed table only when the blocking gate itself passed
+on its own terms (sclera's pixel count is fine; its median lightness is not).
+Implemented in `src/qise/gates.js`; `filter` uses the identical mechanism (see
+below) rather than a special case for `illuminant` alone.
+**Pinned by:** `tests/qise/gate-dependency.test.js`, which drives the exact
+historical scenario above end to end through the real `evaluateGates` +
+`captureInstruction` and asserts the shown instruction names eye visibility,
+never coloured light — plus the `too_dark` variant (sclera's own gate passes;
+illuminant is still blocked, on a different named reason), a real
+out-of-tolerance illuminant (unchanged — still a `"fail"`, still shows the
+coloured-light instruction), and a vocabulary/claim-structure guard on the new
+copy. `e2e/beta-capture-finalisation.spec.js` reproduces the `too_dark` case
+from real pixels in a browser, not a hand-built fixture, as a second, genuine
+check.
 
 Related: `zoneNotExtracted` (a bug in geometry) and `colourNotMeasurable` (a deep
 skin limit) are both legitimate failures, but they are not the same, and a gate
@@ -1524,6 +1557,101 @@ that conflates them will offer a fix to the wrong question. Do **not** merge
 these refusal reasons. The deep-skin refusal is correct and must not be weakened
 in pursuit of a simpler code path.
 
+`filter` (sharpness) has the identical shape: a Laplacian variance of `null`
+means the cheek ROIs did not carry enough pixels to run the kernel, not that
+the frame is blurry. Where that traces to `roiValidity` being short, `filter`
+reports `blocked`/`blockedBy: "roiValidity"`; otherwise it reports
+`unavailable` with an honest "show more of your face" rather than a blur
+verdict on a value that was never computed.
+
+### 55. A display repaint is not a camera frame
+
+Both capture loops (`src/beta/beta.js` and `src/ui/qise/app.js`) drove their
+measurement pipeline from `requestAnimationFrame`, which fires once per DISPLAY
+REFRESH, not once per DECODED VIDEO FRAME. A 120Hz panel refreshes twice as
+often as a 30fps camera decodes, so roughly half of every tick re-read a
+`<video>` element that had not actually produced a new frame since the
+previous tick — and that duplicate could reach motion history, the green-hold
+latch and the burst as if it were a second real sample, with nothing visible
+from a screenshot to say so.
+
+**Symptom:** a burst whose nine frames correlate more than real sensor noise
+would allow, or a motion reading that stays suspiciously calm on a high-refresh
+device specifically.
+**Cause:** treating "the browser painted" as "the camera produced a frame".
+**Fix:** `src/qise/frame-scheduler.js`'s `createFrameScheduler` prefers
+`HTMLVideoElement.requestVideoFrameCallback` — browser-guaranteed to fire once
+per newly presented decoded frame, never for a repaint with nothing new — and
+falls back to a `requestAnimationFrame` poll GUARDED on `video.currentTime`
+where rVFC is unavailable: a tick reading the same `currentTime` as the one
+before it is silently re-polled, never handed to the caller. Both capture
+loops now schedule through this instead of a raw `requestAnimationFrame` call.
+**Pinned by:** `tests/qise/frame-scheduler.test.js`, including the exact
+scenario named in the correcting brief — display callbacks firing faster than
+supplied video frames — asserting processed-frame count equals distinct video
+frames, never callback count.
+
+### 56. A screen cannot be the illuminant it is helping you find your face in
+
+The white screen-light assist (dark-scene help, auto-triggered or manual) is
+genuinely useful for finding a face and letting autofocus lock in a dark room.
+It is not a controlled illuminant: a browser cannot standardise a phone's own
+display brightness, so if a burst were allowed to complete while it stayed on,
+"the reading" would silently mean "the reading, lit partly by whatever this
+phone's screen happens to put out" — breaking comparability against every
+other reading in the same person's history taken without it. Production's own
+code carried a comment saying the assist "stays on through the hold and
+burst"; that was correct as a description and wrong as a design.
+
+**Symptom:** a reading whose Lab values drift depending on whether the room
+was dark enough to trigger the screen flash, with no field anywhere recording
+that it did.
+**Cause:** the hold (`GreenLatch`) was fed the real gates' pass/fail with no
+term for whether the light source was ambient or the phone's own display.
+**Fix:** `ScreenAssistGuard.gatesPassForHold()` (`src/qise/capture-runtime.js`)
+returns false whenever the assist is active, regardless of what the gates
+report, so the hold cannot even begin to accumulate. Every on/off transition
+resets the hold and flags an exposure/white-balance lock (if one was taken
+under the light that just changed) for release. Once the real gates look
+clean for a full hold's worth of time WHILE the assist is on, it is tried
+off, forcing a fresh hold under ambient light alone before any burst.
+Production reuses its own existing `screenLightRequested` state under the same
+gating condition rather than a second, competing source of truth.
+**Pinned by:** `tests/qise/capture-runtime.test.js` — the hold cannot progress
+while the assist is active however clean the gates are, a clean assist-free
+hold still completes normally, and a mid-hold transition to active discards
+the partial hold rather than letting a burst span two lighting conditions.
+
+### 57. The guide oval must mean what the gate it is guiding towards actually measures
+
+The `distance` gate measures the outer-canthi span as a fraction of the camera
+BUFFER. What is drawn on screen is a `<video>` rendered with
+`object-fit: cover` into a box whose aspect ratio need not match the buffer's
+at all — a 4:3 sensor inside a portrait plate, say — so the visible frame is a
+scaled, CROPPED window onto the buffer. A guide sized as "52% of the box" has
+no principled relationship to "22% of the buffer width" unless the crop is
+accounted for; unaccounted, the guide can teach a person to sit exactly where
+the gate rejects them, while looking entirely plausible on screen.
+
+**Symptom:** a face that visibly fills the on-screen oval still fails the
+distance gate, read by the person holding the phone as "the camera is broken"
+rather than as a guide that was never honest about what it guided towards.
+**Cause:** the guide's size was chosen to look right on one phone's crop,
+independent of `DISTANCE_MIN_FRACTION`.
+**Fix:** `src/qise/frame-geometry.js`'s `faceGuideRect()` derives the guide's
+size from `coverTransform()` — the real buffer-to-box mapping — and
+`DISTANCE_MIN_FRACTION` itself, so a face exactly filling the guide clears the
+gate by construction, whatever crop is currently in effect. The
+bizygomatic/interocular ratio it uses is measured against MediaPipe's
+canonical mesh (the same fixture item 23 measures ROI extraction against),
+hardcoded with a citation because `src/` cannot import `tests/fixtures/` into
+the shipped artefact, and pinned live against the fixture by the test below.
+**Pinned by:** `tests/qise/frame-geometry.test.js`, covering a 4:3 landscape
+buffer inside a portrait box (the reported failure's exact shape), a portrait
+buffer at a different portrait box size, and matching aspect ratios (the
+no-crop case `setPlateAspectRatio` reaches deliberately) — plus the pin
+recomputing the mesh ratio live and asserting it still matches the hardcoded
+constant.
 
 ### 24. The summary may only repeat what was measured
 
@@ -1807,6 +1935,25 @@ Install on Android: open the URL in Chrome → ⋮ → *Add to Home screen*.
 
 ## Known gaps / good next tasks
 
+- **The `underexposed` gate's metric is confounded with skin reflectance, and
+  this correction deliberately did not touch it.** `skinPixelsAtOrBelow12 /
+  skinPixelCount` (`src/qise/gates.js`) is a raw-luma threshold on skin
+  pixels, which means it is not independent of how much light a given skin
+  tone reflects back at the same ambient brightness — the same confound the
+  dark-skin erythema limit exists for elsewhere in this document, applied
+  here to exposure rather than colour. `DR-2026-09-06-SCANNER-CAPTURE-
+  CORRECTION` (`docs/DECISION_REGISTER.md`) fixed the capture pipeline's
+  frame scheduling, screen-assist integrity and gate-dependency handling
+  without touching this metric or its threshold, on purpose: locked decision
+  4 in that record is explicit that a threshold is not the fix for an
+  under-evidenced measurement, and there is no labelled ground truth in this
+  repository to re-derive it from. It was already tracked under "Unimplemented
+  scanner improvements" below; this entry exists so the gap is visible from
+  the gate that carries it, not only from the proposals list. Re-deriving it
+  needs physical-device evidence across tone strata, not a guessed
+  replacement constant — `src/qise/diagnostics.js`'s capture telemetry is a
+  start (frame timing, capabilities) but does not itself capture the raw
+  brightness-distribution data a re-derivation would need.
 - **Android packaging is blocked on HTTPS hosting, not on code.** The PWA layer
   is complete and verified on `localhost`: manifest valid, one service worker
   activated at scope `/`, all ten precache entries present, and the app renders

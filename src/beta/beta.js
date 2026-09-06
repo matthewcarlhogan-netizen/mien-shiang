@@ -37,9 +37,12 @@ import {
   openCamera, attachCameraPreview, ensureContinuousFocus, settleAndNegotiate,
   releaseCaptureMode, releaseCapture, createLandmarkerGuarded, GreenLatch,
   PolygonSmoother, BURST_FRAMES, trimmedMedianLab, reduceBurst, describeCameraError,
+  requestCameraRefocus,
 } from "../qise/camera.js";
 import { createLandmarkerWithFallback } from "../landmarker.js";
-import { evaluateGates, captureInstruction } from "../qise/gates.js";
+import {
+  evaluateGates, captureInstruction, captureGuide, canUseCurrentLight, DISTANCE_MIN_FRACTION,
+} from "../qise/gates.js";
 import { frameStats } from "../qise/framestats.js";
 import { createScreenWakeLock } from "../qise/wakelock.js";
 import { createExposureHalo, haloStateFromCapture, shouldUseScreenFlash } from "../ui/qise/exposure-halo.js";
@@ -55,6 +58,10 @@ import { openStore } from "../qise/store.js";
 import { extractRegions, eraseExtractedRegions } from "../region-extractor.js";
 import { shadesOfGray, rawScalars, sensorNoiseConfidence } from "../engine.js";
 import { measureIntegratedReading } from "../qise/integrated.js";
+import { createFrameScheduler } from "../qise/frame-scheduler.js";
+import { ScreenAssistGuard, RefocusRecovery, StallTracker } from "../qise/capture-runtime.js";
+import { faceGuideRect } from "../qise/frame-geometry.js";
+import { createDiagnosticsSession, diagnosticsRequested } from "../qise/diagnostics.js";
 
 const MEDIAPIPE_BUNDLE = new URL("../vendor/mediapipe/vision_bundle.mjs", import.meta.url).href;
 const MEDIAPIPE_WASM = new URL("../vendor/mediapipe/wasm", import.meta.url).href;
@@ -77,6 +84,15 @@ let store = null;
 let exposureHalo = null;
 let scratch = null;
 let captureRun = 0;
+/**
+ * Set while a capture is live, so the three assist buttons — wired ONCE in
+ * init(), long before any given capture's closures exist — have something to
+ * act on without threading state through every render function. Cleared on
+ * every way out of a capture, same discipline as `scratch`.
+ * Shape: { track, assist, requestManualRefocus, getCaptureMode,
+ *          setCaptureMode, applyAssistTransition, requestLightOverride }
+ */
+let activeCapture = null;
 
 const $ = (id) => document.getElementById(id);
 
@@ -226,6 +242,9 @@ async function buildLandmarker() {
     );
     return built.landmarker;
   } catch (error) {
+    // A model-load failure is not a camera-permission failure, and
+    // describeCameraError's fallback used to claim it was one, pointing at a
+    // selfie fallback the beta does not have. This is its own message.
     $("gate-line").textContent = "The reading model failed to load. Refresh the page.";
     throw error;
   }
@@ -239,6 +258,33 @@ function setPlateAspectRatio(video) {
   }
 }
 
+/**
+ * Size and position the face guide from the ACTUAL rendered plate box, so it
+ * represents the same buffer fraction the distance gate measures whatever
+ * crop `object-fit: cover` is currently applying (src/qise/frame-geometry.js).
+ * setPlateAspectRatio already makes the common case crop-free; this is the
+ * general fix that holds even if that has not taken effect yet, or a layout
+ * constraint keeps the box from matching exactly.
+ */
+function applyFaceGuide(video) {
+  const plate = $("plate");
+  const guide = $("face-guide");
+  if (!plate || !guide || !video.videoWidth || !video.videoHeight) return;
+  const box = plate.getBoundingClientRect();
+  if (!(box.width > 0) || !(box.height > 0)) return;
+  const rect = faceGuideRect({
+    bufferWidth: video.videoWidth,
+    bufferHeight: video.videoHeight,
+    boxWidth: box.width,
+    boxHeight: box.height,
+    minInterocularFraction: DISTANCE_MIN_FRACTION,
+  });
+  guide.style.left = `${(rect.leftFraction * 100).toFixed(3)}%`;
+  guide.style.top = `${(rect.topFraction * 100).toFixed(3)}%`;
+  guide.style.width = `${(rect.widthFraction * 100).toFixed(3)}%`;
+  guide.style.height = `${(rect.heightFraction * 100).toFixed(3)}%`;
+}
+
 function hideReadingSurfaces() {
   const surfaces = $("reading-surfaces");
   if (surfaces) surfaces.hidden = true;
@@ -249,6 +295,57 @@ function showReadingSurfaces() {
   if (surfaces) surfaces.hidden = false;
 }
 
+function resetCaptureButton() {
+  const captureBtn = $("go-capture");
+  if (captureBtn) {
+    captureBtn.disabled = false;
+    captureBtn.textContent = "Open the camera";
+  }
+}
+
+/** Every capture-assist control starts hidden; the loop reveals what applies. */
+function hideAssistControls() {
+  for (const id of ["screen-light", "use-current-light", "refocus-camera"]) {
+    const el = $(id);
+    if (el) el.hidden = true;
+  }
+}
+
+/**
+ * The four-chip readiness strip, driven by the SAME captureGuide() production
+ * uses — one guard, one set of groupings, both surfaces.
+ */
+function updateCaptureGuideChips(report) {
+  const guide = report ? captureGuide(report) : [
+    { id: "frame", state: "waiting" }, { id: "light", state: "waiting" },
+    { id: "camera", state: "waiting" }, { id: "steady", state: "waiting" },
+  ];
+  for (const item of guide) {
+    const row = document.querySelector(`[data-guide="${item.id}"]`);
+    if (row) row.dataset.state = item.state;
+  }
+}
+
+/**
+ * Apply what a screen-assist transition demands: reset both the measurement
+ * hold and the "is it safe to drop the assist" probe, and hand exposure/WB
+ * back to the camera if a lock was taken under the light that just changed.
+ * Every on/off flip goes through here — there is exactly one place a burst
+ * could otherwise span two lighting conditions.
+ */
+function makeAssistTransitionHandler({ latch, dropAssistLatch, track, getCaptureMode, setCaptureMode }) {
+  return (transition) => {
+    if (!transition.changed) return;
+    latch.reset();
+    dropAssistLatch.reset();
+    if (transition.releaseExposureLock) {
+      releaseCaptureMode(track)
+        .then((reverted) => { setCaptureMode(reverted.captureMode); })
+        .catch((error) => console.warn("beta: exposure hand-back on assist change failed", error));
+    }
+  };
+}
+
 async function runCapture() {
   assertConsentGranted(consent, "the capture screen");
   const runId = ++captureRun;
@@ -257,6 +354,8 @@ async function runCapture() {
   setCaptureTheme(true);
   exposureHalo?.reset();
   hideReadingSurfaces();
+  hideAssistControls();
+  updateCaptureGuideChips(null);
   const captureBtn = $("go-capture");
   if (captureBtn) {
     captureBtn.disabled = true;
@@ -264,6 +363,11 @@ async function runCapture() {
   }
   $("gate-line").textContent = "Opening the camera.";
   renderCalibration([]);
+
+  const diagnostics = createDiagnosticsSession({
+    enabled: diagnosticsRequested(new URLSearchParams(location.search)),
+  });
+  $("calibration").hidden = !diagnostics.enabled;
 
   const video = $("preview");
   video.hidden = false;
@@ -283,6 +387,7 @@ async function runCapture() {
   try {
     await attachCameraPreview(video, opened.stream);
     setPlateAspectRatio(video);
+    applyFaceGuide(video);
     const focus = await ensureContinuousFocus(opened.track);
     opened.focusSupported = focus.supported;
     landmarker = await buildLandmarker();
@@ -291,7 +396,28 @@ async function runCapture() {
       stream: opened.stream, images: [], landmarks: [], canvas: null, landmarker, video,
     });
     setCaptureTheme(false);
+    resetCaptureButton();
+    activeCapture = null;
     throw error;
+  }
+
+  if (diagnostics.enabled) {
+    const capabilities = typeof opened.track.getCapabilities === "function"
+      ? opened.track.getCapabilities() : null;
+    const settings = typeof opened.track.getSettings === "function"
+      ? opened.track.getSettings() : null;
+    diagnostics.recordDeviceInfo({
+      userAgent: navigator.userAgent,
+      deviceLabel: opened.track.label || null,
+      videoWidth: video.videoWidth,
+      videoHeight: video.videoHeight,
+      frameRate: settings?.frameRate ?? null,
+      facingMode: settings?.facingMode ?? null,
+      focusCapabilities: capabilities ? { focusMode: capabilities.focusMode } : null,
+      exposureCapabilities: capabilities ? { exposureMode: capabilities.exposureMode } : null,
+      whiteBalanceCapabilities: capabilities ? { whiteBalanceMode: capabilities.whiteBalanceMode } : null,
+      actualTrackSettings: settings,
+    });
   }
 
   const canvas = document.createElement("canvas");
@@ -308,13 +434,46 @@ async function runCapture() {
   let captureSettled = false;
   let negotiationStarted = false;
   let exposureReleaseStarted = false;
+  let lightOverrideRequested = false;
 
   const latch = new GreenLatch();
+  // A SEPARATE latch, same hold duration: while the screen assist is active,
+  // this asks "have the real gates looked clean for a full hold-worth of
+  // time anyway?" — the cue to try dropping the assist and see if ambient
+  // light alone can now sustain a genuine measurement (locked decision 3).
+  const dropAssistLatch = new GreenLatch();
   const smoother = new PolygonSmoother();
+  const assist = new ScreenAssistGuard();
+  const refocus = new RefocusRecovery();
+  const stall = new StallTracker();
   const drift = [];
   let previous = null;
   const startedAt = performance.now();
   let underexposureStartMs = null;
+  let assistCycles = 0;
+  let firstFaceRecorded = false;
+
+  const applyAssistTransition = makeAssistTransitionHandler({
+    latch, dropAssistLatch, track: opened.track,
+    getCaptureMode: () => captureMode,
+    setCaptureMode: (mode) => { captureMode = mode; },
+  });
+
+  // Exposed so the three assist buttons — wired ONCE in init(), long before
+  // this closure exists — have something live to act on. Cleared on every
+  // way out of this capture, same discipline as `scratch`.
+  activeCapture = {
+    track: opened.track,
+    assist,
+    requestManualRefocus: () => {
+      diagnostics.recordRefocusAttempt();
+      return requestCameraRefocus(opened.track);
+    },
+    setCaptureMode: (mode) => { captureMode = mode; },
+    getCaptureMode: () => captureMode,
+    applyAssistTransition,
+    requestLightOverride: () => { lightOverrideRequested = true; },
+  };
 
   const history = await store.all();
   const scleraHistory = history.map((r) => r.sclera && r.sclera.rawRatios).filter(Boolean);
@@ -323,34 +482,45 @@ async function runCapture() {
   let collecting = 0;
   let lastRois = null, lastSclera = null, lastMargins = null, lastTier = null;
 
+  const scheduler = createFrameScheduler(video);
+
   const stopAfterLoopError = (error) => {
     if (runId !== captureRun) return;
     console.error("beta: live capture stopped", error);
     captureRun++;
+    scheduler.stop();
     if (scratch) releaseCapture(scratch);
     scratch = null;
+    activeCapture = null;
     setCaptureTheme(false);
-    const captureBtn = $("go-capture");
-    if (captureBtn) {
-      captureBtn.disabled = false;
-      captureBtn.textContent = "Open the camera";
-    }
+    resetCaptureButton();
+    hideAssistControls();
     $("gate-line").textContent = error?.name
       ? describeCameraError(error)
       : "The bench closed the camera. Open it again to continue.";
   };
 
-  // The re-schedule is the last statement of the body and the body is wrapped,
-  // so one throwing frame reports itself and tears the capture down instead of
-  // leaving a live camera behind a dead loop (CLAUDE.md item 50).
-  const scheduleStep = () => requestAnimationFrame((time) => {
-    step(time).catch(stopAfterLoopError);
+  // Distinct DECODED video frames only, never a display repaint — see
+  // src/qise/frame-scheduler.js. The re-schedule stays the LAST statement of
+  // the body, wrapped, so one throwing frame reports itself and tears the
+  // capture down instead of leaving a live camera behind a dead loop
+  // (CLAUDE.md item 50).
+  const scheduleStep = () => scheduler.schedule((frameInfo) => {
+    step(frameInfo.now).catch(stopAfterLoopError);
   });
 
   const step = async (nowMs) => {
     if (!scratch || runId !== captureRun) return;
-    canvas.width = video.videoWidth || 1280;
-    canvas.height = video.videoHeight || 960;
+    // Reassigning canvas.width/height reallocates and clears the backing
+    // bitmap even when the value is unchanged — real cost on every processed
+    // frame now that the frame scheduler already dedupes repaints. Guarded so
+    // it only happens on an actual dimension change (stream start, or a
+    // format change mid-session); drawImage below still repaints every pixel
+    // every frame regardless, so skipping the reassignment changes no output.
+    const frameWidth = video.videoWidth || 1280;
+    const frameHeight = video.videoHeight || 960;
+    if (canvas.width !== frameWidth) canvas.width = frameWidth;
+    if (canvas.height !== frameHeight) canvas.height = frameHeight;
 
     // Drawn WITHOUT a flip: the preview's mirroring is a CSS transform, which
     // does not touch the pixels drawImage and detectForVideo see. Flipping
@@ -361,15 +531,31 @@ async function runCapture() {
     scratch.images = [image];
     const clearFrame = () => { image.data.fill(0); if (scratch) scratch.images = []; };
 
+    diagnostics.recordFrame(nowMs);
+
     const result = landmarker.detectForVideo(video, nowMs);
     const mesh = result && result.faceLandmarks && result.faceLandmarks[0];
 
     if (!mesh) {
+      // A lost face is the same "nothing left to sample" case CLAUDE.md item
+      // 51 already names: every duration this frame tracks is reset rather
+      // than continuing to accumulate across a gap where nothing was
+      // measured at all.
       $("gate-line").textContent = "Bring your face into the frame.";
       exposureHalo?.setCaptureState("seeking");
+      updateCaptureGuideChips(null);
+      hideAssistControls();
+      stall.reset();
+      refocus.reset();
+      underexposureStartMs = null;
       clearFrame();
       scheduleStep();
       return;
+    }
+
+    if (!firstFaceRecorded) {
+      diagnostics.recordMilestone("firstFace", nowMs);
+      firstFaceRecorded = true;
     }
 
     const pts = mesh.map((p) => ({
@@ -394,34 +580,70 @@ async function runCapture() {
 
     const stats = frameStats(image, lastRois, canvas.width, drift, headPose(pts));
     const elapsedMs = nowMs - startedAt;
-    const gates = evaluateGates(stats, pts, lastSclera, { elapsedMs });
+    const gates = evaluateGates(stats, pts, lastSclera, {
+      elapsedMs, acceptUnevenLight: lightOverrideRequested,
+    });
 
+    // ── autofocus recovery ────────────────────────────────────────────────
+    const soft = gates.failures.some((f) => f.id === "filter");
+    const refocusResult = refocus.update({ soft, nowMs, focusSupported: opened.focusSupported });
+    if (refocusResult.shouldRefocus) {
+      diagnostics.recordRefocusAttempt();
+      requestCameraRefocus(opened.track).catch((error) => {
+        console.warn("beta: automatic refocus failed", error);
+      });
+    }
+    const refocusBtn = $("refocus-camera");
+    if (refocusBtn) {
+      refocusBtn.hidden = !(soft && opened.focusSupported);
+      refocusBtn.dataset.emphasis = String(!refocusBtn.hidden);
+    }
+
+    // ── screen-assist: dark scenes auto-trigger, and the assist is NEVER
+    // allowed to still be on when a burst completes (locked decision 3) ────
     const isUnderexposed = gates.failures.some((f) => f.id === "underexposed");
-    if (isUnderexposed) {
-      if (underexposureStartMs === null) underexposureStartMs = nowMs;
-    } else {
-      underexposureStartMs = null;
-    }
-
-    const issueForMs = underexposureStartMs !== null ? nowMs - underexposureStartMs : 0;
+    underexposureStartMs = isUnderexposed ? (underexposureStartMs ?? nowMs) : null;
+    const issueForMs = underexposureStartMs === null ? 0 : nowMs - underexposureStartMs;
     if (shouldUseScreenFlash({
-      issuePresent: isUnderexposed,
-      issueForMs,
-      enabled: exposureHalo?.level > 0,
-      dismissed: false,
-      illuminationActive: false,
+      issuePresent: isUnderexposed, issueForMs, enabled: assist.active,
+      dismissed: false, illuminationActive: false,
     })) {
-      exposureHalo?.setLevel(1);
+      applyAssistTransition(assist.setActive(true, { captureMode }));
     }
 
-    const instruction = captureInstruction(gates);
-    $("gate-line").textContent = instruction.detail || instruction.title;
+    const screenLightBtn = $("screen-light");
+    if (screenLightBtn) {
+      screenLightBtn.hidden = !(isUnderexposed || assist.active);
+      screenLightBtn.setAttribute("aria-pressed", String(assist.active));
+      screenLightBtn.textContent = assist.active
+        ? "Turn off screen light" : "Turn on screen light";
+    }
 
-    // Warm-up first, then lock. `captureSettled` gates the LATCH, not the
-    // gates, so the user keeps live feedback but cannot complete a hold that
-    // ends in a burst lit differently frame to frame.
-    if (!negotiationStarted && gates.pass) {
+    // Once the real gates look clean for a full hold-worth of time WHILE the
+    // assist is on, try dropping it — that is the only way to find out
+    // whether ambient light alone can now sustain a genuine measurement.
+    // gatesPassForHold() below still refuses to complete a hold while
+    // `assist.active`, so nothing can be captured in between.
+    if (assist.active) {
+      const readyToDrop = dropAssistLatch.update(gates.pass, nowMs);
+      if (readyToDrop.ready) {
+        applyAssistTransition(assist.setActive(false, { captureMode }));
+        assistCycles++;
+        diagnostics.recordScreenAssistCycle();
+      }
+    } else {
+      dropAssistLatch.reset();
+    }
+
+    // Warm-up first, then lock — and never while the assist is active, since
+    // a lock taken under screen light would need releasing the instant the
+    // assist drops anyway. `captureSettled` gates the LATCH, not the gates,
+    // so the user keeps live feedback but cannot complete a hold that ends
+    // in a burst lit differently frame to frame.
+    if (!negotiationStarted && gates.pass && !assist.active) {
       negotiationStarted = true;
+      captureSettled = false;
+      latch.reset();
       settleAndNegotiate(opened.track)
         .then((negotiated) => {
           if (runId === captureRun) captureMode = negotiated.captureMode;
@@ -431,7 +653,6 @@ async function runCapture() {
           if (runId === captureRun) captureMode = "auto";
         })
         .finally(() => { if (runId === captureRun) captureSettled = true; });
-      latch.reset();
     }
 
     // A lock correct when taken is wrong the moment the subject turns towards
@@ -455,21 +676,58 @@ async function runCapture() {
         });
     }
 
-    const held = latch.update(gates.pass && captureSettled, nowMs);
+    // ── the one line shown, and the four-chip breakdown beside it ──────────
+    const instruction = captureInstruction(gates);
+    const worstBlockerId = assist.active ? "screen-assist" : (gates.failures[0]?.id ?? null);
+    const before = stall.update(worstBlockerId, nowMs);
+    if (before.blockerId) diagnostics.recordBlockerMs(before.blockerId, before.changed ? 0 : 16);
+
+    let shown = instruction;
+    if (refocusResult.recovering) {
+      shown = {
+        id: "filter", title: "Hold still — sharpening",
+        detail: "The camera is refocusing automatically.",
+      };
+    } else if (assist.active) {
+      shown = {
+        id: "screen-light", title: "Using the screen for light",
+        detail: "Keep your face inside the guide — this turns off on its own once the room is enough.",
+      };
+    } else if (assistCycles >= 3) {
+      // Locked decision 3's abstain/ask-for-better-light clause: the assist
+      // has been tried and dropped repeatedly and ambient still cannot hold
+      // on its own. The screen is not the fix at this point; the room is.
+      shown = {
+        id: "light", title: "Add real light in the room",
+        detail: "The screen alone isn't quite enough here — try a lamp or daylight, then hold still.",
+      };
+    }
+    $("gate-line").textContent = shown.detail || shown.title;
+    updateCaptureGuideChips(gates);
+
+    const currentLightAvailable = canUseCurrentLight(gates, elapsedMs);
+    const useLightBtn = $("use-current-light");
+    if (useLightBtn) useLightBtn.hidden = lightOverrideRequested || !currentLightAvailable;
+
+    // ── the hold, gated through the assist guard so a burst can never
+    // complete while the screen itself is the light source ────────────────
+    const held = latch.update(assist.gatesPassForHold(gates.pass) && captureSettled, nowMs);
     exposureHalo?.setCaptureState(haloStateFromCapture({
-      underexposed: gates.failures.some((f) => f.id === "underexposed"),
-      gatesPass: gates.pass,
-      captureSettled,
+      underexposed: isUnderexposed, gatesPass: gates.pass, captureSettled,
+      recovering: refocusResult.recovering,
     }), held.progress);
 
-    renderCalibration(calibrationLines({
-      luma: cheekLuma(stats),
-      captureMode,
-      haloLevel: exposureHalo?.level,
-      coverage: lastRois.validFraction,
-    }));
+    if (diagnostics.enabled) {
+      renderCalibration(calibrationLines({
+        luma: cheekLuma(stats),
+        captureMode,
+        haloLevel: exposureHalo?.level,
+        coverage: lastRois.validFraction,
+      }));
+    }
 
     if (held.ready) {
+      diagnostics.recordMilestone("ready", nowMs);
       collecting = BURST_FRAMES;
       lastMargins = gates.margins;
       lastTier = gates.captureTier;
@@ -482,6 +740,11 @@ async function runCapture() {
       }
       collecting--;
       if (collecting === 0) {
+        diagnostics.recordMilestone("capture", nowMs);
+        diagnostics.setFinalCaptureMode(captureMode);
+        if (diagnostics.enabled) console.table(diagnostics.summary());
+        scheduler.stop();
+        activeCapture = null;
         // The NEGOTIATED mode, not the one openCamera returned — that is
         // "pending", and exposure may have been handed back mid-hold.
         await finish(burst, lastRois, lastSclera, { ...opened, captureMode },
@@ -700,6 +963,28 @@ export async function init(deps = {}) {
     runCapture().catch((error) => {
       console.error("beta: capture failed", error);
       $("gate-line").textContent = describeCameraError(error);
+      resetCaptureButton();
+    });
+  });
+
+  // The three assist controls are wired ONCE, here, and act through
+  // `activeCapture` — the handle the live capture publishes at start and
+  // clears on every way out (see runCapture). A click while no capture is
+  // running is a no-op rather than an error: the buttons are hidden then,
+  // but a stray event (a queued tap landing after teardown) must not throw.
+  $("screen-light").addEventListener("click", () => {
+    if (!activeCapture) return;
+    const next = !activeCapture.assist.active;
+    activeCapture.applyAssistTransition(
+      activeCapture.assist.setActive(next, { captureMode: activeCapture.getCaptureMode() }),
+    );
+  });
+  $("use-current-light").addEventListener("click", () => {
+    activeCapture?.requestLightOverride();
+  });
+  $("refocus-camera").addEventListener("click", () => {
+    activeCapture?.requestManualRefocus().catch((error) => {
+      console.warn("beta: manual refocus failed", error);
     });
   });
 
