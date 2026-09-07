@@ -2,6 +2,18 @@
 
 Status: execution document. Updated 10 August 2026.
 
+**Scope note (added 7 September 2026, see `docs/DECISION_REGISTER.md` →
+`DR-2026-09-07-DUAL-STORE-DISTRIBUTION-GOAL`):** this document plans the
+Google Play/Android leg only. The prime distribution goal is publication on
+both Google Play and the Apple App Store. `docs/STORE_RELEASE_GATES.md`
+already scopes a four-store release and already states the Apple row's
+requirement as "Native iOS target and signed archive" — a Trusted Web
+Activity (the route below) is an Android/Chrome-specific mechanism with no
+Apple equivalent and cannot satisfy that row on its own. iOS needs its own
+roadmap once a delivery mechanism is chosen; see the open native-shell
+architecture question under "Unresolved proposals" in
+`docs/DECISION_REGISTER.md`.
+
 ## Product boundary
 
 Mien Shiang remains a face scanner. The scanner is the product's entry point,

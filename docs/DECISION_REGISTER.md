@@ -295,10 +295,69 @@ Use this register to stop prompts, discussions and implementation from collapsin
 - **PR #55 disposition:** closed as superseded. It was a diagnosis-only handoff brief written
   against an earlier state of `main`; this record and its implementation supersede it directly.
 
+### DR-2026-09-07-DUAL-STORE-DISTRIBUTION-GOAL
+
+- **Date:** 7 September 2026
+- **Owner:** product owner
+- **Status:** approved
+- **Context:** `docs/STORE_RELEASE_GATES.md` already scopes a four-store release
+  (Google Play, Apple App Store, Samsung Galaxy Store, OPPO Software Store) and
+  already states the Apple row's requirement as "Native iOS target and signed
+  archive" — but neither this register nor `docs/ANDROID_SHIP_ROADMAP.md`
+  referenced that, so the only documented mobile plan (the Android/TWA route)
+  read as if it were the whole strategy. Raised directly by the product owner
+  while a native Android camera-capture proposal
+  (`docs/proposals/android-native-camera/`) was being audited.
+- **Decision:** the prime distribution goal is publication on Google Play and
+  the Apple App Store. `docs/STORE_RELEASE_GATES.md`'s existing four-store
+  scope (Samsung and OPPO included) is not reduced by naming these two as
+  prime — Play and Apple are the two gates every other store decision must
+  clear first.
+- **Consequence:** the "Scanner-first Android TWA route"
+  (`docs/ANDROID_SHIP_ROADMAP.md`, and the "Approved direction" entry below)
+  is confirmed as the Google Play leg only. It has no Apple equivalent — a
+  Trusted Web Activity is an Android/Chrome-specific mechanism, and Apple's
+  App Review Guideline 4.2 ("Minimum Functionality") routinely rejects a bare
+  wrapped-website submission — so it cannot be extended to cover Apple on its
+  own. A distinct iOS delivery mechanism is required and does not yet exist in
+  this repository; `docs/STORE_RELEASE_GATES.md` already lists "No iOS
+  project, privacy manifest or signed archive exists" as a current blocker.
+- **Explicit non-consequence:** this decision does not select an iOS or
+  cross-platform implementation strategy (a fully native Swift shell, a
+  Kotlin-Multiplatform/Capacitor/Cordova hybrid, or another framework), does
+  not approve any specific native code — including
+  `docs/proposals/android-native-camera/AutoRingFlash.kt` — as production
+  code, and does not authorise starting iOS implementation without a design
+  pass. See the native-shell architecture question under "Unresolved
+  proposals" below.
+- **Sequencing and quality bar (same date, product owner, same message):**
+  Google Play launches first — the only physical test device available is a
+  Samsung Android phone, so Android is what can actually be verified on real
+  hardware today. The Apple App Store follows once an iOS delivery mechanism
+  exists, per the consequence above. Independent of store sequencing, the
+  product bar is to be the fastest, most accurate, highest-utility face
+  scanner in its category, built around its two existing pillars — the
+  Mien Shiang reading and the Qi Se longitudinal "flip book" (`docs/
+  PRODUCT_NORTH_STAR.md`'s daily-portrait/timeline direction, already
+  approved 30 August 2026) — not a new third pillar or a repositioning of the
+  product.
+
 ## Unresolved proposals
 
 These must not be implemented as settled decisions without approval:
 
+- The native-shell architecture needed to reach both prime stores: how much
+  of the capture path moves to native code per platform, whether the existing
+  JS measurement engine (`src/engine.js`, `src/utils/calibrationEngine.js`,
+  `src/utils/textureAnalyzer.js`) stays the single source of truth behind an
+  embedded WebView or gets re-derived natively on each platform (which
+  CLAUDE.md items 16 and 47 warn against duplicating — a second copy of a
+  published formula drifts from the first), and which cross-platform
+  framework, if any, is used. `docs/proposals/android-native-camera/
+  AutoRingFlash.kt` is one candidate sketch for the Android capture leg only;
+  it is unreviewed against this architecture question, is not wired into any
+  existing entry point, and has open correctness issues — see
+  `docs/proposals/android-native-camera/AUDIT.md`.
 - A strict rolling 90-day TTL for derived IndexedDB history. Reconcile it with the existing baseline window, migration, user controls and deletion semantics first.
 - React/Vite migration. If approved, explicitly solve GitHub Pages base paths and MediaPipe WASM/asset resolution; this is not a current-stack bug.
 - Exact lifetime, quarterly and annual prices and which SKU launches first.
