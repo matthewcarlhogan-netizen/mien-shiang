@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<title>Phase 0 light probe (research instrument, not shipped)</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+  pre { white-space: pre-wrap; background: #111; color: #d7ffd7; padding: 1rem; border-radius: 6px; }
+  .notice { background: #3a2a00; color: #ffe9a8; padding: 1rem; border-radius: 6px; margin-bottom: 1rem; }
+  button { font-size: 1rem; padding: .5rem 1rem; }
+</style>
+</head>
+<body>
+<!--
+  This page is a standalone research instrument, NOT part of the shipped
+  product. It lives outside src/ on purpose:
+    - scripts/build.js only copies src/ into dist/, so this file and its
+      modules never enter the shipped artefact regardless of anything below.
+    - It is therefore also never added to sw.js's SHELL precache list; doing
+      so would pull a getUserMedia()-driving page into the offline app shell,
+      which CLAUDE.md item 4.8 (this task) explicitly forbids.
+  Consent and lock-state verification are imported from the real production
+  modules (src/qise/consent.js, src/qise/camera.js) rather than reimplemented,
+  per the task's requirements 1.1 and 4.7.
+-->
+<h1>Phase 0 light probe</h1>
+<p id="notice-slot" class="notice" data-copy="disclaimer"></p>
+
+<p>
+  Standalone diagnostic for whether a getUserMedia() track can be locked to a
+  fixed white balance/exposure before a lamp-SNR measurement is taken. Not a
+  product feature, not linked from the app, not precached.
+</p>
+
+<button id="start">Start probe</button>
+<pre id="output">(not run yet)</pre>
+
+<script type="module">
+  import { createConsent, assertConsentGranted } from "../src/qise/consent.js";
+  import { probeLockState } from "./negotiate.js";
+  import { PHOTOSENSITIVITY_NOTICE, LAMP_HALF_PERIOD_MS } from "./copy.js";
+  import { buildReport, formatReport } from "./report.js";
+  import { discardDriftedPairs } from "./retest.js";
+  import { tallyRejections, noPairsReason } from "./rejections.js";
+
+  document.getElementById("notice-slot").textContent = PHOTOSENSITIVITY_NOTICE;
+
+  const output = document.getElementById("output");
+  const consent = createConsent();
+
+  document.getElementById("start").addEventListener("click", async () => {
+    output.textContent = "Requesting camera...";
+    try {
+      // Same gate the production capture path uses: throws rather than
+      // returning a boolean, so there is no path around it (CLAUDE.md item 41).
+      assertConsentGranted(consent, "lightprobe getUserMedia");
+    } catch (err) {
+      output.textContent =
+        "Consent not granted -- this standalone page has no consent UI of " +
+        "its own; it reuses the production gate's assertion and refuses to " +
+        "proceed without it, deliberately.\n" + String(err && err.message ? err.message : err);
+      return;
+    }
+
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    } catch (err) {
+      output.textContent = "getUserMedia failed: " + String(err && err.message ? err.message : err);
+      return;
+    }
+
+    const [track] = stream.getVideoTracks();
+    const lockState = await probeLockState(track);
+
+    // Lock state printed first, before anything about ROI capture even starts
+    // -- requirement 1.2. What follows (block-wise lamp drive, per-ROI
+    // sampling, pair collection) is camera/DOM machinery specific to this
+    // standalone page and is deliberately NOT duplicated here in a way that
+    // would make it importable and testable under node --test; the pure,
+    // testable half of this instrument is everything in report.js,
+    // noiseFloor.js, retest.js, rejections.js and negotiate.js. This handler
+    // is wiring only, exactly as CLAUDE.md item 14/18a argues DOM wiring
+    // should be: thin enough to read, with the logic living where a test can
+    // reach it.
+    output.textContent = "LOCK STATE (before any capture): " +
+      lockState.captureMode.toUpperCase() +
+      "\nmismatches: [" + lockState.mismatches.join(",") + "]" +
+      (lockState.unverified ? "\n\nlampSnr will not be interpretable this run -- see negotiate.js LOCK_UNVERIFIED_SUMMARY." : "") +
+      "\n\nBlock-wise lamp half-period: " + LAMP_HALF_PERIOD_MS.toFixed(1) + " ms." +
+      "\n\n(ROI capture loop not wired in this static build step -- lock-state" +
+      " verification and the report pipeline are the parts under test.)";
+
+    track.stop();
+  });
+</script>
+</body>
+</html>
