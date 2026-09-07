@@ -55,6 +55,7 @@ import { readingScreenModel, historyColumnModel } from "./screens.js";
 import { SHARE_CADENCES, shareReadings } from "./share.js";
 import {
   createExposureHalo, haloStateFromCapture, shouldUseScreenFlash,
+  shouldDropScreenFlash, screenFlashCapReached,
 } from "./exposure-halo.js";
 import { bindPalaceExperience } from "./palace-experience.js";
 import { createThemeController } from "./theme.js";
@@ -300,17 +301,17 @@ async function runCapture() {
   let exposureReleaseStarted = false;
   let underexposedSince = null;
   let softSince = null;
-  let flashIssueSince = null;
+  let screenLightSince = null;
   let refocusStarted = false;
 
   const latch = new GreenLatch();
   const illuminationLatch = new GreenLatch(ILLUMINATION_READY_MS);
-  // Locked decision 3, the other half: once the real gates have looked clean
-  // for a full hold's worth of time WHILE the screen assist is on, this is
-  // the cue to try turning it off and see whether ambient light alone can now
-  // sustain a genuine measurement. Fed the RAW gate pass, not the latch above
-  // — it is answering a different question ("is it safe to test dropping the
-  // assist"), not "is the frame ready to capture".
+  // Locked decision 3, the other half: once the DARKNESS the assist was armed
+  // for has been gone for a full hold's worth of time, this is the cue to turn
+  // it off and let ambient light alone carry the measurement. Fed `!underexposed`
+  // rather than the raw gate pass: a full pass cannot be the release condition,
+  // because the assist disqualifies the hold on its own, so any gate the assist
+  // does not fix would hold it on forever. See `shouldDropScreenFlash`.
   const dropScreenLightLatch = new GreenLatch();
   let observedScreenLightRevision = screenLightRevision;
   const smoother = new PolygonSmoother();
@@ -464,8 +465,6 @@ async function runCapture() {
       const soft = gates.failures.some((failure) => failure.id === "filter");
       underexposedSince = underexposed ? (underexposedSince ?? nowMs) : null;
       softSince = soft ? (softSince ?? nowMs) : null;
-      const flashIssue = underexposed || unevenLight || soft;
-      flashIssueSince = flashIssue ? (flashIssueSince ?? nowMs) : null;
       const exposureAssist = exposureAssistState({
         underexposed,
         underexposedForMs: underexposedSince === null ? 0 : nowMs - underexposedSince,
@@ -481,15 +480,31 @@ async function runCapture() {
       $("use-current-light").hidden = lightOverrideRequested || !currentLightAvailable;
       $("use-current-light").dataset.emphasis = String(currentLightAvailable);
 
-      // Match the native front-camera behaviour: once darkness, uneven light,
-      // or softness persists, turn the whole screen into a neutral flash.
-      // Locked decision 3: it may help ACQUISITION, but it must be back off
-      // before the burst — see the latch gating above and the drop attempt
-      // just below, which is what actually gets it there. A manual
-      // dismissal is respected.
+      // Observed ABOVE the arm/drop decisions so `screenLightSince` is stamped
+      // from the frame clock the rest of this loop uses — `setScreenLight` is
+      // also reachable from the button handler, which has no frame timestamp,
+      // and Date.now() there would be a different epoch from the scheduler's.
+      // A transition also invalidates any hold taken under the old lighting.
+      if (observedScreenLightRevision !== screenLightRevision) {
+        observedScreenLightRevision = screenLightRevision;
+        screenLightSince = screenLightRequested ? nowMs : null;
+        latch.reset();
+      }
+
+      // Auto-arm on DARKNESS ONLY — never on uneven light or softness, which
+      // is what this loop used to do and what wedged it on a real handset.
+      // A screen flash is a remedy for "not enough light". It is not a remedy
+      // for "the light is on one side", because it travels with the phone and
+      // so cannot change one cheek relative to the other, and it is not a
+      // remedy for "out of focus" at all — that is what the refocus request
+      // below is for. Arming on those two put the app into a state it could
+      // not leave: see `shouldDropScreenFlash` for the measured numbers.
+      // Locked decision 3 still holds — the assist may help ACQUISITION, but
+      // it must be back off before the burst. `beta.js` already armed on
+      // darkness alone; this brings production into line with it.
       if (shouldUseScreenFlash({
-        issuePresent: flashIssue,
-        issueForMs: flashIssueSince === null ? 0 : nowMs - flashIssueSince,
+        issuePresent: underexposed,
+        issueForMs: underexposedSince === null ? 0 : nowMs - underexposedSince,
         enabled: screenLightRequested,
         dismissed: screenLightDismissed,
         illuminationActive: Boolean(illuminationSession),
@@ -497,16 +512,30 @@ async function runCapture() {
         setScreenLight(true);
       }
 
-      // Once the real gates have looked clean for a full hold's worth of
-      // time WHILE the assist is on, try dropping it. If the underlying
-      // issue is still there, `shouldUseScreenFlash` above re-arms it once
-      // `flashIssueSince` has aged past its own delay again — bounded on
-      // both sides, so this cannot flip faster than either persistence
-      // window allows. Suspended during the opt-in colour-response sequence,
-      // which manipulates the same screen for an unrelated reason.
+      // Drop it again once the darkness it was armed for has been gone for a
+      // full hold's worth of time — NOT once every gate passes. Waiting for a
+      // full pass cannot terminate: the assist disqualifies the hold by
+      // itself, so a gate the assist does not fix keeps the assist on, which
+      // keeps the hold blocked. Suspended during the opt-in colour-response
+      // sequence, which drives the same screen for an unrelated reason.
       if (screenLightRequested && !illuminationSession) {
-        const readyToDropAssist = dropScreenLightLatch.update(gates.pass, nowMs);
-        if (readyToDropAssist.ready) setScreenLight(false);
+        const activeForMs = screenLightSince === null ? 0 : nowMs - screenLightSince;
+        const clearHold = dropScreenLightLatch.update(!underexposed, nowMs);
+        if (shouldDropScreenFlash({
+          enabled: true, clearHeld: clearHold.ready, activeForMs,
+          illuminationActive: false,
+        })) {
+          // A cap-forced drop means the room never got better. Stop
+          // auto-arming rather than strobing every 700ms: a burst may not
+          // complete under the assist whatever the gates say, so the honest
+          // outcome is the "Too dark" instruction, not a flashing screen.
+          // The button is still there if the user wants it to see themselves.
+          if (screenFlashCapReached({ enabled: true, activeForMs })) {
+            screenLightDismissed = true;
+          }
+          setScreenLight(false);
+          screenLightSince = null;
+        }
       } else {
         dropScreenLightLatch.reset();
       }
@@ -519,11 +548,6 @@ async function runCapture() {
         });
       }
       if (!soft) refocusStarted = false;
-
-      if (observedScreenLightRevision !== screenLightRevision) {
-        observedScreenLightRevision = screenLightRevision;
-        latch.reset();
-      }
 
       if (canNegotiateCaptureMode({
         gatesPass: gates.pass, elapsedMs, negotiationStarted: modeNegotiationStarted,
@@ -704,8 +728,19 @@ async function runCapture() {
       setCapturePrompt("Come into view", "Centre your face inside the oval.");
       underexposedSince = null;
       softSince = null;
-      flashIssueSince = null;
       refocusStarted = false;
+      // Item 51's lesson, applied to the assist: the arm/drop decision above
+      // lives inside `if (mesh)`, so without this a face lost while the screen
+      // flash is on would leave it on with nothing left to turn it off. The
+      // cap is enforced on both branches; the scene-improved release is not,
+      // because `underexposed` is unmeasurable with no face to measure.
+      if (screenLightRequested && !illuminationSession && screenFlashCapReached({
+        enabled: true, activeForMs: screenLightSince === null ? 0 : nowMs - screenLightSince,
+      })) {
+        screenLightDismissed = true;
+        setScreenLight(false);
+        screenLightSince = null;
+      }
       $("capture-frame").dataset.previewLift = "false";
       $("refocus-camera").hidden = true;
       $("use-current-light").hidden = true;

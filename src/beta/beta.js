@@ -45,7 +45,9 @@ import {
 } from "../qise/gates.js";
 import { frameStats } from "../qise/framestats.js";
 import { createScreenWakeLock } from "../qise/wakelock.js";
-import { createExposureHalo, haloStateFromCapture, shouldUseScreenFlash } from "../ui/qise/exposure-halo.js";
+import {
+  createExposureHalo, haloStateFromCapture, shouldUseScreenFlash, shouldDropScreenFlash,
+} from "../ui/qise/exposure-halo.js";
 import { readRois } from "../qise/rois.js";
 import { sampleSclera } from "../qise/sclera.js";
 import { headPose } from "../qise/pose.js";
@@ -459,6 +461,7 @@ async function runCapture() {
   const startedAt = performance.now();
   let underexposureStartMs = null;
   let assistCycles = 0;
+  let assistSinceMs = null;
   let firstFaceRecorded = false;
 
   const applyAssistTransition = makeAssistTransitionHandler({
@@ -627,19 +630,27 @@ async function runCapture() {
         ? "Turn off screen light" : "Turn on screen light";
     }
 
-    // Once the real gates look clean for a full hold-worth of time WHILE the
-    // assist is on, try dropping it — that is the only way to find out
-    // whether ambient light alone can now sustain a genuine measurement.
-    // gatesPassForHold() below still refuses to complete a hold while
-    // `assist.active`, so nothing can be captured in between.
+    // Drop the assist once the DARKNESS it was armed for has been gone for a
+    // full hold's worth of time — not once every gate passes. A full pass
+    // cannot be the release condition: gatesPassForHold() refuses the hold
+    // while `assist.active`, so any gate the assist does not fix (uneven side
+    // light above all, which a phone-mounted light cannot correct) would keep
+    // the assist on and the hold blocked with no way out. The cap is the
+    // backstop for anything else that could wedge it.
     if (assist.active) {
-      const readyToDrop = dropAssistLatch.update(gates.pass, nowMs);
-      if (readyToDrop.ready) {
+      assistSinceMs ??= nowMs;
+      const activeForMs = nowMs - assistSinceMs;
+      const clearHold = dropAssistLatch.update(!isUnderexposed, nowMs);
+      if (shouldDropScreenFlash({
+        enabled: true, clearHeld: clearHold.ready, activeForMs, illuminationActive: false,
+      })) {
         applyAssistTransition(assist.setActive(false, { captureMode }));
+        assistSinceMs = null;
         assistCycles++;
         diagnostics.recordScreenAssistCycle();
       }
     } else {
+      assistSinceMs = null;
       dropAssistLatch.reset();
     }
 
