@@ -1653,6 +1653,77 @@ no-crop case `setPlateAspectRatio` reaches deliberately) — plus the pin
 recomputing the mesh ratio live and asserting it still matches the hardcoded
 constant.
 
+### 58. The screen assist must arm on darkness alone, and must be able to let go
+
+The screen flash is a remedy for ONE thing: not enough light. Production armed
+it on `underexposed || unevenLight || soft`, and released it only on a full
+`gates.pass`. Those two together are a closed loop with no exit, and it shipped.
+
+**Why arming on uneven light cannot work.** A screen flash travels *with the
+phone*. Side light is fixed relative to the *room*. So the assist cannot change
+one cheek relative to the other — it can only add a frontal wash on top of an
+asymmetry it leaves intact. Meanwhile `captureInstruction` was telling the user
+*"Put the light behind your phone… move the phone towards the light until both
+cheeks look even"* while the app itself had made the phone the brightest thing
+in the scene. The instruction was unfollowable by construction: the dominant
+light now moved with the hand that was supposed to be moving away from it.
+Softness is worse — a flash cannot focus a camera; that is what
+`requestCameraRefocus` is for, and it was already wired up three lines below.
+
+**Why the release condition closed the loop.** `ScreenAssistGuard.gatesPassForHold`
+(item 56) refuses the hold whenever the assist is active, *whatever the gates
+say* — correctly, because a screen is not a calibrated illuminant. So the assist
+blocks the pass. And the drop latch was fed `gates.pass`. Waiting for a pass
+that your own presence prevents does not terminate. Any gate the assist does not
+fix — and it fixes exactly one — holds it on forever.
+
+It also degraded the frame it was supposedly rescuing. Measured inside the guide
+oval, same face, same room, seconds apart, with the app's own luma
+(`0.299R+0.587G+0.114B`):
+
+| | p50 | p90 | p99 | max | ≥250 (clip) |
+|---|---|---|---|---|---|
+| assist ON | 187 | 231 | **253** | **255** | **1.6%** |
+| native camera, no assist | 177 | 197 | 210 | 240 | 0.0% |
+
+1.6% sits just under `EXPOSURE_MAX_FRACTION` (0.02), so `overexposed` never even
+fired — the frame was 78% of the way through its clipping budget and no gate
+said so. The user got four gates, one green, forever.
+
+**Symptom:** the capture sits at "1 of 4 ready" with the screen flash on and
+never advances. The preview looks blown out. Tapping nothing helps; the "Use
+this light anyway" escape is *also* absent, because `canUseCurrentLight`
+requires every failure to be an overridable light gate or motion, and the
+washed-out frame fails `filter`, which is neither. Reads as "the camera is
+broken".
+**Distinguishing it from items 50, 51 and 53:** those three darken the frame.
+This one *brightens* it. If the preview is bright and the gate line is still
+red, it is this.
+**Cause:** arming an actuator on conditions it cannot affect, then gating its
+release on a global success it is itself suppressing.
+**Fix:** `shouldUseScreenFlash` is fed `underexposed` alone in both loops
+(`beta.js` already did this; production was the outlier). Release is
+`shouldDropScreenFlash` in `ui/qise/exposure-halo.js` — pure, so a test can
+reach it — which drops on *the darkness clearing*, plus a
+`SCREEN_FLASH_MAX_ON_MS` cap as a backstop so no gate added later can wedge it.
+A cap-forced drop sets `screenLightDismissed`: in a room that stays too dark,
+re-arming every 700 ms is a strobing screen that still cannot produce a reading,
+because locked decision 3 forbids a burst under the assist regardless. Saying
+"Too dark" once is the honest answer. The cap is enforced on the no-face branch
+too — item 51's lesson, since the arm/drop decision lives inside `if (mesh)`.
+**Pinned by:** `tests/qise/exposure-halo.test.js` — `the assist releases on the
+darkness clearing, not on a full gate pass`, `the assist cannot stay on past its
+cap`, `arming and releasing cannot both be true of the same scene, so it cannot
+strobe`, plus two static guards over both capture loops (they cannot be
+imported, item 44) asserting the arm call names darkness alone and the drop
+latch is never fed `gates.pass`. Both guards were verified against the defect
+reintroduced: each fails, and passes again on restore.
+
+**The `overexposed` gate is not the guard here and must not be retuned into
+one.** Its threshold was not the problem — the assist was. Re-deriving
+`EXPOSURE_MAX_FRACTION` still needs physical-device evidence across tone strata,
+same as the `underexposed` metric it mirrors (see "Known gaps").
+
 ### 24. The summary may only repeat what was measured
 
 `reading/summary.js` builds the receipt shown above the detailed sections. It is
