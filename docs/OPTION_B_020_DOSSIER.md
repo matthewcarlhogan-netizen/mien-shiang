@@ -3,8 +3,8 @@
 **Task:** B-020 (Option B execution plan). Source and terminology dossier for the six
 enduring constructs plus the Shen and tension hypotheses.
 **Owners:** Geometry Researcher + Corpus Research Editor.
-**Base:** `main` @ `66d43b1`. Compiled 17 August 2026.
-**Status:** draft — awaiting evidence/source record completion (§10).
+**Base:** `main` @ `89d0d61`. Compiled 17 August 2026; evidence record synchronized 30 August 2026.
+**Status:** evidence-review — research dossier complete; the evidence record below is synchronized for 10 of 14 dispositions under `DR-2026-08-17-B020-CLASS-A` (17 August 2026). R3, R6, R8 and R9 remain open; the independent cultural-review requirement was retired by `DR-2026-08-19-CULTURAL-REVIEW-RETIREMENT`, but that procedural change did not record decisions for those four rows.
 
 ---
 
@@ -710,26 +710,28 @@ material toward (1) and (2) only. All six families remain `Blocked`.**
 
 ---
 
-## 12. Evidence record — TO BE COMPLETED
+## 12. Evidence record — EVIDENCE REVIEW
 Per B-020's acceptance criteria, the Geometry Researcher and Corpus Research Editor
-complete the source and terminology dossier.
+complete the source and terminology dossier. This table is synchronized with the
+decision register; it records the ten approved rows and leaves the four unresolved
+rows visibly open rather than treating shipped code as an implicit disposition.
 
 | # | Item for record | Status | Date |
 |---|---|---|---|
-| R1 | Is "Three Courts" retained, or renamed to "Three Sections"? The English name is unattested. | | |
-| R2 | Is Harmony in or out of the six enduring constructs? | | |
-| R3 | 四瀆 lineage: carry both 目/口 traditions, or select one with recorded rationale? | | |
-| R4 | 北岳 target: 頷 (mandible) / 頦 (menton) / 地閣 (zone)? | | |
-| R5 | 中岳 target: 鼻 (whole nose) or 準頭 (pronasale)? | | |
-| R6 | 五官: which membership ships — physiognomic (with 眉) or Neijing (with 舌)? They are different constructs. | | |
-| R7 | Five Elements: is the 25-type structure acknowledged, or is the 5-type reduction shipped with a stated caveat? | | |
-| R8 | Are the polygynous (妻妾宮) and servile (奴僕宮) palace names shipped literally, modernised, or suppressed — and is that decision recorded as an editorial act? | | |
-| R9 | Colour (五色) as classifier input: confirm exclusion. | | |
-| R10 | Left/right convention: subject-side or image-side, and is 男左女右 adopted? Unattested in every source retrieved. | | |
-| R11 | Confirm all 14 prohibited inferences (§10.2) are acceptable as absolute product constraints. | | |
-| R12 | Confirm the malar-rash gate is renamed to a non-specific message (§10.3). | | |
-| R13 | Confirm 假神 is removed from the rule set and gate precedence is hard-coded. | | |
-| R14 | Confirm the earlobe-crease gate is re-scoped to a separate ear pipeline or withdrawn. | | |
+| R1 | Is "Three Courts" retained, or renamed to "Three Sections"? The English name is unattested. | **Approved** — Three Sections 三停. | 17 August 2026 |
+| R2 | Is Harmony in or out of the six enduring constructs? | **Approved** — out of the six; retained only as an explicitly computed proportion score. | 17 August 2026 |
+| R3 | 四瀆 lineage: carry both 目/口 traditions, or select one with recorded rationale? | **OWNER DECISION REQUIRED** — explicitly not decided in `DR-2026-08-17-B020-CLASS-A`. | — |
+| R4 | 北岳 target: 頷 (mandible) / 頦 (menton) / 地閣 (zone)? | **Approved** — 北岳 = 頦 (menton); alternatives remain in source notes. | 17 August 2026 |
+| R5 | 中岳 target: 鼻 (whole nose) or 準頭 (pronasale)? | **Approved** — 中岳 = 鼻, subject to measurement availability and abstention where prominence is not recoverable. | 17 August 2026 |
+| R6 | 五官: which membership ships — physiognomic (with 眉) or Neijing (with 舌)? They are different constructs. | **OWNER DECISION REQUIRED** — explicitly not decided in `DR-2026-08-17-B020-CLASS-A`. | — |
+| R7 | Five Elements: is the 25-type structure acknowledged, or is the 5-type reduction shipped with a stated caveat? | **Approved** — ship the five-type reduction and state that 靈樞·陰陽二十五人 defines twenty-five. | 17 August 2026 |
+| R8 | Are the polygynous (妻妾宮) and servile (奴僕宮) palace names shipped literally, modernised, or suppressed — and is that decision recorded as an editorial act? | **OWNER DECISION REQUIRED** — explicitly not decided in `DR-2026-08-17-B020-CLASS-A`. | — |
+| R9 | Colour (五色) as classifier input: confirm exclusion. | **OWNER DECISION REQUIRED** — explicitly not decided in `DR-2026-08-17-B020-CLASS-A`; legal constraints remain applicable. | — |
+| R10 | Left/right convention: subject-side or image-side, and is 男左女右 adopted? Unattested in every source retrieved. | **Approved** — subject-side laterality; 男左女右 rejected. | 17 August 2026 |
+| R11 | Confirm all 14 prohibited inferences (§10.2) are acceptable as absolute product constraints. | **Approved** — the fourteen prohibited inferences are absolute product constraints, pending legal confirmation where marked. | 17 August 2026 |
+| R12 | Confirm the malar-rash gate is renamed to a non-specific message (§10.3). | **Approved** — safety-gate copy is completely non-specific and never names a clinical finding, pending legal confirmation. | 17 August 2026 |
+| R13 | Confirm 假神 is removed from the rule set and gate precedence is hard-coded. | **Approved** — 假神 is removed and gate precedence is enforced programmatically with negative tests. | 17 August 2026 |
+| R14 | Confirm the earlobe-crease gate is re-scoped to a separate ear pipeline or withdrawn. | **Approved** — the diagonal-earlobe-crease gate is withdrawn from v1; the charter is amended. | 17 August 2026 |
 
 ---
 

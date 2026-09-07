@@ -4,18 +4,20 @@ The independent cultural-review dependency described in this document was retire
 
 # B-020 — R1–R14 disposition package
 
-**Status: awaiting disposition. Nothing here is approved.**
+**Historical status (17 August 2026):** awaiting disposition. Nothing in this recommendation package was approved when it was prepared.
 Prepared 17 August 2026 from `OPTION_B_020_DOSSIER.md` §12 and `PRODUCT_DESIGN_V2.md`.
+
+**Current synchronization (30 August 2026):** `DR-2026-08-17-B020-CLASS-A` records R1, R2, R4, R5, R7, R10, R11, R12, R13 and R14 as approved. R3, R6, R8 and R9 remain open. `DR-2026-08-19-CULTURAL-REVIEW-RETIREMENT` retires the independent cultural-review requirement; it does not itself decide those four rows and does not weaken rights, safety, provenance or evidence-integrity gates.
 
 Recommendations are recommendations. The implementer cannot record the verdict —
 `docs/OPTION_B_EXECUTION_PLAN.md` reserves that for the named independent owner,
 and B-020's acceptance criteria name a source/cultural reviewer specifically.
 
 **The corpus currently shipped behind the `on` flag already embodies every
-recommendation below.** That is a statement of fact, not of approval: it was
-built so the engine could be evidenced, and every row remains open. Amending a
-row means changing corpus content, which the "corpus/code consequence" column
-sizes.
+recommendation below.** That is an implementation fact, not a substitute for a
+disposition: ten rows are approved in the decision register, while R3, R6, R8
+and R9 remain open. Amending a row means changing corpus content, which the
+"corpus/code consequence" column sizes.
 
 ## Who can sign what
 
@@ -27,6 +29,13 @@ sizes.
 
 R8 and R9 appear in more than one class deliberately: each needs both a cultural
 and a legal view, and neither substitutes for the other.
+
+The independent cultural-review requirement was retired by
+`DR-2026-08-19-CULTURAL-REVIEW-RETIREMENT`. That retirement changes the required
+review path; it does not itself decide R3, R6, R8 or R9. The Class B and C labels
+below are historical rationale and risk classification, not active release
+requirements. The open rows still require an explicit product-owner disposition,
+with legal review still required where the records say so.
 
 ---
 
@@ -174,13 +183,13 @@ and a legal view, and neither substitutes for the other.
 
 ---
 
-## What happens on approval
+## Historical approval workflow
 
-Rows in class A can be recorded in `DECISION_REGISTER.md` immediately and the
-corpus updated in the same change. Rows in class B and C cannot: B-020's
-acceptance criteria require an independent reviewer's recorded disposition, and
-`commercial-rights-audit.md` requires a named, qualified reviewer with a log of
-contested interpretations. **No amount of agreement between us satisfies that.**
+At the time this package was prepared, rows in class A could be recorded in
+`DECISION_REGISTER.md` immediately and the corpus updated in the same change.
+Rows in class B and C were held for the independent-review and legal gates then
+specified. **No amount of agreement between us satisfied those gates.**
 
-Until R3, R6, R8 and R9 have an independent cultural disposition, the heritage
-layer stays behind the flag on internal origins only.
+The current decision state is the register and the synchronized evidence record:
+R3, R6, R8 and R9 are still open, and the heritage layer stays behind the flag
+on internal origins only. The commercial-rights audit remains a separate gate.
