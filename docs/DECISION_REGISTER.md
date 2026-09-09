@@ -348,8 +348,10 @@ Use this register to stop prompts, discussions and implementation from collapsin
       10–20 seconds for the guided capture itself, with the overall default flow staying under 60
       seconds. Exact duration, frame rate, yaw/pitch targets, pose tolerance, quality thresholds and
       scanner thresholds are **not** set by this decision — they require calibration, device
-      testing and regression evidence, exactly as `docs/CALIBRATION_TODO.md`'s existing open items
-      already do for the current pipeline. The user is not exposed to yaw/pitch/landmark/confidence
+      testing and regression evidence, exactly as CLAUDE.md's "Calibration validation plan"
+      already requires for the current pipeline (merged there from `CALIBRATION_TODO.md`, since
+      archived to `docs/archive/CALIBRATION_TODO.md`). The user is not exposed to
+      yaw/pitch/landmark/confidence
       mechanics unless later usability evidence explicitly justifies it; automatic progression is
       preferred over a checklist of poses.
     - **E. Fairness ownership.** Engineering/research owns producing the fairness evidence; the

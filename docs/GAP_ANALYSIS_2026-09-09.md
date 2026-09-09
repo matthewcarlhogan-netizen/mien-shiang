@@ -23,7 +23,7 @@ on anything content-related.
 | Twelve Palaces (`src/reading/twelve-palaces.js`) | **10 of 12 real, as of this session's own commit.** Wealth and Property deliberately withheld — this project's own primary source disagrees with the received layout on where they are, and the app now says so rather than guessing. Before today's work, **all twelve** were withheld. | `heritageStatus: "RUNTIME_PROSE"` on 10 entries, `"WITHHELD_STRUCTURAL_DISAGREEMENT"` on 2, verified by reading the current file and its passing tests (`tests/reading.test.js`, `npm test` 1403/1403). |
 | Three Sections (`src/reading/three-courts.js`) | **Permanently empty by design, not by omission.** `BALANCED_READING = null`, with a comment: "not cleared for runtime: its attribution and predicate are contradicted in the inspected witness." This is the R1 finding — the only source for the balanced-thirds maxim has a contested attribution, so the module measures real geometry but asserts no heritage claim. | Read in full; `heritageReading: null` unconditionally in `readThreeCourts()`. |
 | Proportion Harmony (`src/reading/harmony.js`) | **No prose at all, also by design.** Returns a 0–100 number plus a component breakdown and a sources-differ note — never a written sentence. CLAUDE.md item 33 states this is deliberate ("about the canons, not about the face"), so this is not a gap to fill, it's a boundary to preserve. Worth naming anyway, because a reviewer skimming the UI could easily mistake "no prose" for "unfinished." | Read `computeHarmony()` in full; no `reading`/`text` field anywhere in its return shape. |
-| Reflection Engine's own Twelve Palaces note (`src/qise/reflection-corpus.js:261`) | **Stale, not void — a "close the loop" gap.** This is a *separate*, hand-authored copy surface from `src/reading/twelve-palaces.js` (the Qi Se tracker's own heritage-flavour text layer). It still reads: *"Shenxiang Quanbian; the exact Twelve Palaces body locator remains unresolved."* That was true when written. It is no longer the strongest available statement — this session found and verified a real, citable locator (see `docs/heritage-evidence/SOURCE_ACQUISITION_FINDINGS_2026-09-09.md`), and this file was never updated to reflect it. Small, but exactly the kind of drift CLAUDE.md's own discipline exists to catch. | `grep -n "twelvePalaces" src/qise/reflection-corpus.js`, this session. |
+| Reflection Engine's own Twelve Palaces note (`src/qise/reflection-corpus.js:261`) | **Fixed, same session (commit `4d040a7`).** This is a *separate*, hand-authored copy surface from `src/reading/twelve-palaces.js` (the Qi Se tracker's own heritage-flavour text layer). It previously said the body locator "remains unresolved," which stopped being the strongest available statement once this session found and verified a real, citable locator (`docs/heritage-evidence/SOURCE_ACQUISITION_FINDINGS_2026-09-09.md`). Now states that finding, graded provisional — not upgraded past what the evidence supports. | `grep -n "twelvePalaces" src/qise/reflection-corpus.js`, re-checked after the fix. |
 | Daily Portrait (any file) | **Zero code, anywhere.** `grep -ri "dailyportrait\|daily-portrait" src/` returns no matches. Everything under `docs/DAILY_PORTRAIT_ARCHITECTURE.md`, `docs/DECISION_CARDS.md` Cards 1–5, and today's charter amendment is specification and governance, not implementation. | Direct grep, this session — zero hits. |
 | Insights / face-shape narrative (`src/utils/insights.js`) | **Populated** — 340 lines, registered in `copy-guard.test.js` as `INSIGHTS_COPY`. Not independently re-read line-by-line this session; treated as complete based on size, registration, and passing tests, not a full re-audit. | Line count + registration check only. |
 | Science screen (`src/scienceview.js`) | **Not independently re-verified this pass** — 39 lines, small by design (it renders `SCIENCE_POINTS`/`SCIENCE_INTRO` from `reading/science.js`, which was not read in full this session). Flagged as an open item rather than asserted either way. | Not checked beyond a line count. |
@@ -62,29 +62,34 @@ legal sign-off, no hashed manifest entry. **Switching away from Kanripo does not
 anything.** The full five-part evidence standard (`docs/commercial-rights-audit.md`) applies
 regardless of source.
 
-**What Kanripo specifically encumbers, and what a clean-room strategy actually has to avoid.**
-Kanripo's CC BY-SA 4.0 declaration is at the organisation level, over their *surrogate* — the
-specific scanned/transcribed digital file (`docs/DECISION_CARDS.md` Card 11). It is not a claim over
-the underlying historical text, which is centuries old and public domain by age independent of who
-digitised it. That distinction is the whole clean-room strategy:
+**What Kanripo specifically encumbers — and an UNRESOLVED PROPOSAL for a clean-room strategy, not
+a conclusion anyone should build on.** Kanripo's CC BY-SA 4.0 declaration is at the organisation
+level, over their *surrogate* — the specific scanned/transcribed digital file (`docs/DECISION_CARDS.md`
+Card 11). Card 11 explicitly requires "product-owner and/or counsel review" before any of this
+project's Kanripo-sourced content is treated as commercially cleared, and **that review has not
+happened.** Nothing below changes that status. It is offered as a starting hypothesis for whoever
+does that review, not as permission to proceed without it:
 
-- **Facts and historical claims are not copyrightable, anywhere.** "太清神鑑 places the Wealth Palace at
-  the forehead, not the nose" is a fact about a historical document's content. Stating it, in your
-  own words, does not require a licence from whoever digitised the document you learned it from.
-- **What would actually infringe is copying Kanripo's specific expression** — their exact
-  transcription text, their OCR output, their scan images, verbatim or near-verbatim.
-- **This session's Twelve Palaces content already follows this discipline**, whether or not that was
-  the explicit intent: every reading sentence is independently composed prose describing a fact
-  (a name, a location, a domain of life), citing the source by title, never reproducing Kanripo's
-  transcribed text directly. **This is a good-faith reading of ordinary fact/expression copyright
-  doctrine, not a cleared legal opinion** — Card 11 itself says this needs "product-owner and/or
-  counsel review," and nothing in this report substitutes for that.
-- **A genuinely independent alternative source exists for some claims**: this session's own research
-  (`SOURCE_ACQUISITION_FINDINGS_2026-09-09.md`) found the Three Sections maxim and a Twelve Palaces
-  chapter body via Wikisource/Wikimedia Commons, not Kanripo. Wikimedia Commons' own licensing terms
-  for those specific scans were **not independently verified this session** — before relying on this
-  as a "clean" alternative to Kanripo, that needs checking directly (Commons hosts a mix of PD and
-  CC-licensed scans; which applies to these specific files was not confirmed).
+- **Proposed distinction, not yet confirmed by counsel:** the CC BY-SA declaration may be read as
+  covering Kanripo's specific *expression* — their transcription text, OCR output, scan images —
+  rather than the underlying historical text itself, which is centuries old and public domain by
+  age independently of who digitised it. If that reading holds, restating a documented historical
+  fact in independently-composed prose, rather than reproducing Kanripo's transcription verbatim or
+  near-verbatim, would sit outside what the declaration restricts.
+- **This session's Twelve Palaces content was written consistent with that proposed distinction**
+  (independently composed sentences describing a name, a location, a domain of life; source cited by
+  title; no verbatim reproduction) — but this is reported as a fact about how the content was
+  written, not as evidence that doing so is legally sufficient. **The distinction above is this
+  report's own reasoning, not a cleared legal opinion, and must not be relied on as one.** Card 11's
+  required review is the only thing that can actually close this gap; until it happens, all six
+  content families remain `Blocked` regardless of how any individual piece of content was drafted.
+- **A separate, independently-sourced alternative exists for some claims**: this session's own
+  research (`SOURCE_ACQUISITION_FINDINGS_2026-09-09.md`) found the Three Sections maxim and a Twelve
+  Palaces chapter body via Wikisource/Wikimedia Commons, not Kanripo. This does not sidestep the need
+  for review either — Wikimedia Commons' own licensing terms for those specific scans were **not
+  independently verified this session** (Commons hosts a mix of public-domain and CC-licensed scans;
+  which applies to these particular files was not confirmed), so this alternative has its own
+  unresolved rights question, not a cleaner one by default.
 
 **The gap nobody has named yet:** *"Repository editorial copy has no recorded contributor
 agreement"* (`docs/commercial-rights-audit.md`). That line predates this session, but it is no
@@ -222,11 +227,12 @@ Get a human to check the GitHub Actions billing/status page for this account. No
 roadmap can be verified by real CI runs, only by local checks, until this clears. Low effort, but it
 is the one item nobody except the account owner can act on.
 
-**Phase 1 — close the two cheap, real gaps found this session.**
-- Update `src/qise/reflection-corpus.js`'s stale Twelve Palaces note.
-- Fix or remove the broken `PHASE_0_BLOCKER_REPORT.md` citation in `ZKT_TELEMETRY_SCOPE.md`.
-Both are single-file, low-risk, and otherwise sit as small landmines for the next person who trusts
-the doc text over the code.
+**Phase 1 — DONE, same day (commit `4d040a7`).** Both cheap gaps this report originally flagged
+here are closed: `src/qise/reflection-corpus.js`'s stale Twelve Palaces note now states the locator
+this session found (graded provisional, not upgraded past what the evidence supports), and the
+broken `PHASE_0_BLOCKER_REPORT.md` citation in `ZKT_TELEMETRY_SCOPE.md` is repointed to
+`docs/STORE_RELEASE_GATES.md`, which actually exists. Left here, struck through in effect, so a
+later reader sees the phase was real and closed rather than wondering why it's missing.
 
 **Phase 2 — the rights chain, because it gates every content family regardless of what's written.**
 Pick one content family (Five Elements is furthest along — locator and rights already "Have" per

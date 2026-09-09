@@ -57,6 +57,26 @@ const colourReading = (integrated) => ({
   integrated,
 });
 
+test("projectIntegratedReading() preserves palace heritageStatus and structuralNote", () => {
+  // src/qise/store.js:134 calls projectIntegratedReading() on every stored reading. If
+  // heritageStatus is dropped here, every stored/round-tripped reading looks withheld
+  // regardless of what src/reading/twelve-palaces.js actually produced.
+  const reading = integratedReadingFromScalars(face(), raw());
+  const projected = projectIntegratedReading(reading);
+  const runtimePalace = reading.twelvePalaces.palaces.find((p) => p.heritageStatus === "RUNTIME_PROSE");
+  const withheldPalace = reading.twelvePalaces.palaces.find((p) => p.heritageStatus === "WITHHELD_STRUCTURAL_DISAGREEMENT");
+  assert.ok(runtimePalace, "fixture must contain at least one RUNTIME_PROSE palace");
+  assert.ok(withheldPalace, "fixture must contain at least one WITHHELD_STRUCTURAL_DISAGREEMENT palace");
+
+  const projectedRuntime = projected.twelvePalaces.palaces.find((p) => p.key === runtimePalace.key);
+  const projectedWithheld = projected.twelvePalaces.palaces.find((p) => p.key === withheldPalace.key);
+  assert.equal(projectedRuntime.heritageStatus, "RUNTIME_PROSE");
+  assert.equal(typeof projectedRuntime.reading, "string");
+  assert.equal(projectedWithheld.heritageStatus, "WITHHELD_STRUCTURAL_DISAGREEMENT");
+  assert.equal(projectedWithheld.reading, null);
+  assert.match(projectedWithheld.structuralNote, /Taiqing Shenjian/);
+});
+
 test("the accepted map becomes a complete, privacy-safe integrated reading", () => {
   const reading = integratedReadingFromScalars(face(), raw());
   assert.equal(reading.fiveElements.available, true);
