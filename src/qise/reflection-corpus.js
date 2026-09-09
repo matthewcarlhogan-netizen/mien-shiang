@@ -258,7 +258,11 @@ export const HERITAGE = Object.freeze({
   twelvePalaces: {
     primary: {
       text: "Twelve regions of the face were named as palaces, each given a domain of life to preside over.",
-      source: "Shenxiang Quanbian; the exact Twelve Palaces body locator remains unresolved",
+      // Updated 9 September 2026: a body locator was found (Gujin Tushu Jicheng juan 631,
+      // excerpting Shenxiang Quanbian) — see docs/heritage-evidence/SOURCE_ACQUISITION_FINDINGS_2026-09-09.md.
+      // Graded provisional rather than resolved: the source transcription is itself
+      // marked unproofread, below this project's VERIFIED_PRIMARY bar.
+      source: "Shenxiang Quanbian; a body locator is now found but provisional, not yet independently verified",
       note: "The same twelve names belong to an entirely different astrological system, so the labels travel further than the physiognomy does.",
     },
   },

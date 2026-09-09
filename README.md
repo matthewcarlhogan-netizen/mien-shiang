@@ -54,6 +54,16 @@ limit, not a bug. The app says so rather than guessing.
 **Severity grades are uncalibrated.** The measurements are real; the 0–1 scores
 are reasoned starting points, not fitted to labelled data.
 
+## Product status and roadmap
+
+Phase 1 (governance and structure) closed 9 September 2026. The product itself is not close to
+shippable yet — most of the reading content exists, Daily Portrait does not, and none of the six
+reading families are commercially cleared. `docs/GAP_ANALYSIS_2026-09-09.md` is the **Official
+Phase 2 Development Roadmap**: an evidence-based audit of exactly what's built, what's missing, the
+IP/sourcing constraints on writing more heritage content, and a sequenced plan for what comes next.
+Read it before starting Daily Portrait, before writing more reading content, or before assuming any
+content family is cleared for a paid release.
+
 ## Working on this
 
 Read **CLAUDE.md** first. It documents six constraints that look like tidy-up
