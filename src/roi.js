@@ -32,7 +32,7 @@ export const MIN_ROI_PX = 8;
  * about MediaPipe jitter. The design assumption is a 2px shift plus a 1px
  * rasterisation margin. Both are uncalibrated. A fixed 3px means a different
  * fraction of a zone at each resolution; changing it needs device evidence,
- * not a convenient pass rate. See docs/PR52_RELEASE_GATES.md for scale and
+ * not a convenient pass rate. See docs/archive/PR52_GATE_EVIDENCE_2026-09-05.md for scale and
  * low-end tuning limitations. The translated-hull test proves the mechanism
  * on a synthetic +/-3px sweep, not this assumption on real faces.
  */

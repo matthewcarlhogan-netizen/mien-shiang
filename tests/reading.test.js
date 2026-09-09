@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import { composeReading, readFiveElements, readThreeCourts, readTwelvePalaces, readQiSe }
   from "../src/reading/index.js";
 import { SHAPE_TO_ELEMENT } from "../src/reading/five-elements.js";
-import { PALACES } from "../src/reading/twelve-palaces.js";
+import { PALACES, SOURCES_DIFFER } from "../src/reading/twelve-palaces.js";
 import { geometryReport, LM } from "../src/geometry.js";
 import { readComplexion } from "../src/adapters/entertainment.js";
 
@@ -146,13 +146,11 @@ test("palace pigment measurement is abstained", () => {
   assert.equal(siblings.measured, true);
 });
 
-test("the trials label remains English while unverified heritage prose stays withheld", () => {
+test("the trials palace carries real heritage prose, cited to its source", () => {
   const trials = PALACES.find((p) => p.key === "trials");
-  assert.equal(trials.hanzi, undefined);
   assert.equal(trials.name, "Palace of Trials");
-  assert.equal(trials.reading, null);
-  assert.equal(trials.heritageStatus, "WITHHELD_PENDING_SOURCE_REVIEW");
-  assert.match(trials.sourceReviewNote, /chapter body.*source review/i);
+  assert.equal(trials.heritageStatus, "RUNTIME_PROSE");
+  assert.match(trials.reading, /Taiqing Shenjian/);
 });
 
 test("palace pigment measurement is abstained regardless of input", () => {
@@ -161,6 +159,58 @@ test("palace pigment measurement is abstained regardless of input", () => {
   const toneOf = (r) => r.palaces.find((p) => p.key === "life").tone;
   assert.equal(toneOf(shadowed), undefined);
   assert.equal(toneOf(clear), undefined);
+});
+
+test("the two contested names render literally, never suppressed or modernised", () => {
+  const spouse = PALACES.find((p) => p.key === "partner");
+  const servants = PALACES.find((p) => p.key === "support");
+  assert.equal(spouse.name, "Wife/Concubine Palace");
+  assert.equal(spouse.heritageStatus, "RUNTIME_PROSE");
+  assert.match(spouse.reading, /Qiqie Gong/);
+  assert.match(spouse.translationNote, /polygynous/i);
+  assert.equal(servants.name, "Servant Palace");
+  assert.equal(servants.heritageStatus, "RUNTIME_PROSE");
+  assert.match(servants.reading, /Nupu Gong/);
+  // Neither the display name nor the reading prose ever carries raw Han
+  // characters: tests/ui-language.test.js pins English-only reader-facing
+  // src/ string literals outside heritage/ and reading/provenance.js.
+  const hasHan = (s) => [...String(s ?? "")].some((c) => {
+    const code = c.codePointAt(0);
+    return (code >= 0x3400 && code <= 0x4dbf) || (code >= 0x4e00 && code <= 0x9fff) || (code >= 0xf900 && code <= 0xfaff);
+  });
+  for (const p of [spouse, servants]) {
+    assert.equal(hasHan(p.name), false, `${p.key}: name must be English-only`);
+    assert.equal(hasHan(p.reading), false, `${p.key}: reading must be English-only`);
+    assert.equal(hasHan(p.translationNote), false, `${p.key}: translationNote must be English-only`);
+  }
+});
+
+test("Wealth and Property withhold interpretation where this project's own sources disagree", () => {
+  const wealth = PALACES.find((p) => p.key === "wealth");
+  const property = PALACES.find((p) => p.key === "property");
+  for (const p of [wealth, property]) {
+    assert.equal(p.reading, null, `${p.key}: reading must stay null`);
+    assert.equal(p.heritageStatus, "WITHHELD_STRUCTURAL_DISAGREEMENT");
+    assert.match(p.structuralNote, /Taiqing Shenjian/);
+  }
+  // Every other palace is unaffected by this disagreement.
+  const affected = new Set(["wealth", "property"]);
+  for (const p of PALACES) {
+    if (affected.has(p.key)) continue;
+    assert.equal(p.heritageStatus, "RUNTIME_PROSE", `${p.key}: should carry real content`);
+    assert.equal(typeof p.reading, "string", `${p.key}: reading should be a real string`);
+  }
+  assert.match(SOURCES_DIFFER, /Wealth/);
+  assert.match(SOURCES_DIFFER, /Property/);
+});
+
+test("the withheld-interpretation reason survives readTwelvePalaces(), not only the static PALACES layout", () => {
+  const r = readTwelvePalaces(makeRaw());
+  const wealth = r.palaces.find((p) => p.key === "wealth");
+  const life = r.palaces.find((p) => p.key === "life");
+  assert.equal(wealth.reading, null);
+  assert.equal(wealth.measured, true, "wealth: still measured even though not interpreted");
+  assert.equal(typeof life.reading, "string");
 });
 
 // ────────────────────────────────────────────────────────────────── qi se ───

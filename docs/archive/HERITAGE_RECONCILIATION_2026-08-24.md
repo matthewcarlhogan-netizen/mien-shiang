@@ -1,5 +1,11 @@
 # Heritage source reconciliation — 24 August 2026
 
+**ARCHIVED, 9 September 2026 — historical working notes, per `docs/
+HERITAGE_CONNECTOR_STAGE_STATUS.md`'s own description of this file.**
+`src/heritage/registry.js` and `src/heritage/evidence.js` cite this document
+by path in code comments for provenance; those citations were updated to the
+new path in the same change that moved this file, not left to go stale.
+
 ## What this is
 
 A follow-up review of `feature/claude-heritage-review` (draft PR #35) found that

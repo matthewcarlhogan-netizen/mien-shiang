@@ -110,8 +110,13 @@ const projectPalaces = (value) => value ? {
     measured: palace?.measured === true,
     tone: palace?.tone ?? null,
     toneGloss: palace?.toneGloss ?? null,
+    // heritageStatus decides whether `reading` is real prose or should be
+    // treated as withheld (src/ui/qise/screens.js checks it) — dropping it
+    // here made every stored/round-tripped reading look withheld, silently.
+    heritageStatus: palace?.heritageStatus ?? null,
     reading: palace?.reading ?? null,
     translationNote: palace?.translationNote ?? null,
+    structuralNote: palace?.structuralNote ?? null,
     notMeasuredNote: palace?.notMeasuredNote ?? null,
   })),
 } : null;

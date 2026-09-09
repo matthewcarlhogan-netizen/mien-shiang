@@ -17,7 +17,7 @@ competitor in this category can copy without dismantling their own claims.
 | Requirement | State |
 |---|---|
 | Engine correctness, coverage, traceability, variation | **Closed** — `docs/PARITY_2026-08-17.md`, 10/10 gates |
-| Class-A dispositions R1–R14 | **Closed** — `DR-2026-08-17-B020-CLASS-A` |
+| Class-A dispositions R1–R14 | **14 of 14 closed** — `DR-2026-08-17-B020-CLASS-A` closed ten; R3, R6, R8 and R9 were approved 9 September 2026 by `DR-2026-09-09-B020-CLASS-BC-R3-R6-R8-R9`, which records the product owner's disposition for each against `docs/OPTION_B_020_DISPOSITIONS.md`. **R8's disposition there (suppress 妻妾宮/奴僕宮) was itself superseded the same day** by `DR-2026-09-09-R8-TWELVE-PALACES-RESTORED`: no suppression list exists in `src/reading/twelve-palaces.js` any more, both names render literally, and only Wealth/Property are withheld — for an unrelated reason (structural source disagreement, not naming). See that entry, not the suppression-list description above, for R8's actual current state. None of this changes any heritage family's `Blocked` commercial-release status. |
 | Su Wen edition, designated edition families | **Closed** — `docs/EDITION_DECISIONS.md` |
 | Three Sections primary source | **Open** — `docs/ACQUISITION_THREE_SECTIONS.md` |
 | Twelve Palaces chapter body | **Open** |

@@ -1,13 +1,20 @@
 # HANDOFF.md
 
+**ARCHIVED, 9 September 2026 — dated phase-log, 4+ weeks stale (last updated
+7 August 2026, when the repository had 199 tests; it now has 1,400 and has
+since added the Qi Se tracker, the heritage connector system and the Option B
+programme, none of which this file knows about).** Its conclusions are fully
+absorbed into `CLAUDE.md` and `docs/DECISION_REGISTER.md`. Zero other files
+in the repository referenced this file by name, confirmed before archiving.
+
 Rolling state of the build. Updated at the end of every phase.
-Phase 0 evidence lives in [AUDIT.md](AUDIT.md).
+Phase 0 evidence lives in [PHASE0_AUDIT_2026-08-07.md](PHASE0_AUDIT_2026-08-07.md).
 
 ---
 
 ## Current position
 
-**Phase 0 (repo audit) — complete.** See AUDIT.md.
+**Phase 0 (repo audit) — complete.** See PHASE0_AUDIT_2026-08-07.md.
 **Phase 1 (capture and analysis core) — code complete, exit criterion NOT met.**
 
 The blocker is stated in full under "Blocked" below: Phase 1's exit requires

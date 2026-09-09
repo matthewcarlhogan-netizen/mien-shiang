@@ -173,6 +173,73 @@ Set-Location android
 Do not commit the keystore, passwords, Play service credentials or generated
 face data.
 
+#### Deployment detail (merged from `DEPLOY.md`, 9 September 2026)
+
+Two hard blockers, both confirmed rather than assumed, are why this milestone
+needs a human at a real terminal rather than an agent session: **Bubblewrap's
+first run is interactive** (`bubblewrap init` walks through package id, app
+name, colours and signing details; run non-interactively it dies with
+`ERR_USE_AFTER_CLOSE: readline was closed`), and **there is no HTTPS origin
+yet** — TWA rejects HTTP outright, and creating a hosting account is a
+product-owner action. Bubblewrap manages its own JDK/Android SDK versions on
+first run; do not pre-install them.
+
+**Hosting choice is not arbitrary — pick Netlify or Cloudflare Pages, not a
+GitHub Pages *project* site.** Digital Asset Links must be served from the
+origin **root** (`https://<host>/.well-known/assetlinks.json`). Netlify
+(`yoursite.netlify.app`) and Cloudflare Pages (`yourproject.pages.dev`) each
+give you the root of that subdomain. A GitHub Pages project site
+(`username.github.io/mien-shiang/`) has its origin root — `username.github.io`
+— served by a *different* repository you don't control from here, so
+`assetlinks.json` cannot be placed for it and TWA verification cannot pass,
+unless you also own that user-site repo or attach a custom domain. **Publish
+directory is `src/`** — `scripts/serve.js` is a local dev server only, never
+deployed.
+
+After deploying, verify by hand before building anything:
+```bash
+curl -i https://<your-host>/manifest.webmanifest     # expect 200, application/manifest+json
+```
+Then open the URL on an Android phone in Chrome — it should offer *Install
+app* / *Add to Home screen*. If not, stop; the APK will not work either, and
+the reason is in the Manifest panel of remote DevTools
+(`chrome://inspect` with the phone connected).
+
+**Digital Asset Links is where this usually goes wrong, and fails silently:**
+if verification fails, the app still runs, but with a browser address bar
+across the top — which defeats the whole point. Get the fingerprint with
+`bubblewrap fingerprint --help` and check what your installed version
+actually does: Google's own ChromeOS documentation says Bubblewrap no longer
+generates `assetlinks.json` and directs you to the `fingerprint` command,
+while several current third-party guides still describe it as generating the
+file — trust your installed binary over either. Place the result at
+`src/.well-known/assetlinks.json`, redeploy, then confirm it is actually
+reachable (`curl -i https://<your-host>/.well-known/assetlinks.json`) — some
+static hosts silently 404 dotted directories.
+
+**The fingerprint gotcha:** if you ever enrol in Google Play App Signing,
+Play re-signs your upload with a *different* key, and the fingerprint in
+`assetlinks.json` must then be the one shown in the Play Console — not the
+one from your local keystore. This is the single most common cause of a TWA
+shipping with a visible address bar. For a sideloaded APK, the local keystore
+fingerprint is correct.
+
+**The gate, on a physical device:** opens full screen with no address bar
+(if there is one, back to the Digital Asset Links step), shows the icon on
+the home screen, still renders in airplane mode. **Back up the keystore the
+moment it is created** — losing it means never shipping an update under the
+same identity; it is already in `.gitignore`, keep it that way.
+
+The three icons are valid and correctly sized but remain **placeholder art**
+— replace them before any public listing; the icon is the app's only
+branding surface on a home screen. Before any Play Store listing: Google
+applies additional policy to health-related apps, and in some jurisdictions a
+skin-assessment tool can fall within medical device regulation — the
+constraint that referral output never names a disease is deliberate and
+load-bearing (see CLAUDE.md); do not weaken it to make a listing more
+compelling, and treat store-policy fit as a question for a qualified adviser,
+not something to resolve in code.
+
 ### Milestone 4 — Play Console and closed test (minimum 14 days when required)
 
 - Create the listing with face-scanner screenshots from a real release build.

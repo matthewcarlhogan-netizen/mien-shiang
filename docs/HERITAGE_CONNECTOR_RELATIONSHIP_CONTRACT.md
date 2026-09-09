@@ -525,7 +525,7 @@ completed; this section supersedes that — the second record now exists.
 ### 8.7.1 What was added
 
 `three-sections-pingdeng-yuguan` — `registry.js`, following
-`docs/agents/D2_GEMINI_HANDOFF.md` Task 2b's field-by-field spec verbatim:
+`docs/archive/D2_GEMINI_HANDOFF.md` Task 2b's field-by-field spec verbatim:
 
 | field | value |
 |---|---|

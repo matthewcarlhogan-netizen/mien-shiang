@@ -11,12 +11,13 @@ three lighting-consistency engine changes on this branch.
 The lighting-consistency review (this branch) established that the app has
 no way to learn how it actually behaves on real customer hardware — no
 device is more real than the synthetic fixtures in `tests/` and
-`scripts/engine-bench.mjs`. Per the Phase 0 audit already on this repo
-(`docs/PHASE_0_BLOCKER_REPORT.md`), there is currently no signed Android
-candidate, no iOS target, and no store listing either — so even if ZKT ships
-today, there is no installed base to generate data from until distribution
-catches up. This is worth building for when that changes, not for an
-immediate result.
+`scripts/engine-bench.mjs`. Per the current store-readiness record
+(`docs/STORE_RELEASE_GATES.md` — corrected 9 September 2026 from a citation
+to `docs/PHASE_0_BLOCKER_REPORT.md`, a file that does not exist in this
+repository), there is currently no signed Android candidate, no iOS target,
+and no store listing either — so even if ZKT ships today, there is no
+installed base to generate data from until distribution catches up. This is
+worth building for when that changes, not for an immediate result.
 
 ## What this is not
 

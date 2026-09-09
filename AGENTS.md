@@ -21,7 +21,7 @@ Before changing the product, read:
 - Mark new ideas as proposals until the product owner approves them.
 - Treat the current code and tests as evidence of implementation, not proof that every document is current.
 - Use en-AU spelling in user-facing copy.
-- Raw frames remain in volatile memory and are not persisted or transmitted.
+- Raw frames, and every frame the measurement path reads, remain in volatile memory and are not persisted or transmitted. The one narrow exception, amended 9 September 2026 by `DR-2026-09-09-CARDS-1-2-DAILY-PORTRAIT-CHARTER`: a Daily Portrait timeline **display frame** (aligned/cropped/orientation-corrected, per `docs/DAILY_PORTRAIT_ARCHITECTURE.md`) may be persisted once built and consent-gated — it is never the same buffer the measurement path consumes, so this guarantee is otherwise unaffected. See `docs/PROJECT_CHARTER.md` for the full wording.
 - The product is entertainment and self-discovery, not diagnosis, identity, attractiveness scoring, prediction or a fixed judgement of character.
 - When evidence is missing, abstain or set `needsVerification: true`; never fabricate a MediaPipe index, classical claim, legal conclusion or commercial decision.
 - For Option B, programme approval is not signal approval. Follow the execution queue in dependency order; no new transient signal becomes persistent, eligible or user-facing before its contract and independent proof verdict pass.

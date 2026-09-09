@@ -1,5 +1,10 @@
 # Getting to an installable APK
 
+**ARCHIVED, 9 September 2026 — merged into `docs/ANDROID_SHIP_ROADMAP.md`'s
+Milestone 3 section.** Kept here for provenance; the content below is
+unchanged from before the merge. Read ANDROID_SHIP_ROADMAP.md for the
+current copy.
+
 Status: the web app is done and verified. What remains is hosting and packaging,
 and both need decisions or credentials that only you have.
 

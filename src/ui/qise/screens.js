@@ -248,7 +248,11 @@ export function integratedReadingModel(reading) {
     supported: palace.supported === true,
     notMeasuredNote: palace.notMeasuredNote || null,
     heritageStatus: palace.heritageStatus || palaceSource?.heritageStatus || null,
-    sourceReviewNote: palace.sourceReviewNote || palaceSource?.sourceReviewNote || null,
+    // structuralNote (a per-palace explanation of why this one's interpretation is
+    // withheld, e.g. a source disagreement) reuses the same rendered slot as the
+    // older, more generic sourceReviewNote so app.js needs no separate handling.
+    sourceReviewNote: palace.structuralNote || palace.sourceReviewNote || palaceSource?.sourceReviewNote || null,
+    translationNote: palace.translationNote || null,
     reading: (palace.heritageStatus || palaceSource?.heritageStatus) === "RUNTIME_PROSE"
       ? palace.reading || null
       : null,

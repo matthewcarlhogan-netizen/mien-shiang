@@ -1,6 +1,12 @@
 # Response to Claude heritage review — 23 August 2026
 
-> **Update, 24 August 2026:** see `docs/HERITAGE_RECONCILIATION_2026-08-24.md`.
+**ARCHIVED, 9 September 2026.** This document never carried the same
+superseding banner its sibling `docs/HERITAGE_RESEARCH_HANDOFF_2026-08-23.md`
+received on 24 August 2026 despite describing the same PR review and being
+corrected by the same reconciliation pass — added now, on archiving, so the
+gap doesn't outlive the file's active life.
+
+> **Update, 24 August 2026:** see `docs/archive/HERITAGE_RECONCILIATION_2026-08-24.md`.
 > Questions 4 and 7 below are superseded by that reconciliation pass. Question
 > 6 (stable source identity from an actual acquisition run) remains fully
 > open and is the recommended next unit of work.
