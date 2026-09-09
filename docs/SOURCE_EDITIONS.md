@@ -80,6 +80,18 @@ missing**, which is what R8 needs in order to be dispositioned properly.
 
 ## Five Mountains 五岳 and Four Rivers 四瀆 — Established
 
+**Superseded for this section only, 9 September 2026:** `docs/heritage-evidence/
+PROJECT_OWNED_SOURCE_REGISTER.md` now carries a hash-verified, direct-acquisition
+account of these same two witnesses (太清神鑑, 人倫大統賦) plus a surrogate-rights
+finding this section does not have (the Kanripo transcription layer's CC BY-SA
+4.0 claim — `AMBIGUOUS`, ShareAlike implications unresolved for counsel). Treat
+that register as authoritative for these two families; the rest of this file
+(Five Elements, Qi Se, Twelve Palaces, Three Sections, Proportion harmony) is
+outside that register's Kanripo-only scope and remains authoritative here — the
+two documents were evaluated for a full merge and found only partially
+overlapping, so this file was corrected rather than archived.
+
+
 | Field | Value |
 |---|---|
 | Works | 太清神鑑 (*Siku Quanshu* recension); 神相全編 via 欽定古今圖書集成 藝術典 vol. 632; 人倫大統賦 with 薛延年 commentary (*Siku* recension) |

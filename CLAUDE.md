@@ -1954,6 +1954,60 @@ low-confidence regime suppresses both, so removing that single constant removes
 both observations together. Four-and-three is the right split; it is one
 constant carrying two suppressed observations, not one carrying one.
 
+#### Calibration validation plan (merged from `CALIBRATION_TODO.md`, 9 September 2026)
+
+`calculateAdaptiveScale` in `src/utils/calibrationEngine.js` computes a
+per-image scale from the whole-frame 90th-percentile Hessian structureness:
+`scale = 2 * (p90 / 0.06)`. The constant `0.06` was measured on **synthetic**
+flat-skin patches using the 3-point Laplacian in `ridgeResponse()` — genuine
+furrows reached ~2.5 on the same patches, sensor noise sits around 0.06.
+**This has not been validated on real phone photos.** The highest-value
+single improvement: collect ~20 real phone photos across varied skin tones
+(Fitzpatrick I–VI), mixed ages, and mixed lighting (indoor ambient, outdoor
+daylight, flash); label each forehead/glabella zone smooth or wrinkled by
+visual inspection; run `ridgeResponse()` with the current static
+`RIDGE_STRUCTURE_SCALE = 1.0` and with the adaptive output; compare the
+resulting `ridgeDelta` distributions between the two groups; choose the
+constant that maximises separation per skin-tone stratum. Target: at least
+0.5 standardised mean difference per stratum before the adaptive scale is
+considered validated.
+
+`ZONE_FULL_SCALE`'s per-zone values are based on known anatomical wrinkle
+depth differences but have not been fitted to labelled data — forehead
+`0.08` (deep horizontal expression lines), glabella `0.09` (deepest
+inter-brow furrows), periorbital `0.04` (fine crow's-feet, thin skin),
+nasolabial `0.05` (moderate fold depth), cheeks `0.06` (baseline, matches the
+original constant), chin `0.05` (moderate). These need calibrating against
+the same labelled photo set. `ITA_CONFIDENCE` is derived from Lee et al.
+2026, Wilkes et al., and the Chardon 1991 ITA banding — literature-grounded,
+not fitted to a validation set for this app's specific configuration. The
+±30° angular tolerance in `ridgeResponse` (item 32's taper) was chosen to
+balance sensitivity against specificity; if too many false positives appear
+on smooth cheeks under real-photo testing, tighten toward 20°.
+
+Priority order once real photos exist: collect the labelled set (≥20) → fit
+`RIDGE_STRUCTURE_SCALE` per skin-tone stratum → fit `ZONE_FULL_SCALE` from
+labelled zones → validate `ITA_CONFIDENCE` asymmetry against erythema ground
+truth → consider isotonic calibration of severity → confidence once
+sufficient labelled data exists (target n ≥ 100 per stratum).
+
+**`AXIS_MAD_FLOOR.ming` — a unit mismatch, `needsVerification: true`.**
+`src/qise/baseline.js` sets `ming: 0.15` and `run: 0.15`, copied from the
+CIELAB axes, with a comment warning the units differ. `ming` is
+`L*(P90) / L*(P50)` (`src/qise/metrics.js`, `lumRatioP90P50`) — dimensionless,
+typically a little above 1; the floor is `max(2 * MAD, AXIS_MAD_FLOOR)`, so
+whenever the personal MAD is small the constant binds, and `courseKey`
+(`src/qise/passages.js`) thresholds at 1 — meaning lustre only leaves
+`"level"` once the ratio moves by 0.15 or more, a very large day-to-day swing
+for that quantity. `run` is `C * (1 + 0.045 * C)`
+(`src/qise/metrics.js`/`color.js`), roughly 25 at C ≈ 15 — its own MAD
+dominates the 0.15 floor, so it self-scales correctly and needs no change.
+**Prediction if unaddressed:** `ming` reads `"level"` nearly always and
+`courseKey` collapses toward `moistureLed`/`level`, i.e. `run` alone drives
+the course. **Measurement that would settle it:** the personal MAD of `ming`
+across a real multi-day capture series, per capture class. Until that exists
+there is no basis for a value, so the constant is left untouched.
+
 ---
 
 ## Regulatory constraints on wording

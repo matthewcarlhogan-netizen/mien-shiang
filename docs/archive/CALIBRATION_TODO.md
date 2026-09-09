@@ -1,5 +1,9 @@
 # Calibration TODO
 
+**ARCHIVED, 9 September 2026 — merged into `CLAUDE.md`'s "Severity scaling is
+uncalibrated" section.** Kept here for provenance; the content below is
+unchanged from before the merge. Read CLAUDE.md for the current copy.
+
 ## Status
 
 Phase 1 implements nine calibration blind-spot fixes. Several constants are

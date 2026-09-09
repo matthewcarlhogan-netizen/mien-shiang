@@ -1,5 +1,10 @@
 # Commercial rights — closure checklist
 
+**ARCHIVED, 9 September 2026 — merged into `docs/commercial-rights-audit.md`'s
+"Who owes what" section.** Kept here for provenance; the content below is
+unchanged from before the merge. Read commercial-rights-audit.md for the
+current copy.
+
 **Status: all six families `Blocked`. Nothing below is approved or complete.**
 Prepared 19 August 2026 against `docs/commercial-rights-audit.md` and
 `docs/commercial-rights-manifest.json`.
