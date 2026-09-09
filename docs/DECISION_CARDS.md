@@ -1,15 +1,19 @@
 # Decision cards
 
-**Status: open decision cards, 30 August 2026. None of these is decided by this document or by
-this pass.** Per brief and per `docs/AGENTS.md`'s standing rule, absence of a decision is
-`UNDECIDED`, never inferred by an agent. Each card states options, evidence, the consequence both
-ways, and — where research supports one — a labelled recommendation that is **not** an approval.
-The product owner records approval, if given, as a new dated entry in `docs/DECISION_REGISTER.md`
-referencing the card below by name.
+**Originally opened 30 August 2026; eight of eleven resolved 9 September 2026.** Per brief and
+per `docs/AGENTS.md`'s standing rule, absence of a decision is `UNDECIDED`, never inferred by an
+agent — every card below still states options, evidence and the consequence both ways, and each
+now also states whether and how it was resolved, with a pointer to the `docs/DECISION_REGISTER.md`
+entry that recorded the product owner's approval. Cards 6, 9 and 11 are **deliberately** left open
+— see `DR-2026-09-09-CARDS-6-9-11-NOT-RESOLVED` for why a general "clear the blockers" instruction
+did not extend to a safety gate, an explicitly-not-agent-decidable card, and a rights/legal
+determination.
 
 ---
 
-## CARD 1 — Charter amendment: persisting a daily face photograph
+## CARD 1 — Charter amendment: persisting a daily face photograph — RESOLVED 9 September 2026
+
+**Resolved by `DR-2026-09-09-CARDS-1-2-DAILY-PORTRAIT-CHARTER`: Option A approved.** `docs/PROJECT_CHARTER.md` and `AGENTS.md` are amended accordingly. This does not implement PR C — see that entry's Consequences.
 
 **The conflict.** `docs/PROJECT_CHARTER.md` states: "Raw camera frames are processed in volatile
 memory, are not uploaded and are not persisted. Only explicitly allow-listed derived records may
@@ -48,7 +52,9 @@ approval.**
 
 ---
 
-## CARD 2 — Consent-domain separation
+## CARD 2 — Consent-domain separation — RESOLVED 9 September 2026
+
+**Resolved by `DR-2026-09-09-CARDS-1-2-DAILY-PORTRAIT-CHARTER`: Option B approved** (extend Qi Se's existing consent gate). Option A (separate domains) remains available as a future, additive migration.
 
 **The question.** Should Daily Portrait storage consent be a separate consent domain from Qi Se
 processing consent, backup authorisation, and heritage presentation — or should all Daily Portrait
@@ -77,7 +83,9 @@ to the product owner without a research thumb on the scale.
 
 ---
 
-## CARD 3 — Original vs. canonical image retention
+## CARD 3 — Original vs. canonical image retention — RESOLVED 9 September 2026
+
+**Resolved by `DR-2026-09-09-DECISION-CARDS-3-4-5-7-8-10`: Option A approved** (canonical frame only), Option B recorded as a documented future option. Downstream of Card 1; not actionable until PR C is scoped.
 
 **The question.** Does the Daily Portrait archive retain: **(A)** the canonical (aligned,
 cropped) display frame only; **(B)** the canonical frame locally, with the original full-resolution
@@ -100,7 +108,9 @@ chosen silently.
 
 ---
 
-## CARD 4 — Encryption and key recovery
+## CARD 4 — Encryption and key recovery — RESOLVED 9 September 2026
+
+**Resolved by `DR-2026-09-09-DECISION-CARDS-3-4-5-7-8-10`: a generated recovery key, shown once at setup, approved as the primary mechanism.** Downstream of Card 1; not actionable until PR C is scoped.
 
 **The question.** Is client-side, genuinely end-to-end encryption of the backup archive approved,
 and if so, which key-recovery mechanism (user passphrase / generated recovery key / platform
@@ -125,7 +135,9 @@ product owner rather than deciding unilaterally.
 
 ---
 
-## CARD 5 — Multi-device policy
+## CARD 5 — Multi-device policy — RESOLVED 9 September 2026
+
+**Resolved by `DR-2026-09-09-DECISION-CARDS-3-4-5-7-8-10`: the one-active-writer v1 constraint approved.** Downstream of Card 1; not actionable until PR C is scoped.
 
 **The question.** Is `docs/BACKUP_ARCHIVE_FORMAT.md`'s v1 constraint (one active writing device,
 `conflict` surfaced rather than merged) approved as the shipped policy, or is full multi-device
@@ -138,7 +150,7 @@ before a simpler, safer version has shipped and been used. **Not an approval.**
 
 ---
 
-## CARD 6 — Qi Se safety authorisation
+## CARD 6 — Qi Se safety authorisation — DELIBERATELY NOT RESOLVED, see `DR-2026-09-09-CARDS-6-9-11-NOT-RESOLVED`
 
 **Carried forward, unchanged by this session**, from
 `docs/heritage-evidence/SAFETY_AUTHORIZATION_INTERFACE.md` §3(a)/(b). The question remains exactly
@@ -158,7 +170,9 @@ supplies a literal `true` anywhere in production code.
 
 ---
 
-## CARD 7 — Five Mountains lineage routing
+## CARD 7 — Five Mountains lineage routing — RESOLVED 9 September 2026
+
+**Resolved by `DR-2026-09-09-DECISION-CARDS-3-4-5-7-8-10`: Option D approved now, Option E approved as the future direction (not for implementation yet).**
 
 **Carried forward, unchanged by this session**, from
 `docs/heritage-evidence/PRODUCT_OWNER_DECISIONS.md` (renamed in this PR to
@@ -174,7 +188,9 @@ this pass does not touch it.
 
 ---
 
-## CARD 8 — SUPERSEDE R7 with new pinned evidence?
+## CARD 8 — SUPERSEDE R7 with new pinned evidence? — RESOLVED 9 September 2026
+
+**Resolved by `DR-2026-09-09-DECISION-CARDS-3-4-5-7-8-10`: Option A approved and implemented** — `src/qise/reflection-corpus.js`'s `HERITAGE.fiveElements` entry corrected this session. R7's runtime eligibility is unchanged.
 
 **The conflict.** `docs/DECISION_REGISTER.md`'s `DR-2026-08-17-B020-CLASS-A` records R7 as
 **approved**: ship the five-type Five Elements reduction while stating that 靈樞·陰陽二十五人
@@ -215,7 +231,9 @@ shipped code**, per B1.
 
 ---
 
-## CARD 10 — Twelve Palaces construct runtime status
+## CARD 10 — Twelve Palaces construct runtime status — RESOLVED 9 September 2026
+
+**Resolved by `DR-2026-09-09-DECISION-CARDS-3-4-5-7-8-10`: Option A approved (no change)**, including against a second, lower-confidence corroborating source found this session — see `docs/heritage-evidence/SOURCE_ACQUISITION_FINDINGS_2026-09-09.md`. The open `twelve-palaces-constituents` disagreement is unresolved by that finding.
 
 **The question.** `docs/heritage-evidence/REPO_RECONCILIATION_MATRIX.md`'s EV-13 promotes the
 `twelvePalaces.lineages["taiqing-yuguan"]` lineage's evidence to `VERIFIED_PRIMARY` (the 十二宮
@@ -248,7 +266,7 @@ side effect of an evidence correction. **Not an approval.**
 
 ---
 
-## CARD 11 — Kanripo surrogate rights (project-owned acquisition, all pinned records)
+## CARD 11 — Kanripo surrogate rights (project-owned acquisition, all pinned records) — DELIBERATELY NOT RESOLVED, see `DR-2026-09-09-CARDS-6-9-11-NOT-RESOLVED`
 
 **Carried forward, unchanged by this session**, from matrix row SR-18. The project-owned Kanripo
 acquisition (KR3g0043/0044/0045/0046) found an explicit **organisation-level CC BY-SA 4.0
@@ -263,7 +281,7 @@ well-attested the underlying scholarship now is.
 
 ---
 
-## CARD 9 — Analytics boundary
+## CARD 9 — Analytics boundary — DELIBERATELY NOT RESOLVED, see `DR-2026-09-09-CARDS-6-9-11-NOT-RESOLVED`
 
 **The question.** Should any event in `docs/SECURITY_PRIVACY_THREAT_MODEL.md`'s named-but-
 unimplemented aggregate-telemetry taxonomy actually be implemented?

@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import { composeReading, readFiveElements, readThreeCourts, readTwelvePalaces, readQiSe }
   from "../src/reading/index.js";
 import { SHAPE_TO_ELEMENT } from "../src/reading/five-elements.js";
-import { PALACES } from "../src/reading/twelve-palaces.js";
+import { PALACES, R8_SUPPRESSED_PALACE_KEYS } from "../src/reading/twelve-palaces.js";
 import { geometryReport, LM } from "../src/geometry.js";
 import { readComplexion } from "../src/adapters/entertainment.js";
 
@@ -161,6 +161,33 @@ test("palace pigment measurement is abstained regardless of input", () => {
   const toneOf = (r) => r.palaces.find((p) => p.key === "life").tone;
   assert.equal(toneOf(shadowed), undefined);
   assert.equal(toneOf(clear), undefined);
+});
+
+test("R8 suppresses exactly partner and support, independent of the source-review hold", () => {
+  assert.deepEqual([...R8_SUPPRESSED_PALACE_KEYS].sort(), ["partner", "support"]);
+  for (const palace of PALACES) {
+    const shouldBeSuppressed = R8_SUPPRESSED_PALACE_KEYS.includes(palace.key);
+    assert.equal(palace.suppressedByR8, shouldBeSuppressed, `${palace.key}: suppressedByR8`);
+    if (shouldBeSuppressed) {
+      assert.match(palace.r8SuppressionNote, /permanently suppressed/i);
+    } else {
+      assert.equal(palace.r8SuppressionNote, undefined);
+    }
+    // Neither suppressed palace's neutral English name leaks the literal source meaning.
+    if (shouldBeSuppressed) {
+      assert.doesNotMatch(palace.name, /wife|concubine|spouse|servant/i);
+    }
+  }
+});
+
+test("R8 suppression survives readTwelvePalaces(), not only the static PALACES layout", () => {
+  const r = readTwelvePalaces(makeRaw());
+  const partner = r.palaces.find((p) => p.key === "partner");
+  const support = r.palaces.find((p) => p.key === "support");
+  assert.equal(partner.suppressedByR8, true);
+  assert.equal(support.suppressedByR8, true);
+  const life = r.palaces.find((p) => p.key === "life");
+  assert.equal(life.suppressedByR8, false);
 });
 
 // ────────────────────────────────────────────────────────────────── qi se ───

@@ -243,9 +243,16 @@ export const HERITAGE = Object.freeze({
   },
   fiveElements: {
     primary: {
-      text: "The Inner Classic sets out five forms — wood, fire, earth, metal, water — and gives each a face: long, tapering, round, square, uneven.",
-      source: "Huangdi Neijing, Lingshu, Yin-Yang Twenty-Five Types; anonymous composite text",
-      note: "The source actually divides these five again into twenty-five. Almost every modern retelling, including this one, keeps the five and drops the rest.",
+      text: "Five forms are named after the five phases — wood, fire, earth, metal, water — and each is given a face: long, tapering, round, square, uneven.",
+      source: "Taiqing Shenjian, Five Forms chapter",
+      // DR-2026-09-09 (Decision Card 8): corrected from a version that cited the Inner
+      // Classic's Yin-Yang Twenty-Five Types chapter as if it were itself the source of
+      // this face-reading material. No physiognomic (face-reading) source in this
+      // project's corpus establishes a twenty-five-fold face-reading subdivision — that
+      // finer structure belongs to a related classical framework with shared imagery,
+      // not to this system. Runtime eligibility for the five-form reduction is unchanged;
+      // only this attribution note was inaccurate.
+      note: "A related classical framework, Huangdi Neijing, Lingshu, Yin-Yang Twenty-Five Types, subdivides the same five phases into twenty-five constitutional types of its own — that framework's finer structure is shared imagery, not a face-reading source this reduction simplifies. Almost every modern retelling still cites the Inner Classic here; this project does not repeat that.",
     },
   },
   twelvePalaces: {

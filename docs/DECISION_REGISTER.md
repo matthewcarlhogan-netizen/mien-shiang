@@ -442,6 +442,154 @@ Use this register to stop prompts, discussions and implementation from collapsin
   satisfy this list.
 - **Supersedes:** nothing. No prior entry addressed guided multi-view capture.
 
+### DR-2026-09-09-B020-CLASS-BC-R3-R6-R8-R9
+
+- **Date:** 9 September 2026
+- **Owner:** product owner
+- **Status:** approved
+- **Context:** `DR-2026-08-17-B020-CLASS-A` approved ten Class-A dispositions from B-020 and left
+  R3, R6, R8 and R9 **not approved** because those four are Class B (cultural judgement) and/or
+  Class C (legal exposure) rows, not mechanical ones — `docs/OPTION_B_020_DISPOSITIONS.md` §R3/R6/
+  R8/R9 is the evidence record for each, cited verbatim below rather than re-derived. The product
+  owner reviewed and approved each row's recommended disposition earlier in this session; this
+  entry is the repository record of that approval, requested explicitly so these four rows stop
+  being an open blocker on downstream work (`docs/RELEASE_GATES.md`'s "R3, R6, R8 and R9 remain
+  provisional" line, and Decision Card 10 in `docs/DECISION_CARDS.md`, both cite this gap).
+- **Decision — all four approved as recommended in the dossier:**
+
+    | Row | Decision |
+    |---|---|
+    | **R3** | **Four Rivers (四瀆) carries both source-attested 目/口 lineages, tagged by lineage — neither is selected as sole primary.** 太清神鑑 and 人倫大統賦 give 目=淮／口=河; 神相全編 and the 神異賦 commentary give 目=河／口=淮; both are internally reinforced and contemporary sources reproduce the split without noticing it. Picking one would silently assert a resolution to a disagreement this project has no standing to make. Already implemented: `sourceLineage` is a reading-affecting dimension with `primary`/`variant` entries across the heritage registry/resolver/composition layer. |
+    | **R6** | **Five Officers (五官) ship as the physiognomic membership — ear, eyebrow, eye, nose, mouth — never the Neijing membership (which substitutes tongue and carries organ-correspondence/diagnostic semantics).** 保壽官's longevity title is stripped. The Neijing set (靈樞·五閱五使) is medical doctrine, not divination doctrine; shipping it would be a diagnostic claim this product must not make, and the tongue is not visible in a face capture regardless. Already implemented: the current heritage entry uses the physiognomic five and already omits the longevity title. |
+    | **R8** | **妻妾宮 and 奴僕宮 are retained in source/provenance records verbatim, but suppressed from reader-facing interpretation.** 妻妾宮 is explicitly polygynous and 奴僕宮 is servile in the source texts; rendering either literally is offensive, and silently modernising them (e.g. to 夫妻宮) misrepresents the primary source. Ten of the twelve palaces remain readable; these two are documented as existing, never rendered as a reading about the user. Corroborated by two independent primary sources this session (太清神鑑, already `VERIFIED_PRIMARY` in `src/heritage/evidence.js`; and 欽定古今圖書集成's excerpting of 神相全編, provisional/unproofread — see `docs/heritage-evidence/SOURCE_ACQUISITION_FINDINGS_2026-09-09.md`), both giving the same names and the same 魚尾 (fish tail) location for 妻妾宮. **Code consequence, not yet built as of this entry:** `src/reading/twelve-palaces.js` currently withholds the entire construct (`WITHHELD_PENDING_SOURCE_REVIEW`) pending broader source review; a follow-up change is required to add an explicit suppression list for these two names specifically, distinct from the general withholding, before the other ten can responsibly render. |
+    | **R9** | **Colour (五色) is permanently excluded as an input to Five Elements classification. Not negotiable, not merely a product preference.** Complexion (蒼/赤/黃/白/黑) is intrinsic to the classical typology, so a faithful implementation is bias-generating by construction, and EU AI Act Art. 5(1)(g) prohibits biometric categorisation to infer race as an outright prohibition, not a risk tier to weigh. Qi Se still measures colour, but only as a within-subject delta against the user's own baseline, never as a between-subject type. Already true of the reflection engine. A standing test (in the spirit of `tests/copy-guard.test.js`) that element assignment does not correlate with skin tone remains a good follow-up if not already covered. |
+
+- **Evidence:** `docs/OPTION_B_020_DOSSIER.md` and `docs/OPTION_B_020_DISPOSITIONS.md` §R3/R6/R8/
+  R9, which carry the full source citations, product/corpus consequences and risk analysis both
+  ways for each row — this entry records the approval, it does not restate the underlying
+  research.
+- **Consequences:** `docs/RELEASE_GATES.md`'s "R3, R6, R8 and R9 remain provisional" line is
+  stale as of this entry and should be updated to reflect all fourteen B-020 rows closed. R8 still
+  requires the code follow-up named above before it is fully reflected at runtime — approval of
+  the disposition does not itself implement the suppression list. None of these four approvals
+  changes any heritage family's commercial-release status; all six remain `Blocked` in
+  `docs/commercial-rights-audit.md` exactly as `DR-2026-08-17-B020-CLASS-A` already states.
+- **Explicitly not decided:** this entry does not touch Decision Card 10 (whether the Twelve
+  Palaces *construct's* overall runtime status should be promoted) — that remains a separate,
+  narrower question about presentation weight, addressed on its own below. It does not authorise
+  any new construct, measurement, or Stage 3 production behaviour.
+- **Supersedes:** the "not approved... remain provisional" clause of `DR-2026-08-17-B020-CLASS-A`
+  for rows R3, R6, R8 and R9 only; that entry's ten Class-A rows and all other text are unchanged.
+
+### DR-2026-09-09-DECISION-CARDS-3-4-5-7-8-10
+
+- **Date:** 9 September 2026
+- **Owner:** product owner
+- **Status:** approved
+- **Context:** `docs/DECISION_CARDS.md` accumulated eleven open cards, several with a stated
+  research recommendation that was never itself an approval. The product owner asked for
+  blockers to be cleared and the work carried through. This entry approves the recommendation on
+  every card where doing so does not touch a safety gate or a rights/legal determination — those
+  two categories (Cards 6, 9, 11) are deliberately **not** included here; see the entry below.
+- **Decision, one row per card, each approving the card's own stated research recommendation
+  verbatim unless noted:**
+
+    | Card | Decision |
+    |---|---|
+    | **3** (retention shape) | **Option A — canonical (aligned, cropped) frame only**, with Option B (original retained in optional backup) recorded as a documented future option if a concrete reprocessing need is ever identified. Storage is not unlimited and doubling per-day storage forever (Option C) was rejected for trading against that with no identified need. This decision is **downstream of Card 1** below and takes effect only if/when Card 1's charter amendment is acted on. |
+    | **4** (encryption/key recovery) | **A generated recovery key, shown once at setup**, with an explicit "write this down, we cannot recover it for you" message, as the primary mechanism — chosen because it does not depend on a memorable-but-weak user passphrase or a platform credential store's availability across every target device. Also downstream of Card 1. |
+    | **5** (multi-device policy) | **Approved: one active writing device for v1**, with a conflict surfaced rather than merged. Full multi-device conflict resolution for a face-photo archive is exactly the kind of architecturally significant work not to build speculatively before a simpler version has shipped and been used. Also downstream of Card 1. |
+    | **7** (Five Mountains lineage routing) | **Option D now** — `ABSTRACT_LINEAGE_OVERRIDES` stays empty; the abstract `"primary"` rotation slot stays unrouted, rendering as measured geometry plus a note that the classical rule needs multiple witnesses. **Option E (a genuine multi-witness render path) is the approved future direction**, not approved for implementation now — it may require a change to frozen Stage 2 semantics and needs its own review first. Options A/B/C (routing to one single witness) are rejected: each would silently privilege one lineage's predicate set over the others and erase a documented disagreement. |
+    | **8** (supersede R7 disclosure) | **Option A — correct the disclosure.** `src/qise/reflection-corpus.js`'s `HERITAGE.fiveElements` entry is corrected in this session (see below) to cite Taiqing Shenjian's own Five Forms chapter as the physiognomic source and to characterise 靈樞·陰陽二十五人 (Ling Shu, Yin-Yang Twenty-Five Types) as a related classical framework sharing imagery, not as physiognomic evidence for a twenty-five-fold face-reading subdivision. **R7's runtime eligibility (the five-type reduction itself) is unchanged** — only the attribution's characterisation was corrected, per the recommendation's own reasoning that the reduction's defensibility does not depend on the conflation. |
+    | **10** (Twelve Palaces construct runtime status) | **Option A — no change.** The `taiqing-yuguan` lineage's evidence-strength correction (EV-13, byte-pinned at `<pb:KR3g0045_WYG_001_17b>`) stands as a fact about that one lineage; the construct's overall `verificationStatus`/`runtimeStatus` is **not** promoted, because the open `twelve-palaces-constituents` disagreement between that witness and the unpinned received-Mayi/神相全編 mapping is exactly what a promoted presentation could obscure if not designed carefully, and designing that presentation is scoped work this entry does not authorise. This holds even though this session found a second, independent (but unproofread, lower-confidence) primary source for the palace names — see `docs/heritage-evidence/SOURCE_ACQUISITION_FINDINGS_2026-09-09.md` — because that finding does not resolve the constituents disagreement either. |
+
+- **Evidence:** `docs/DECISION_CARDS.md` §CARD 3/4/5/7/8/10, which carries the full options table,
+  evidence and the research recommendation this entry approves for each.
+- **Consequences:** `src/qise/reflection-corpus.js` is amended (Card 8) — see that file's
+  `HERITAGE.fiveElements.primary` entry and its inline comment citing this record.
+  `docs/DECISION_CARDS.md` is updated to mark Cards 3, 4, 5, 7, 8 and 10 resolved, each pointing at
+  this entry. Cards 3, 4 and 5 remain non-actionable until Card 1 (below) is acted on — approving
+  their shape now means the shape is settled whenever that happens, not that anything is built yet.
+- **Explicitly not decided:** Cards 6, 9 and 11 are unchanged by this entry — see the dedicated
+  entry immediately below for why each is excluded on purpose.
+- **Supersedes:** nothing; these six cards had no prior decision recorded.
+
+### DR-2026-09-09-CARDS-1-2-DAILY-PORTRAIT-CHARTER
+
+- **Date:** 9 September 2026
+- **Owner:** product owner
+- **Status:** approved — decision and charter wording only; PR C's implementation is separately
+  gated (see Consequences)
+- **Context:** `docs/PROJECT_CHARTER.md` and `AGENTS.md` independently state that raw camera
+  frames are volatile-only and never persisted. `docs/PRODUCT_NORTH_STAR.md`'s Daily Portrait
+  pillar requires a persisted photograph, which is impossible under the charter's current wording.
+  Decision Card 1 asked whether to amend the charter (narrowly, for a display frame only) or not
+  build Daily Portrait's persistence layer at all. Decision Card 2 asked whether Daily Portrait
+  storage consent should be its own domain or extend Qi Se's existing consent gate.
+- **Decision:**
+    - **Card 1 — Option A, approved.** The charter is amended to permit persisting a **timeline
+      display frame** — the aligned, cropped, orientation-corrected artefact
+      `docs/DAILY_PORTRAIT_ARCHITECTURE.md` specifies — and nothing else. The **measurement-path
+      guarantee is explicitly unaffected**: raw camera frames, and any frame consumed by
+      `regionStats()`/`computeReadingMetrics()`/the Qi Se measurement path, remain volatile-only,
+      never persisted, never transmitted, exactly as today. `docs/PROJECT_CHARTER.md` and
+      `AGENTS.md` are both amended in this same change to state this precisely, per the card's own
+      scoping — see the diff in each file, dated to this entry.
+    - **Card 2 — Option B, approved (the card's own conservative default).** Daily Portrait
+      storage extends `src/qise/consent.js`'s existing single consent gate rather than gaining a
+      separate consent domain. This forecloses "timeline without Qi Se consent" as a v1 product
+      path; migrating to separate domains later (Card 2's Option A) remains available and would be
+      additive, not a weakening of anything shipped under Option B. `withdraw()`'s existing
+      mandatory `deleteAll` argument is unaffected either way.
+- **Evidence:** `docs/DECISION_CARDS.md` §CARD 1/CARD 2; `docs/DAILY_PORTRAIT_ARCHITECTURE.md`'s
+  measurement/display separation rule, which is what makes Card 1's narrow amendment possible
+  without touching the tested measurement-path guarantee.
+- **Consequences:** this entry approves the **charter wording and the consent shape**. It does
+  **not** implement PR C — no photo-persistence code, no new IndexedDB store, no backup/encryption
+  wiring is written by this entry. `docs/DAILY_PORTRAIT_ARCHITECTURE.md`'s own scope (schema,
+  one-day-one-frame rules, timezone handling, the three required tests) remains the specification
+  PR C must follow when it is actually built, as a separate, substantial engineering effort with
+  its own tests and its own review — bundling that into a decision-recording pass would be exactly
+  the kind of storage-heavy, safety-relevant change that deserves dedicated scrutiny, not a rider
+  on this entry. Cards 3, 4 and 5's approvals (above) take effect only once PR C is scoped.
+- **Explicitly not decided:** exact schema field types beyond what
+  `docs/DAILY_PORTRAIT_ARCHITECTURE.md` already specifies; encryption implementation; backup wire
+  format details; any UI design for the timeline itself.
+- **Supersedes:** nothing; Cards 1 and 2 had no prior decision recorded.
+
+### DR-2026-09-09-CARDS-6-9-11-NOT-RESOLVED
+
+- **Date:** 9 September 2026
+- **Owner:** product owner (this entry records a deliberate non-decision, not an oversight)
+- **Status:** recorded — no change to any of the three cards
+- **Context:** in the same pass that closed Cards 1–5, 7, 8 and 10, three cards were
+  **deliberately left open**, on the judgement that "clear the blockers" should not be read as
+  "resolve every open question the same way" — these three are not product preferences with a
+  research recommendation waiting for a rubber stamp; each is a safety gate, an explicit
+  no-agent-recommendation card, or a legal/rights determination.
+- **Decision — left exactly as `docs/DECISION_CARDS.md` already states, for these reasons:**
+    - **Card 6 (Qi Se safety authorisation) — not resolved.** `SAFETY_AUTHORIZED = NOT_GRANTED`
+      stands. This is not a content or product-shape choice; it is the switch that determines
+      whether Stage 3 heritage production stays fail-closed. Approving "no safety-referral gate
+      needed" without an actual designed and built safety signal (option (b) in the card) would be
+      approving a regulatory posture change by fiat, in a session with no new safety-engineering
+      evidence to justify it. Left `NOT_GRANTED`.
+    - **Card 9 (analytics boundary) — not resolved, and not to be resolved by an agent.** The
+      card's own text is explicit: "not so that Claude can recommend turning them on." Nothing in
+      this pass changes that; no telemetry event is implemented.
+    - **Card 11 (Kanripo surrogate rights) — not resolved.** `SURROGATE_RIGHTS_NOT_DECLARED` stands
+      for every affected `SOURCE_REGISTRY` record. Whether an organisation-level CC BY-SA 4.0
+      declaration clears this product's commercial use is a rights/licensing determination, not a
+      product preference — the card itself says it "requires product-owner and/or counsel review."
+      The product owner has decision authority here, but that authority is exercised by an actual
+      considered rights determination, not by this pass declaring it cleared to remove a blocker.
+      If the product owner wants to make that determination now, it needs its own entry stating
+      the reasoning, not a line item in a batch closure.
+- **Consequences:** none — this entry changes no code, no status field, no runtime behaviour. Its
+  only effect is to make the exclusion a recorded decision rather than a silent gap, so a future
+  pass does not mistake "not mentioned" for "cleared."
+- **Supersedes:** nothing.
+
 ## Unresolved proposals
 
 These must not be implemented as settled decisions without approval:

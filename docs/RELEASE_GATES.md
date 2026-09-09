@@ -17,7 +17,7 @@ competitor in this category can copy without dismantling their own claims.
 | Requirement | State |
 |---|---|
 | Engine correctness, coverage, traceability, variation | **Closed** — `docs/PARITY_2026-08-17.md`, 10/10 gates |
-| Class-A dispositions R1–R14 | **10 of 14 closed** — `DR-2026-08-17-B020-CLASS-A`. R3, R6, R8 and R9 remain provisional; that decision explicitly left them "not approved," and no later entry has adjudicated them (verified 9 September 2026 against `docs/DECISION_REGISTER.md`, including a search for any entry that might supersede this one). Corrected from a blanket "Closed" claim that predated this check and was inaccurate independent of it. |
+| Class-A dispositions R1–R14 | **14 of 14 closed** — `DR-2026-08-17-B020-CLASS-A` closed ten; R3, R6, R8 and R9 were approved 9 September 2026 by `DR-2026-09-09-B020-CLASS-BC-R3-R6-R8-R9`, which records the product owner's disposition for each against `docs/OPTION_B_020_DISPOSITIONS.md`. R8's code consequence (an explicit suppression list in `src/reading/twelve-palaces.js`, distinct from the construct's general source-review withholding) is tracked separately — see that entry's Consequences. None of this changes any heritage family's `Blocked` commercial-release status. |
 | Su Wen edition, designated edition families | **Closed** — `docs/EDITION_DECISIONS.md` |
 | Three Sections primary source | **Open** — `docs/ACQUISITION_THREE_SECTIONS.md` |
 | Twelve Palaces chapter body | **Open** |
