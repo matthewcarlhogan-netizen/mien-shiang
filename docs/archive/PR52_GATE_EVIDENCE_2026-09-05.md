@@ -1,3 +1,12 @@
+> **ARCHIVED, 9 September 2026.** Renamed from `docs/PR52_RELEASE_GATES.md` — the original name
+> collided with `docs/RELEASE_GATES.md` (content-readiness, canonical, current) and
+> `docs/STORE_RELEASE_GATES.md` (store-submission, canonical, current), inviting confusion about
+> which one governs. PR #52 merged 5 September 2026; this document's own "Independent Release
+> Gatekeeper review is pending" and "Next owner" lines are stale as a result and are left
+> unedited below as the historical record they are. Nothing in this file is superseded in
+> substance — it is dated evidence for a closed PR, kept for provenance, not a live gate status.
+> `docs/RELEASE_GATES.md` is canonical for current gate status.
+
 # PR #52 gate evidence and handoff
 
 ## Scope and versions

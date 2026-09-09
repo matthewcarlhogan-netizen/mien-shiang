@@ -651,7 +651,7 @@ export function regionStats(rgba, mask, w, h) {
  */
 // UNCALIBRATED starting points in EI units (100*log10(linear R/linear G)),
 // not CIE Delta E, error bounds or probabilities. See the low-end/device
-// protocol in docs/PR52_RELEASE_GATES.md before proposing any tuning.
+// protocol in docs/archive/PR52_GATE_EVIDENCE_2026-09-05.md before proposing any tuning.
 export const BOUNDARY_SENSITIVITY_EI_THRESHOLD = 1.5;
 export const BOUNDARY_SENSITIVITY_FOCAL_THRESHOLD = 1.5;
 
@@ -728,7 +728,7 @@ export function boundarySensitivity(rgba, fullMask, erodedMask, w, h) {
  * 200 lies between the sigma-5 and sigma-6 synthetic values. That separation
  * does NOT establish a phone's noise distribution or ISO: texture, sharpening
  * and denoising confound it. No physical-device calibration is claimed. Keep
- * this advisory; see docs/PR52_RELEASE_GATES.md for the low-end tuning protocol.
+ * this advisory; see docs/archive/PR52_GATE_EVIDENCE_2026-09-05.md for the low-end tuning protocol.
  */
 export const SENSOR_NOISE_VARIANCE_CEILING = 200;
 
