@@ -155,20 +155,19 @@ function renderQiSe(q, openDiffer) {
  */
 export const PALACE_SCOPE_NOTE =
   "A single front-on photo doesn't isolate the brows, eyelids, temples and outer eye corners as " +
-  "separate areas to read. Unclear regions stay unmeasured, and heritage interpretations remain " +
-  "withheld while the source chapter is under review.";
+  "separate areas to read. Unclear regions stay unmeasured regardless of whether a heritage reading " +
+  "is otherwise available for them.";
 
 function renderPalaces(tp, openDiffer) {
   if (!tp) return "";
   const row = (p) => `
     <details class="palace">
       <summary>${esc(p.name)}
-        ${p.heritageStatus === "RUNTIME_PROSE"
-          ? `<span class="muted small">— ${esc(p.location)}</span>`
-          : ""}
+        <span class="muted small">— ${esc(p.location)}</span>
         ${p.measured ? "" : `<span class="tag">not read</span>`}</summary>
       ${p.reading ? `<p>${esc(p.reading)}</p>` : ""}
       ${p.translationNote ? `<p class="muted small">${esc(p.translationNote)}</p>` : ""}
+      ${p.structuralNote ? `<p class="muted small">${esc(p.structuralNote)}</p>` : ""}
       ${p.measured
         ? ""
         : `<p class="muted small">${esc(p.notMeasuredNote)}</p>`}
@@ -190,8 +189,7 @@ function renderPalaces(tp, openDiffer) {
     complete
       ? `Complete scan · all ${supportedCount} supported palace regions available`
       : `Partial scan · ${tp.measuredCount} of ${supportedCount} supported palace regions available`,
-    `${lede("The Twelve Palaces layout is retained for source study. Its heritage interpretations are withheld until the chapter evidence is verified.")}
-     ${tp.sourceReviewNote ? `<p class="source-review-note">${esc(tp.sourceReviewNote)}</p>` : ""}
+    `${lede("Ten of the twelve palaces carry a classical reading, cited to their primary source. Two — where this project's own sources disagree on the palace's location — are measured but not interpreted; see the note on each.")}
      ${group("Available in this photo", read)}
      ${group("Supported, but not clear in this photo", missed)}
      ${group("Listed for context — not sampled", contextual)}

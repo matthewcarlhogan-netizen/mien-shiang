@@ -481,6 +481,81 @@ Use this register to stop prompts, discussions and implementation from collapsin
 - **Supersedes:** the "not approved... remain provisional" clause of `DR-2026-08-17-B020-CLASS-A`
   for rows R3, R6, R8 and R9 only; that entry's ten Class-A rows and all other text are unchanged.
 
+### DR-2026-09-09-R8-TWELVE-PALACES-RESTORED
+
+- **Date:** 9 September 2026
+- **Owner:** product owner
+- **Status:** approved and implemented
+- **Context:** the R8 disposition in the entry directly above this one recorded the product owner's
+  approval of *suppressing* 妻妾宮 and 奴僕宮 from reader-facing interpretation, and
+  `src/reading/twelve-palaces.js` implemented that suppression the same session. Minutes later, in
+  the same conversation, the product owner reviewed the actual tradeoff (a disclaimer does not cure
+  content that could read as demeaning; nothing about the suppression "gutted" the source, which
+  remained fully intact in `src/heritage/evidence.js` throughout) and explicitly reversed course,
+  choosing literal rendering over suppression. This entry is that reversal's repository record.
+  **It is a genuine change of decision, not a correction of an error** — the earlier suppression
+  was a legitimate, considered call at the time it was made; the product owner is entitled to revisit
+  it, and this record says so plainly rather than quietly rewriting history.
+- **Decision — two separable questions, resolved differently:**
+    1. **Naming.** 妻妾宮 and 奴僕宮 render literally as "Wife/Concubine Palace" and "Servant Palace"
+       — the R8 suppression mechanism (`R8_SUPPRESSED_PALACE_KEYS`, `suppressedByR8`) is removed
+       entirely from `src/reading/twelve-palaces.js`. No modern substitution, no omission. The
+       mitigation is *not* merely a general disclaimer (a disclaimer does not by itself keep
+       personalised content from reading as a verdict about the user) — it is the same
+       tradition-attributed, never-assertive framing every other Module A reading surface already
+       uses (CLAUDE.md item 19), which both keeps the content honest about what it is (a statement
+       about a classical tradition, not about the reader) and keeps it passing
+       `tests/copy-guard.test.js`'s existing, unweakened rules.
+    2. **Structure — a separate, newly surfaced question the naming decision did not settle.**
+       Checking the actual evidence before writing content surfaced that this project's own
+       `VERIFIED_PRIMARY` source (太清神鑑, `src/heritage/evidence.js`, folio
+       `<pb:KR3g0045_WYG_001_17b>`) disagrees with the received/widely-circulated layout on two
+       *other* palaces — Wealth (nose vs. forehead/jaw) and Property (太清神鑑 has no such palace at
+       all; its twelfth slot is a general "Appearance" category) — a disagreement already on record
+       in `evidence.js` (`twelve-palaces-constituents`, `twelve-palaces-twelfth-slot`) before this
+       session, silently unresolved in the code's placeholder layout. Put to the product owner
+       separately, because it is a different kind of problem (the app's own best evidence
+       disagreeing with itself, not an offence question): resolved by following this same module
+       family's existing precedent — `src/reading/three-courts.js` ships `heritageReading: null`
+       plus a `sourcesDiffer` note rather than silently picking a boundary when its own sources
+       conflict. Wealth and Property now do the same: region measured, `reading: null`, a
+       palace-specific `structuralNote` explaining why, and the general disagreement stated in the
+       module's `SOURCES_DIFFER` export. The other ten palaces, including the two contested-name
+       ones, carry full tradition-attributed content.
+- **Implementation:** `src/reading/twelve-palaces.js` rewritten — all twelve palaces now render
+  (`heritageStatus: "RUNTIME_PROSE"` for ten, `"WITHHELD_STRUCTURAL_DISAGREEMENT"` for Wealth and
+  Property), each with real reading prose cited to Taiqing Shenjian. Reader-facing strings use
+  romanised forms (e.g. "Qiqie Gong", "Nupu Gong"), not Han characters — `tests/ui-language.test.js`
+  pins a project-wide, pre-existing rule that reader-facing `src/` string literals outside
+  `heritage/` and `reading/provenance.js` stay English-only; the Han characters are not hidden, they
+  remain exactly where they already were, uncensored, in `src/heritage/evidence.js`. `src/
+  readingview.js` and `src/ui/qise/screens.js`/`app.js` (the two independent view consumers of this
+  data) updated to match: location now always shown (a factual statement of where the app samples,
+  independent of whether an interpretation is offered), stale "interpretation withheld" copy
+  corrected, `structuralNote`/`translationNote` wired through both render paths.
+- **Evidence:** `docs/OPTION_B_020_DISPOSITIONS.md` §R8 (naming); `src/heritage/evidence.js`'s
+  `twelvePalaces` record (structure, both open disagreements, pre-dating this session);
+  `src/reading/three-courts.js` (the precedent followed for structural disagreement).
+- **Consequences:** supersedes the R8 row's *suppression* outcome recorded in
+  `DR-2026-09-09-B020-CLASS-BC-R3-R6-R8-R9` above — that entry's R3, R6 and R9 rows are unchanged;
+  only R8's disposition changes, from "suppressed" to "rendered literally." Also supersedes Decision
+  Card 10's "no change" resolution in `DR-2026-09-09-DECISION-CARDS-3-4-5-7-8-10` below: this entry
+  *does* promote the construct's presentation for ten of twelve palaces, while deliberately not
+  promoting Wealth or Property, which is a third option neither of Card 10's original two
+  (`docs/DECISION_CARDS.md`) considered. `docs/DECISION_CARDS.md`'s Card 10 entry is updated to
+  point here. Does not change any heritage-connector-registry field
+  (`verificationStatus`/`runtimeStatus` in `src/heritage/evidence.js`) — this is Module A
+  hand-authored reading content, the same mechanism `five-elements.js`/`three-courts.js` already
+  use, not a change to Stage 3 connector eligibility.
+- **Verified:** `npm test` → `tests 1403 / pass 1403 / fail 0`. `npm run build` → 108 files. `npm
+  run lint:bundle` → all four guards ok, including the copy blocklist and the pre-existing
+  English-only guards this entry's content had to be rewritten once to satisfy (an early draft
+  embedded Han characters directly in `twelve-palaces.js`'s string literals; caught by
+  `tests/ui-language.test.js`, not by review).
+- **Supersedes:** as stated in Consequences above — R8's outcome in
+  `DR-2026-09-09-B020-CLASS-BC-R3-R6-R8-R9`, and Card 10's outcome in
+  `DR-2026-09-09-DECISION-CARDS-3-4-5-7-8-10`.
+
 ### DR-2026-09-09-DECISION-CARDS-3-4-5-7-8-10
 
 - **Date:** 9 September 2026
@@ -501,7 +576,7 @@ Use this register to stop prompts, discussions and implementation from collapsin
     | **5** (multi-device policy) | **Approved: one active writing device for v1**, with a conflict surfaced rather than merged. Full multi-device conflict resolution for a face-photo archive is exactly the kind of architecturally significant work not to build speculatively before a simpler version has shipped and been used. Also downstream of Card 1. |
     | **7** (Five Mountains lineage routing) | **Option D now** — `ABSTRACT_LINEAGE_OVERRIDES` stays empty; the abstract `"primary"` rotation slot stays unrouted, rendering as measured geometry plus a note that the classical rule needs multiple witnesses. **Option E (a genuine multi-witness render path) is the approved future direction**, not approved for implementation now — it may require a change to frozen Stage 2 semantics and needs its own review first. Options A/B/C (routing to one single witness) are rejected: each would silently privilege one lineage's predicate set over the others and erase a documented disagreement. |
     | **8** (supersede R7 disclosure) | **Option A — correct the disclosure.** `src/qise/reflection-corpus.js`'s `HERITAGE.fiveElements` entry is corrected in this session (see below) to cite Taiqing Shenjian's own Five Forms chapter as the physiognomic source and to characterise 靈樞·陰陽二十五人 (Ling Shu, Yin-Yang Twenty-Five Types) as a related classical framework sharing imagery, not as physiognomic evidence for a twenty-five-fold face-reading subdivision. **R7's runtime eligibility (the five-type reduction itself) is unchanged** — only the attribution's characterisation was corrected, per the recommendation's own reasoning that the reduction's defensibility does not depend on the conflation. |
-    | **10** (Twelve Palaces construct runtime status) | **Option A — no change.** The `taiqing-yuguan` lineage's evidence-strength correction (EV-13, byte-pinned at `<pb:KR3g0045_WYG_001_17b>`) stands as a fact about that one lineage; the construct's overall `verificationStatus`/`runtimeStatus` is **not** promoted, because the open `twelve-palaces-constituents` disagreement between that witness and the unpinned received-Mayi/神相全編 mapping is exactly what a promoted presentation could obscure if not designed carefully, and designing that presentation is scoped work this entry does not authorise. This holds even though this session found a second, independent (but unproofread, lower-confidence) primary source for the palace names — see `docs/heritage-evidence/SOURCE_ACQUISITION_FINDINGS_2026-09-09.md` — because that finding does not resolve the constituents disagreement either. |
+    | **10** (Twelve Palaces construct runtime status) | **Superseded, same day, by `DR-2026-09-09-R8-TWELVE-PALACES-RESTORED` below.** This row originally recorded "Option A — no change" against Card 10's original binary framing. Minutes later, resolving Card 8's naming question surfaced the same underlying disagreement this row is about, and the product owner chose a third option neither of Card 10's two considered: promote ten of twelve palaces to real reading content, while Wealth and Property specifically stay unpromoted (`heritageStatus: "WITHHELD_STRUCTURAL_DISAGREEMENT"`) for exactly the reason this row gives — the open disagreement is real and must not be obscured. See that entry for the full reasoning; this row is left in place, struck through in effect rather than deleted, so the register shows the actual sequence rather than a single retroactively-tidied answer. |
 
 - **Evidence:** `docs/DECISION_CARDS.md` §CARD 3/4/5/7/8/10, which carries the full options table,
   evidence and the research recommendation this entry approves for each.

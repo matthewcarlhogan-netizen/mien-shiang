@@ -1092,20 +1092,20 @@ function integratedStoryMarkup(model) {
     const revealId = `palace-reveal-${esc(palace.key)}`;
     const status = palace.measured ? "region available" : "region unavailable";
     const reading = palace.reading;
-    const sourceHeld = palace.heritageStatus !== "RUNTIME_PROSE";
     return `<article class="palace-card" data-open="false" data-palace="${esc(palace.key)}"
         style="--palace-index:${index};--palace-accent:var(--${palaceAccents[index % palaceAccents.length]})">
       <button class="palace-enter" type="button" aria-expanded="false" aria-controls="${revealId}">
         <span class="palace-number num">${String(index + 1).padStart(2, "0")}</span>
         <span class="palace-title"><strong>${esc(palace.name)}</strong>
-          ${sourceHeld ? "" : `<span class="muted">${esc(palace.location)}</span>`}</span>
+          <span class="muted">${esc(palace.location)}</span></span>
         <span class="palace-arrow" aria-hidden="true">↗</span>
       </button>
       <div class="palace-reveal" id="${revealId}" hidden>
         <span class="palace-tone" data-contextual="${!palace.measured}">${esc(status)}</span>
         ${reading
           ? `<p>${esc(reading)}</p>`
-          : `<p class="source-note">${esc(palace.sourceReviewNote || "Heritage interpretation withheld pending source review.")}</p>`}
+          : `<p class="source-note">${esc(palace.sourceReviewNote || "This project's own sources disagree on where this palace sits, so no heritage reading is offered for it.")}</p>`}
+        ${palace.translationNote ? `<p class="source-note">${esc(palace.translationNote)}</p>` : ""}
         ${palace.measured ? "" : `<p class="source-note">${esc(palace.notMeasuredNote)}</p>`}
       </div>
     </article>`;
@@ -1128,8 +1128,8 @@ function integratedStoryMarkup(model) {
     </section>
     <section class="structure-section palace-collection" id="palace-collection">
       <p class="eyebrow">Twelve Palaces</p>
-      <div class="palace-heading"><div><h2>Measured regions, interpretation withheld</h2>
-      <p class="muted">${model.palaces.measuredCount} of ${model.palaces.totalCount} regions were available in this scan. The chapter evidence is still under review.</p></div>
+      <div class="palace-heading"><div><h2>Ten of twelve palaces read; two measured only</h2>
+      <p class="muted">${model.palaces.measuredCount} of ${model.palaces.totalCount} regions were available in this scan. Two palaces are measured but not interpreted — see the placement note below.</p></div>
       <div class="palace-count" aria-label="${model.palaces.measuredCount} of ${model.palaces.totalCount} regions measured"><strong>${model.palaces.measuredCount}</strong><span>/ ${model.palaces.totalCount}</span></div></div>
       <div class="palace-grid">${palaces}</div>
       <button class="palace-delight" type="button" data-delight="palaces">Save this reading</button>

@@ -212,9 +212,11 @@ test("palaces are grouped as scope, with a reason, and none are fabricated", () 
   assert.ok(html.includes("Available in this photo (1)"));
   assert.ok(html.includes("Listed for context — not sampled (1)"));
   assert.ok(html.includes(PALACE_SCOPE_NOTE), "the six contextual palaces must be explained");
-  // The unread palace keeps its English name, while unverified mapping detail is withheld.
+  // The unsampled palace keeps its English name and location (a factual statement of
+  // where the app samples, shown regardless of heritage status), while the "not read"
+  // tag marks it as unsupported in this photo.
   assert.ok(html.includes("Siblings Palace"));
-  assert.ok(!html.includes("the eyebrows"));
+  assert.ok(html.includes("the eyebrows"));
   assert.ok(html.includes("not read"));
 });
 

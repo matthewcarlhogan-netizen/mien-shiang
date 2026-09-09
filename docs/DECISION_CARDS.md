@@ -231,9 +231,9 @@ shipped code**, per B1.
 
 ---
 
-## CARD 10 — Twelve Palaces construct runtime status — RESOLVED 9 September 2026
+## CARD 10 — Twelve Palaces construct runtime status — RESOLVED 9 September 2026 (superseded once, same day)
 
-**Resolved by `DR-2026-09-09-DECISION-CARDS-3-4-5-7-8-10`: Option A approved (no change)**, including against a second, lower-confidence corroborating source found this session — see `docs/heritage-evidence/SOURCE_ACQUISITION_FINDINGS_2026-09-09.md`. The open `twelve-palaces-constituents` disagreement is unresolved by that finding.
+**Resolved by `DR-2026-09-09-DECISION-CARDS-3-4-5-7-8-10`: initially "Option A, no change."** Superseded minutes later by `DR-2026-09-09-R8-TWELVE-PALACES-RESTORED`, once resolving Card 8's naming question surfaced the same underlying disagreement: ten of twelve palaces are now promoted to real reading content; Wealth and Property specifically stay unpromoted (measured, not interpreted) because their disagreement is real. Neither of this card's original two options anticipated that split; see the later entry for why it was chosen instead of either.
 
 **The question.** `docs/heritage-evidence/REPO_RECONCILIATION_MATRIX.md`'s EV-13 promotes the
 `twelvePalaces.lineages["taiqing-yuguan"]` lineage's evidence to `VERIFIED_PRIMARY` (the 十二宮
