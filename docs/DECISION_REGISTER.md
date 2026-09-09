@@ -100,7 +100,7 @@ Use this register to stop prompts, discussions and implementation from collapsin
     the second (`three-sections-pingdeng-yuguan`) record remains future work under this decision.
 
 - **D2-3 IMPLEMENTED (1 September 2026).** The second record, `three-sections-pingdeng-yuguan`,
-  is now added, following the field-by-field spec in `docs/agents/D2_GEMINI_HANDOFF.md` Task 2b
+  is now added, following the field-by-field spec in `docs/archive/D2_GEMINI_HANDOFF.md` Task 2b
   exactly: `relationshipPredicate: 平等`, `excludedPredicateClauses: ["和美"]` (the verse's
   harmony/beauty consequence-clause, excluded on the same grounds as the sibling record's `上相`),
   `sourceId: heritage-three-sections-yuguan` (an independent, byte-pinned, `VERIFIED_PRIMARY`

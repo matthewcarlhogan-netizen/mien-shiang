@@ -2,6 +2,11 @@
 
 **Branch:** `claude/capture-controller-rebuild-hw1pdf`
 
+**ARCHIVED, 9 September 2026** — the SUPERSEDED banner below already does
+this document's own superseding work in detail; moved to `docs/archive/`
+for provenance. Zero other files referenced this document by name,
+confirmed before archiving.
+
 ---
 
 ## SUPERSEDED, 6 September 2026 — read this before anything below

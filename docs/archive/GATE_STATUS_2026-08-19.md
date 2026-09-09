@@ -1,5 +1,11 @@
 # Gate status — public-release readiness
 
+**ARCHIVED, 9 September 2026 — dated snapshot, no longer regenerated.**
+`docs/RELEASE_GATES.md` is the canonical, current release-readiness
+contract; this file is retained as a point-in-time record of gate status as
+it stood on 19 August 2026. Zero other files in the repository referenced
+this file by name, confirmed before archiving.
+
 **As at 19 August 2026, after the cultural-review retirement.** Regenerate by hand when a
 gate moves; nothing here is automated, because nothing here can be
 self-certified.

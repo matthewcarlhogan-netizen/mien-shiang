@@ -746,7 +746,7 @@ export const HERITAGE_EVIDENCE = deepFreeze({
  * five-mountains-four-rivers-corresponds, four-rivers-shen-corresponds,
  * shen-requires-form, form-requires-shen, and
  * heritage-qise-modifies-form-shen-mountains-rivers. See
- * docs/HERITAGE_RECONCILIATION_2026-08-24.md and CLAUDE.md item 33-adjacent
+ * docs/archive/HERITAGE_RECONCILIATION_2026-08-24.md and CLAUDE.md item 33-adjacent
  * migration notes for why a flat cross-construct record was replaced by
  * several atomic edges rather than kept alongside them.
  */

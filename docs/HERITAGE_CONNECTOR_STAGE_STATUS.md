@@ -2,8 +2,8 @@
 
 Canonical freeze record for the heritage connector work. This is the file to
 read before touching `src/heritage/` or proposing new heritage connector
-work. It supersedes the WIP framing in `docs/HERITAGE_RECONCILIATION_2026-08-24.md`
-and `docs/HERITAGE_RESEARCH_HANDOFF_2026-08-23.md`, which remain as
+work. It supersedes the WIP framing in `docs/archive/HERITAGE_RECONCILIATION_2026-08-24.md`
+and `docs/archive/HERITAGE_RESEARCH_HANDOFF_2026-08-23.md`, which remain as
 historical working notes but do not describe the current, frozen state.
 
 ## Stage 1 — heritage connector data spine
@@ -17,7 +17,7 @@ and validator (`src/heritage/schema.js`, `src/heritage/validator.js`,
 `src/heritage/schema-helpers.js`) replaced the legacy
 `attestedCombinations`/`validateHeritageCombination` model. Went through
 multiple correction rounds, most recently reconciled against a
-source-verification addendum (`docs/HERITAGE_RECONCILIATION_2026-08-24.md`).
+source-verification addendum (`docs/archive/HERITAGE_RECONCILIATION_2026-08-24.md`).
 
 ## Stage 2 — deterministic heritage connector resolver
 

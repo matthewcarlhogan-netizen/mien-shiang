@@ -1,3 +1,12 @@
+**ARCHIVED, 9 September 2026** — Tasks 1 and 2 were implemented exactly as
+specified (`docs/HERITAGE_CONNECTOR_RELATIONSHIP_CONTRACT.md` §8/§8.7); Task
+3 was deliberately implemented differently, a narrower field set the product
+owner approved in its place — see that same contract's §8.2. Three live
+citations to this file (`src/heritage/registry.js:635,676`,
+`docs/DECISION_REGISTER.md`'s D2-3 entry, and
+`docs/HERITAGE_CONNECTOR_RELATIONSHIP_CONTRACT.md`) were updated to the new
+path in the same change that moved this file.
+
 # D-2 execution handoff — Gemini 2.5 Flash Lite
 
 Bounded, mechanical execution package. Architecture and source analysis are complete and frozen in

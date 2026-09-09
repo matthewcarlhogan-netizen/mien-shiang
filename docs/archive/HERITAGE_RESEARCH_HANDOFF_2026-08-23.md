@@ -1,6 +1,8 @@
 # Heritage research encoding handoff — 23 August 2026
 
-> **Update, 24 August 2026:** see `docs/HERITAGE_RECONCILIATION_2026-08-24.md`.
+**ARCHIVED, 9 September 2026** — historical working notes, per `docs/HERITAGE_CONNECTOR_STAGE_STATUS.md`'s own description of this file.
+
+> **Update, 24 August 2026:** see `docs/archive/HERITAGE_RECONCILIATION_2026-08-24.md`.
 > Items 4 and 7 below are superseded — 人倫風鑑 is now held at
 > `SOURCE_REQUIRED` rather than presented as a real provisional witness
 > pending a distinctness question, and the directional Five Mountains wording

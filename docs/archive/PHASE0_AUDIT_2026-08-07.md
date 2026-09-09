@@ -1,3 +1,9 @@
+**ARCHIVED and RENAMED, 9 September 2026 — moved to
+`docs/archive/PHASE0_AUDIT_2026-08-07.md`.** Dated 7 August 2026 snapshot,
+4+ weeks stale, zero other files referenced it by name. The rename resolves
+a basename collision: a second, unrelated `docs/proposals/android-native-
+camera/AUDIT.md` was added 7 September 2026 and is current.
+
 # AUDIT.md — Phase 0 repo audit
 
 Inventory of the repository as it actually is, against the target product

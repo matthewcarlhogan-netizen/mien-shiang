@@ -206,8 +206,8 @@ export const HERITAGE_REGISTRY = createHeritageRegistry();
  * yuebo-mountains-rivers-form-shen-configuration,
  * five-forms-generative-overcoming-system) encode the research dispositions
  * recorded in the Stage 1 handoff that the legacy model never captured at
- * all. See docs/HERITAGE_RECONCILIATION_2026-08-24.md for prior corrections
- * to the underlying source records this graph cites.
+ * all. See docs/archive/HERITAGE_RECONCILIATION_2026-08-24.md for prior
+ * corrections to the underlying source records this graph cites.
  */
 /*
  * Every field HERITAGE_CONNECTOR_FIELDS marks required must be present even
@@ -632,7 +632,7 @@ export const HERITAGE_CONNECTOR_REGISTRY = deepFreeze({
    * carries safely as connector-record content without touching a second
    * frozen file.
    *
-   * D2-3 (docs/agents/D2_GEMINI_HANDOFF.md Task 2a): `disagreementIds` and
+   * D2-3 (docs/archive/D2_GEMINI_HANDOFF.md Task 2a): `disagreementIds` and
    * `alternateConnectorIds` now declared explicitly, cross-referencing the
    * sibling `three-sections-pingdeng-yuguan` record below. `disagreementIds`
    * is not strictly load-bearing for reachability — `collectDisagreementIds()`
@@ -673,7 +673,7 @@ export const HERITAGE_CONNECTOR_REGISTRY = deepFreeze({
    * DR-2026-08-31-D2-CONNECTOR-PREDICATE (D2-3). The second of exactly two
    * Three Sections predicate records the decision register authorises — see
    * docs/DECISION_REGISTER.md's D2-3 entry and
-   * docs/agents/D2_GEMINI_HANDOFF.md Task 2b for the field-by-field spec this
+   * docs/archive/D2_GEMINI_HANDOFF.md Task 2b for the field-by-field spec this
    * record follows verbatim. Do NOT add a third: a
    * `three-sections-xiangcheng-taiqing` record would duplicate the sibling
    * connector above and is explicitly forbidden.
