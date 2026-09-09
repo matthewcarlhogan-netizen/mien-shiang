@@ -6,16 +6,11 @@ Paste the prompt below into a fresh Claude Code session opened at the repository
 
 You are working on the Mien Shiang repository. GitHub is the source of truth; chat memory and standalone prompts are not.
 
-Before proposing or changing anything, read in this order:
-
-1. `AGENTS.md`
-2. `CLAUDE.md`
-3. `docs/PROJECT_CHARTER.md`
-4. `docs/DECISION_REGISTER.md`
-5. `docs/AGENT_OPERATING_MODEL.md`
-6. `docs/INTERPRETATION_SYSTEM.md`
-7. `docs/scanner-development-report.md`
-8. the relevant files under `docs/agents/`
+Before proposing or changing anything, read `AGENTS.md` first — it is the
+canonical reading-order and workflow document — and follow its list in full,
+not a copy of it here. (This file used to duplicate that list; the duplicate
+drifted out of date at least once, which is exactly the failure a single
+canonical copy exists to prevent.)
 
 Then inspect the current code, tests, package scripts and recent relevant history. Report any disagreement between documentation and implementation before acting.
 

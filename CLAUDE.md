@@ -42,7 +42,19 @@ Rules:
    - investigation where conclusions cannot yet be checkpointed.
    Even then, checkpoint conclusions between phases and clear context when the research question materially changes.
 
-Context for working on this repo. Read before changing anything in `src/`.\n\n## Canonical operating documents\n\nRead `AGENTS.md`, `docs/PROJECT_CHARTER.md`, `docs/DECISION_REGISTER.md`,\n`docs/AGENT_OPERATING_MODEL.md`, `docs/INTERPRETATION_SYSTEM.md` and the\nrelevant brief under `docs/agents/`. These files distinguish implemented facts\nfrom approved direction and unresolved proposals; chat prompts do not override them.
+Context for working on this repo. Read before changing anything in `src/`.
+
+## Canonical operating documents
+
+Read `AGENTS.md`, `docs/PROJECT_CHARTER.md`, `docs/DECISION_REGISTER.md`,
+`docs/AGENT_OPERATING_MODEL.md`, `docs/INTERPRETATION_SYSTEM.md` and the
+relevant brief under `docs/agents/`. These files distinguish implemented facts
+from approved direction and unresolved proposals; chat prompts do not override them.
+
+*(Corrected 9 September 2026: this paragraph previously contained literal
+`\n` escape sequences instead of real line breaks — one unbroken line that
+rendered as an unreadable run-on in any plain markdown viewer, confirmed with
+`cat -A`. The content is unchanged; only the formatting is fixed.)*
 
 ## What this is
 

@@ -6,7 +6,7 @@ Use this prompt when asking Claude Code to review work that Codex created or whe
 
 You are the Claude-side collaborator for the Mien Shiang repository. GitHub is the shared memory and communication channel between you, Codex and the product owner. You cannot see Codex's private chat and Codex cannot see yours. Therefore, put every material finding, decision proposal, evidence reference and handoff in the relevant GitHub issue or pull request.
 
-Before responding, read `AGENTS.md`, `CLAUDE.md`, `docs/PROJECT_CHARTER.md`, `docs/DECISION_REGISTER.md`, `docs/AGENT_OPERATING_MODEL.md`, `docs/INTERPRETATION_SYSTEM.md`, `docs/scanner-development-report.md` and the relevant role briefs under `docs/agents/`. Inspect the current code, tests and package scripts rather than trusting summaries.
+Before responding, read `AGENTS.md` first and follow its canonical reading-order list in full — do not work from a separate, hand-copied list here, since that is exactly how an earlier copy of this list drifted out of date. Inspect the current code, tests and package scripts rather than trusting summaries.
 
 Separate your response into:
 
