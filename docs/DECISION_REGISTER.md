@@ -295,6 +295,153 @@ Use this register to stop prompts, discussions and implementation from collapsin
 - **PR #55 disposition:** closed as superseded. It was a diagnosis-only handoff brief written
   against an earlier state of `main`; this record and its implementation supersede it directly.
 
+### DR-2026-09-09-GUIDED-MULTIVIEW-CAPTURE
+
+- **Date:** 9 September 2026
+- **Owner:** product owner
+- **Status:** approved — direction and constraints only. This is the first repository record of
+  this decision. No `DR-2026-09-07-GUIDED-MULTIVIEW-CAPTURE` or any similarly named entry existed
+  before this one: verified by a full-repository grep and a `git log --all` search across every
+  branch and commit on 9 September 2026, both returning zero matches. The direction was discussed
+  conversationally earlier in the same product-owner session that produced this entry; that
+  conversation is not itself a repository decision, and this entry does not claim it was.
+- **Context:** the product's stated north star is a fast, deliberate daily-portrait ritual, not a
+  biometric scanning procedure. The current capture flow (`src/qise/`, `src/ui/qise/app.js`) is
+  single-frontal-view, still-photo, burst-based (`BURST_FRAMES = 9`, `src/qise/camera.js`). This
+  decision authorises exploring a guided multi-view capture architecture as a bounded direction,
+  under an explicit governing test rather than an open licence to capture more:
+  > *"What is the smallest guided capture sequence that can legitimately expose the largest useful
+  > set of already-authorised observations?"* — never *"what is the largest number of views we can
+  > technically capture?"* An additional view earns a place in the default flow only by meaningful
+  > authorised utility it cannot reliably obtain from the canonical frontal view alone, never merely
+  > because the camera can technically capture it.
+- **Four things this decision keeps distinct**, because collapsing any pair is the actual risk in
+  "richer capture, richer product": **source authority** (what the historical corpus attests),
+  **measurement authority** (what a validated method can legitimately measure), **capture
+  observability** (what a capture session makes observable), and **product output** (what the
+  application actually shows). Improved observability must never jump directly to product output
+  without first clearing source and measurement authority — the same discipline `rawScalars()` /
+  `analyse()` already enforce in `src/engine.js` (CLAUDE.md item 16) and `RESEARCH_ONLY` /
+  `RUNTIME_PROSE` already enforce in the heritage connector registry. Multi-view capture gets no
+  exception to it.
+- **Decision — five product-owner determinations, plus the constraints that bound them:**
+    - **A. First-release capture scope.** Canonical frontal capture, controlled left oblique, and
+      controlled right oblique — three views, no more. Profile, rear, ear-specific, top/bottom or
+      any other view is explicitly **excluded from the first release** unless the repository later
+      contains evidence that makes a specific one both necessary and authorised; absent that
+      evidence, it stays out. This is a scope decision, not an approval of exact yaw/pitch values
+      for the two oblique views — those remain calibration parameters (see below).
+    - **B. Capture technology.** The target is a short guided **video** capture session, not a
+      sequence of manually requested stills: `open → guided capture → automatic acquisition →
+      automatic quality assessment → automatic valid-frame/segment selection → reading/portrait`.
+      The video is an acquisition mechanism, not a new data product. Automatic frame/segment
+      selection is permitted only bounded by the existing quality and safety architecture (see
+      constraint 2 below) and must never optimise for flattering appearance, attractiveness, a more
+      interesting or favourable reading, or construct availability at the expense of valid capture
+      quality.
+    - **C. Stage 3 is not a capture dependency.** Guided multi-view capture does not require, and
+      must not be blocked on, Stage 3 heritage production work. Capture observability does not
+      create source authority, does not create measurement authority, does not promote a
+      `RESEARCH_ONLY` connector, and does not authorise Stage 3 production — a future Stage 3
+      promotion remains its own, separate decision regardless of what capture makes observable.
+    - **D. Capture burden.** Product-experience targets, not calibrated runtime constants: roughly
+      10–20 seconds for the guided capture itself, with the overall default flow staying under 60
+      seconds. Exact duration, frame rate, yaw/pitch targets, pose tolerance, quality thresholds and
+      scanner thresholds are **not** set by this decision — they require calibration, device
+      testing and regression evidence, exactly as `docs/CALIBRATION_TODO.md`'s existing open items
+      already do for the current pipeline. The user is not exposed to yaw/pitch/landmark/confidence
+      mechanics unless later usability evidence explicitly justifies it; automatic progression is
+      preferred over a checklist of poses.
+    - **E. Fairness ownership.** Engineering/research owns producing the fairness evidence; the
+      product owner owns final release acceptance of it. Evaluation should consider skin tone, age,
+      device tier/camera characteristics, resolution, lighting, pose, frame-selection behaviour, and
+      capture failure/retry/abstention behaviour, **where the available evidence supports doing
+      so** — this decision does not invent a demographic-testing harness the repository does not
+      have; if one is required, that is implementation work to scope separately, not something to
+      pretend already exists.
+    - **1. Epistemic separation is absolute, unchanged by capture richness.** Qi Se stays
+      within-subject, self-referenced, longitudinal. The canonical frontal segment stays the
+      longitudinal reference unless a *separate* decision validates and approves an alternate
+      baseline. Alternate views never silently enter the historical baseline. No between-subject
+      comparison, no demographic classification, and none of the fourteen prohibited-inference
+      categories already listed in this register (`docs/OPTION_B_020_DOSSIER.md` §10.2) gain a new
+      pathway because a new view exists.
+    - **2. "Controlled view" is a runtime contract, not prose.** A frame does not become a
+      controlled view because the user happened to turn their head. It requires an explicit guided
+      target, measurable pose/quality/illumination validity, bounded acceptance conditions, and
+      deterministic rejection of invalid frames. This decision does not fix the numbers.
+    - **3. Best-frame/segment selection is bounded by the existing gates, not a new one.** It must
+      operate within the existing `captureQualityGate → safetyGate` precedence (`docs/
+      PRODUCT_DESIGN_V2.md`, cited live from `src/heritage/composition.js:20`), never weaken either
+      gate, use deterministic and versioned criteria, preserve longitudinal comparability (matching
+      the `basis`-tagging discipline `glowIndex`/harmony already use — CLAUDE.md items 18 and 33),
+      reject invalid frames rather than choose the least-bad invalid one, and abstain if no valid
+      frame exists.
+    - **4. Confidence measures capture/measurement quality only.** It cannot create a construct,
+      authorise a source relationship or a proxy, rescue invalid anatomy, override an abstention or
+      a safety gate, widen an existing output boundary, or become a hidden user score. Higher
+      confidence means stronger evidence for an already-authorised observation, never broader
+      product authority.
+    - **5. The privacy boundary covers the whole acquisition pipeline.** Raw video, transient
+      frames, processed frames, landmarks, geometry, intermediate representations, embeddings,
+      metadata, logs, caches and crash/error artifacts are all in scope. Moving from still capture
+      to video must not silently create persistent biometric storage: raw video and transient
+      frames stay volatile by default, and nothing is persisted or transmitted merely because the
+      capture class changed. **This decision authorises no persistent biometric embedding of any
+      kind.** Any future proposal to persist one is a separate decision against `docs/
+      SECURITY_PRIVACY_THREAT_MODEL.md` and `docs/LOCAL_AND_CLOUD_DATA_ARCHITECTURE.md`.
+    - **6. Enforcement is architectural, not documentary.** A capture session would conceptually
+      need to represent canonical frontal capture, left- and right-oblique capture, view/capture
+      class, quality evidence, per-view availability, confidence, and abstention state. Measurement
+      resolution consumes only capture classes it explicitly supports; a missing required view fails
+      closed; there is no silent fallback from oblique to a frontal proxy, from unavailable anatomy
+      to an invented proxy, or from an invalid frame to a "best available" invalid one. This
+      decision does not prescribe an exact object shape — that is an implementation task to weigh
+      against the current architecture, not a decision to make in the abstract.
+    - **7. Traditional/heritage fidelity cannot be a casualty of better capture.** Source
+      disagreement, multiple lineages, partial observability and attribution are all preserved, per
+      the existing heritage connector disagreement-preservation contract (`docs/
+      HERITAGE_CONNECTOR_RELATIONSHIP_CONTRACT.md`; CLAUDE.md item 20). Richer capture is not
+      licence to erase ambiguity, silently modernise a traditional relationship, or convert an
+      observable geometry into a traditional claim the source evidence and measurement authority
+      don't already support.
+    - **8. The current production pipeline stays authoritative until a replacement earns it**,
+      against the acceptance criteria listed below. A rollback path is required. A technically
+      working prototype is not sufficient grounds to demote the current pipeline.
+- **Consequences:** authorises bounded architectural design and prototyping work toward guided
+  multi-view capture, under every constraint above. It does not authorise writing or shipping
+  production capture code, and does not itself change `src/qise/`, `src/ui/qise/app.js`, or any
+  gate/threshold in `src/qise/gates.js`.
+- **Explicit non-consequences:**
+    - Does not approve exact capture duration, frame rate, yaw/pitch targets, pose tolerance, or
+      any capture-quality or scanner threshold.
+    - Does not approve new landmark mappings, auricle measurement, calibrated 3D reconstruction, or
+      3D reconstruction as a proxy for missing evidence.
+    - Does not approve any new construct, any new measurement, or any Stage 3 heritage production
+      behaviour (constraint C).
+    - Does not adjudicate R3, R6, R8 or R9 — those remain governed by whatever this register
+      separately says about them, unaffected by this entry.
+    - Does not reintroduce the independent cultural-review requirement retired by
+      `DR-2026-08-19-CULTURAL-REVIEW-RETIREMENT`.
+    - Does not change the current production capture pipeline's authoritative status, and does not
+      change scanner code, capture-quality gates, or safety gates.
+    - Does not modify pull request #61 or anything on its branch.
+    - Does not authorise any medical, personality, fortune, longevity, wealth/rank, destiny,
+      attractiveness, identity, or other already-prohibited inference — the existing
+      fourteen-item prohibited-inference list is unchanged.
+- **Acceptance criteria before any replacement of the current capture pipeline:** repeatability
+  (measured test-retest agreement); longitudinal baseline compatibility (no accidental second,
+  incompatible baseline); regression against the current pipeline (same subject, same conditions,
+  both pipelines, diffed); capture-quality-gate preservation or measured improvement; safety-gate
+  preservation; a full-pipeline privacy audit against constraint 5; p95 time-to-valid-capture and a
+  total capture-time budget; a declared physical-device coverage matrix; deterministic behaviour;
+  graceful failure; correct, tested abstention; per-view availability correctness; zero
+  unauthorised claim expansion (a copy-guard-style scan, matching `tests/copy-guard.test.js`'s
+  method); fairness evidence (constraint E); an exercised rollback path; no persistent biometric
+  embeddings; no hidden proxy substitution. A technically working prototype does not by itself
+  satisfy this list.
+- **Supersedes:** nothing. No prior entry addressed guided multi-view capture.
+
 ## Unresolved proposals
 
 These must not be implemented as settled decisions without approval:
