@@ -28,6 +28,7 @@ import {
 } from "../../qise/camera.js";
 import { createLandmarkerWithFallback } from "../../landmarker.js";
 import { createFrameScheduler } from "../../qise/frame-scheduler.js";
+import { faceGuideRect } from "../../qise/frame-geometry.js";
 import {
   fitSelfieDimensions, validateSelfieDimensions, validateSelfieFile,
 } from "../../qise/upload.js";
@@ -41,7 +42,7 @@ import {
 } from "../../qise/illumination.js";
 import { createScreenWakeLock } from "../../qise/wakelock.js";
 import {
-  evaluateGates, captureGuide, captureInstruction, canUseCurrentLight,
+  evaluateGates, captureGuide, captureInstruction, canUseCurrentLight, DISTANCE_MIN_FRACTION,
 } from "../../qise/gates.js";
 import { frameStats } from "../../qise/framestats.js";
 import { computeReadingMetrics, lumRatioP90P50 } from "../../qise/metrics.js";
@@ -73,6 +74,34 @@ const FACE_MODEL = new URL(
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+/**
+ * Size and position the face guide from the ACTUAL rendered capture-frame
+ * box, so it represents the same buffer fraction the `distance` gate
+ * measures whatever crop `object-fit: cover` is currently applying
+ * (src/qise/frame-geometry.js). Without this the guide was a static CSS
+ * oval with no principled relationship to DISTANCE_MIN_FRACTION — CLAUDE.md
+ * item 57's exact failure mode, present here even though beta.js already
+ * carried the fix.
+ */
+function applyFaceGuide(video) {
+  const box = $("capture-frame");
+  const guide = $("face-guide");
+  if (!box || !guide || !video.videoWidth || !video.videoHeight) return;
+  const rect = box.getBoundingClientRect();
+  if (!(rect.width > 0) || !(rect.height > 0)) return;
+  const guideRect = faceGuideRect({
+    bufferWidth: video.videoWidth,
+    bufferHeight: video.videoHeight,
+    boxWidth: rect.width,
+    boxHeight: rect.height,
+    minInterocularFraction: DISTANCE_MIN_FRACTION,
+  });
+  guide.style.left = `${(guideRect.leftFraction * 100).toFixed(3)}%`;
+  guide.style.top = `${(guideRect.topFraction * 100).toFixed(3)}%`;
+  guide.style.width = `${(guideRect.widthFraction * 100).toFixed(3)}%`;
+  guide.style.height = `${(guideRect.heightFraction * 100).toFixed(3)}%`;
+}
 
 const consent = createConsent();
 let store = null;
@@ -258,6 +287,7 @@ async function runCapture() {
   let landmarker = null;
   try {
     await attachCameraPreview(video, opened.stream);
+    applyFaceGuide(video);
     const focus = await ensureContinuousFocus(opened.track);
     landmarker = await buildLandmarker("VIDEO");
     opened.focusSupported = focus.supported;
