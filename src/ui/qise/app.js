@@ -125,6 +125,13 @@ function show(id) {
   for (const s of document.querySelectorAll(".screen")) {
     s.dataset.active = String(s.id === id);
   }
+  // A step change, not an in-page scroll — leftover scroll position from
+  // the previous screen otherwise persists onto the new one. Harmless when
+  // every screen fit in one viewport; not harmless now that the capture
+  // frame is tall and sits at the very top of its screen, where a few
+  // hundred pixels of inherited scroll crops straight into the live camera
+  // preview a person is about to use.
+  window.scrollTo(0, 0);
 }
 
 function selectReadingTab(name, { scroll = true } = {}) {
