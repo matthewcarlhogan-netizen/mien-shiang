@@ -267,8 +267,29 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .pattern-count{font-size:.78rem;opacity:.72}
 .pattern-intro{margin-bottom:1rem}
 .reading-actions{margin-top:1rem}
-.capture-frame{--halo-screen-strength:.18;--manual-preview-brightness:1;position:relative;overflow:hidden;border:1px solid var(--qise-border);border-radius:26px;background:#0B0A09;box-shadow:0 22px 60px rgba(0,0,0,.24)}
-.capture-frame video,.capture-frame canvas{display:block;width:100%;height:min(56svh,34rem);object-fit:cover}
+.visually-hidden-label{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+/* Full-bleed: the camera is the screen, not a photo inside a card. Bleeds
+   past .wrap's 1rem side padding (the negative margin cancels it exactly)
+   so the face genuinely fills the width on a phone, matching the immersive-
+   viewfinder feel of every mainstream camera app rather than a bordered
+   thumbnail with a separate status panel underneath it.
+   Vertically it fills the device screen too: show() toggles
+   body.capture-live, which hides the app header and zeroes .wrap's top
+   padding, so 100dvh of video starts at the physical top of the screen —
+   not "78% of the viewport inside a card" as an earlier pass shipped.
+   Everything below the frame (restart, the selfie fallback) still exists in
+   normal document flow, one scroll away — nothing is removed, only no
+   longer fighting the camera for the first screenful. */
+body.capture-live .app-head{display:none}
+body.capture-live .wrap{padding-top:0}
+.capture-frame{--halo-screen-strength:.18;--manual-preview-brightness:1;position:relative;overflow:hidden;margin:0 -1rem;background:#0B0A09}
+.capture-frame video,.capture-frame canvas{display:block;width:100%;height:100vh;height:100dvh;object-fit:cover}
+@media (min-width:640px){
+  /* Full-height on a phone is a viewfinder; full-height on a desktop tab is
+     just a very tall, very narrow video. Cap it once .wrap's own 42rem
+     width cap makes that shape look wrong instead of immersive. */
+  .capture-frame video,.capture-frame canvas{height:min(100dvh,42rem)}
+}
 .capture-frame video{filter:brightness(var(--manual-preview-brightness));transition:filter .12s linear}
 .capture-frame[data-preview-lift="true"] video{filter:brightness(2.15) contrast(.88) saturate(.9)}
 .capture-frame [hidden]{display:none}
@@ -310,25 +331,45 @@ html[data-screen-flash="true"] .capture-badge span{background:#FFFDF5;box-shadow
 .illumination-choice-status{margin:.65rem 0 0 1.8rem;font-size:.76rem;opacity:.76}
 .illumination-state{display:inline-flex;margin:0 0 .5rem;padding:.28rem .55rem;border:1px solid var(--qing);border-radius:999px;color:var(--qing);font-size:.7rem;letter-spacing:.04em}
 .illumination-state[hidden]{display:none}
-.capture-status{margin:.85rem 0 0}
-.capture-progress-head{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:.45rem;font-size:.72rem;letter-spacing:.04em}
-.capture-progress-head strong{font-weight:600}.capture-progress-head span{opacity:.66}
-.capture-guide{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,1fr);gap:.3rem}
-.capture-guide li{display:grid;justify-items:center;gap:.25rem;padding:.15rem 0;color:color-mix(in srgb,var(--qise-ink) 58%,transparent);font-size:.68rem}
-.capture-guide li::before{content:"";width:.62rem;height:.62rem;border:2px solid var(--qise-border);border-radius:50%}
-.capture-guide li[data-state="ready"]{color:var(--qise-ink)}
-.capture-guide li[data-state="ready"]::before{background:var(--qing);border-color:var(--qing);box-shadow:0 0 0 3px color-mix(in srgb,var(--qing) 15%,transparent)}
-.capture-guide li[data-state="adjust"]{color:var(--huang);font-weight:600}
-.capture-guide li[data-state="adjust"]::before{border-color:var(--huang);box-shadow:0 0 0 3px color-mix(in srgb,var(--huang) 15%,transparent)}
-.capture-coach{margin:.7rem 0 0;padding:1rem;border:1px solid color-mix(in srgb,var(--huang) 50%,var(--qise-border));border-radius:18px;background:linear-gradient(135deg,color-mix(in srgb,var(--huang) 10%,var(--qise-surface)),var(--qise-surface));box-shadow:0 12px 30px color-mix(in srgb,var(--qise-shadow) 50%,transparent)}
-.capture-coach[data-state="ready"]{border-color:color-mix(in srgb,var(--qing) 65%,var(--qise-border));background:linear-gradient(135deg,color-mix(in srgb,var(--qing) 13%,var(--qise-surface)),var(--qise-surface))}
-.capture-coach .eyebrow{margin-bottom:.2rem;color:inherit;opacity:.62}
-.capture-coach h2{font-family:var(--passage);font-size:1.22rem;line-height:1.25;margin:0}
-.capture-coach-detail{margin:.35rem 0 0;font-size:.82rem;line-height:1.5;opacity:.76}
-.capture-help{margin:.65rem 0 0;font-size:.76rem;opacity:.7}
-.capture-actions{display:grid;grid-template-columns:1fr 1fr;gap:.45rem;margin-top:.8rem}
-.capture-actions button{font-size:.78rem;min-height:44px;padding:.45rem .7rem;border-color:var(--qise-border);border-radius:12px}
-.capture-actions button[data-emphasis="true"]{grid-column:1/-1;background:var(--qise-ink);border-color:var(--qise-ink);color:var(--qise-action-fg)}
+/* The whole readiness/coaching stack now lives OVERLAID on the frame
+   itself (see the markup comment in qise.html), not as a card stacked
+   below it — so a person reads it without looking away from their own
+   face. pointer-events:none on the scrim keeps the (mostly transparent)
+   upper part of the gradient from blocking taps on the video/guide behind
+   it; buttons opt back in. Text is light-on-dark here regardless of the
+   page's light/dark theme, because it sits on a live camera feed whose
+   brightness this app cannot control — a fixed scrim is what keeps
+   WCAG AA contrast guaranteed rather than theme-dependent. */
+.capture-overlay{position:absolute;left:0;right:0;bottom:0;z-index:8;padding:1.4rem 1rem 1.3rem;background:linear-gradient(180deg,transparent 58%,rgba(11,10,9,.7) 80%,rgba(11,10,9,.92));color:#F1EDE4;pointer-events:none}
+.capture-overlay button{pointer-events:auto}
+/* The per-gate checklist (Face/Light/Clear/Still + "N of 4 ready") is gone
+   from view on purpose, not merely restyled: it was the "look for 4 green
+   lights" scan this screen was rejected over. The ring already carries one
+   unified ready/not-ready signal, and #gate-line already carries the one
+   sentence naming what's still wrong — a four-way checklist was a second,
+   more granular readout of information the ring and the line already give,
+   and asking a person to reconcile three simultaneous readouts while
+   holding a pose was the actual defect. app.js keeps writing to these
+   elements (renderCaptureGuide, capture-ready-count) for anything that
+   still reads their text — e.g. a screen reader landing mid-flow — so
+   nothing downstream had to change, only their visibility here. */
+.capture-progress-head{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.capture-coach{margin:0}
+.capture-coach-line{font-family:var(--passage);font-size:.92rem;line-height:1.3;margin:0;color:#F1EDE4}
+.capture-coach[data-state="ready"] .capture-coach-line{color:var(--qing)}
+.capture-coach-detail{margin:.2rem 0 0;font-size:.74rem;line-height:1.4;color:rgba(241,237,228,.72)}
+.capture-help{margin:.5rem 0 0;font-size:.74rem;color:rgba(241,237,228,.7)}
+/* Buttons are a "skip the wait" shortcut, not an instruction — the auto-arm
+   logic they shortcut already runs without any tap (see the markup
+   comment). Floated clear of the coach text instead of sitting inline
+   below it, because an inline pill row read as two things to deal with
+   while also holding a pose. Still real, labelled, 44px controls — nothing
+   here is smaller or harder to reach, only out of the eyeline the ring and
+   the face already own. Each stays independently hidden by app.js and
+   appears only in the rare case auto-handling needs an explicit nudge. */
+.capture-actions{position:absolute;right:1rem;bottom:5.4rem;z-index:9;display:flex;flex-direction:column;align-items:flex-end;gap:.4rem}
+.capture-actions button{font-size:.72rem;min-height:44px;padding:.4rem .85rem;border-radius:999px;border:1px solid rgba(241,237,228,.35);background:rgba(17,15,13,.62);color:#F1EDE4;backdrop-filter:blur(8px)}
+.capture-actions button[data-emphasis="true"]{background:#F1EDE4;color:#171411;border-color:transparent}
 .capture-secondary-actions{display:flex;justify-content:center;margin-top:.55rem}
 .capture-secondary-actions button{min-height:36px;padding:.25rem .55rem;border:0;text-decoration:underline;text-underline-offset:.18em;font-size:.72rem;opacity:.72}
 .upload-panel{margin-top:1rem}
@@ -350,7 +391,6 @@ html[data-screen-flash="true"] .capture-badge span{background:#FFFDF5;box-shadow
 @media (max-width:480px){
   .app-head{flex-wrap:nowrap;margin-bottom:1.25rem}
   .privacy-mark{display:none}
-  .capture-frame video,.capture-frame canvas{height:min(46svh,28rem)}
   .palace-grid{grid-template-columns:1fr}
   .today-next{grid-template-columns:1fr}
   .today-next button{width:100%}
@@ -422,8 +462,8 @@ html[data-screen-flash="true"] .capture-badge span{background:#FFFDF5;box-shadow
 
 <!-- ═══ Phase 4 — capture ════════════════════════════════════════════════ -->
 <section class="screen" id="screen-capture" aria-labelledby="capture-h">
-  <p class="eyebrow">Face scan</p>
-  <h1 id="capture-h">Step into the frame</h1>
+  <p class="eyebrow visually-hidden-label">Face scan</p>
+  <h1 id="capture-h" class="visually-hidden-label">Step into the frame</h1>
   <div class="capture-frame" id="capture-frame" data-preview-lift="false"><video id="preview" playsinline muted autoplay aria-label="Camera preview"
          style="width:100%;transform:scaleX(-1)"></video>
     <canvas id="selfie-preview" hidden aria-label="Selected selfie preview"></canvas>
@@ -439,27 +479,36 @@ html[data-screen-flash="true"] .capture-badge span{background:#FFFDF5;box-shadow
     </div>
     <div class="capture-badge" aria-hidden="true"><span></span> Auto capture</div>
     <div class="illumination-wash" id="illumination-wash" hidden aria-hidden="true"></div>
-  </div>
 
-  <div class="capture-status">
-    <p class="illumination-state" id="illumination-state" hidden></p>
-    <div class="capture-progress-head"><strong>Photo check</strong><span id="capture-ready-count">0 of 4 ready</span></div>
-    <ul class="capture-guide" id="capture-guide" aria-label="Scan readiness">
-      <li data-guide="frame" data-state="waiting">Face</li>
-      <li data-guide="light" data-state="waiting">Light</li>
-      <li data-guide="camera" data-state="waiting">Clear</li>
-      <li data-guide="steady" data-state="waiting">Still</li>
-    </ul>
-    <section class="capture-coach" id="capture-coach" data-state="adjust" role="status" aria-live="polite" aria-atomic="true">
-      <p class="eyebrow">Do this now</p>
-      <h2 id="gate-line">Opening the camera</h2>
-      <p class="capture-coach-detail" id="gate-detail">Bring your face into the oval.</p>
-      <div class="capture-actions">
-        <button id="screen-light" type="button" aria-pressed="false" hidden>Turn on screen flash</button>
-        <button id="use-current-light" type="button" hidden>Use this light anyway</button>
-        <button id="refocus-camera" type="button" hidden>Refocus camera</button>
+    <!-- Overlaid on the frame itself, not stacked below it — readiness lives
+         where a person is already looking (their own face), instead of a
+         separate panel that has to be found and read while also holding a
+         pose. Buttons here are a "skip the wait" shortcut only: the
+         underlying auto-arm logic (shouldUseScreenFlash / RefocusRecovery /
+         the assisted-limits grace period) already runs without any tap —
+         see camera.js / exposure-halo.js. Their timing is unchanged; only
+         how insistently they're presented has. -->
+    <div class="capture-overlay">
+      <p class="illumination-state" id="illumination-state" hidden></p>
+      <div class="capture-progress-head">
+        <ul class="capture-guide" id="capture-guide" aria-label="Scan readiness">
+          <li data-guide="frame" data-state="waiting">Face</li>
+          <li data-guide="light" data-state="waiting">Light</li>
+          <li data-guide="camera" data-state="waiting">Clear</li>
+          <li data-guide="steady" data-state="waiting">Still</li>
+        </ul>
+        <span id="capture-ready-count">0 of 4 ready</span>
       </div>
-    </section>
+      <section class="capture-coach" id="capture-coach" data-state="adjust" role="status" aria-live="polite" aria-atomic="true">
+        <p id="gate-line" class="capture-coach-line">Opening the camera</p>
+        <p class="capture-coach-detail" id="gate-detail">Bring your face into the oval.</p>
+        <div class="capture-actions">
+          <button id="screen-light" type="button" aria-pressed="false" hidden>Turn on screen flash</button>
+          <button id="use-current-light" type="button" hidden>Use this light anyway</button>
+          <button id="refocus-camera" type="button" hidden>Refocus camera</button>
+        </div>
+      </section>
+    </div>
   </div>
   <svg class="spark" id="gate-ring" viewBox="0 0 100 6" aria-hidden="true">
     <line x1="0" y1="3" x2="100" y2="3" stroke="var(--qise-track)" stroke-width="4" />

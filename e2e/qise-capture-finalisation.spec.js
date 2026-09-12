@@ -100,10 +100,19 @@ test("production: the face guide is sized from faceGuideRect(), not the static C
     minInterocularFraction: DISTANCE_MIN_FRACTION,
   });
 
-  expect(guideStyle.left).toBe(`${(expected.leftFraction * 100).toFixed(3)}%`);
-  expect(guideStyle.top).toBe(`${(expected.topFraction * 100).toFixed(3)}%`);
-  expect(guideStyle.width).toBe(`${(expected.widthFraction * 100).toFixed(3)}%`);
-  expect(guideStyle.height).toBe(`${(expected.heightFraction * 100).toFixed(3)}%`);
+  // Compared as numbers, not as exact strings: app.js writes a `.toFixed(3)`
+  // string into the inline style, but the browser's CSSOM re-serializes a
+  // percentage on readback and drops an insignificant trailing zero
+  // ("25.350%" round-trips as "25.35%", "10.000%" as "10%") — verified
+  // directly against this engine, not assumed. A string comparison is
+  // therefore fragile to exactly how "round" the current box's pixel
+  // dimensions happen to be, which has nothing to do with whether the guide
+  // was actually derived from faceGuideRect(). Real, unrelated regressions
+  // in the computed fraction still fail this at ordinary float precision.
+  expect(parseFloat(guideStyle.left)).toBeCloseTo(expected.leftFraction * 100, 3);
+  expect(parseFloat(guideStyle.top)).toBeCloseTo(expected.topFraction * 100, 3);
+  expect(parseFloat(guideStyle.width)).toBeCloseTo(expected.widthFraction * 100, 3);
+  expect(parseFloat(guideStyle.height)).toBeCloseTo(expected.heightFraction * 100, 3);
 });
 
 /*
