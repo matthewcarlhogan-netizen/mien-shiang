@@ -278,7 +278,15 @@ button[disabled]{opacity:.45;cursor:not-allowed}
    whatever crop object-fit:cover is currently applying. The values below
    are only the static fallback shown before real video dimensions are
    known. */
-.face-guide{position:absolute;z-index:3;left:17%;top:12%;width:66%;height:76%;border:1px solid rgba(255,255,255,.2);border-radius:48% 48% 44% 44%;box-shadow:0 0 0 999px rgba(0,0,0,.12),inset 0 0 30px rgba(255,255,255,.08);pointer-events:none}
+.face-guide{position:absolute;z-index:3;left:17%;top:12%;width:66%;height:76%;border:1px solid rgba(255,255,255,.2);border-radius:48% 48% 44% 44%;box-shadow:0 0 0 999px rgba(0,0,0,.12),inset 0 0 30px rgba(255,255,255,.08);pointer-events:none;transition:border-color .15s ease,box-shadow .15s ease}
+/* Live pose feedback: set from the pose gate's own status in app.js, so this
+   reflects the same POSE_YAW_MAX/PITCH_MAX/ROLL_MAX the capture gate already
+   enforces rather than a second, independent visual judgement. Uses --qing —
+   the SAME green the capture-guide dots and the exposure-halo's "perfect"
+   state already use for ready/positive on this exact screen — not a new
+   colour, so a pose pass reads as one consistent signal with the halo
+   ring's own eventual green, rather than a third, competing hue. */
+.face-guide[data-pose="pass"]{border-color:var(--qing);box-shadow:0 0 0 999px rgba(0,0,0,.12),inset 0 0 30px color-mix(in srgb,var(--qing) 35%,transparent),0 0 22px color-mix(in srgb,var(--qing) 55%,transparent)}
 .capture-badge{position:absolute;z-index:6;left:.75rem;top:.75rem;display:flex;align-items:center;gap:.4rem;padding:.28rem .58rem;border-radius:999px;background:rgba(10,10,10,.58);color:#fff;font-size:.68rem;letter-spacing:.05em;text-transform:uppercase;backdrop-filter:blur(8px);pointer-events:none}
 .capture-badge span{width:.46rem;height:.46rem;border-radius:50%;background:#8BB5AD;box-shadow:0 0 0 3px rgba(139,181,173,.2)}
 .exposure-fill{position:absolute;inset:0;z-index:1;pointer-events:none;background:radial-gradient(ellipse 39% 53% at 50% 49%,rgba(255,255,255,0) 0 52%,rgba(255,252,242,calc(var(--halo-screen-strength) * .72)) 69%,rgba(255,252,242,var(--halo-screen-strength)) 100%)}

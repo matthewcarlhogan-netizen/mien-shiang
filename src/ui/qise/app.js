@@ -263,6 +263,7 @@ async function runCapture() {
   screenLightDismissed = false;
   lightOverrideRequested = false;
   $("capture-frame").dataset.previewLift = "false";
+  $("face-guide").dataset.pose = "unavailable";
   $("illumination-state").hidden = !illuminationRequested;
   $("illumination-state").textContent = illuminationRequested
     ? "Colour response check selected"
@@ -487,6 +488,17 @@ async function runCapture() {
         acceptUnevenLight: lightOverrideRequested,
       });
       const illuminationStable = illuminationFrameStable(gates);
+
+      // Real-time ghost-outline feedback: the guide oval itself reflects the
+      // pose gate's live status, so a person sees correction feedback where
+      // they're already looking instead of only learning a capture failed
+      // after the fact. Reuses the pose gate's own POSE_YAW_MAX/PITCH/ROLL
+      // margins verbatim — no new threshold, no new measurement. A pose
+      // entry absent from `failures` means it passed; when present its
+      // `status` is "unavailable" (no face/axes measured yet) or "fail"
+      // (measured, outside tolerance) — see gates.js's evaluateGates.
+      const poseFailure = gates.failures.find((failure) => failure.id === "pose");
+      $("face-guide").dataset.pose = poseFailure ? poseFailure.status : "pass";
 
       const elapsedMs = nowMs - startedAt;
       const underexposed = gates.failures.some((failure) => failure.id === "underexposed");
@@ -772,6 +784,7 @@ async function runCapture() {
         screenLightSince = null;
       }
       $("capture-frame").dataset.previewLift = "false";
+      $("face-guide").dataset.pose = "unavailable";
       $("refocus-camera").hidden = true;
       $("use-current-light").hidden = true;
       exposureHalo?.setCaptureState("seeking");

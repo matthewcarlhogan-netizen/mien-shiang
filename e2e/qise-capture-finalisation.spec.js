@@ -105,3 +105,26 @@ test("production: the face guide is sized from faceGuideRect(), not the static C
   expect(guideStyle.width).toBe(`${(expected.widthFraction * 100).toFixed(3)}%`);
   expect(guideStyle.height).toBe(`${(expected.heightFraction * 100).toFixed(3)}%`);
 });
+
+/*
+ * Real-time ghost-outline feedback: the guide oval reflects the pose gate's
+ * live status (set from gates.js's own `failures` array — no new threshold),
+ * so a well-posed face should see it turn positive WHILE STILL LOOKING AT
+ * THE CAMERA, not only find out after a completed or failed attempt. This
+ * drives the real capture loop and watches for the DOM state transition,
+ * rather than asserting on app.js source (which nothing else can import —
+ * item 44) or by construction alone.
+ */
+test("production: the face guide turns positive in real time for a well-posed synthetic face", async ({ page }) => {
+  const capture = buildSyntheticCapture();
+  await installSyntheticCamera(page, capture);
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("/qise.html");
+
+  await page.click("#consent-next");
+  await page.click("#consent-grant");
+
+  // Reached during the live preview, well before finish() navigates away to
+  // #screen-reading (asserted separately by the finalisation test above).
+  await expect(page.locator("#face-guide")).toHaveAttribute("data-pose", "pass", { timeout: 20000 });
+});

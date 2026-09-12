@@ -130,9 +130,9 @@ export const GATES = Object.freeze([
       // is missing passing by default, one level further down.
       //
       // Roll comes from two landmarks and is always available; yaw and pitch
-      // need MediaPipe's transformation matrix. A frame with only roll is
-      // still worth gating on roll, and the reading records which axes were
-      // checked rather than implying all three were.
+      // need landmark depth, which is not always present. A frame with only
+      // roll is still worth gating on roll, and the reading records which
+      // axes were checked rather than implying all three were.
       const limits = { yaw: POSE_YAW_MAX, pitch: POSE_PITCH_MAX, roll: POSE_ROLL_MAX };
       const measured = Object.keys(limits).filter((k) => typeof pose[k] === "number" && Number.isFinite(pose[k]));
       if (measured.length === 0) return null;
