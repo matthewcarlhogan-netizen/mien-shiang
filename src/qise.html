@@ -272,9 +272,24 @@ button[disabled]{opacity:.45;cursor:not-allowed}
    past .wrap's 1rem side padding (the negative margin cancels it exactly)
    so the face genuinely fills the width on a phone, matching the immersive-
    viewfinder feel of every mainstream camera app rather than a bordered
-   thumbnail with a separate status panel underneath it. */
+   thumbnail with a separate status panel underneath it.
+   Vertically it fills the device screen too: show() toggles
+   body.capture-live, which hides the app header and zeroes .wrap's top
+   padding, so 100dvh of video starts at the physical top of the screen —
+   not "78% of the viewport inside a card" as an earlier pass shipped.
+   Everything below the frame (restart, the selfie fallback) still exists in
+   normal document flow, one scroll away — nothing is removed, only no
+   longer fighting the camera for the first screenful. */
+body.capture-live .app-head{display:none}
+body.capture-live .wrap{padding-top:0}
 .capture-frame{--halo-screen-strength:.18;--manual-preview-brightness:1;position:relative;overflow:hidden;margin:0 -1rem;background:#0B0A09}
-.capture-frame video,.capture-frame canvas{display:block;width:100%;height:min(78svh,48rem);object-fit:cover}
+.capture-frame video,.capture-frame canvas{display:block;width:100%;height:100vh;height:100dvh;object-fit:cover}
+@media (min-width:640px){
+  /* Full-height on a phone is a viewfinder; full-height on a desktop tab is
+     just a very tall, very narrow video. Cap it once .wrap's own 42rem
+     width cap makes that shape look wrong instead of immersive. */
+  .capture-frame video,.capture-frame canvas{height:min(100dvh,42rem)}
+}
 .capture-frame video{filter:brightness(var(--manual-preview-brightness));transition:filter .12s linear}
 .capture-frame[data-preview-lift="true"] video{filter:brightness(2.15) contrast(.88) saturate(.9)}
 .capture-frame [hidden]{display:none}
@@ -325,30 +340,35 @@ html[data-screen-flash="true"] .capture-badge span{background:#FFFDF5;box-shadow
    page's light/dark theme, because it sits on a live camera feed whose
    brightness this app cannot control — a fixed scrim is what keeps
    WCAG AA contrast guaranteed rather than theme-dependent. */
-.capture-overlay{position:absolute;left:0;right:0;bottom:0;z-index:8;padding:2.2rem 1rem 1.1rem;background:linear-gradient(180deg,transparent,rgba(11,10,9,.75) 42%,rgba(11,10,9,.93));color:#F1EDE4;pointer-events:none}
+.capture-overlay{position:absolute;left:0;right:0;bottom:0;z-index:8;padding:1.4rem 1rem 1.3rem;background:linear-gradient(180deg,transparent 58%,rgba(11,10,9,.7) 80%,rgba(11,10,9,.92));color:#F1EDE4;pointer-events:none}
 .capture-overlay button{pointer-events:auto}
-.capture-progress-head{display:flex;align-items:center;justify-content:space-between;gap:.8rem;margin-bottom:.6rem}
-.capture-progress-head span{font-size:.68rem;letter-spacing:.04em;opacity:.72}
-.capture-guide{list-style:none;margin:0;padding:0;display:flex;gap:.85rem;flex-wrap:wrap}
-.capture-guide li{display:flex;align-items:center;gap:.32rem;color:rgba(241,237,228,.6);font-size:.68rem}
-.capture-guide li::before{content:"";width:.55rem;height:.55rem;border:2px solid rgba(241,237,228,.4);border-radius:50%;flex:none}
-.capture-guide li[data-state="ready"]{color:#F1EDE4}
-.capture-guide li[data-state="ready"]::before{background:var(--qing);border-color:var(--qing);box-shadow:0 0 0 3px color-mix(in srgb,var(--qing) 40%,transparent)}
-.capture-guide li[data-state="adjust"]{color:#F1EDE4;font-weight:600}
-.capture-guide li[data-state="adjust"]::before{border-color:var(--huang);box-shadow:0 0 0 3px color-mix(in srgb,var(--huang) 40%,transparent)}
+/* The per-gate checklist (Face/Light/Clear/Still + "N of 4 ready") is gone
+   from view on purpose, not merely restyled: it was the "look for 4 green
+   lights" scan this screen was rejected over. The ring already carries one
+   unified ready/not-ready signal, and #gate-line already carries the one
+   sentence naming what's still wrong — a four-way checklist was a second,
+   more granular readout of information the ring and the line already give,
+   and asking a person to reconcile three simultaneous readouts while
+   holding a pose was the actual defect. app.js keeps writing to these
+   elements (renderCaptureGuide, capture-ready-count) for anything that
+   still reads their text — e.g. a screen reader landing mid-flow — so
+   nothing downstream had to change, only their visibility here. */
+.capture-progress-head{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 .capture-coach{margin:0}
-.capture-coach-line{font-family:var(--passage);font-size:1.05rem;line-height:1.3;margin:0;color:#F1EDE4}
+.capture-coach-line{font-family:var(--passage);font-size:.92rem;line-height:1.3;margin:0;color:#F1EDE4}
 .capture-coach[data-state="ready"] .capture-coach-line{color:var(--qing)}
-.capture-coach-detail{margin:.25rem 0 0;font-size:.8rem;line-height:1.45;color:rgba(241,237,228,.78)}
+.capture-coach-detail{margin:.2rem 0 0;font-size:.74rem;line-height:1.4;color:rgba(241,237,228,.72)}
 .capture-help{margin:.5rem 0 0;font-size:.74rem;color:rgba(241,237,228,.7)}
 /* Buttons are a "skip the wait" shortcut, not an instruction — the auto-arm
    logic they shortcut already runs without any tap (see the markup
-   comment). Sized and labelled the same as any other control (nothing
-   here is smaller or harder to reach); only the old full-width black
-   "DO THIS NOW" panel treatment is gone, since that visual weight is what
-   made an optional action read as a required one. */
-.capture-actions{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.7rem}
-.capture-actions button{font-size:.76rem;min-height:44px;padding:.5rem 1rem;border-radius:999px;border:1px solid rgba(241,237,228,.4);background:rgba(241,237,228,.1);color:#F1EDE4;backdrop-filter:blur(6px)}
+   comment). Floated clear of the coach text instead of sitting inline
+   below it, because an inline pill row read as two things to deal with
+   while also holding a pose. Still real, labelled, 44px controls — nothing
+   here is smaller or harder to reach, only out of the eyeline the ring and
+   the face already own. Each stays independently hidden by app.js and
+   appears only in the rare case auto-handling needs an explicit nudge. */
+.capture-actions{position:absolute;right:1rem;bottom:5.4rem;z-index:9;display:flex;flex-direction:column;align-items:flex-end;gap:.4rem}
+.capture-actions button{font-size:.72rem;min-height:44px;padding:.4rem .85rem;border-radius:999px;border:1px solid rgba(241,237,228,.35);background:rgba(17,15,13,.62);color:#F1EDE4;backdrop-filter:blur(8px)}
 .capture-actions button[data-emphasis="true"]{background:#F1EDE4;color:#171411;border-color:transparent}
 .capture-secondary-actions{display:flex;justify-content:center;margin-top:.55rem}
 .capture-secondary-actions button{min-height:36px;padding:.25rem .55rem;border:0;text-decoration:underline;text-underline-offset:.18em;font-size:.72rem;opacity:.72}
@@ -371,7 +391,6 @@ html[data-screen-flash="true"] .capture-badge span{background:#FFFDF5;box-shadow
 @media (max-width:480px){
   .app-head{flex-wrap:nowrap;margin-bottom:1.25rem}
   .privacy-mark{display:none}
-  .capture-frame video,.capture-frame canvas{height:min(70svh,40rem)}
   .palace-grid{grid-template-columns:1fr}
   .today-next{grid-template-columns:1fr}
   .today-next button{width:100%}
