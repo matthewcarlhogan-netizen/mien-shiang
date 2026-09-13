@@ -195,6 +195,18 @@ async function build() {
     stubbed.push("adapters/safety.js", "rules-b.js", "modulebview.js");
   }
 
+  // Remove additional Module B files that should not ship in entertainment-only
+  const moduleBFiles = [
+    "src/rules-b.js",
+    "src/modulebview.js",
+  ];
+  for (const file of moduleBFiles) {
+    const destPath = join(DIST, relative(SRC, join(SRC, file)));
+    if (existsSync(destPath) && !flavour.moduleB) {
+      rmSync(destPath, { force: true });
+    }
+  }
+
   const vendoredAssets = await vendorMediaPipe();
 
   // Recorded in the artefact so a store submission can be checked against what
