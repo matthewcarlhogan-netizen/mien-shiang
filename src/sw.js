@@ -50,6 +50,13 @@ const SHELL = [
   "./ui/qise/share.js", "./ui/qise/theme.js", "./ui/qise/exposure-halo.js", "./ui/qise/app.js",
   "./manifest.webmanifest", "./icon-192.png", "./icon-512.png",
   "./icon-512-maskable.png",
+  // MediaPipe WASM runtime and model for offline first-run support.
+  "./vendor/mediapipe/vision_bundle.mjs",
+  "./vendor/mediapipe/wasm/vision_wasm_internal.js",
+  "./vendor/mediapipe/wasm/vision_wasm_internal.wasm",
+  "./vendor/mediapipe/wasm/vision_wasm_nosimd_internal.js",
+  "./vendor/mediapipe/wasm/vision_wasm_nosimd_internal.wasm",
+  "./vendor/mediapipe/models/face_landmarker.task",
 ];
 
 self.addEventListener("install", (e) => {

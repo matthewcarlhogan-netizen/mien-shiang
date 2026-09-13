@@ -163,6 +163,7 @@ function setScreenLight(enabled, { syncHalo = true } = {}) {
   if (screenLightRequested !== next) screenLightRevision++;
   screenLightRequested = next;
   const fill = $("exposure-fill");
+  const ringFlash = $("ring-flash");
   const button = $("screen-light");
   const themeMeta = $("theme-color");
   document.documentElement.dataset.screenFlash = String(next);
@@ -174,6 +175,10 @@ function setScreenLight(enabled, { syncHalo = true } = {}) {
     screenFlashThemeColour = null;
   }
   if (fill) fill.hidden = !next;
+  if (ringFlash) {
+    ringFlash.style.setProperty("--ring-flash-strength", next ? "0.45" : "0");
+    ringFlash.style.opacity = next ? "1" : "0";
+  }
   if (syncHalo && exposureHalo) {
     // Programmatic activation must drive the same full-strength CSS values as
     // direct input. The old emit:false path exposed a nearly invisible 18%

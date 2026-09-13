@@ -267,18 +267,19 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .pattern-count{font-size:.78rem;opacity:.72}
 .pattern-intro{margin-bottom:1rem}
 .reading-actions{margin-top:1rem}
-.capture-frame{--halo-screen-strength:.18;--manual-preview-brightness:1;position:relative;overflow:hidden;border:1px solid var(--qise-border);border-radius:26px;background:#0B0A09;box-shadow:0 22px 60px rgba(0,0,0,.24)}
-.capture-frame video,.capture-frame canvas{display:block;width:100%;height:min(56svh,34rem);object-fit:cover}
-.capture-frame video{filter:brightness(var(--manual-preview-brightness));transition:filter .12s linear}
+.capture-frame{--halo-screen-strength:.18;--manual-preview-brightness:1;--ring-flash-strength:0;position:relative;overflow:hidden;border:1px solid var(--qise-border);border-radius:26px;background:#0B0A09;box-shadow:0 22px 60px rgba(0,0,0,.24)}
+.capture-frame video,.capture-frame canvas{display:block;width:100vw;height:100vh;object-fit:cover}
+.capture-frame video{filter:brightness(var(--manual-preview-brightness)) contrast(1.05);transition:filter .12s linear}
 .capture-frame[data-preview-lift="true"] video{filter:brightness(2.15) contrast(.88) saturate(.9)}
 .capture-frame [hidden]{display:none}
-.face-guide{position:absolute;z-index:3;left:50%;top:50%;width:min(66%,18rem);height:76%;transform:translate(-50%,-50%);border:1px solid rgba(255,255,255,.2);border-radius:48% 48% 44% 44%;box-shadow:0 0 0 999px rgba(0,0,0,.12),inset 0 0 30px rgba(255,255,255,.08);pointer-events:none}
-.capture-badge{position:absolute;z-index:6;left:.75rem;top:.75rem;display:flex;align-items:center;gap:.4rem;padding:.28rem .58rem;border-radius:999px;background:rgba(10,10,10,.58);color:#fff;font-size:.68rem;letter-spacing:.05em;text-transform:uppercase;backdrop-filter:blur(8px);pointer-events:none}
+.face-guide{position:fixed;z-index:10;left:50%;top:50%;width:min(70%,20rem);height:80%;transform:translate(-50%,-50%);border:3px solid rgba(255,255,255,.5);border-radius:50%;box-shadow:0 0 0 999px rgba(0,0,0,.25),inset 0 0 50px rgba(255,255,255,.2);pointer-events:none}
+.ring-flash{position:fixed;inset:0;z-index:2;pointer-events:none;background:radial-gradient(circle at center,rgba(255,255,255,var(--ring-flash-strength)) 0%,transparent 70%);transition:background .2s ease-out,opacity .2s ease-out;opacity:0}
+.capture-badge{position:fixed;z-index:11;left:.75rem;top:.75rem;display:flex;align-items:center;gap:.4rem;padding:.28rem .58rem;border-radius:999px;background:rgba(10,10,10,.7);color:#fff;font-size:.68rem;letter-spacing:.05em;text-transform:uppercase;backdrop-filter:blur(8px);pointer-events:none}
 .capture-badge span{width:.46rem;height:.46rem;border-radius:50%;background:#8BB5AD;box-shadow:0 0 0 3px rgba(139,181,173,.2)}
 .exposure-fill{position:absolute;inset:0;z-index:1;pointer-events:none;background:radial-gradient(ellipse 39% 53% at 50% 49%,rgba(255,255,255,0) 0 52%,rgba(255,252,242,calc(var(--halo-screen-strength) * .72)) 69%,rgba(255,252,242,var(--halo-screen-strength)) 100%)}
 html[data-screen-flash="true"] .capture-frame{border-color:#FFFDF5;box-shadow:0 0 0 5px #FFFDF5,0 0 72px rgba(255,250,232,.8)}
 html[data-screen-flash="true"] .capture-badge span{background:#FFFDF5;box-shadow:0 0 0 4px rgba(255,253,245,.28)}
-.exposure-halo{position:absolute;z-index:5;inset:0;color:rgba(255,255,255,.82);pointer-events:none}
+.exposure-halo{position:fixed;z-index:10;inset:0;color:rgba(255,255,255,.82);pointer-events:none}
 .exposure-halo svg{width:100%;height:100%;display:block;overflow:visible;pointer-events:none}
 .halo-track,.halo-progress{fill:none;vector-effect:non-scaling-stroke}
 .halo-track{stroke:currentColor;stroke-width:2;opacity:.45}
@@ -336,7 +337,7 @@ html[data-screen-flash="true"] .capture-badge span{background:#FFFDF5;box-shadow
 @media (max-width:480px){
   .app-head{flex-wrap:nowrap;margin-bottom:1.25rem}
   .privacy-mark{display:none}
-  .capture-frame video,.capture-frame canvas{height:min(46svh,28rem)}
+  .capture-frame video,.capture-frame canvas{height:100vh;min-height:100vh}
   .palace-grid{grid-template-columns:1fr}
   .today-next{grid-template-columns:1fr}
   .today-next button{width:100%}
@@ -410,8 +411,10 @@ html[data-screen-flash="true"] .capture-badge span{background:#FFFDF5;box-shadow
 <section class="screen" id="screen-capture" aria-labelledby="capture-h">
   <p class="eyebrow">Face scan</p>
   <h1 id="capture-h">Step into the frame</h1>
-  <div class="capture-frame" id="capture-frame" data-preview-lift="false"><video id="preview" playsinline muted autoplay aria-label="Camera preview"
-         style="width:100%;transform:scaleX(-1)"></video>
+  <div class="capture-frame" id="capture-frame" data-preview-lift="false">
+    <div class="ring-flash" id="ring-flash" aria-hidden="true"></div>
+    <video id="preview" playsinline muted autoplay aria-label="Camera preview"
+         style="position:fixed;top:0;left:0;width:100vw;height:100vh;object-fit:cover;transform:scaleX(-1);z-index:1"></video>
     <canvas id="selfie-preview" hidden aria-label="Selected selfie preview"></canvas>
     <div class="exposure-fill" id="exposure-fill" hidden aria-hidden="true"></div>
     <div class="face-guide" aria-hidden="true"></div>
